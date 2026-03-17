@@ -64,13 +64,11 @@ const ExplainGrade = () => {
 
     // Mock AI response
     setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant" as const,
-          content: `Great question! Looking at your submission for "${gradeBreakdown.assessment}", your Algorithm Analysis section scored 58%. The main areas to improve are:\n\n1. **Big-O Analysis**: You correctly identified O(n) for insertion but missed the amortized analysis for dynamic resizing\n2. **Comparative Analysis**: Including comparisons with hash tables would strengthen your answer\n3. **Space Complexity**: This was largely omitted from your analysis\n\nWould you like me to show you an example of how to structure a strong algorithm analysis section?`,
-        },
-      ]);
+      const aiMsg: ChatMsg = {
+        role: "assistant",
+        content: `Great question! Looking at your submission for "${gradeBreakdown.assessment}", your Algorithm Analysis section scored 58%. The main areas to improve are:\n\n1. **Big-O Analysis**: You correctly identified O(n) for insertion but missed the amortized analysis for dynamic resizing\n2. **Comparative Analysis**: Including comparisons with hash tables would strengthen your answer\n3. **Space Complexity**: This was largely omitted from your analysis\n\nWould you like me to show you an example of how to structure a strong algorithm analysis section?`,
+      };
+      setMessages((prev) => [...prev, aiMsg]);
     }, 1000);
   };
 
