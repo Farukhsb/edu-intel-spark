@@ -53,12 +53,12 @@ const chatMessages: ChatMsg[] = [
 
 const ExplainGrade = () => {
   const [expandedArea, setExpandedArea] = useState<number | null>(0);
-  const [messages, setMessages] = useState(chatMessages);
+  const [messages, setMessages] = useState<ChatMsg[]>(chatMessages);
   const [inputValue, setInputValue] = useState("");
 
   const handleSend = () => {
     if (!inputValue.trim()) return;
-    const userMsg = { role: "user" as const, content: inputValue };
+    const userMsg: ChatMsg = { role: "user", content: inputValue };
     setMessages((prev) => [...prev, userMsg]);
     setInputValue("");
 
