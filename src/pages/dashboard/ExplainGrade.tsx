@@ -42,9 +42,11 @@ const gradeBreakdown = {
   ],
 };
 
-const chatMessages = [
+type ChatMsg = { role: "user" | "assistant"; content: string };
+
+const chatMessages: ChatMsg[] = [
   {
-    role: "assistant" as const,
+    role: "assistant",
     content: "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
   },
 ];
