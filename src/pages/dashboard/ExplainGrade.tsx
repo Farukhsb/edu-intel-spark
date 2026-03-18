@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Brain, ChevronDown, ChevronUp, MessageSquare, Send, Sparkles } from "lucide-react";
+import { Brain, ChevronDown, ChevronUp, Send, Sparkles, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
 
 const gradeBreakdown = {
   assessment: "CS301 - Assignment 1: Data Structures",
@@ -44,32 +46,121 @@ const gradeBreakdown = {
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
-const chatMessages: ChatMsg[] = [
-  {
-    role: "assistant",
-    content: "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
-  },
-];
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
 
 const ExplainGrade = () => {
   const [expandedArea, setExpandedArea] = useState<number | null>(0);
-  const [messages, setMessages] = useState<ChatMsg[]>(chatMessages);
+  const [messages, setMessages] = useState<ChatMsg[]>([
+    {
+      role: "assistant",
+      content: "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
+    },
+  ]);
   const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || isLoading) return;
     const userMsg: ChatMsg = { role: "user", content: inputValue };
-    setMessages((prev) => [...prev, userMsg]);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInputValue("");
+    setIsLoading(true);
 
-    // Mock AI response
-    setTimeout(() => {
-      const aiMsg: ChatMsg = {
-        role: "assistant",
-        content: `Great question! Looking at your submission for "${gradeBreakdown.assessment}", your Algorithm Analysis section scored 58%. The main areas to improve are:\n\n1. **Big-O Analysis**: You correctly identified O(n) for insertion but missed the amortized analysis for dynamic resizing\n2. **Comparative Analysis**: Including comparisons with hash tables would strengthen your answer\n3. **Space Complexity**: This was largely omitted from your analysis\n\nWould you like me to show you an example of how to structure a strong algorithm analysis section?`,
+    let assistantSoFar = "";
+
+    try {
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+          gradeContext: gradeBreakdown,
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "AI service error" }));
+        toast.error(err.error || "Something went wrong");
+        setIsLoading(false);
+        return;
+      }
+
+      if (!resp.body) throw new Error("No response body");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+      let streamDone = false;
+
+      const upsert = (chunk: string) => {
+        assistantSoFar += chunk;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && prev.length === updatedMessages.length + 1) {
+            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+          }
+          return [...prev, { role: "assistant", content: assistantSoFar }];
+        });
       };
-      setMessages((prev) => [...prev, aiMsg]);
-    }, 1000);
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") { streamDone = true; break; }
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) upsert(content);
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      // Final flush
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split("\n")) {
+          if (!raw) continue;
+          if (raw.endsWith("\r")) raw = raw.slice(0, -1);
+          if (raw.startsWith(":") || raw.trim() === "") continue;
+          if (!raw.startsWith("data: ")) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) upsert(content);
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to get AI response");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -158,8 +249,8 @@ const ExplainGrade = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex h-64 flex-col">
-            <div className="flex-1 space-y-3 overflow-y-auto pr-2">
+          <div className="flex h-80 flex-col">
+            <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto pr-2">
               {messages.map((msg, i) => (
                 <div
                   key={i}
@@ -172,12 +263,23 @@ const ExplainGrade = () => {
                         : "bg-muted"
                     }`}
                   >
-                    {msg.content.split("\n").map((line, j) => (
-                      <p key={j} className={j > 0 ? "mt-1" : ""}>{line}</p>
-                    ))}
+                    {msg.role === "assistant" ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
                   </div>
                 </div>
               ))}
+              {isLoading && messages[messages.length - 1]?.role === "user" && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl bg-muted px-4 py-2.5">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-3 flex gap-2">
               <Input
@@ -185,8 +287,9 @@ const ExplainGrade = () => {
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="Ask about your grade..."
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                disabled={isLoading}
               />
-              <Button size="icon" onClick={handleSend}>
+              <Button size="icon" onClick={handleSend} disabled={isLoading}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>
