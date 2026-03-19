@@ -116,6 +116,26 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/dashboard/assignments"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Assignments />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/assignments/:id"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <AssignmentDetail />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
