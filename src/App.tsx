@@ -18,6 +18,8 @@ import InstitutionalInsights from "./pages/dashboard/InstitutionalInsights";
 import StudentGrades from "./pages/dashboard/StudentGrades";
 import ExplainGrade from "./pages/dashboard/ExplainGrade";
 import ImprovementPlan from "./pages/dashboard/ImprovementPlan";
+import Assignments from "./pages/dashboard/Assignments";
+import AssignmentDetail from "./pages/dashboard/AssignmentDetail";
 
 const queryClient = new QueryClient();
 
