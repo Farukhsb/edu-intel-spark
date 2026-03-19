@@ -14,6 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
+      assignments: {
+        Row: {
+          created_at: string
+          description: string | null
+          due_date: string | null
+          file_url: string | null
+          id: string
+          lecturer_id: string
+          max_score: number
+          module_code: string | null
+          rubric: Json | null
+          status: Database["public"]["Enums"]["assignment_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          file_url?: string | null
+          id?: string
+          lecturer_id: string
+          max_score?: number
+          module_code?: string | null
+          rubric?: Json | null
+          status?: Database["public"]["Enums"]["assignment_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          file_url?: string | null
+          id?: string
+          lecturer_id?: string
+          max_score?: number
+          module_code?: string | null
+          rubric?: Json | null
+          status?: Database["public"]["Enums"]["assignment_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      grades: {
+        Row: {
+          ai_breakdown: Json | null
+          ai_feedback: string | null
+          ai_score: number | null
+          created_at: string
+          final_feedback: string | null
+          final_score: number | null
+          id: string
+          lecturer_feedback: string | null
+          lecturer_score: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          submission_id: string
+        }
+        Insert: {
+          ai_breakdown?: Json | null
+          ai_feedback?: string | null
+          ai_score?: number | null
+          created_at?: string
+          final_feedback?: string | null
+          final_score?: number | null
+          id?: string
+          lecturer_feedback?: string | null
+          lecturer_score?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submission_id: string
+        }
+        Update: {
+          ai_breakdown?: Json | null
+          ai_feedback?: string | null
+          ai_score?: number | null
+          created_at?: string
+          final_feedback?: string | null
+          final_score?: number | null
+          id?: string
+          lecturer_feedback?: string | null
+          lecturer_score?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grades_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -43,6 +141,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      submissions: {
+        Row: {
+          assignment_id: string
+          file_name: string
+          file_type: string | null
+          file_url: string
+          id: string
+          status: Database["public"]["Enums"]["submission_status"]
+          student_email: string | null
+          student_id: string | null
+          student_name: string | null
+          submitted_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          assignment_id: string
+          file_name: string
+          file_type?: string | null
+          file_url: string
+          id?: string
+          status?: Database["public"]["Enums"]["submission_status"]
+          student_email?: string | null
+          student_id?: string | null
+          student_name?: string | null
+          submitted_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          assignment_id?: string
+          file_name?: string
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          status?: Database["public"]["Enums"]["submission_status"]
+          student_email?: string | null
+          student_id?: string | null
+          student_name?: string | null
+          submitted_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submissions_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -79,6 +227,14 @@ export type Database = {
     }
     Enums: {
       app_role: "lecturer" | "student"
+      assignment_status: "draft" | "published" | "closed"
+      submission_status:
+        | "submitted"
+        | "ai_grading"
+        | "ai_graded"
+        | "under_review"
+        | "approved"
+        | "released"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -207,6 +363,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["lecturer", "student"],
+      assignment_status: ["draft", "published", "closed"],
+      submission_status: [
+        "submitted",
+        "ai_grading",
+        "ai_graded",
+        "under_review",
+        "approved",
+        "released",
+      ],
     },
   },
 } as const
