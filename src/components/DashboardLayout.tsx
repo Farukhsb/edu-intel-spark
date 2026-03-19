@@ -13,6 +13,7 @@ import {
   Shield,
   TrendingUp,
   University,
+  Upload,
   User,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const lecturerLinks = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
   { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
   { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
   { to: "/dashboard/integrity", label: "Academic Integrity", icon: Shield },
@@ -29,6 +31,7 @@ const lecturerLinks = [
 
 const studentLinks = [
   { to: "/dashboard", label: "My Grades", icon: GraduationCap },
+  { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
   { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
   { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
 ];

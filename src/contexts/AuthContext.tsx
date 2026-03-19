@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { posthog } from "@/lib/posthog";
 
 type AppRole = "lecturer" | "student";
 
@@ -54,8 +55,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           setTimeout(() => fetchProfile(session.user.id), 0);
+          posthog.identify(session.user.id, { email: session.user.email });
         } else {
           setProfile(null);
+          posthog.reset();
         }
         setLoading(false);
       }
