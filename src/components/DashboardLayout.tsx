@@ -13,6 +13,7 @@ import {
   Shield,
   TrendingUp,
   University,
+  Upload,
   User,
   X,
 } from "lucide-react";
