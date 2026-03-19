@@ -55,8 +55,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           setTimeout(() => fetchProfile(session.user.id), 0);
+          posthog.identify(session.user.id, { email: session.user.email });
         } else {
           setProfile(null);
+          posthog.reset();
         }
         setLoading(false);
       }
