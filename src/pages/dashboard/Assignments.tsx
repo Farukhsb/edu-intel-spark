@@ -76,7 +76,7 @@ const Assignments = () => {
       return;
     }
     setCreating(true);
-    const { error } = await supabase.from("assignments").insert({
+    const { error } = await supabase.from("assignments").insert([{
       title: title.trim(),
       description: description.trim() || null,
       module_code: moduleCode.trim() || null,
@@ -84,8 +84,8 @@ const Assignments = () => {
       due_date: dueDate || null,
       lecturer_id: user!.id,
       status: "draft" as const,
-      rubric: rubric.length > 0 ? rubric : null,
-    });
+      rubric: (rubric.length > 0 ? rubric : null) as any,
+    }]);
 
     if (error) {
       toast.error("Failed to create assignment");
