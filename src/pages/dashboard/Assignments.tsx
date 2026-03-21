@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -15,9 +15,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, FileText, Calendar, Users, BookOpen } from "lucide-react";
+import { Plus, FileText, Calendar, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
 
 interface Assignment {
   id: string;
@@ -28,6 +29,7 @@ interface Assignment {
   due_date: string | null;
   status: "draft" | "published" | "closed";
   created_at: string;
+  rubric: RubricCriterion[] | null;
 }
 
 const statusVariant = (status: string) => {
@@ -43,12 +45,12 @@ const Assignments = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [moduleCode, setModuleCode] = useState("");
   const [maxScore, setMaxScore] = useState("100");
   const [dueDate, setDueDate] = useState("");
+  const [rubric, setRubric] = useState<RubricCriterion[]>([]);
 
   const fetchAssignments = async () => {
     const { data, error } = await supabase
@@ -82,6 +84,7 @@ const Assignments = () => {
       due_date: dueDate || null,
       lecturer_id: user!.id,
       status: "draft" as const,
+      rubric: rubric.length > 0 ? rubric : null,
     });
 
     if (error) {
@@ -93,6 +96,7 @@ const Assignments = () => {
       setModuleCode("");
       setMaxScore("100");
       setDueDate("");
+      setRubric([]);
       setDialogOpen(false);
       fetchAssignments();
     }
@@ -123,7 +127,6 @@ const Assignments = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold font-display">
@@ -143,62 +146,37 @@ const Assignments = () => {
                 New Assignment
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Assignment</DialogTitle>
                 <DialogDescription>
-                  Set up the assignment details. You can publish it when ready.
+                  Set up assignment details and rubric. Publish when ready.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">
                   <Label htmlFor="title">Title *</Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Assignment 1 - Data Structures"
-                  />
+                  <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Assignment 1 - Data Structures" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="module">Module Code</Label>
-                  <Input
-                    id="module"
-                    value={moduleCode}
-                    onChange={(e) => setModuleCode(e.target.value)}
-                    placeholder="e.g. CS301"
-                  />
+                  <Input id="module" value={moduleCode} onChange={(e) => setModuleCode(e.target.value)} placeholder="e.g. CS301" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Description / Instructions</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe what students should submit..."
-                    rows={3}
-                  />
+                  <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what students should submit..." rows={3} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="maxScore">Max Score</Label>
-                    <Input
-                      id="maxScore"
-                      type="number"
-                      value={maxScore}
-                      onChange={(e) => setMaxScore(e.target.value)}
-                    />
+                    <Input id="maxScore" type="number" value={maxScore} onChange={(e) => setMaxScore(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dueDate">Due Date</Label>
-                    <Input
-                      id="dueDate"
-                      type="datetime-local"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                    />
+                    <Input id="dueDate" type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                   </div>
                 </div>
+                <RubricBuilder rubric={rubric} onChange={setRubric} maxScore={Number(maxScore) || 100} />
                 <Button onClick={handleCreate} disabled={creating} className="w-full">
                   {creating ? "Creating..." : "Create Assignment"}
                 </Button>
@@ -208,16 +186,13 @@ const Assignments = () => {
         )}
       </div>
 
-      {/* Assignments List */}
       {assignments.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <BookOpen className="h-12 w-12 text-muted-foreground/40 mb-3" />
             <p className="font-medium">No assignments yet</p>
             <p className="text-sm text-muted-foreground">
-              {role === "lecturer"
-                ? "Create your first assignment to get started"
-                : "No assignments have been published yet"}
+              {role === "lecturer" ? "Create your first assignment to get started" : "No assignments have been published yet"}
             </p>
           </CardContent>
         </Card>
@@ -228,19 +203,16 @@ const Assignments = () => {
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <FileText className="h-4 w-4 text-primary" />
                       <h3 className="font-semibold">{a.title}</h3>
-                      <Badge variant={statusVariant(a.status)} className="capitalize">
-                        {a.status}
-                      </Badge>
+                      <Badge variant={statusVariant(a.status)} className="capitalize">{a.status}</Badge>
+                      {a.rubric && Array.isArray(a.rubric) && a.rubric.length > 0 && (
+                        <Badge variant="outline" className="text-xs">{a.rubric.length} criteria</Badge>
+                      )}
                     </div>
-                    {a.module_code && (
-                      <p className="text-xs text-muted-foreground">{a.module_code}</p>
-                    )}
-                    {a.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{a.description}</p>
-                    )}
+                    {a.module_code && <p className="text-xs text-muted-foreground">{a.module_code}</p>}
+                    {a.description && <p className="text-sm text-muted-foreground line-clamp-2">{a.description}</p>}
                     <div className="flex items-center gap-4 pt-1">
                       {a.due_date && (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -248,16 +220,12 @@ const Assignments = () => {
                           Due {format(new Date(a.due_date), "MMM d, yyyy HH:mm")}
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground">
-                        Max: {a.max_score} pts
-                      </span>
+                      <span className="text-xs text-muted-foreground">Max: {a.max_score} pts</span>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     {role === "lecturer" && a.status === "draft" && (
-                      <Button size="sm" onClick={() => handlePublish(a.id)}>
-                        Publish
-                      </Button>
+                      <Button size="sm" onClick={() => handlePublish(a.id)}>Publish</Button>
                     )}
                     <Button size="sm" variant="outline" asChild>
                       <a href={`/dashboard/assignments/${a.id}`}>
