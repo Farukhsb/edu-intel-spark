@@ -61,7 +61,7 @@ const Assignments = () => {
     if (error) {
       toast.error("Failed to load assignments");
     } else {
-      setAssignments((data as Assignment[]) || []);
+      setAssignments((data as unknown as Assignment[]) || []);
     }
     setLoading(false);
   };
