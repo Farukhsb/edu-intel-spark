@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import Install from "./pages/Install";
 import { DashboardLayout } from "./components/DashboardLayout";
 
 import LecturerOverview from "./pages/dashboard/LecturerOverview";
