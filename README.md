@@ -1,4 +1,4 @@
-# EduIntel Spark Educational Analytics Platform
+# Edu Intel Spark Educational Analytics Platform
 
 ## Overview  
 EduIntel Spark is an advanced educational analytics platform designed to help educators and institutions make data-driven decisions to improve student outcomes and enhance learning experiences.
