@@ -1,15 +1,9 @@
-# About This Project
+### 🔄 Roadmap to Real Data
 
-(Existing content here...)
+Future versions will integrate real anonymised datasets from publicly available education sources.
 
-## 🧪 Prototype Demonstration
+### 📸 Platform Screenshots
 
-This project demonstrates how AI and data analytics can be applied to education systems using realistic, simulated datasets. The goal is to showcase system design, analytical thinking, and potential real-world application.
-
----
-
-## 📊 Data Disclaimer
-
-The data presented in this prototype is simulated and created for demonstration purposes only. It is designed to reflect realistic educational scenarios and showcase the potential capabilities of the platform.
-
----
+- At-Risk Students detection (Image 5)
+- Assessment Timeline - Learning Outcomes (Image 7)
+- AI Detection Panel from Academic Integrity (Image 2)
