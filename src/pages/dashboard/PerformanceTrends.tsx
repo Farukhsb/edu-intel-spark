@@ -1,6 +1,28 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingDown, TrendingUp, Minus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { TrendingDown, TrendingUp, Minus, AlertTriangle, Lightbulb, User } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  Legend,
+} from "recharts";
 
 const assessments = [
   { name: "Assignment 1", avgGrade: 68, participation: 95, date: "Oct 2024" },
@@ -12,122 +34,240 @@ const assessments = [
 ];
 
 const gradeDistribution = [
-  { band: "1st (70-100%)", count: 48, percentage: 14, color: "bg-success" },
-  { band: "2:1 (60-69%)", count: 82, percentage: 24, color: "bg-info" },
-  { band: "2:2 (50-59%)", count: 104, percentage: 30, color: "bg-warning" },
-  { band: "3rd (40-49%)", count: 72, percentage: 21, color: "bg-accent" },
-  { band: "Fail (<40%)", count: 36, percentage: 11, color: "bg-destructive" },
+  { band: "1st (70-100%)", count: 48, percentage: 14, fill: "hsl(152, 56%, 45%)" },
+  { band: "2:1 (60-69%)", count: 82, percentage: 24, fill: "hsl(205, 80%, 55%)" },
+  { band: "2:2 (50-59%)", count: 104, percentage: 30, fill: "hsl(38, 92%, 60%)" },
+  { band: "3rd (40-49%)", count: 72, percentage: 21, fill: "hsl(280, 55%, 55%)" },
+  { band: "Fail (<40%)", count: 36, percentage: 11, fill: "hsl(0, 72%, 55%)" },
+];
+
+const participationHeatmap = [
+  { week: "W1", mon: 85, tue: 90, wed: 78, thu: 92, fri: 65 },
+  { week: "W2", mon: 88, tue: 85, wed: 82, thu: 90, fri: 60 },
+  { week: "W3", mon: 80, tue: 82, wed: 75, thu: 85, fri: 55 },
+  { week: "W4", mon: 75, tue: 78, wed: 70, thu: 80, fri: 50 },
+  { week: "W5", mon: 70, tue: 75, wed: 68, thu: 78, fri: 48 },
+  { week: "W6", mon: 65, tue: 70, wed: 62, thu: 72, fri: 42 },
 ];
 
 const atRiskStudents = [
-  { name: "David Lee", trend: "declining", avgGrade: 38, lastGrade: 32, flags: ["Missed 2 submissions", "Below threshold"] },
-  { name: "Emma Walsh", trend: "declining", avgGrade: 42, lastGrade: 35, flags: ["Grade drop >15%"] },
-  { name: "Tom Baker", trend: "stable-low", avgGrade: 41, lastGrade: 40, flags: ["Consistently below threshold"] },
-  { name: "Fatima Al-Rashid", trend: "declining", avgGrade: 51, lastGrade: 39, flags: ["Sudden drop", "Missed lab"] },
+  {
+    name: "David Lee", trend: "declining", avgGrade: 38, lastGrade: 32,
+    flags: ["Missed 2 submissions", "Below threshold"],
+    sparkline: [65, 58, 45, 38, 32],
+    recommendation: "Suggest tutoring session for data structures. Consider extending deadline for Assignment 3.",
+  },
+  {
+    name: "Emma Walsh", trend: "declining", avgGrade: 42, lastGrade: 35,
+    flags: ["Grade drop >15%"],
+    sparkline: [70, 62, 55, 42, 35],
+    recommendation: "Schedule 1-on-1 meeting. Review study habits and workload balance.",
+  },
+  {
+    name: "Tom Baker", trend: "stable-low", avgGrade: 41, lastGrade: 40,
+    flags: ["Consistently below threshold"],
+    sparkline: [42, 40, 41, 40, 40],
+    recommendation: "Assign peer mentor. Provide additional practice materials for core concepts.",
+  },
+  {
+    name: "Fatima Al-Rashid", trend: "declining", avgGrade: 51, lastGrade: 39,
+    flags: ["Sudden drop", "Missed lab"],
+    sparkline: [68, 60, 55, 51, 39],
+    recommendation: "Recent sudden decline suggests external factors. Refer to student support services.",
+  },
 ];
 
 const PerformanceTrends = () => {
+  const [moduleFilter, setModuleFilter] = useState("all");
+  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
+
+  const heatmapColor = (val: number) => {
+    if (val >= 85) return "bg-success/80";
+    if (val >= 70) return "bg-success/40";
+    if (val >= 55) return "bg-warning/50";
+    return "bg-destructive/40";
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Assessment Timeline */}
+      {/* Filter */}
+      <div className="flex items-center gap-4">
+        <Select value={moduleFilter} onValueChange={setModuleFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by module" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Modules</SelectItem>
+            <SelectItem value="CS301">CS301 - Data Structures</SelectItem>
+            <SelectItem value="CS205">CS205 - Algorithms</SelectItem>
+            <SelectItem value="CS102">CS102 - Intro to Prog</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Average Grade Over Time - Line Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Assessment Timeline</CardTitle>
-          <CardDescription>Average grade progression across assessments</CardDescription>
+          <CardTitle className="text-base">Average Grades Over Time</CardTitle>
+          <CardDescription>Assessment performance and participation trends</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {assessments.map((a, i) => {
-              const prev = i > 0 ? assessments[i - 1].avgGrade : a.avgGrade;
-              const diff = a.avgGrade - prev;
-              return (
-                <div key={i} className="flex items-center gap-4 rounded-lg border p-3">
-                  <div className="w-20 text-xs text-muted-foreground">{a.date}</div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{a.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold font-display">{a.avgGrade}%</span>
-                        {i > 0 && (
-                          <span
-                            className={`flex items-center text-xs ${
-                              diff > 0 ? "text-success" : diff < 0 ? "text-destructive" : "text-muted-foreground"
-                            }`}
-                          >
-                            {diff > 0 ? <TrendingUp className="h-3 w-3" /> : diff < 0 ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
-                            {diff > 0 ? "+" : ""}{diff}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${a.avgGrade}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-muted-foreground">{a.participation}% participation</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={assessments}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" angle={-20} textAnchor="end" height={50} />
+              <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" domain={[0, 100]} />
+              <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+              <Legend />
+              <Line type="monotone" dataKey="avgGrade" name="Avg Grade %" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="participation" name="Participation %" stroke="hsl(var(--success))" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
         </CardContent>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Grade Distribution */}
+        {/* Grade Distribution - Bar Chart */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Grade Distribution</CardTitle>
-            <CardDescription>Current cohort breakdown by band</CardDescription>
+            <CardDescription>Current cohort breakdown by classification</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {gradeDistribution.map((g, i) => (
-              <div key={i} className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{g.band}</span>
-                  <span className="text-muted-foreground">{g.count} students ({g.percentage}%)</span>
-                </div>
-                <div className="h-3 overflow-hidden rounded-full bg-muted">
-                  <div className={`h-full rounded-full ${g.color}`} style={{ width: `${g.percentage * 3}%` }} />
-                </div>
-              </div>
-            ))}
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={gradeDistribution} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis type="category" dataKey="band" tick={{ fontSize: 10 }} width={100} stroke="hsl(var(--muted-foreground))" />
+                <Tooltip
+                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                  formatter={(value: number) => [`${value} students`, "Count"]}
+                />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+                  {gradeDistribution.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* At-Risk Students */}
+        {/* Participation Heatmap */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">At-Risk Students</CardTitle>
-            <CardDescription>Students requiring early intervention</CardDescription>
+            <CardTitle className="text-base">Engagement Heatmap</CardTitle>
+            <CardDescription>Weekly participation rates by day</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {atRiskStudents.map((s, i) => (
-              <div key={i} className="rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+          <CardContent>
+            <div className="space-y-1">
+              <div className="grid grid-cols-6 gap-1 text-xs text-muted-foreground mb-1">
+                <span></span>
+                <span className="text-center">Mon</span>
+                <span className="text-center">Tue</span>
+                <span className="text-center">Wed</span>
+                <span className="text-center">Thu</span>
+                <span className="text-center">Fri</span>
+              </div>
+              {participationHeatmap.map((row) => (
+                <div key={row.week} className="grid grid-cols-6 gap-1">
+                  <span className="text-xs text-muted-foreground flex items-center">{row.week}</span>
+                  {[row.mon, row.tue, row.wed, row.thu, row.fri].map((val, i) => (
+                    <div
+                      key={i}
+                      className={`h-8 rounded flex items-center justify-center text-[10px] font-medium ${heatmapColor(val)}`}
+                      title={`${val}%`}
+                    >
+                      {val}%
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-4 mt-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-destructive/40" /> Low</span>
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-warning/50" /> Medium</span>
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-success/40" /> Good</span>
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-success/80" /> High</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* At-Risk Students with Sparklines and Recommendations */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <CardTitle className="text-base">At-Risk Students</CardTitle>
+          </div>
+          <CardDescription>Students requiring early intervention — click for personalized recommendations</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {atRiskStudents.map((s, i) => {
+            const sparkData = s.sparkline.map((v, idx) => ({ x: idx, y: v }));
+            const isExpanded = expandedStudent === s.name;
+
+            return (
+              <div
+                key={i}
+                className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 space-y-3 cursor-pointer transition-all hover:border-destructive/40"
+                onClick={() => setExpandedStudent(isExpanded ? null : s.name)}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{s.name}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-destructive">{s.lastGrade}%</span>
-                    <TrendingDown className="h-4 w-4 text-destructive" />
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10">
+                      <User className="h-4 w-4 text-destructive" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">{s.name}</span>
+                      <p className="text-xs text-muted-foreground">Avg: {s.avgGrade}%</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Sparkline */}
+                    <div className="w-[80px] h-[30px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={sparkData}>
+                          <Line
+                            type="monotone"
+                            dataKey="y"
+                            stroke="hsl(var(--destructive))"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-bold text-destructive">{s.lastGrade}%</span>
+                      <TrendingDown className="inline-block ml-1 h-4 w-4 text-destructive" />
+                    </div>
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Avg: {s.avgGrade}%</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+
+                <div className="flex flex-wrap gap-1.5">
                   {s.flags.map((f, j) => (
                     <Badge key={j} variant="outline" className="border-destructive/30 text-xs text-destructive">
                       {f}
                     </Badge>
                   ))}
                 </div>
+
+                {isExpanded && (
+                  <div className="rounded-lg bg-card border p-3 mt-2 flex items-start gap-2 animate-fade-in">
+                    <Lightbulb className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-primary mb-1">AI Recommendation</p>
+                      <p className="text-sm text-muted-foreground">{s.recommendation}</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+            );
+          })}
+        </CardContent>
+      </Card>
     </div>
   );
 };

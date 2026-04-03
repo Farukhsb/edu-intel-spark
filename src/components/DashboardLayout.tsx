@@ -10,7 +10,9 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  Search,
   Shield,
+  Target,
   TrendingUp,
   University,
   Upload,
@@ -18,11 +20,13 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const lecturerLinks = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
+  { to: "/dashboard/learning-outcomes", label: "Learning Outcomes", icon: Target },
   { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
   { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
   { to: "/dashboard/integrity", label: "Academic Integrity", icon: Shield },
@@ -41,6 +45,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const links = profile?.role === "lecturer" ? lecturerLinks : studentLinks;
 
@@ -48,6 +53,10 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     await signOut();
     navigate("/auth");
   };
+
+  const filteredLinks = searchQuery
+    ? links.filter((l) => l.label.toLowerCase().includes(searchQuery.toLowerCase()))
+    : links;
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -73,12 +82,25 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           </span>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {links.map((link) => (
+        {/* Sidebar Search */}
+        <div className="px-3 pt-4 pb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
+            <Input
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-8 text-xs bg-sidebar-accent border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/40"
+            />
+          </div>
+        </div>
+
+        <nav className="flex-1 space-y-1 px-3 py-2 overflow-y-auto">
+          {filteredLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              onClick={() => setSidebarOpen(false)}
+              onClick={() => { setSidebarOpen(false); setSearchQuery(""); }}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 location.pathname === link.to

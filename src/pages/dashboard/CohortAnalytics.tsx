@@ -1,8 +1,28 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, ArrowRight, BookOpen, CheckCircle, Lightbulb, Target } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AlertTriangle, ArrowRight, CheckCircle, Lightbulb, Target } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  Legend,
+} from "recharts";
 
 const learningOutcomes = [
   { outcome: "LO1: Understand data structures", achievement: 78, target: 70, status: "met" },
@@ -10,6 +30,22 @@ const learningOutcomes = [
   { outcome: "LO3: Implement sorting algorithms", achievement: 71, target: 70, status: "met" },
   { outcome: "LO4: Analyse complexity", achievement: 45, target: 70, status: "below" },
   { outcome: "LO5: Design recursive solutions", achievement: 38, target: 70, status: "below" },
+];
+
+const cohortTrend = [
+  { assessment: "Assignment 1", CS301: 68, CS205: 62, CS102: 75, CS401: 60 },
+  { assessment: "Midterm", CS301: 58, CS205: 55, CS102: 70, CS401: 58 },
+  { assessment: "Assignment 2", CS301: 62, CS205: 60, CS102: 72, CS401: 64 },
+  { assessment: "Lab Report", CS301: 71, CS205: 66, CS102: 78, CS401: 68 },
+  { assessment: "Assignment 3", CS301: 55, CS205: 52, CS102: 74, CS401: 62 },
+];
+
+const gradeDistChart = [
+  { band: "1st", count: 48, fill: "hsl(152, 56%, 45%)" },
+  { band: "2:1", count: 82, fill: "hsl(205, 80%, 55%)" },
+  { band: "2:2", count: 104, fill: "hsl(38, 92%, 60%)" },
+  { band: "3rd", count: 72, fill: "hsl(280, 55%, 55%)" },
+  { band: "Fail", count: 36, fill: "hsl(0, 72%, 55%)" },
 ];
 
 const recommendations = [
@@ -41,15 +77,83 @@ const moduleComparison = [
 ];
 
 const CohortAnalytics = () => {
+  const [moduleFilter, setModuleFilter] = useState("all");
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <Tabs defaultValue="outcomes">
+      {/* Filter */}
+      <div className="flex items-center gap-4">
+        <Select value={moduleFilter} onValueChange={setModuleFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by module" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Modules</SelectItem>
+            <SelectItem value="CS301">CS301</SelectItem>
+            <SelectItem value="CS205">CS205</SelectItem>
+            <SelectItem value="CS102">CS102</SelectItem>
+            <SelectItem value="CS401">CS401</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Tabs defaultValue="trends">
         <TabsList>
+          <TabsTrigger value="trends">Performance Trends</TabsTrigger>
           <TabsTrigger value="outcomes">Learning Outcomes</TabsTrigger>
           <TabsTrigger value="modules">Module Comparison</TabsTrigger>
           <TabsTrigger value="recommendations">AI Recommendations</TabsTrigger>
         </TabsList>
 
+        {/* Performance Trends with Charts */}
+        <TabsContent value="trends" className="mt-4 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Average Grades by Module Over Time</CardTitle>
+              <CardDescription>Comparison across modules per assessment</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={cohortTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="assessment" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" domain={[0, 100]} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                  <Legend />
+                  <Line type="monotone" dataKey="CS301" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="CS205" stroke="hsl(var(--destructive))" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="CS102" stroke="hsl(var(--success))" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="CS401" stroke="hsl(var(--warning))" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Grade Distribution Bar Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Grade Distribution</CardTitle>
+              <CardDescription>Cohort classification breakdown</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={gradeDistChart}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="band" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                    {gradeDistChart.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Learning Outcomes */}
         <TabsContent value="outcomes" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
@@ -63,32 +167,19 @@ const CohortAnalytics = () => {
                     <span className="text-sm font-medium">{lo.outcome}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold">{lo.achievement}%</span>
-                      {lo.status === "met" && (
-                        <CheckCircle className="h-4 w-4 text-success" />
-                      )}
-                      {lo.status === "at-risk" && (
-                        <AlertTriangle className="h-4 w-4 text-warning" />
-                      )}
-                      {lo.status === "below" && (
-                        <AlertTriangle className="h-4 w-4 text-destructive" />
-                      )}
+                      {lo.status === "met" && <CheckCircle className="h-4 w-4 text-success" />}
+                      {lo.status === "at-risk" && <AlertTriangle className="h-4 w-4 text-warning" />}
+                      {lo.status === "below" && <AlertTriangle className="h-4 w-4 text-destructive" />}
                     </div>
                   </div>
                   <div className="relative h-3 overflow-hidden rounded-full bg-muted">
                     <div
                       className={`absolute inset-y-0 left-0 rounded-full transition-all ${
-                        lo.status === "met"
-                          ? "bg-success"
-                          : lo.status === "at-risk"
-                          ? "bg-warning"
-                          : "bg-destructive"
+                        lo.status === "met" ? "bg-success" : lo.status === "at-risk" ? "bg-warning" : "bg-destructive"
                       }`}
                       style={{ width: `${lo.achievement}%` }}
                     />
-                    <div
-                      className="absolute inset-y-0 w-0.5 bg-foreground/40"
-                      style={{ left: `${lo.target}%` }}
-                    />
+                    <div className="absolute inset-y-0 w-0.5 bg-foreground/40" style={{ left: `${lo.target}%` }} />
                   </div>
                   <p className="text-xs text-muted-foreground">Target: {lo.target}%</p>
                 </div>
@@ -97,6 +188,7 @@ const CohortAnalytics = () => {
           </Card>
         </TabsContent>
 
+        {/* Module Comparison */}
         <TabsContent value="modules" className="mt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             {moduleComparison.map((mod, i) => (
@@ -121,6 +213,7 @@ const CohortAnalytics = () => {
           </div>
         </TabsContent>
 
+        {/* AI Recommendations */}
         <TabsContent value="recommendations" className="mt-4 space-y-4">
           {recommendations.map((rec, i) => (
             <Card key={i} className="border-l-4 border-l-primary">
@@ -131,13 +224,7 @@ const CohortAnalytics = () => {
                     <div className="flex items-center gap-2">
                       <h3 className="font-medium text-sm">{rec.topic}</h3>
                       <Badge
-                        variant={
-                          rec.priority === "critical"
-                            ? "destructive"
-                            : rec.priority === "high"
-                            ? "secondary"
-                            : "outline"
-                        }
+                        variant={rec.priority === "critical" ? "destructive" : rec.priority === "high" ? "secondary" : "outline"}
                         className="text-xs"
                       >
                         {rec.priority}
