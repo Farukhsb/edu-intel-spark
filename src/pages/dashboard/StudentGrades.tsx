@@ -88,6 +88,15 @@ const StudentGrades = () => {
     };
 
     fetchGrades();
+
+    // Real-time listener for grade updates
+    const channel = supabase
+      .channel("student-grades-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => fetchGrades())
+      .on("postgres_changes", { event: "*", schema: "public", table: "grades" }, () => fetchGrades())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   if (loading) return <div className="flex items-center justify-center py-12"><p className="text-muted-foreground">Loading grades...</p></div>;

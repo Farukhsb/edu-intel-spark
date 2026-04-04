@@ -148,6 +148,15 @@ const LecturerOverview = () => {
     };
 
     fetchDashboard();
+
+    // Real-time listeners
+    const channel = supabase
+      .channel("dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => fetchDashboard())
+      .on("postgres_changes", { event: "*", schema: "public", table: "grades" }, () => fetchDashboard())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   if (loading) return <div className="flex items-center justify-center py-12"><p className="text-muted-foreground">Loading dashboard...</p></div>;

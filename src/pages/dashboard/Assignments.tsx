@@ -53,22 +53,44 @@ const Assignments = () => {
   const [rubric, setRubric] = useState<RubricCriterion[]>([]);
 
   const fetchAssignments = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("assignments")
       .select("*")
       .order("created_at", { ascending: false });
 
+    // Students only see published assignments that haven't passed the due date
+    if (role === "student") {
+      query = query.eq("status", "published");
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       toast.error("Failed to load assignments");
     } else {
-      setAssignments((data as unknown as Assignment[]) || []);
+      let filtered = (data as unknown as Assignment[]) || [];
+      // Auto-hide past-due assignments for students
+      if (role === "student") {
+        filtered = filtered.filter((a) => !a.due_date || new Date(a.due_date) > new Date());
+      }
+      setAssignments(filtered);
     }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchAssignments();
-  }, []);
+
+    // Real-time listener for assignment changes
+    const channel = supabase
+      .channel("assignments-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => {
+        fetchAssignments();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [role]);
 
   const handleCreate = async () => {
     if (!title.trim()) {
