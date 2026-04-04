@@ -31,5 +31,22 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Firebase Analytics -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-analytics-compat.js"></script>
+    <script>
+      var firebaseConfig = {
+        apiKey: "AIzaSyBHxOJDx53QDBQZA5V6QxQo5Ls2oTEbOfg",
+        authDomain: "academic-insights-hub-2c8a5.firebaseapp.com",
+        projectId: "academic-insights-hub-2c8a5",
+        storageBucket: "academic-insights-hub-2c8a5.firebasestorage.app",
+        messagingSenderId: "134013669001",
+        appId: "1:134013669001:web:0e879287b2b600e7350058",
+        measurementId: "G-L8JS8HP365"
+      };
+      firebase.initializeApp(firebaseConfig);
+      firebase.analytics();
+    </script>
   </body>
 </html>
