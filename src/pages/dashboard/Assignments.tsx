@@ -42,6 +42,7 @@ const statusVariant = (status: string) => {
 const Assignments = () => {
   const { role, user } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [submissionStats, setSubmissionStats] = useState<Record<string, { total: number; graded: number; approved: number; released: number }>>({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
