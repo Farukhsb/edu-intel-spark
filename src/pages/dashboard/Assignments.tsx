@@ -76,6 +76,21 @@ const Assignments = () => {
         filtered = filtered.filter((a) => !a.due_date || new Date(a.due_date) > new Date());
       }
       setAssignments(filtered);
+
+      // Fetch submission stats per assignment
+      if (filtered.length > 0) {
+        const ids = filtered.map((a) => a.id);
+        const { data: subs } = await supabase.from("submissions").select("assignment_id, status").in("assignment_id", ids);
+        const statsMap: Record<string, { total: number; graded: number; approved: number; released: number }> = {};
+        (subs || []).forEach((s: any) => {
+          if (!statsMap[s.assignment_id]) statsMap[s.assignment_id] = { total: 0, graded: 0, approved: 0, released: 0 };
+          statsMap[s.assignment_id].total++;
+          if (["ai_graded", "under_review", "approved", "released"].includes(s.status)) statsMap[s.assignment_id].graded++;
+          if (["approved", "released"].includes(s.status)) statsMap[s.assignment_id].approved++;
+          if (s.status === "released") statsMap[s.assignment_id].released++;
+        });
+        setSubmissionStats(statsMap);
+      }
     }
     setLoading(false);
   };
