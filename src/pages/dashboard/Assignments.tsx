@@ -261,6 +261,27 @@ const Assignments = () => {
                       )}
                       <span className="text-xs text-muted-foreground">Max: {a.max_score} pts</span>
                     </div>
+                    {/* Progress bar for submissions */}
+                    {submissionStats[a.id] && submissionStats[a.id].total > 0 && (
+                      <div className="pt-2 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>{submissionStats[a.id].total} submitted</span>
+                          <span>{submissionStats[a.id].graded} graded</span>
+                          <span>{submissionStats[a.id].released} released</span>
+                        </div>
+                        <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden bg-muted">
+                          {submissionStats[a.id].released > 0 && (
+                            <div className="bg-success h-full" style={{ width: `${(submissionStats[a.id].released / submissionStats[a.id].total) * 100}%` }} />
+                          )}
+                          {(submissionStats[a.id].approved - submissionStats[a.id].released) > 0 && (
+                            <div className="bg-primary h-full" style={{ width: `${((submissionStats[a.id].approved - submissionStats[a.id].released) / submissionStats[a.id].total) * 100}%` }} />
+                          )}
+                          {(submissionStats[a.id].graded - submissionStats[a.id].approved) > 0 && (
+                            <div className="bg-warning h-full" style={{ width: `${((submissionStats[a.id].graded - submissionStats[a.id].approved) / submissionStats[a.id].total) * 100}%` }} />
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {role === "lecturer" && a.status === "draft" && (
