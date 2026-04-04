@@ -132,7 +132,29 @@ const AssignmentDetail = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [id]);
+  useEffect(() => {
+    fetchData();
+
+    // Real-time listeners for submissions and grades
+    const subChannel = supabase
+      .channel(`submissions-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "submissions", filter: `assignment_id=eq.${id}` }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const gradeChannel = supabase
+      .channel(`grades-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "grades" }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subChannel);
+      supabase.removeChannel(gradeChannel);
+    };
+  }, [id]);
 
   const uploadFile = async (file: File) => {
     const filePath = `${user!.id}/${id}/${Date.now()}_${file.name}`;
