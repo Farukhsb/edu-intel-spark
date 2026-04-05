@@ -3,20 +3,17 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Firebase config — these are publishable client-side keys (like Supabase anon key)
-// Update these values with your Firebase project config from the Firebase Console
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: "academic-insights-hub.firebaseapp.com",
-  projectId: "academic-insights-hub",
-  storageBucket: "academic-insights-hub.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "",
+  apiKey: "AIzaSyBHxOJDx53QDBQZA5V6QxQo5Ls2oTEbOfg",
+  authDomain: "academic-insights-hub-2c8a5.firebaseapp.com",
+  projectId: "academic-insights-hub-2c8a5",
+  storageBucket: "academic-insights-hub-2c8a5.firebasestorage.app",
+  messagingSenderId: "134013669001",
+  appId: "1:134013669001:web:0e879287b2b600e7350058",
+  measurementId: "G-L8JS8HP365"
 };
 
 const app = initializeApp(firebaseConfig);
-
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
