@@ -11,11 +11,11 @@ serve(async (req) => {
 
   try {
     const { assignmentId } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!ANTHROPIC_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Missing required environment variables");
     }
 
@@ -39,7 +39,6 @@ serve(async (req) => {
       });
     }
 
-    // Build submission summaries for comparison
     const submissionList = submissions.map((s: any) => ({
       id: s.id,
       student: s.student_name || s.student_email || "Anonymous",
@@ -52,59 +51,27 @@ serve(async (req) => {
 Submissions:
 ${submissionList.map((s: any, i: number) => `${i + 1}. ${s.student} - ${s.file} (${s.url})`).join("\n")}
 
-Analyze the file names, submission patterns, and any available metadata. Flag pairs that warrant further review. Consider:
-- Similar file names or naming patterns
-- Submissions very close in time
-- Any other suspicious patterns
+Analyze the file names, submission patterns, and any available metadata. Flag pairs that warrant further review.
 
-For each flagged pair, provide a similarity score (0-100) and explanation.`;
+Respond with a JSON object containing:
+- "flags": array of objects with "student_a", "student_b", "submission_a_id", "submission_b_id", "similarity_score" (0-100), "reason", "severity" ("low"|"medium"|"high")
+- "summary": overall integrity assessment string
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+Respond ONLY with the JSON object.`;
+
+    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2048,
         messages: [
-          { role: "system", content: "You are an academic integrity analyst. Respond with structured data." },
           { role: "user", content: prompt },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "report_similarity",
-              description: "Report similarity findings between submissions",
-              parameters: {
-                type: "object",
-                properties: {
-                  flags: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        student_a: { type: "string" },
-                        student_b: { type: "string" },
-                        submission_a_id: { type: "string" },
-                        submission_b_id: { type: "string" },
-                        similarity_score: { type: "number", description: "0-100 similarity percentage" },
-                        reason: { type: "string" },
-                        severity: { type: "string", enum: ["low", "medium", "high"] },
-                      },
-                      required: ["student_a", "student_b", "similarity_score", "reason", "severity"],
-                    },
-                  },
-                  summary: { type: "string", description: "Overall integrity assessment" },
-                },
-                required: ["flags", "summary"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "report_similarity" } },
       }),
     });
 
@@ -114,20 +81,18 @@ For each flagged pair, provide a similarity score (0-100) and explanation.`;
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       throw new Error(`AI error: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    
+    const content = aiData.content?.[0]?.text || "";
+
     let result = { flags: [], summary: "Analysis complete" };
-    if (toolCall?.function?.arguments) {
-      result = JSON.parse(toolCall.function.arguments);
+    try {
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+      result = JSON.parse(jsonMatch[1].trim());
+    } catch {
+      console.error("Failed to parse plagiarism response:", content);
     }
 
     return new Response(JSON.stringify(result), {
