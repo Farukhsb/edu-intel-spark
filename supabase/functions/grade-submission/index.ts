@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.99.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,30 +9,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { submissionIds, assignmentId } = await req.json();
+    const { assignment, submissions } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not configured");
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Supabase not configured");
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    const { data: assignment, error: aErr } = await supabase
-      .from("assignments")
-      .select("*")
-      .eq("id", assignmentId)
-      .single();
-
-    if (aErr || !assignment) throw new Error("Assignment not found");
-
-    const { data: submissions, error: sErr } = await supabase
-      .from("submissions")
-      .select("*")
-      .in("id", submissionIds);
-
-    if (sErr || !submissions?.length) throw new Error("No submissions found");
+    if (!assignment || !submissions?.length) throw new Error("Missing assignment or submissions data");
 
     const rubric = assignment.rubric || [];
     const rubricText = Array.isArray(rubric) && rubric.length > 0
@@ -43,11 +23,6 @@ serve(async (req) => {
     const results: any[] = [];
 
     for (const sub of submissions) {
-      await supabase
-        .from("submissions")
-        .update({ status: "ai_grading" })
-        .eq("id", sub.id);
-
       const prompt = `You are an expert academic grader. Grade this student submission for the assignment "${assignment.title}".
 
 Assignment Description: ${assignment.description || "N/A"}
@@ -57,7 +32,7 @@ Maximum Score: ${assignment.max_score}
 Rubric Criteria:
 ${rubricText}
 
-Student: ${sub.student_name || sub.student_email || "Anonymous"}
+Student: ${sub.student_name || "Anonymous"}
 File: ${sub.file_name} (${sub.file_type || "unknown type"})
 File URL: ${sub.file_url}
 
@@ -79,47 +54,39 @@ Be fair, constructive, and specific in your feedback. Respond ONLY with the JSON
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514",
             max_tokens: 2048,
-            messages: [
-              { role: "user", content: prompt },
-            ],
+            messages: [{ role: "user", content: prompt }],
           }),
         });
 
         if (!aiResponse.ok) {
           const errText = await aiResponse.text();
           console.error("AI error for submission", sub.id, aiResponse.status, errText);
-          await supabase.from("submissions").update({ status: "submitted" }).eq("id", sub.id);
           results.push({ submissionId: sub.id, error: `AI error: ${aiResponse.status}` });
           continue;
         }
 
         const aiData = await aiResponse.json();
         const content = aiData.content?.[0]?.text || "";
-        
+
         let gradeResult;
         try {
-          // Extract JSON from the response (handle markdown code blocks)
           const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
           gradeResult = JSON.parse(jsonMatch[1].trim());
         } catch {
           console.error("Failed to parse AI response for", sub.id, content);
-          await supabase.from("submissions").update({ status: "submitted" }).eq("id", sub.id);
           results.push({ submissionId: sub.id, error: "Failed to parse AI response" });
           continue;
         }
 
-        await supabase.from("grades").insert({
-          submission_id: sub.id,
-          ai_score: gradeResult.score,
-          ai_feedback: gradeResult.feedback,
-          ai_breakdown: gradeResult.breakdown || [],
+        results.push({
+          submissionId: sub.id,
+          score: gradeResult.score,
+          feedback: gradeResult.feedback,
+          breakdown: gradeResult.breakdown || [],
+          success: true,
         });
-
-        await supabase.from("submissions").update({ status: "ai_graded" }).eq("id", sub.id);
-        results.push({ submissionId: sub.id, score: gradeResult.score, success: true });
       } catch (gradeErr) {
         console.error("Grading error for", sub.id, gradeErr);
-        await supabase.from("submissions").update({ status: "submitted" }).eq("id", sub.id);
         results.push({ submissionId: sub.id, error: String(gradeErr) });
       }
     }

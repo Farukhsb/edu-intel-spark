@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import {
+  User as FirebaseUser,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  updateProfile,
+} from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { posthog } from "@/lib/posthog";
 
 type AppRole = "lecturer" | "student";
@@ -15,8 +22,7 @@ interface Profile {
 }
 
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  user: FirebaseUser | null;
   profile: Profile | null;
   role: AppRole | null;
   loading: boolean;
@@ -34,79 +40,75 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    if (data) setProfile(data as Profile);
+  const fetchProfile = async (uid: string) => {
+    const snap = await getDoc(doc(db, "profiles", uid));
+    if (snap.exists()) {
+      setProfile({ id: snap.id, ...snap.data() } as Profile);
+    }
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          setTimeout(() => fetchProfile(session.user.id), 0);
-          posthog.identify(session.user.id, { email: session.user.email });
-        } else {
-          setProfile(null);
-          posthog.reset();
-        }
-        setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        await fetchProfile(firebaseUser.uid);
+        posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
+      } else {
+        setProfile(null);
+        posthog.reset();
       }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string, role: AppRole) => {
-    const { error } = await supabase.auth.signUp({
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(cred.user, { displayName: fullName });
+
+    // Create profile in Firestore
+    await setDoc(doc(db, "profiles", cred.user.uid), {
+      full_name: fullName,
       email,
-      password,
-      options: {
-        data: { full_name: fullName, role },
-        emailRedirectTo: window.location.origin,
-      },
+      role,
+      avatar_url: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
-    if (error) throw error;
+
+    // Create user_roles entry
+    await setDoc(doc(db, "user_roles", cred.user.uid), {
+      user_id: cred.user.uid,
+      role,
+    });
+
+    await fetchProfile(cred.user.uid);
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const handleSignOut = async () => {
+    await firebaseSignOut(auth);
     setProfile(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
-        session,
         user,
         profile,
         role: profile?.role ?? null,
         loading,
         signUp,
         signIn,
-        signOut,
+        signOut: handleSignOut,
       }}
     >
       {children}

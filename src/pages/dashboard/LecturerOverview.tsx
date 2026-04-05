@@ -1,29 +1,15 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/firebase";
+import { collection, query, getDocs, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  BarChart3,
-  CheckCircle,
-  Clock,
-  FileText,
-  TrendingDown,
-  TrendingUp,
-  Users,
-  AlertTriangle,
-  Target,
-  Sparkles,
+  BarChart3, CheckCircle, Clock, FileText, TrendingDown, TrendingUp,
+  Users, AlertTriangle, Target, Sparkles,
 } from "lucide-react";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 
 interface Stats {
@@ -59,104 +45,98 @@ const LecturerOverview = () => {
   const [gradeDistribution, setGradeDistribution] = useState<{ label: string; count: number; color: string; fill: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      const { data: assignments } = await supabase.from("assignments").select("id, title, max_score");
-      const assignmentMap: Record<string, { title: string; max_score: number }> = {};
-      (assignments || []).forEach((a: any) => { assignmentMap[a.id] = { title: a.title, max_score: a.max_score }; });
+  const fetchDashboard = async () => {
+    const assignmentsSnap = await getDocs(collection(db, "assignments"));
+    const assignmentMap: Record<string, { title: string; max_score: number }> = {};
+    assignmentsSnap.docs.forEach((d) => {
+      const data = d.data();
+      assignmentMap[d.id] = { title: data.title, max_score: data.max_score };
+    });
 
-      const { data: submissions } = await supabase.from("submissions").select("*").order("submitted_at", { ascending: false });
-      const allSubs = submissions || [];
+    const subsSnap = await getDocs(collection(db, "submissions"));
+    const allSubs = subsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+    allSubs.sort((a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
 
-      const subIds = allSubs.map((s: any) => s.id);
-      let allGrades: any[] = [];
-      if (subIds.length > 0) {
-        const { data: gData } = await supabase.from("grades").select("*").in("submission_id", subIds);
-        allGrades = gData || [];
+    const gradesSnap = await getDocs(collection(db, "grades"));
+    const allGrades = gradesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+    const gradeMap: Record<string, any> = {};
+    allGrades.forEach((g: any) => { gradeMap[g.submission_id] = g; });
+
+    const gradedSubs = allSubs.filter((s: any) => ["ai_graded", "under_review", "approved", "released"].includes(s.status));
+    const pendingSubs = allSubs.filter((s: any) => ["submitted", "ai_grading"].includes(s.status));
+    const scores = allGrades.filter((g: any) => g.final_score != null || g.ai_score != null).map((g: any) => g.final_score ?? g.ai_score);
+    const avgScore = scores.length > 0 ? Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10 : null;
+
+    const studentScores: Record<string, number[]> = {};
+    allSubs.forEach((s: any) => {
+      const key = s.student_id || s.student_name || s.student_email;
+      if (!key) return;
+      const g = gradeMap[s.id];
+      const score = g?.final_score ?? g?.ai_score;
+      if (score != null) {
+        if (!studentScores[key]) studentScores[key] = [];
+        studentScores[key].push(score);
       }
-      const gradeMap: Record<string, any> = {};
-      allGrades.forEach((g: any) => { gradeMap[g.submission_id] = g; });
+    });
+    let onTarget = 0, atRisk = 0;
+    Object.values(studentScores).forEach((ss) => {
+      const avg = ss.reduce((a, b) => a + b, 0) / ss.length;
+      if (avg >= 50) onTarget++; else atRisk++;
+    });
 
-      const gradedSubs = allSubs.filter((s: any) => ["ai_graded", "under_review", "approved", "released"].includes(s.status));
-      const pendingSubs = allSubs.filter((s: any) => ["submitted", "ai_grading"].includes(s.status));
-      const scores = allGrades.filter((g: any) => g.final_score != null || g.ai_score != null).map((g: any) => g.final_score ?? g.ai_score);
-      const avgScore = scores.length > 0 ? Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10 : null;
+    const uniqueStudents = new Set(allSubs.map((s: any) => s.student_id || s.student_name || s.student_email).filter(Boolean));
 
-      // Calculate on-target vs at-risk per student
-      const studentScores: Record<string, number[]> = {};
-      allSubs.forEach((s: any) => {
-        const key = s.student_id || s.student_name || s.student_email;
-        if (!key) return;
-        const g = gradeMap[s.id];
-        const score = g?.final_score ?? g?.ai_score;
-        if (score != null) {
-          if (!studentScores[key]) studentScores[key] = [];
-          studentScores[key].push(score);
-        }
-      });
-      let onTarget = 0;
-      let atRisk = 0;
-      Object.values(studentScores).forEach((ss) => {
-        const avg = ss.reduce((a, b) => a + b, 0) / ss.length;
-        if (avg >= 50) onTarget++;
-        else atRisk++;
-      });
+    setStats({
+      totalSubmissions: allSubs.length,
+      gradedCount: gradedSubs.length,
+      pendingCount: pendingSubs.length,
+      avgScore,
+      activeStudents: uniqueStudents.size,
+      assignmentCount: assignmentsSnap.size,
+      onTarget,
+      atRisk,
+    });
 
-      const uniqueStudents = new Set(allSubs.map((s: any) => s.student_id || s.student_name || s.student_email).filter(Boolean));
+    const dist = [
+      { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
+      { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
+      { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
+      { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
+    ];
+    scores.forEach((s: number) => {
+      if (s >= 90) dist[0].count++;
+      else if (s >= 70) dist[1].count++;
+      else if (s >= 50) dist[2].count++;
+      else dist[3].count++;
+    });
+    setGradeDistribution(dist);
 
-      setStats({
-        totalSubmissions: allSubs.length,
-        gradedCount: gradedSubs.length,
-        pendingCount: pendingSubs.length,
-        avgScore,
-        activeStudents: uniqueStudents.size,
-        assignmentCount: (assignments || []).length,
-        onTarget,
-        atRisk,
-      });
+    const recentSubs: RecentSubmission[] = allSubs.slice(0, 6).map((s: any) => {
+      const a = assignmentMap[s.assignment_id];
+      const g = gradeMap[s.id];
+      return {
+        id: s.id,
+        student_name: s.student_name || s.student_email || "Student",
+        file_name: s.file_name,
+        status: s.status,
+        submitted_at: s.submitted_at,
+        assignment_title: a?.title || "Unknown",
+        score: g?.final_score ?? g?.ai_score ?? null,
+        max_score: a?.max_score || 100,
+      };
+    });
+    setRecent(recentSubs);
+    setLoading(false);
+  };
 
-      const dist = [
-        { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
-        { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
-        { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
-        { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
-      ];
-      scores.forEach((s: number) => {
-        if (s >= 90) dist[0].count++;
-        else if (s >= 70) dist[1].count++;
-        else if (s >= 50) dist[2].count++;
-        else dist[3].count++;
-      });
-      setGradeDistribution(dist);
-
-      const recentSubs: RecentSubmission[] = allSubs.slice(0, 6).map((s: any) => {
-        const a = assignmentMap[s.assignment_id];
-        const g = gradeMap[s.id];
-        return {
-          id: s.id,
-          student_name: s.student_name || s.student_email || "Student",
-          file_name: s.file_name,
-          status: s.status,
-          submitted_at: s.submitted_at,
-          assignment_title: a?.title || "Unknown",
-          score: g?.final_score ?? g?.ai_score ?? null,
-          max_score: a?.max_score || 100,
-        };
-      });
-      setRecent(recentSubs);
-      setLoading(false);
-    };
-
+  useEffect(() => {
     fetchDashboard();
 
     // Real-time listeners
-    const channel = supabase
-      .channel("dashboard-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => fetchDashboard())
-      .on("postgres_changes", { event: "*", schema: "public", table: "grades" }, () => fetchDashboard())
-      .subscribe();
+    const unsubSubs = onSnapshot(collection(db, "submissions"), () => fetchDashboard());
+    const unsubGrades = onSnapshot(collection(db, "grades"), () => fetchDashboard());
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { unsubSubs(); unsubGrades(); };
   }, []);
 
   if (loading) return <div className="flex items-center justify-center py-12"><p className="text-muted-foreground">Loading dashboard...</p></div>;
@@ -165,7 +145,6 @@ const LecturerOverview = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Welcome Banner */}
       <Card className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-primary/20">
         <CardContent className="flex items-center gap-4 p-6">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
@@ -184,7 +163,6 @@ const LecturerOverview = () => {
         </CardContent>
       </Card>
 
-      {/* Color-coded KPI Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-l-primary">
           <CardContent className="p-4">
@@ -199,7 +177,6 @@ const LecturerOverview = () => {
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-l-4 border-l-[hsl(var(--success))]">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -213,7 +190,6 @@ const LecturerOverview = () => {
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-l-4 border-l-destructive">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -227,7 +203,6 @@ const LecturerOverview = () => {
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-l-4 border-l-[hsl(var(--warning))]">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -243,7 +218,6 @@ const LecturerOverview = () => {
         </Card>
       </div>
 
-      {/* Secondary stats */}
       <div className="grid gap-4 grid-cols-3">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
@@ -275,7 +249,6 @@ const LecturerOverview = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Recent Submissions */}
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="text-base">Recent Submissions</CardTitle>
@@ -313,7 +286,6 @@ const LecturerOverview = () => {
           </CardContent>
         </Card>
 
-        {/* Grade Distribution Chart */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Grade Distribution</CardTitle>
@@ -328,9 +300,7 @@ const LecturerOverview = () => {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                   <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                  />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                     {gradeDistribution.map((entry, idx) => (
                       <Cell key={idx} fill={entry.fill} />
