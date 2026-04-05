@@ -1,13 +1,23 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  query,
+  orderBy,
+  where,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  doc,
+  getDocs,
+} from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -54,81 +64,79 @@ const Assignments = () => {
   const [dueDate, setDueDate] = useState("");
   const [rubric, setRubric] = useState<RubricCriterion[]>([]);
 
-  const fetchAssignments = async () => {
-    let query = supabase
-      .from("assignments")
-      .select("*")
-      .order("created_at", { ascending: false });
+  useEffect(() => {
+    if (!user) return;
 
-    // Students only see published assignments that haven't passed the due date
+    // Build query based on role
+    let q;
     if (role === "student") {
-      query = query.eq("status", "published");
+      q = query(
+        collection(db, "assignments"),
+        where("status", "==", "published"),
+        orderBy("created_at", "desc")
+      );
+    } else {
+      q = query(
+        collection(db, "assignments"),
+        where("lecturer_id", "==", user.uid),
+        orderBy("created_at", "desc")
+      );
     }
 
-    const { data, error } = await query;
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      let data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Assignment));
 
-    if (error) {
-      toast.error("Failed to load assignments");
-    } else {
-      let filtered = (data as unknown as Assignment[]) || [];
       // Auto-hide past-due assignments for students
       if (role === "student") {
-        filtered = filtered.filter((a) => !a.due_date || new Date(a.due_date) > new Date());
+        data = data.filter((a) => !a.due_date || new Date(a.due_date) > new Date());
       }
-      setAssignments(filtered);
 
-      // Fetch submission stats per assignment
-      if (filtered.length > 0) {
-        const ids = filtered.map((a) => a.id);
-        const { data: subs } = await supabase.from("submissions").select("assignment_id, status").in("assignment_id", ids);
+      setAssignments(data);
+
+      // Fetch submission stats
+      if (data.length > 0) {
         const statsMap: Record<string, { total: number; graded: number; approved: number; released: number }> = {};
-        (subs || []).forEach((s: any) => {
-          if (!statsMap[s.assignment_id]) statsMap[s.assignment_id] = { total: 0, graded: 0, approved: 0, released: 0 };
-          statsMap[s.assignment_id].total++;
-          if (["ai_graded", "under_review", "approved", "released"].includes(s.status)) statsMap[s.assignment_id].graded++;
-          if (["approved", "released"].includes(s.status)) statsMap[s.assignment_id].approved++;
-          if (s.status === "released") statsMap[s.assignment_id].released++;
-        });
+        for (const a of data) {
+          const subsSnap = await getDocs(
+            query(collection(db, "submissions"), where("assignment_id", "==", a.id))
+          );
+          const stats = { total: 0, graded: 0, approved: 0, released: 0 };
+          subsSnap.docs.forEach((d) => {
+            const s = d.data();
+            stats.total++;
+            if (["ai_graded", "under_review", "approved", "released"].includes(s.status)) stats.graded++;
+            if (["approved", "released"].includes(s.status)) stats.approved++;
+            if (s.status === "released") stats.released++;
+          });
+          statsMap[a.id] = stats;
+        }
         setSubmissionStats(statsMap);
       }
-    }
-    setLoading(false);
-  };
+      setLoading(false);
+    });
 
-  useEffect(() => {
-    fetchAssignments();
-
-    // Real-time listener for assignment changes
-    const channel = supabase
-      .channel("assignments-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => {
-        fetchAssignments();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [role]);
+    return () => unsubscribe();
+  }, [role, user]);
 
   const handleCreate = async () => {
-    if (!title.trim()) {
+    if (!title.trim() || !user) {
       toast.error("Title is required");
       return;
     }
     setCreating(true);
-    const { error } = await supabase.from("assignments").insert([{
-      title: title.trim(),
-      description: description.trim() || null,
-      module_code: moduleCode.trim() || null,
-      max_score: Number(maxScore) || 100,
-      due_date: dueDate || null,
-      lecturer_id: user!.id,
-      status: "draft" as const,
-      rubric: (rubric.length > 0 ? rubric : null) as any,
-    }]);
-
-    if (error) {
-      toast.error("Failed to create assignment");
-    } else {
+    try {
+      await addDoc(collection(db, "assignments"), {
+        title: title.trim(),
+        description: description.trim() || null,
+        module_code: moduleCode.trim() || null,
+        max_score: Number(maxScore) || 100,
+        due_date: dueDate || null,
+        lecturer_id: user.uid,
+        status: "draft",
+        rubric: rubric.length > 0 ? rubric : null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
       toast.success("Assignment created");
       setTitle("");
       setDescription("");
@@ -137,22 +145,18 @@ const Assignments = () => {
       setDueDate("");
       setRubric([]);
       setDialogOpen(false);
-      fetchAssignments();
+    } catch {
+      toast.error("Failed to create assignment");
     }
     setCreating(false);
   };
 
   const handlePublish = async (id: string) => {
-    const { error } = await supabase
-      .from("assignments")
-      .update({ status: "published" as const })
-      .eq("id", id);
-
-    if (error) {
-      toast.error("Failed to publish");
-    } else {
+    try {
+      await updateDoc(doc(db, "assignments", id), { status: "published", updated_at: new Date().toISOString() });
       toast.success("Assignment published — students can now submit");
-      fetchAssignments();
+    } catch {
+      toast.error("Failed to publish");
     }
   };
 
@@ -261,7 +265,6 @@ const Assignments = () => {
                       )}
                       <span className="text-xs text-muted-foreground">Max: {a.max_score} pts</span>
                     </div>
-                    {/* Progress bar for submissions */}
                     {submissionStats[a.id] && submissionStats[a.id].total > 0 && (
                       <div className="pt-2 space-y-1">
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">

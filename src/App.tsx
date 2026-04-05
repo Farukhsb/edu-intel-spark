@@ -27,9 +27,9 @@ import StudentProfile from "./pages/dashboard/StudentProfile";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { session, loading } = useAuth();
+  const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
-  if (!session) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/auth" replace />;
   return <>{children}</>;
 };
 

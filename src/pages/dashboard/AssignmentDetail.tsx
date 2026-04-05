@@ -1,6 +1,20 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { db, storage as firebaseStorage } from "@/lib/firebase";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  getDocs,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,19 +30,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft,
-  Upload,
-  FileText,
-  CheckCircle,
-  Clock,
-  Brain,
-  Eye,
-  CheckCheck,
-  Edit,
-  Send,
-  Shield,
-  AlertTriangle,
-  Loader2,
+  ArrowLeft, Upload, FileText, CheckCircle, Clock, Brain, Eye,
+  CheckCheck, Edit, Send, Shield, AlertTriangle, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -109,59 +112,54 @@ const AssignmentDetail = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchData = async () => {
-    if (!id) return;
-
-    const { data: aData } = await supabase.from("assignments").select("*").eq("id", id).single();
-    if (aData) setAssignment(aData as Assignment);
-
-    const { data: sData } = await supabase.from("submissions").select("*").eq("assignment_id", id).order("submitted_at", { ascending: false });
-
-    if (sData) {
-      setSubmissions(sData as Submission[]);
-      const subIds = (sData as Submission[]).map((s) => s.id);
-      if (subIds.length > 0) {
-        const { data: gData } = await supabase.from("grades").select("*").in("submission_id", subIds);
-        if (gData) {
-          const gradeMap: Record<string, Grade> = {};
-          (gData as Grade[]).forEach((g) => { gradeMap[g.submission_id] = g; });
-          setGrades(gradeMap);
-        }
-      }
-    }
-    setLoading(false);
-  };
-
+  // Fetch assignment
   useEffect(() => {
-    fetchData();
-
-    // Real-time listeners for submissions and grades
-    const subChannel = supabase
-      .channel(`submissions-${id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "submissions", filter: `assignment_id=eq.${id}` }, () => {
-        fetchData();
-      })
-      .subscribe();
-
-    const gradeChannel = supabase
-      .channel(`grades-${id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "grades" }, () => {
-        fetchData();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subChannel);
-      supabase.removeChannel(gradeChannel);
+    if (!id) return;
+    const fetchAssignment = async () => {
+      const snap = await getDoc(doc(db, "assignments", id));
+      if (snap.exists()) setAssignment({ id: snap.id, ...snap.data() } as Assignment);
+      setLoading(false);
     };
+    fetchAssignment();
+  }, [id]);
+
+  // Real-time submissions listener
+  useEffect(() => {
+    if (!id) return;
+    const q = query(
+      collection(db, "submissions"),
+      where("assignment_id", "==", id),
+      orderBy("submitted_at", "desc")
+    );
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const subs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Submission));
+      setSubmissions(subs);
+
+      // Fetch grades for these submissions
+      if (subs.length > 0) {
+        const gradeMap: Record<string, Grade> = {};
+        for (const sub of subs) {
+          const gSnap = await getDocs(
+            query(collection(db, "grades"), where("submission_id", "==", sub.id))
+          );
+          gSnap.docs.forEach((gDoc) => {
+            gradeMap[sub.id] = { id: gDoc.id, ...gDoc.data() } as Grade;
+          });
+        }
+        setGrades(gradeMap);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [id]);
 
   const uploadFile = async (file: File) => {
-    const filePath = `${user!.id}/${id}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("submissions").upload(filePath, file);
-    if (uploadError) throw uploadError;
-    const { data: urlData } = supabase.storage.from("submissions").getPublicUrl(filePath);
-    return { fileUrl: urlData.publicUrl, fileName: file.name, fileType: file.type };
+    const filePath = `submissions/${user!.uid}/${id}/${Date.now()}_${file.name}`;
+    const storageRef = ref(firebaseStorage, filePath);
+    await uploadBytes(storageRef, file);
+    const fileUrl = await getDownloadURL(storageRef);
+    return { fileUrl, fileName: file.name, fileType: file.type };
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,13 +168,19 @@ const AssignmentDetail = () => {
     setUploading(true);
     try {
       const { fileUrl, fileName, fileType } = await uploadFile(file);
-      const { error } = await supabase.from("submissions").insert({
-        assignment_id: id, student_id: user!.id, file_url: fileUrl,
-        file_name: fileName, file_type: fileType, uploaded_by: user!.id, status: "submitted" as const,
+      await addDoc(collection(db, "submissions"), {
+        assignment_id: id,
+        student_id: user!.uid,
+        file_url: fileUrl,
+        file_name: fileName,
+        file_type: fileType,
+        uploaded_by: user!.uid,
+        status: "submitted",
+        submitted_at: new Date().toISOString(),
+        student_name: null,
+        student_email: user!.email || null,
       });
-      if (error) throw error;
       toast.success("Submission uploaded!");
-      fetchData();
     } catch { toast.error("Upload failed"); }
     setUploading(false);
     e.target.value = "";
@@ -191,49 +195,102 @@ const AssignmentDetail = () => {
       try {
         const { fileUrl, fileName, fileType } = await uploadFile(file);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-        await supabase.from("submissions").insert({
-          assignment_id: id, student_name: studentName, file_url: fileUrl,
-          file_name: fileName, file_type: fileType, uploaded_by: user!.id, status: "submitted" as const,
+        await addDoc(collection(db, "submissions"), {
+          assignment_id: id,
+          student_name: studentName,
+          file_url: fileUrl,
+          file_name: fileName,
+          file_type: fileType,
+          uploaded_by: user!.uid,
+          status: "submitted",
+          submitted_at: new Date().toISOString(),
+          student_id: null,
+          student_email: null,
         });
         success++;
       } catch { toast.error(`Failed to upload ${file.name}`); }
     }
     toast.success(`${success} file(s) uploaded`);
-    fetchData();
     setUploading(false);
     e.target.value = "";
   };
 
-  // Trigger real AI grading
+  // AI Grade — send data to edge function, write results to Firestore
   const handleAIGrade = async () => {
     const toGrade = submissions.filter((s) => selected.has(s.id) && s.status === "submitted");
     if (toGrade.length === 0) { toast.error("Select submitted files to grade"); return; }
+    if (!assignment) return;
 
     setGrading(true);
     toast.info(`Sending ${toGrade.length} submission(s) for AI grading...`);
 
+    // Update status to ai_grading
+    for (const sub of toGrade) {
+      await updateDoc(doc(db, "submissions", sub.id), { status: "ai_grading" });
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke("grade-submission", {
-        body: { submissionIds: toGrade.map((s) => s.id), assignmentId: id },
+        body: {
+          assignment: {
+            title: assignment.title,
+            description: assignment.description,
+            module_code: assignment.module_code,
+            max_score: assignment.max_score,
+            rubric: assignment.rubric,
+          },
+          submissions: toGrade.map((s) => ({
+            id: s.id,
+            student_name: s.student_name || s.student_email || "Anonymous",
+            file_name: s.file_name,
+            file_type: null,
+            file_url: s.file_url,
+          })),
+        },
       });
 
       if (error) throw error;
       const results = data?.results || [];
-      const successCount = results.filter((r: any) => r.success).length;
-      const failCount = results.filter((r: any) => r.error).length;
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const r of results) {
+        if (r.success) {
+          // Write grade to Firestore
+          await addDoc(collection(db, "grades"), {
+            submission_id: r.submissionId,
+            ai_score: r.score,
+            ai_feedback: r.feedback,
+            ai_breakdown: r.breakdown || [],
+            lecturer_score: null,
+            lecturer_feedback: null,
+            final_score: null,
+            final_feedback: null,
+            reviewed_by: null,
+            reviewed_at: null,
+            created_at: new Date().toISOString(),
+          });
+          await updateDoc(doc(db, "submissions", r.submissionId), { status: "ai_graded" });
+          successCount++;
+        } else {
+          await updateDoc(doc(db, "submissions", r.submissionId), { status: "submitted" });
+          failCount++;
+        }
+      }
 
       if (successCount > 0) toast.success(`${successCount} submission(s) graded successfully`);
       if (failCount > 0) toast.error(`${failCount} submission(s) failed to grade`);
     } catch (err: any) {
       toast.error(err?.message || "AI grading failed");
+      for (const sub of toGrade) {
+        await updateDoc(doc(db, "submissions", sub.id), { status: "submitted" });
+      }
     }
 
     setGrading(false);
     setSelected(new Set());
-    fetchData();
   };
 
-  // Bulk approve
   const handleBulkApprove = async () => {
     const toApprove = submissions.filter((s) => selected.has(s.id) && (s.status === "ai_graded" || s.status === "under_review"));
     if (toApprove.length === 0) { toast.error("Select AI-graded submissions to approve"); return; }
@@ -241,39 +298,43 @@ const AssignmentDetail = () => {
     for (const sub of toApprove) {
       const grade = grades[sub.id];
       if (grade) {
-        await supabase.from("grades").update({
+        await updateDoc(doc(db, "grades", grade.id), {
           final_score: grade.lecturer_score ?? grade.ai_score,
           final_feedback: grade.lecturer_feedback ?? grade.ai_feedback,
-          reviewed_by: user!.id, reviewed_at: new Date().toISOString(),
-        }).eq("id", grade.id);
+          reviewed_by: user!.uid,
+          reviewed_at: new Date().toISOString(),
+        });
       }
-      await supabase.from("submissions").update({ status: "approved" as const }).eq("id", sub.id);
+      await updateDoc(doc(db, "submissions", sub.id), { status: "approved" });
     }
     toast.success(`${toApprove.length} submission(s) approved`);
     setSelected(new Set());
-    fetchData();
   };
 
-  // Release grades to students
   const handleReleaseGrades = async () => {
     const toRelease = submissions.filter((s) => selected.has(s.id) && s.status === "approved");
     if (toRelease.length === 0) { toast.error("Select approved submissions to release"); return; }
 
     for (const sub of toRelease) {
-      await supabase.from("submissions").update({ status: "released" as const }).eq("id", sub.id);
+      await updateDoc(doc(db, "submissions", sub.id), { status: "released" });
     }
     toast.success(`${toRelease.length} grade(s) released to students`);
     setSelected(new Set());
-    fetchData();
   };
 
-  // Plagiarism check
   const handlePlagiarismCheck = async () => {
     if (!id) return;
     setCheckingPlagiarism(true);
     try {
+      const submissionData = submissions.map((s) => ({
+        id: s.id,
+        student_name: s.student_name || s.student_email || "Anonymous",
+        file_name: s.file_name,
+        file_url: s.file_url,
+      }));
+
       const { data, error } = await supabase.functions.invoke("check-plagiarism", {
-        body: { assignmentId: id },
+        body: { submissions: submissionData },
       });
       if (error) throw error;
       setPlagiarismFlags(data?.flags || []);
@@ -299,15 +360,13 @@ const AssignmentDetail = () => {
     const grade = grades[reviewSubmission.id];
     if (!grade) { toast.error("No AI grade found"); return; }
 
-    await supabase.from("grades").update({
+    await updateDoc(doc(db, "grades", grade.id), {
       lecturer_score: Number(editScore) || null,
       lecturer_feedback: editFeedback || null,
-    }).eq("id", grade.id);
-
-    await supabase.from("submissions").update({ status: "under_review" as const }).eq("id", reviewSubmission.id);
+    });
+    await updateDoc(doc(db, "submissions", reviewSubmission.id), { status: "under_review" });
     toast.success("Review saved");
     setReviewOpen(false);
-    fetchData();
   };
 
   const toggleSelect = (subId: string) => {
@@ -339,7 +398,6 @@ const AssignmentDetail = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard/assignments")}>
           <ArrowLeft className="h-4 w-4" />
@@ -358,7 +416,6 @@ const AssignmentDetail = () => {
         <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">{assignment.description}</p></CardContent></Card>
       )}
 
-      {/* Rubric display */}
       {assignment.rubric && Array.isArray(assignment.rubric) && assignment.rubric.length > 0 && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Rubric</CardTitle></CardHeader>
@@ -378,7 +435,6 @@ const AssignmentDetail = () => {
         </Card>
       )}
 
-      {/* Actions */}
       <div className="flex flex-wrap gap-3">
         {!isLecturer && (
           <>
@@ -422,7 +478,6 @@ const AssignmentDetail = () => {
         )}
       </div>
 
-      {/* Plagiarism Flags */}
       {plagiarismFlags.length > 0 && (
         <Card className="border-warning">
           <CardHeader className="pb-2">
@@ -438,18 +493,15 @@ const AssignmentDetail = () => {
                   <p className="text-sm font-medium">{flag.student_a} ↔ {flag.student_b}</p>
                   <p className="text-xs text-muted-foreground">{flag.reason}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={flag.severity === "high" ? "destructive" : flag.severity === "medium" ? "secondary" : "outline"}>
-                    {flag.similarity_score}% similar
-                  </Badge>
-                </div>
+                <Badge variant={flag.severity === "high" ? "destructive" : flag.severity === "medium" ? "secondary" : "outline"}>
+                  {flag.similarity_score}% similar
+                </Badge>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
 
-      {/* Submissions */}
       <Card>
         <CardHeader><CardTitle className="text-base">Submissions ({submissions.length})</CardTitle></CardHeader>
         <CardContent>
@@ -474,7 +526,6 @@ const AssignmentDetail = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{sub.student_name || sub.student_email || "Student"}</p>
                       <p className="text-xs text-muted-foreground truncate">{sub.file_name} · {format(new Date(sub.submitted_at), "MMM d, HH:mm")}</p>
-                      {/* Show AI breakdown if available */}
                       {grade?.ai_breakdown && Array.isArray(grade.ai_breakdown) && grade.ai_breakdown.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {grade.ai_breakdown.map((b: any, i: number) => (
@@ -484,7 +535,6 @@ const AssignmentDetail = () => {
                           ))}
                         </div>
                       )}
-                      {/* Show feedback for students on released grades */}
                       {!isLecturer && sub.status === "released" && grade?.final_feedback && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{grade.final_feedback}</p>
                       )}
@@ -512,7 +562,6 @@ const AssignmentDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Review Dialog */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -527,7 +576,6 @@ const AssignmentDetail = () => {
                   <p className="text-lg font-bold font-display">{grades[reviewSubmission.id].ai_score}/{assignment.max_score}</p>
                   <p className="text-xs font-medium text-muted-foreground mt-2">AI Feedback</p>
                   <p className="text-sm">{grades[reviewSubmission.id].ai_feedback || "N/A"}</p>
-                  {/* AI Breakdown */}
                   {grades[reviewSubmission.id].ai_breakdown && Array.isArray(grades[reviewSubmission.id].ai_breakdown) && (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs font-medium text-muted-foreground">Breakdown</p>

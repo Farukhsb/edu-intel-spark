@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/firebase";
+import { collection, query, where, orderBy, onSnapshot, getDocs } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,37 +24,46 @@ const StudentGrades = () => {
   const [stats, setStats] = useState({ avg: 0, count: 0, highest: 0, lowest: 0 });
 
   useEffect(() => {
-    const fetchGrades = async () => {
-      if (!user) return;
+    if (!user) return;
 
-      // Get student's submissions
-      const { data: submissions } = await supabase
-        .from("submissions")
-        .select("*")
-        .eq("student_id", user.id)
-        .order("submitted_at", { ascending: false });
+    const q = query(
+      collection(db, "submissions"),
+      where("student_id", "==", user.uid),
+      orderBy("submitted_at", "desc")
+    );
 
-      if (!submissions?.length) { setLoading(false); return; }
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const submissions = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+
+      if (!submissions.length) { setLoading(false); return; }
 
       // Get assignments for context
       const assignmentIds = [...new Set(submissions.map((s: any) => s.assignment_id))];
-      const { data: assignments } = await supabase
-        .from("assignments")
-        .select("id, title, module_code, max_score")
-        .in("id", assignmentIds);
-
       const assignmentMap: Record<string, any> = {};
-      (assignments || []).forEach((a: any) => { assignmentMap[a.id] = a; });
+      for (const aId of assignmentIds) {
+        const aSnap = await getDocs(
+          query(collection(db, "assignments"), where("__name__", "==", aId))
+        );
+        // Use getDoc instead for single doc
+      }
+      // Fetch all assignments and filter
+      const allAssignments = await getDocs(collection(db, "assignments"));
+      allAssignments.docs.forEach((d) => {
+        if (assignmentIds.includes(d.id)) {
+          assignmentMap[d.id] = { ...d.data(), id: d.id };
+        }
+      });
 
       // Get grades
-      const subIds = submissions.map((s: any) => s.id);
-      const { data: gradeData } = await supabase
-        .from("grades")
-        .select("*")
-        .in("submission_id", subIds);
-
       const gradeMap: Record<string, any> = {};
-      (gradeData || []).forEach((g: any) => { gradeMap[g.submission_id] = g; });
+      for (const s of submissions) {
+        const gSnap = await getDocs(
+          query(collection(db, "grades"), where("submission_id", "==", s.id))
+        );
+        gSnap.docs.forEach((gDoc) => {
+          gradeMap[s.id] = { id: gDoc.id, ...gDoc.data() };
+        });
+      }
 
       const studentGrades: StudentGrade[] = submissions.map((s: any) => {
         const a = assignmentMap[s.assignment_id];
@@ -74,7 +84,6 @@ const StudentGrades = () => {
 
       setGrades(studentGrades);
 
-      // Compute stats from released grades
       const releasedScores = studentGrades.filter((g) => g.score != null).map((g) => g.score!);
       if (releasedScores.length > 0) {
         setStats({
@@ -85,18 +94,9 @@ const StudentGrades = () => {
         });
       }
       setLoading(false);
-    };
+    });
 
-    fetchGrades();
-
-    // Real-time listener for grade updates
-    const channel = supabase
-      .channel("student-grades-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => fetchGrades())
-      .on("postgres_changes", { event: "*", schema: "public", table: "grades" }, () => fetchGrades())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    return () => unsubscribe();
   }, [user]);
 
   if (loading) return <div className="flex items-center justify-center py-12"><p className="text-muted-foreground">Loading grades...</p></div>;
@@ -105,7 +105,6 @@ const StudentGrades = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Overview Stats */}
       {releasedGrades.length > 0 && (
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           <Card><CardContent className="p-4 text-center">
@@ -127,7 +126,6 @@ const StudentGrades = () => {
         </div>
       )}
 
-      {/* Grade Cards */}
       {grades.length === 0 ? (
         <Card><CardContent className="py-12 text-center">
           <p className="text-muted-foreground">No submissions yet. Head to Assignments to submit your work.</p>
