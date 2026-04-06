@@ -397,12 +397,12 @@ const AssignmentDetail = () => {
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || !id) return;
+    if (!files || !id || !user?.uid) return;
     setUploading(true);
     let success = 0;
     for (const file of Array.from(files)) {
       try {
-        const { fileUrl, fileName, fileType } = await uploadFile(file);
+        const { fileUrl, fileName, fileType } = await uploadFile(file, user.uid);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
         await addDoc(collection(db, "submissions"), {
           assignment_id: id,
