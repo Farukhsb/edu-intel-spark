@@ -317,6 +317,17 @@ const AssignmentDetail = () => {
 
     for (const sub of toRelease) {
       await updateDoc(doc(db, "submissions", sub.id), { status: "released" });
+      // Create notification for student
+      if (sub.student_id) {
+        try {
+          await addDoc(collection(db, "notifications"), {
+            user_id: sub.student_id,
+            message: `Your grade for "${assignment?.title || "an assignment"}" has been released.`,
+            read: false,
+            created_at: new Date().toISOString(),
+          });
+        } catch { /* notifications collection may not exist yet */ }
+      }
     }
     toast.success(`${toRelease.length} grade(s) released to students`);
     setSelected(new Set());
