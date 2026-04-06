@@ -2,15 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  collection,
-  query,
-  orderBy,
-  where,
-  onSnapshot,
-  addDoc,
-  updateDoc,
-  doc,
-  getDocs,
+  collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, doc, getDocs,
 } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,17 +11,24 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, FileText, Calendar, BookOpen } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, FileText, Calendar, BookOpen, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
+
+const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Physics", "Biology"];
+const COHORTS = [
+  { value: "100", label: "Level 100" },
+  { value: "200", label: "Level 200" },
+  { value: "300", label: "Level 300" },
+  { value: "400", label: "Level 400" },
+];
 
 interface Assignment {
   id: string;
@@ -41,6 +40,8 @@ interface Assignment {
   status: "draft" | "published" | "closed";
   created_at: string;
   rubric: RubricCriterion[] | null;
+  cohort_ids?: string[];
+  department_ids?: string[];
 }
 
 const statusVariant = (status: string) => {
@@ -50,7 +51,7 @@ const statusVariant = (status: string) => {
 };
 
 const Assignments = () => {
-  const { role, user } = useAuth();
+  const { role, user, profile, isDemo } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [submissionStats, setSubmissionStats] = useState<Record<string, { total: number; graded: number; approved: number; released: number }>>({});
   const [loading, setLoading] = useState(true);
@@ -63,43 +64,47 @@ const Assignments = () => {
   const [maxScore, setMaxScore] = useState("100");
   const [dueDate, setDueDate] = useState("");
   const [rubric, setRubric] = useState<RubricCriterion[]>([]);
+  const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
   useEffect(() => {
+    if (isDemo) {
+      setAssignments([
+        { id: "demo-1", title: "Assignment 1 - Data Structures", description: "Implement a binary search tree", module_code: "CS301", max_score: 100, due_date: new Date(Date.now() + 7 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null, cohort_ids: ["200", "300"], department_ids: ["Computer Science"] },
+        { id: "demo-2", title: "Algorithms Coursework", description: "Dynamic programming problems", module_code: "CS205", max_score: 80, due_date: new Date(Date.now() + 14 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null, cohort_ids: ["200"], department_ids: ["Computer Science"] },
+        { id: "demo-3", title: "Lab Report - Sorting", description: "Compare sorting algorithms", module_code: "CS301", max_score: 50, due_date: null, status: "draft", created_at: new Date().toISOString(), rubric: null },
+      ]);
+      setLoading(false);
+      return;
+    }
     if (!user) return;
 
-    // Build query based on role
     let q;
     if (role === "student") {
-      q = query(
-        collection(db, "assignments"),
-        where("status", "==", "published"),
-        orderBy("created_at", "desc")
-      );
+      q = query(collection(db, "assignments"), where("status", "==", "published"), orderBy("created_at", "desc"));
     } else {
-      q = query(
-        collection(db, "assignments"),
-        where("lecturer_id", "==", user.uid),
-        orderBy("created_at", "desc")
-      );
+      q = query(collection(db, "assignments"), where("lecturer_id", "==", user.uid), orderBy("created_at", "desc"));
     }
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       let data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Assignment));
 
-      // Auto-hide past-due assignments for students
-      if (role === "student") {
+      // Filter for student's cohort/department
+      if (role === "student" && profile) {
+        data = data.filter((a) => {
+          const matchCohort = !a.cohort_ids || a.cohort_ids.length === 0 || (profile.cohort_id && a.cohort_ids.includes(profile.cohort_id));
+          const matchDept = !a.department_ids || a.department_ids.length === 0 || (profile.department_id && a.department_ids.includes(profile.department_id));
+          return matchCohort && matchDept;
+        });
         data = data.filter((a) => !a.due_date || new Date(a.due_date) > new Date());
       }
 
       setAssignments(data);
 
-      // Fetch submission stats
-      if (data.length > 0) {
+      if (data.length > 0 && role === "lecturer") {
         const statsMap: Record<string, { total: number; graded: number; approved: number; released: number }> = {};
         for (const a of data) {
-          const subsSnap = await getDocs(
-            query(collection(db, "submissions"), where("assignment_id", "==", a.id))
-          );
+          const subsSnap = await getDocs(query(collection(db, "submissions"), where("assignment_id", "==", a.id)));
           const stats = { total: 0, graded: 0, approved: 0, released: 0 };
           subsSnap.docs.forEach((d) => {
             const s = d.data();
@@ -116,13 +121,13 @@ const Assignments = () => {
     });
 
     return () => unsubscribe();
-  }, [role, user]);
+  }, [role, user, profile, isDemo]);
+
+  const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  const toggleDepartment = (val: string) => setSelectedDepartments(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
   const handleCreate = async () => {
-    if (!title.trim() || !user) {
-      toast.error("Title is required");
-      return;
-    }
+    if (!title.trim() || !user) { toast.error("Title is required"); return; }
     setCreating(true);
     try {
       await addDoc(collection(db, "assignments"), {
@@ -134,16 +139,14 @@ const Assignments = () => {
         lecturer_id: user.uid,
         status: "draft",
         rubric: rubric.length > 0 ? rubric : null,
+        cohort_ids: selectedCohorts.length > 0 ? selectedCohorts : null,
+        department_ids: selectedDepartments.length > 0 ? selectedDepartments : null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
       toast.success("Assignment created");
-      setTitle("");
-      setDescription("");
-      setModuleCode("");
-      setMaxScore("100");
-      setDueDate("");
-      setRubric([]);
+      setTitle(""); setDescription(""); setModuleCode(""); setMaxScore("100");
+      setDueDate(""); setRubric([]); setSelectedCohorts([]); setSelectedDepartments([]);
       setDialogOpen(false);
     } catch {
       toast.error("Failed to create assignment");
@@ -152,6 +155,7 @@ const Assignments = () => {
   };
 
   const handlePublish = async (id: string) => {
+    if (isDemo) { toast.info("Publishing disabled in demo mode"); return; }
     try {
       await updateDoc(doc(db, "assignments", id), { status: "published", updated_at: new Date().toISOString() });
       toast.success("Assignment published — students can now submit");
@@ -160,41 +164,33 @@ const Assignments = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-muted-foreground">Loading assignments...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {isDemo && (
+        <Card className="border-warning bg-warning/5">
+          <CardContent className="flex items-center gap-2 p-3">
+            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
+            <span className="text-sm text-muted-foreground">Viewing demo assignment data</span>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold font-display">
-            {role === "lecturer" ? "Manage Assignments" : "My Assignments"}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {role === "lecturer"
-              ? "Create assignments, upload briefs, and manage submissions"
-              : "View and submit your assignments"}
-          </p>
+          <h2 className="text-xl font-bold font-display">{role === "lecturer" ? "Manage Assignments" : "My Assignments"}</h2>
+          <p className="text-sm text-muted-foreground">{role === "lecturer" ? "Create assignments, upload briefs, and manage submissions" : "View and submit your assignments"}</p>
         </div>
-        {role === "lecturer" && (
+        {role === "lecturer" && !isDemo && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Assignment
-              </Button>
+              <Button><Plus className="mr-2 h-4 w-4" />New Assignment</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Assignment</DialogTitle>
-                <DialogDescription>
-                  Set up assignment details and rubric. Publish when ready.
-                </DialogDescription>
+                <DialogDescription>Set up assignment details and rubric. Publish when ready.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">
@@ -219,6 +215,31 @@ const Assignments = () => {
                     <Input id="dueDate" type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                   </div>
                 </div>
+
+                {/* Cohort & Department Selection */}
+                <div className="space-y-2">
+                  <Label>Target Cohorts (optional)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {COHORTS.map((c) => (
+                      <label key={c.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox checked={selectedCohorts.includes(c.value)} onCheckedChange={() => toggleCohort(c.value)} />
+                        {c.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Target Departments (optional)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {DEPARTMENTS.map((d) => (
+                      <label key={d} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox checked={selectedDepartments.includes(d)} onCheckedChange={() => toggleDepartment(d)} />
+                        {d}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 <RubricBuilder rubric={rubric} onChange={setRubric} maxScore={Number(maxScore) || 100} />
                 <Button onClick={handleCreate} disabled={creating} className="w-full">
                   {creating ? "Creating..." : "Create Assignment"}
@@ -234,9 +255,7 @@ const Assignments = () => {
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <BookOpen className="h-12 w-12 text-muted-foreground/40 mb-3" />
             <p className="font-medium">No assignments yet</p>
-            <p className="text-sm text-muted-foreground">
-              {role === "lecturer" ? "Create your first assignment to get started" : "No assignments have been published yet"}
-            </p>
+            <p className="text-sm text-muted-foreground">{role === "lecturer" ? "Create your first assignment to get started" : "No assignments have been published yet"}</p>
           </CardContent>
         </Card>
       ) : (
@@ -253,14 +272,16 @@ const Assignments = () => {
                       {a.rubric && Array.isArray(a.rubric) && a.rubric.length > 0 && (
                         <Badge variant="outline" className="text-xs">{a.rubric.length} criteria</Badge>
                       )}
+                      {a.cohort_ids && a.cohort_ids.length > 0 && (
+                        <Badge variant="outline" className="text-xs">L{a.cohort_ids.join(",L")}</Badge>
+                      )}
                     </div>
                     {a.module_code && <p className="text-xs text-muted-foreground">{a.module_code}</p>}
                     {a.description && <p className="text-sm text-muted-foreground line-clamp-2">{a.description}</p>}
                     <div className="flex items-center gap-4 pt-1">
                       {a.due_date && (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
-                          Due {format(new Date(a.due_date), "MMM d, yyyy HH:mm")}
+                          <Calendar className="h-3 w-3" />Due {format(new Date(a.due_date), "MMM d, yyyy HH:mm")}
                         </span>
                       )}
                       <span className="text-xs text-muted-foreground">Max: {a.max_score} pts</span>
@@ -273,27 +294,19 @@ const Assignments = () => {
                           <span>{submissionStats[a.id].released} released</span>
                         </div>
                         <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden bg-muted">
-                          {submissionStats[a.id].released > 0 && (
-                            <div className="bg-success h-full" style={{ width: `${(submissionStats[a.id].released / submissionStats[a.id].total) * 100}%` }} />
-                          )}
-                          {(submissionStats[a.id].approved - submissionStats[a.id].released) > 0 && (
-                            <div className="bg-primary h-full" style={{ width: `${((submissionStats[a.id].approved - submissionStats[a.id].released) / submissionStats[a.id].total) * 100}%` }} />
-                          )}
-                          {(submissionStats[a.id].graded - submissionStats[a.id].approved) > 0 && (
-                            <div className="bg-warning h-full" style={{ width: `${((submissionStats[a.id].graded - submissionStats[a.id].approved) / submissionStats[a.id].total) * 100}%` }} />
-                          )}
+                          {submissionStats[a.id].released > 0 && <div className="bg-success h-full" style={{ width: `${(submissionStats[a.id].released / submissionStats[a.id].total) * 100}%` }} />}
+                          {(submissionStats[a.id].approved - submissionStats[a.id].released) > 0 && <div className="bg-primary h-full" style={{ width: `${((submissionStats[a.id].approved - submissionStats[a.id].released) / submissionStats[a.id].total) * 100}%` }} />}
+                          {(submissionStats[a.id].graded - submissionStats[a.id].approved) > 0 && <div className="bg-warning h-full" style={{ width: `${((submissionStats[a.id].graded - submissionStats[a.id].approved) / submissionStats[a.id].total) * 100}%` }} />}
                         </div>
                       </div>
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {role === "lecturer" && a.status === "draft" && (
+                    {role === "lecturer" && a.status === "draft" && !isDemo && (
                       <Button size="sm" onClick={() => handlePublish(a.id)}>Publish</Button>
                     )}
                     <Button size="sm" variant="outline" asChild>
-                      <a href={`/dashboard/assignments/${a.id}`}>
-                        {role === "lecturer" ? "View Submissions" : "Submit"}
-                      </a>
+                      <a href={`/dashboard/assignments/${a.id}`}>{role === "lecturer" ? "View Submissions" : "Submit"}</a>
                     </Button>
                   </div>
                 </div>

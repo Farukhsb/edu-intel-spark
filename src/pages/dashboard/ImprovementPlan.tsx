@@ -1,33 +1,44 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, CheckCircle2, Circle, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { BookOpen, CheckCircle2, Circle, Target, Loader2, RefreshCw } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-const plan = [
-  {
-    module: "CS301 - Data Structures",
-    currentGrade: 61,
-    targetGrade: 70,
-    tasks: [
-      { task: "Review recursion base case patterns", done: true },
-      { task: "Practice 5 tree traversal problems", done: true },
-      { task: "Complete Big-O analysis worksheet", done: false },
-      { task: "Write test cases for edge scenarios", done: false },
-    ],
-  },
-  {
-    module: "CS205 - Algorithms",
-    currentGrade: 66,
-    targetGrade: 70,
-    tasks: [
-      { task: "Study dynamic programming fundamentals", done: true },
-      { task: "Solve 3 graph algorithm problems", done: false },
-      { task: "Review sorting algorithm comparisons", done: false },
-    ],
-  },
+interface PlanModule {
+  module: string;
+  currentGrade: number;
+  targetGrade: number;
+  tasks: { task: string; done: boolean }[];
+}
+
+interface Resource {
+  title: string;
+  type: string;
+  duration: string;
+  relevance: number;
+}
+
+const DEMO_PLAN: PlanModule[] = [
+  { module: "CS301 - Data Structures", currentGrade: 61, targetGrade: 70, tasks: [
+    { task: "Review recursion base case patterns", done: true },
+    { task: "Practice 5 tree traversal problems", done: true },
+    { task: "Complete Big-O analysis worksheet", done: false },
+    { task: "Write test cases for edge scenarios", done: false },
+  ]},
+  { module: "CS205 - Algorithms", currentGrade: 66, targetGrade: 70, tasks: [
+    { task: "Study dynamic programming fundamentals", done: true },
+    { task: "Solve 3 graph algorithm problems", done: false },
+    { task: "Review sorting algorithm comparisons", done: false },
+  ]},
 ];
 
-const resources = [
+const DEMO_RESOURCES: Resource[] = [
   { title: "Recursion Deep Dive", type: "Video", duration: "25 min", relevance: 95 },
   { title: "Big-O Cheat Sheet", type: "Guide", duration: "10 min", relevance: 88 },
   { title: "Tree Traversal Practice Set", type: "Exercises", duration: "45 min", relevance: 82 },
@@ -35,8 +46,102 @@ const resources = [
 ];
 
 const ImprovementPlan = () => {
+  const { user, isDemo } = useAuth();
+  const [plan, setPlan] = useState<PlanModule[]>(DEMO_PLAN);
+  const [resources, setResources] = useState<Resource[]>(DEMO_RESOURCES);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    if (isDemo || !user) return;
+    fetchPlanFromFirestore();
+  }, [user, isDemo]);
+
+  const fetchPlanFromFirestore = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const subsSnap = await getDocs(query(collection(db, "submissions"), where("student_id", "==", user.uid)));
+      if (subsSnap.empty) { setLoading(false); return; }
+
+      const submissions = subsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const assignmentIds = [...new Set(submissions.map((s: any) => s.assignment_id))];
+      
+      const allAssignments = await getDocs(collection(db, "assignments"));
+      const assignmentMap: Record<string, any> = {};
+      allAssignments.docs.forEach(d => { if (assignmentIds.includes(d.id)) assignmentMap[d.id] = { ...d.data(), id: d.id }; });
+
+      const gradeMap: Record<string, any> = {};
+      for (const s of submissions) {
+        const gSnap = await getDocs(query(collection(db, "grades"), where("submission_id", "==", s.id)));
+        gSnap.docs.forEach(gDoc => { gradeMap[s.id] = { id: gDoc.id, ...gDoc.data() }; });
+      }
+
+      // Build plan from actual grades
+      const moduleScores: Record<string, { scores: number[]; maxScores: number[] }> = {};
+      submissions.forEach((s: any) => {
+        const a = assignmentMap[s.assignment_id];
+        const g = gradeMap[s.id];
+        if (!a || !g) return;
+        const score = g.final_score ?? g.ai_score;
+        if (score == null) return;
+        const key = a.module_code || a.title;
+        if (!moduleScores[key]) moduleScores[key] = { scores: [], maxScores: [] };
+        moduleScores[key].scores.push(score);
+        moduleScores[key].maxScores.push(a.max_score);
+      });
+
+      const livePlan: PlanModule[] = Object.entries(moduleScores).map(([mod, data]) => {
+        const avg = Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length);
+        return {
+          module: mod,
+          currentGrade: avg,
+          targetGrade: Math.max(avg + 10, 70),
+          tasks: [
+            { task: `Review weak areas in ${mod}`, done: false },
+            { task: `Complete practice problems`, done: false },
+            { task: `Seek feedback on last submission`, done: false },
+          ],
+        };
+      });
+
+      if (livePlan.length > 0) setPlan(livePlan);
+    } catch (err) {
+      console.error("Failed to fetch plan:", err);
+    }
+    setLoading(false);
+  };
+
+  const generateAIRecommendations = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("explain-grade", {
+        body: {
+          messages: [{ role: "user", content: `Based on these modules and grades, give me 4 specific improvement resources with title, type, estimated duration, and relevance percentage:\n${plan.map(p => `${p.module}: ${p.currentGrade}% (target: ${p.targetGrade}%)`).join("\n")}` }],
+          gradeContext: { plan },
+        },
+      });
+      if (error) throw error;
+      toast.success("AI recommendations updated");
+    } catch {
+      toast.error("Failed to get AI recommendations. Using defaults.");
+    }
+    setGenerating(false);
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {isDemo && (
+        <Card className="border-warning bg-warning/5">
+          <CardContent className="flex items-center gap-2 p-3">
+            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
+            <span className="text-sm text-muted-foreground">Viewing demo improvement plan data</span>
+          </CardContent>
+        </Card>
+      )}
+
       {plan.map((p, i) => {
         const completed = p.tasks.filter((t) => t.done).length;
         const progress = (completed / p.tasks.length) * 100;
@@ -59,11 +164,7 @@ const ImprovementPlan = () => {
             <CardContent className="space-y-2">
               {p.tasks.map((t, j) => (
                 <div key={j} className="flex items-center gap-3 text-sm">
-                  {t.done ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                  ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
+                  {t.done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />}
                   <span className={t.done ? "text-muted-foreground line-through" : ""}>{t.task}</span>
                 </div>
               ))}
@@ -72,12 +173,17 @@ const ImprovementPlan = () => {
         );
       })}
 
-      {/* Recommended Resources */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Recommended Resources</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base">Recommended Resources</CardTitle>
+            </div>
+            <Button variant="outline" size="sm" onClick={generateAIRecommendations} disabled={generating}>
+              {generating ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-2 h-3 w-3" />}
+              AI Refresh
+            </Button>
           </div>
           <CardDescription>AI-curated materials based on your weak areas</CardDescription>
         </CardHeader>

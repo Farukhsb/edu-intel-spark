@@ -1,30 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { AlertTriangle, ArrowRight, CheckCircle, Lightbulb, Target } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  Legend,
-} from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertTriangle, ArrowRight, CheckCircle, Lightbulb, Target, Loader2 } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 
-const learningOutcomes = [
+const DEMO_OUTCOMES = [
   { outcome: "LO1: Understand data structures", achievement: 78, target: 70, status: "met" },
   { outcome: "LO2: Apply algorithmic thinking", achievement: 52, target: 70, status: "at-risk" },
   { outcome: "LO3: Implement sorting algorithms", achievement: 71, target: 70, status: "met" },
@@ -32,7 +17,7 @@ const learningOutcomes = [
   { outcome: "LO5: Design recursive solutions", achievement: 38, target: 70, status: "below" },
 ];
 
-const cohortTrend = [
+const DEMO_TREND = [
   { assessment: "Assignment 1", CS301: 68, CS205: 62, CS102: 75, CS401: 60 },
   { assessment: "Midterm", CS301: 58, CS205: 55, CS102: 70, CS401: 58 },
   { assessment: "Assignment 2", CS301: 62, CS205: 60, CS102: 72, CS401: 64 },
@@ -40,7 +25,7 @@ const cohortTrend = [
   { assessment: "Assignment 3", CS301: 55, CS205: 52, CS102: 74, CS401: 62 },
 ];
 
-const gradeDistChart = [
+const DEMO_DIST = [
   { band: "1st", count: 48, fill: "hsl(152, 56%, 45%)" },
   { band: "2:1", count: 82, fill: "hsl(205, 80%, 55%)" },
   { band: "2:2", count: 104, fill: "hsl(38, 92%, 60%)" },
@@ -48,28 +33,13 @@ const gradeDistChart = [
   { band: "Fail", count: 36, fill: "hsl(0, 72%, 55%)" },
 ];
 
-const recommendations = [
-  {
-    topic: "Recursion & Base Cases",
-    reason: "67% of students failing to identify correct base cases",
-    suggestion: "Add a dedicated workshop on tree recursion patterns with visual step-through",
-    priority: "critical",
-  },
-  {
-    topic: "Big-O Notation",
-    reason: "Students confusing amortised vs worst-case analysis",
-    suggestion: "Introduce comparison tables and real-world benchmarking exercises",
-    priority: "high",
-  },
-  {
-    topic: "Dynamic Programming",
-    reason: "Low engagement with practice problems",
-    suggestion: "Gamify DP exercises with progressive difficulty levels",
-    priority: "medium",
-  },
+const DEMO_RECS = [
+  { topic: "Recursion & Base Cases", reason: "67% of students failing to identify correct base cases", suggestion: "Add a dedicated workshop on tree recursion patterns", priority: "critical" },
+  { topic: "Big-O Notation", reason: "Students confusing amortised vs worst-case analysis", suggestion: "Introduce comparison tables and benchmarking exercises", priority: "high" },
+  { topic: "Dynamic Programming", reason: "Low engagement with practice problems", suggestion: "Gamify DP exercises with progressive difficulty levels", priority: "medium" },
 ];
 
-const moduleComparison = [
+const DEMO_MODULES = [
   { module: "CS301 - Data Structures", avgGrade: 62, submissions: 156, passRate: 74 },
   { module: "CS205 - Algorithms", avgGrade: 58, submissions: 134, passRate: 68 },
   { module: "CS102 - Intro to Prog", avgGrade: 71, submissions: 210, passRate: 89 },
@@ -77,16 +47,53 @@ const moduleComparison = [
 ];
 
 const CohortAnalytics = () => {
+  const { isDemo } = useAuth();
   const [moduleFilter, setModuleFilter] = useState("all");
+  const [learningOutcomes, setLearningOutcomes] = useState(DEMO_OUTCOMES);
+  const [cohortTrend, setCohortTrend] = useState(DEMO_TREND);
+  const [gradeDistChart, setGradeDistChart] = useState(DEMO_DIST);
+  const [recommendations, setRecommendations] = useState(DEMO_RECS);
+  const [moduleComparison, setModuleComparison] = useState(DEMO_MODULES);
+  const [loading, setLoading] = useState(!isDemo);
+
+  useEffect(() => {
+    if (isDemo) return;
+    const fetchData = async () => {
+      try {
+        const gradesSnap = await getDocs(collection(db, "grades"));
+        const scores = gradesSnap.docs.map(d => d.data().final_score ?? d.data().ai_score).filter(s => s != null) as number[];
+        if (scores.length > 0) {
+          const dist = [
+            { band: "1st (70+)", count: scores.filter(s => s >= 70).length, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69)", count: scores.filter(s => s >= 60 && s < 70).length, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59)", count: scores.filter(s => s >= 50 && s < 60).length, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49)", count: scores.filter(s => s >= 40 && s < 50).length, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40)", count: scores.filter(s => s < 40).length, fill: "hsl(0, 72%, 55%)" },
+          ];
+          setGradeDistChart(dist);
+        }
+      } catch (err) { console.error("Failed to fetch cohort data:", err); }
+      setLoading(false);
+    };
+    fetchData();
+  }, [isDemo]);
+
+  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Filter */}
+      {isDemo && (
+        <Card className="border-warning bg-warning/5">
+          <CardContent className="flex items-center gap-2 p-3">
+            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
+            <span className="text-sm text-muted-foreground">Viewing demo cohort analytics</span>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center gap-4">
         <Select value={moduleFilter} onValueChange={setModuleFilter}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filter by module" />
-          </SelectTrigger>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filter by module" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Modules</SelectItem>
             <SelectItem value="CS301">CS301</SelectItem>
@@ -105,7 +112,6 @@ const CohortAnalytics = () => {
           <TabsTrigger value="recommendations">AI Recommendations</TabsTrigger>
         </TabsList>
 
-        {/* Performance Trends with Charts */}
         <TabsContent value="trends" className="mt-4 space-y-6">
           <Card>
             <CardHeader>
@@ -128,8 +134,6 @@ const CohortAnalytics = () => {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-
-          {/* Grade Distribution Bar Chart */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Grade Distribution</CardTitle>
@@ -143,9 +147,7 @@ const CohortAnalytics = () => {
                   <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {gradeDistChart.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.fill} />
-                    ))}
+                    {gradeDistChart.map((entry, idx) => <Cell key={idx} fill={entry.fill} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -153,12 +155,11 @@ const CohortAnalytics = () => {
           </Card>
         </TabsContent>
 
-        {/* Learning Outcomes */}
         <TabsContent value="outcomes" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Learning Outcome Achievement</CardTitle>
-              <CardDescription>CS301 — Data Structures & Algorithms (2024/25)</CardDescription>
+              <CardDescription>CS301 — Data Structures & Algorithms</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               {learningOutcomes.map((lo, i) => (
@@ -173,12 +174,7 @@ const CohortAnalytics = () => {
                     </div>
                   </div>
                   <div className="relative h-3 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`absolute inset-y-0 left-0 rounded-full transition-all ${
-                        lo.status === "met" ? "bg-success" : lo.status === "at-risk" ? "bg-warning" : "bg-destructive"
-                      }`}
-                      style={{ width: `${lo.achievement}%` }}
-                    />
+                    <div className={`absolute inset-y-0 left-0 rounded-full transition-all ${lo.status === "met" ? "bg-success" : lo.status === "at-risk" ? "bg-warning" : "bg-destructive"}`} style={{ width: `${lo.achievement}%` }} />
                     <div className="absolute inset-y-0 w-0.5 bg-foreground/40" style={{ left: `${lo.target}%` }} />
                   </div>
                   <p className="text-xs text-muted-foreground">Target: {lo.target}%</p>
@@ -188,7 +184,6 @@ const CohortAnalytics = () => {
           </Card>
         </TabsContent>
 
-        {/* Module Comparison */}
         <TabsContent value="modules" className="mt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             {moduleComparison.map((mod, i) => (
@@ -213,7 +208,6 @@ const CohortAnalytics = () => {
           </div>
         </TabsContent>
 
-        {/* AI Recommendations */}
         <TabsContent value="recommendations" className="mt-4 space-y-4">
           {recommendations.map((rec, i) => (
             <Card key={i} className="border-l-4 border-l-primary">
@@ -223,17 +217,11 @@ const CohortAnalytics = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-medium text-sm">{rec.topic}</h3>
-                      <Badge
-                        variant={rec.priority === "critical" ? "destructive" : rec.priority === "high" ? "secondary" : "outline"}
-                        className="text-xs"
-                      >
-                        {rec.priority}
-                      </Badge>
+                      <Badge variant={rec.priority === "critical" ? "destructive" : rec.priority === "high" ? "secondary" : "outline"} className="text-xs">{rec.priority}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{rec.reason}</p>
                     <div className="flex items-center gap-1.5 pt-1 text-sm font-medium text-primary">
-                      <ArrowRight className="h-3.5 w-3.5" />
-                      {rec.suggestion}
+                      <ArrowRight className="h-3.5 w-3.5" />{rec.suggestion}
                     </div>
                   </div>
                 </div>

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { NetworkStatus } from "@/components/NetworkStatus";
 
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -27,9 +28,9 @@ import StudentProfile from "./pages/dashboard/StudentProfile";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, isDemo } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user && !isDemo) return <Navigate to="/auth" replace />;
   return <>{children}</>;
 };
 
@@ -50,6 +51,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <NetworkStatus />
       <BrowserRouter>
         <AuthProvider>
           <Routes>
