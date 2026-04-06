@@ -787,13 +787,13 @@ const AssignmentDetail = () => {
                       <Badge variant={sc.variant as any} className="text-xs">
                         <StatusIcon className="mr-1 h-3 w-3" />{sc.label}
                       </Badge>
-                      {isLecturer && (sub.status === "ai_graded" || sub.status === "under_review") && (
+                      {isLecturer && grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
                         <Button size="sm" variant="ghost" onClick={() => openReview(sub)}>
                           <Edit className="h-3 w-3 mr-1" />
                           <span className="text-xs">Review</span>
                         </Button>
                       )}
-                      {isLecturer && sub.status === "ai_graded" && (
+                      {isLecturer && grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
                         <Button size="sm" variant="outline" className="text-xs h-7" onClick={async () => {
                           const grade = grades[sub.id];
                           if (grade) {
@@ -807,7 +807,10 @@ const AssignmentDetail = () => {
                             } catch (e) { console.warn("Grade update failed:", e); }
                             try {
                               await updateDoc(doc(db, "submissions", sub.id), { status: "approved" });
-                            } catch (e) { console.warn("Status update failed:", e); }
+                            } catch (e) {
+                              console.warn("Status update failed:", e);
+                              toast.error("Could not update status — check Firestore rules");
+                            }
                             toast.success("Submission approved");
                           }
                         }}>
