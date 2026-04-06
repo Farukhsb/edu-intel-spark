@@ -149,6 +149,9 @@ const AssignmentDetail = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [grading, setGrading] = useState(false);
+  const [gradingCount, setGradingCount] = useState(0);
+  const [gradingElapsed, setGradingElapsed] = useState(0);
+  const gradingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewSubmission, setReviewSubmission] = useState<Submission | null>(null);
@@ -400,6 +403,9 @@ const AssignmentDetail = () => {
     if (!assignment) return;
 
     setGrading(true);
+    setGradingCount(toGrade.length);
+    setGradingElapsed(0);
+    gradingTimerRef.current = setInterval(() => setGradingElapsed((p) => p + 1), 1000);
     toast.info(`Sending ${toGrade.length} submission(s) for AI grading...`);
 
     // Update status to ai_grading
@@ -467,6 +473,7 @@ const AssignmentDetail = () => {
 
     setGrading(false);
     setSelected(new Set());
+    if (gradingTimerRef.current) { clearInterval(gradingTimerRef.current); gradingTimerRef.current = null; }
   };
 
   const handleBulkApprove = async () => {
@@ -655,10 +662,24 @@ const AssignmentDetail = () => {
             {selected.size > 0 && (
               <>
                 {hasSubmitted && (
-                  <Button variant="secondary" onClick={handleAIGrade} disabled={grading}>
-                    {grading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-                    {grading ? "Grading..." : `AI Grade (${selected.size})`}
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Button variant="secondary" onClick={handleAIGrade} disabled={grading}>
+                      {grading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
+                      {grading ? "Grading..." : `AI Grade (${selected.size})`}
+                    </Button>
+                    {grading && (
+                      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground animate-in fade-in">
+                        <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                        <span>
+                          {gradingElapsed < 30
+                            ? `Processing ${gradingCount} file(s)... ${gradingElapsed}s`
+                            : gradingElapsed < 90
+                              ? `AI is reading & grading... ${gradingElapsed}s (est. ~${Math.max(30, gradingCount * 45 - gradingElapsed)}s left)`
+                              : `Still working... ${gradingElapsed}s — large files take longer`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {hasGraded && (
                   <Button variant="default" onClick={handleBulkApprove}>
