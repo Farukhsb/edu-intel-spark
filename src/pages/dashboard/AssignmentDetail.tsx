@@ -675,9 +675,9 @@ const AssignmentDetail = () => {
             <Button onClick={() => bulkInputRef.current?.click()} disabled={uploading}>
               <Upload className="mr-2 h-4 w-4" />{uploading ? "Uploading..." : "Bulk Upload"}
             </Button>
-            <Button variant="outline" onClick={handlePlagiarismCheck} disabled={checkingPlagiarism || submissions.length < 2}>
+            <Button variant="outline" onClick={handlePlagiarismCheck} disabled={checkingPlagiarism || submissions.length < 1}>
               {checkingPlagiarism ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
-              {checkingPlagiarism ? "Checking..." : "Plagiarism Check"}
+              {checkingPlagiarism ? "Checking..." : submissions.length === 1 ? "AI Content Check" : "Plagiarism Check"}
             </Button>
             {selected.size > 0 && (
               <>
