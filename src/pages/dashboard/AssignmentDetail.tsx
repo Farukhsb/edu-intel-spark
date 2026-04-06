@@ -14,7 +14,7 @@ import {
   updateDoc,
   getDocs,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,7 @@ type SubmissionStatus = "submitted" | "ai_grading" | "ai_graded" | "under_review
 
 interface Submission {
   id: string;
+  assignment_id: string;
   student_name: string | null;
   student_email: string | null;
   file_name: string;
@@ -126,55 +127,63 @@ const AssignmentDetail = () => {
 
   // Real-time submissions listener
   useEffect(() => {
-    if (!id) return;
-    const q = query(
-      collection(db, "submissions"),
-      where("assignment_id", "==", id),
-      orderBy("submitted_at", "desc")
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      async (snapshot) => {
-        const subs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Submission));
-        setSubmissions(subs);
+    if (!id || !role || !user?.uid) return;
 
-        // Fetch grades for these submissions
-        if (subs.length > 0) {
-          const gradeMap: Record<string, Grade> = {};
-          for (const sub of subs) {
+    const submissionsQuery = role === "lecturer"
+      ? query(collection(db, "submissions"), where("assignment_id", "==", id))
+      : query(collection(db, "submissions"), where("student_id", "==", user.uid));
+
+    const normalizeSubmissions = (docs: any[]) => docs
+      .map((d) => ({ id: d.id, ...d.data() } as Submission))
+      .filter((sub) => role === "lecturer" ? sub.assignment_id === id : sub.assignment_id === id && sub.student_id === user.uid)
+      .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+
+    const loadGradesForSubmissions = async (subs: Submission[]) => {
+      if (subs.length === 0) {
+        setGrades({});
+        return;
+      }
+
+      const gradeEntries = await Promise.all(
+        subs.map(async (sub) => {
+          try {
             const gSnap = await getDocs(
               query(collection(db, "grades"), where("submission_id", "==", sub.id))
             );
-            gSnap.docs.forEach((gDoc) => {
-              gradeMap[sub.id] = { id: gDoc.id, ...gDoc.data() } as Grade;
-            });
+
+            const firstGrade = gSnap.docs[0];
+            return firstGrade
+              ? [sub.id, { id: firstGrade.id, ...firstGrade.data() } as Grade]
+              : null;
+          } catch (error) {
+            console.warn(`[Grades] Skipping inaccessible grade lookup for submission ${sub.id}:`, error);
+            return null;
           }
-          setGrades(gradeMap);
-        }
+        })
+      );
+
+      setGrades(
+        Object.fromEntries(
+          gradeEntries.filter((entry): entry is [string, Grade] => Boolean(entry))
+        )
+      );
+    };
+
+    const unsubscribe = onSnapshot(
+      submissionsQuery,
+      async (snapshot) => {
+        const subs = normalizeSubmissions(snapshot.docs);
+        setSubmissions(subs);
+        await loadGradesForSubmissions(subs);
         setLoading(false);
       },
       (error) => {
-        console.error("[Submissions] Snapshot error (index may be missing):", error.message);
-        // Fallback: fetch without ordering if index is missing
-        getDocs(query(collection(db, "submissions"), where("assignment_id", "==", id)))
+        console.error("[Submissions] Snapshot error:", error.message);
+        getDocs(submissionsQuery)
           .then(async (snapshot) => {
-            const subs = snapshot.docs
-              .map((d) => ({ id: d.id, ...d.data() } as Submission))
-              .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+            const subs = normalizeSubmissions(snapshot.docs);
             setSubmissions(subs);
-
-            if (subs.length > 0) {
-              const gradeMap: Record<string, Grade> = {};
-              for (const sub of subs) {
-                const gSnap = await getDocs(
-                  query(collection(db, "grades"), where("submission_id", "==", sub.id))
-                );
-                gSnap.docs.forEach((gDoc) => {
-                  gradeMap[sub.id] = { id: gDoc.id, ...gDoc.data() } as Grade;
-                });
-              }
-              setGrades(gradeMap);
-            }
+            await loadGradesForSubmissions(subs);
             setLoading(false);
           })
           .catch(() => setLoading(false));
@@ -182,24 +191,68 @@ const AssignmentDetail = () => {
     );
 
     return () => unsubscribe();
-  }, [id]);
+  }, [id, role, user?.uid]);
 
   const uploadFile = async (file: File) => {
     const filePath = `submissions/${user!.uid}/${id}/${Date.now()}_${file.name}`;
     console.log("[Upload] Starting upload to:", filePath, "Size:", file.size, "Type:", file.type);
     const storageRef = ref(firebaseStorage, filePath);
 
-    // Use simple uploadBytes (non-resumable) which is more reliable across origins
     try {
-      setUploadProgress(10); // Show some initial progress
       console.log("[Upload] Uploading file...");
-      const snapshot = await uploadBytes(storageRef, file);
-      console.log("[Upload] Upload complete, getting download URL...");
-      setUploadProgress(90);
-      const fileUrl = await getDownloadURL(snapshot.ref);
-      console.log("[Upload] Download URL obtained:", fileUrl.substring(0, 80) + "...");
-      setUploadProgress(100);
-      return { fileUrl, fileName: file.name, fileType: file.type };
+      const result = await new Promise<{ fileUrl: string; fileName: string; fileType: string }>((resolve, reject) => {
+        let settled = false;
+        let timeoutId = 0;
+
+        const finish = async (taskRef: ReturnType<typeof ref>) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+
+          try {
+            const fileUrl = await getDownloadURL(taskRef);
+            console.log("[Upload] Download URL obtained:", fileUrl.substring(0, 80) + "...");
+            setUploadProgress(100);
+            resolve({ fileUrl, fileName: file.name, fileType: file.type });
+          } catch (error) {
+            reject(error);
+          }
+        };
+
+        const fail = (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+          reject(error);
+        };
+
+        const uploadTask = uploadBytesResumable(storageRef, file, {
+          contentType: file.type || "application/octet-stream",
+        });
+
+        timeoutId = window.setTimeout(() => {
+          uploadTask.cancel();
+          fail(new Error("Upload timed out. Firebase Storage CORS or bucket access is still blocking uploads."));
+        }, 45000);
+
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const progress = Math.max(1, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+            setUploadProgress(progress);
+          },
+          (error) => {
+            console.error("[Upload] Upload failed:", error);
+            fail(error);
+          },
+          () => {
+            console.log("[Upload] Upload complete, getting download URL...");
+            void finish(uploadTask.snapshot.ref);
+          }
+        );
+      });
+
+      return result;
     } catch (error: any) {
       console.error("[Upload] Upload failed:", error?.code, error?.message, error);
       throw error;
