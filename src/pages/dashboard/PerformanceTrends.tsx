@@ -50,7 +50,41 @@ const PerformanceTrends = () => {
 
   useEffect(() => {
     if (isDemo) { setLoading(false); return; }
-    setLoading(false); // Use demo data as fallback for now
+    const fetchData = async () => {
+      try {
+        const gradesSnap = await getDocs(collection(db, "grades"));
+        const subsSnap = await getDocs(collection(db, "submissions"));
+        const scores = gradesSnap.docs.map(d => d.data().final_score ?? d.data().ai_score).filter(s => s != null) as number[];
+
+        if (scores.length > 0) {
+          // Build real grade distribution
+          const dist = [
+            { band: "1st (70-100%)", count: scores.filter(s => s >= 70).length, percentage: 0, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69%)", count: scores.filter(s => s >= 60 && s < 70).length, percentage: 0, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59%)", count: scores.filter(s => s >= 50 && s < 60).length, percentage: 0, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49%)", count: scores.filter(s => s >= 40 && s < 50).length, percentage: 0, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40%)", count: scores.filter(s => s < 40).length, percentage: 0, fill: "hsl(0, 72%, 55%)" },
+          ];
+          const total = scores.length;
+          dist.forEach(d => d.percentage = Math.round((d.count / total) * 100));
+        }
+
+        // Build at-risk students from submissions with low scores
+        const studentScores: Record<string, { name: string; scores: number[] }> = {};
+        subsSnap.docs.forEach(d => {
+          const s = d.data();
+          const key = s.student_id || s.student_name || s.student_email;
+          if (!key) return;
+          const name = s.student_name || s.student_email || "Unknown";
+          if (!studentScores[key]) studentScores[key] = { name, scores: [] };
+          const g = gradesSnap.docs.find(gd => gd.data().submission_id === d.id);
+          const score = g?.data()?.final_score ?? g?.data()?.ai_score;
+          if (score != null) studentScores[key].scores.push(score);
+        });
+      } catch (err) { console.error("Failed to fetch performance data:", err); }
+      setLoading(false);
+    };
+    fetchData();
   }, [isDemo]);
 
   const heatmapColor = (val: number) => {

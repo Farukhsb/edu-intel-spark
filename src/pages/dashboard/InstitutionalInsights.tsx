@@ -38,14 +38,20 @@ const InstitutionalInsights = () => {
     const fetchData = async () => {
       try {
         const profilesSnap = await getDocs(collection(db, "profiles"));
+        const gradesSnap = await getDocs(collection(db, "grades"));
+        const subsSnap = await getDocs(collection(db, "submissions"));
+        const scores = gradesSnap.docs.map(d => d.data().final_score ?? d.data().ai_score).filter(s => s != null) as number[];
+
         const deptMap: Record<string, number> = {};
         profilesSnap.docs.forEach(d => {
           const data = d.data();
           if (data.department_id) deptMap[data.department_id] = (deptMap[data.department_id] || 0) + 1;
         });
         if (Object.keys(deptMap).length > 0) {
+          const avgAll = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 65;
+          const passAll = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 75;
           setDepartmentStats(Object.entries(deptMap).map(([dept, count]) => ({
-            dept, students: count, avgGrade: 65, passRate: 75, trend: "+0%",
+            dept, students: count, avgGrade: avgAll, passRate: passAll, trend: "+0%",
           })));
         }
       } catch (err) { console.error("Failed to fetch institutional data:", err); }
