@@ -179,7 +179,7 @@ const InstitutionalInsights = () => {
             <CardDescription>Assessments requiring curriculum review</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {DEMO_LOW.map((a, i) => (
+            {lowPerforming.map((a, i) => (
               <div key={i} className="rounded-lg border border-warning/20 bg-warning/5 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">{a.name}</span>
