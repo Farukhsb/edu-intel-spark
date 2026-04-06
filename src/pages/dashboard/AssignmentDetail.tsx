@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { auth, db, storage as firebaseStorage } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
   doc,
   getDoc,
@@ -14,7 +14,6 @@ import {
   updateDoc,
   getDocs,
 } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject, type StorageReference } from "firebase/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -246,71 +245,41 @@ const AssignmentDetail = () => {
     }
 
     const safeFileName = file.name.replace(/[\\/]/g, "_");
-    const filePath = `submissions/${currentUserId}/${id}/${safeFileName}`;
+    const filePath = `${currentUserId}/${id}/${Date.now()}_${safeFileName}`;
     console.log("[Upload] Starting upload to:", filePath, "Size:", file.size, "Type:", file.type);
-    const storageRef = ref(firebaseStorage, filePath);
 
     try {
       setUploadProgress(0);
-      console.log("[Upload] Uploading file...");
-      const result = await new Promise<{ fileUrl: string; fileName: string; fileType: string; storageRef: StorageReference }>((resolve, reject) => {
-        let settled = false;
-        let timeoutId = 0;
+      setUploadProgress(10);
+      console.log("[Upload] Uploading to Lovable Cloud storage...");
 
-        const finish = async (taskRef: ReturnType<typeof ref>) => {
-          if (settled) return;
-          settled = true;
-          window.clearTimeout(timeoutId);
-
-          try {
-            const fileUrl = await getDownloadURL(taskRef);
-            console.log("[Upload] Download URL obtained:", fileUrl.substring(0, 80) + "...");
-            setUploadProgress(100);
-            resolve({
-              fileUrl,
-              fileName: safeFileName,
-              fileType: file.type || "application/octet-stream",
-              storageRef: taskRef,
-            });
-          } catch (error) {
-            reject(error);
-          }
-        };
-
-        const fail = (error: unknown) => {
-          if (settled) return;
-          settled = true;
-          window.clearTimeout(timeoutId);
-          reject(error);
-        };
-
-        const uploadTask = uploadBytesResumable(storageRef, file, {
+      const { data, error } = await supabase.storage
+        .from("submissions")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
           contentType: file.type || "application/octet-stream",
         });
 
-        timeoutId = window.setTimeout(() => {
-          uploadTask.cancel();
-          fail(new Error("Upload timed out. Firebase Storage CORS or bucket access is still blocking uploads."));
-        }, 45000);
+      if (error) throw error;
 
-        uploadTask.on(
-          "state_changed",
-          (snapshot) => {
-            const progress = Math.max(1, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
-            setUploadProgress(progress);
-          },
-          (error) => {
-            console.error("[Upload] Upload failed:", error);
-            fail(error);
-          },
-          () => {
-            console.log("[Upload] Upload complete, getting download URL...");
-            void finish(uploadTask.snapshot.ref);
-          }
-        );
-      });
+      setUploadProgress(80);
+      console.log("[Upload] Upload complete, getting public URL...");
 
-      return result;
+      const { data: urlData } = supabase.storage
+        .from("submissions")
+        .getPublicUrl(data.path);
+
+      const fileUrl = urlData.publicUrl;
+      console.log("[Upload] URL obtained:", fileUrl.substring(0, 80) + "...");
+      setUploadProgress(100);
+
+      return {
+        fileUrl,
+        fileName: safeFileName,
+        fileType: file.type || "application/octet-stream",
+        storagePath: data.path,
+      };
     } catch (error: any) {
       console.error("[Upload] Upload failed:", error?.code, error?.message, error);
       throw error;
@@ -348,7 +317,7 @@ const AssignmentDetail = () => {
     setUploadProgress(0);
 
     let uploadedFile:
-      | { fileUrl: string; fileName: string; fileType: string; storageRef: StorageReference }
+      | { fileUrl: string; fileName: string; fileType: string; storagePath: string }
       | null = null;
     let submissionCreated = false;
 
@@ -380,7 +349,7 @@ const AssignmentDetail = () => {
 
       if (uploadedFile && !submissionCreated) {
         try {
-          await deleteObject(uploadedFile.storageRef);
+          await supabase.storage.from("submissions").remove([uploadedFile.storagePath]);
           console.warn("[Submission] Removed uploaded file after Firestore write failure");
         } catch (cleanupError) {
           console.error("[Submission] Failed to clean up uploaded file:", cleanupError);
