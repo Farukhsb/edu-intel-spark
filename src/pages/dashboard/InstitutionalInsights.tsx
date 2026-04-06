@@ -198,7 +198,7 @@ const InstitutionalInsights = () => {
             <CardDescription>Key metrics for regulatory compliance</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {DEMO_ACCRED.map((m, i) => (
+            {accreditation.map((m, i) => (
               <div key={i} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{m.metric}</span>
