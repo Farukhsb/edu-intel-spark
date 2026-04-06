@@ -132,25 +132,54 @@ const AssignmentDetail = () => {
       where("assignment_id", "==", id),
       orderBy("submitted_at", "desc")
     );
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const subs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Submission));
-      setSubmissions(subs);
+    const unsubscribe = onSnapshot(
+      q,
+      async (snapshot) => {
+        const subs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Submission));
+        setSubmissions(subs);
 
-      // Fetch grades for these submissions
-      if (subs.length > 0) {
-        const gradeMap: Record<string, Grade> = {};
-        for (const sub of subs) {
-          const gSnap = await getDocs(
-            query(collection(db, "grades"), where("submission_id", "==", sub.id))
-          );
-          gSnap.docs.forEach((gDoc) => {
-            gradeMap[sub.id] = { id: gDoc.id, ...gDoc.data() } as Grade;
-          });
+        // Fetch grades for these submissions
+        if (subs.length > 0) {
+          const gradeMap: Record<string, Grade> = {};
+          for (const sub of subs) {
+            const gSnap = await getDocs(
+              query(collection(db, "grades"), where("submission_id", "==", sub.id))
+            );
+            gSnap.docs.forEach((gDoc) => {
+              gradeMap[sub.id] = { id: gDoc.id, ...gDoc.data() } as Grade;
+            });
+          }
+          setGrades(gradeMap);
         }
-        setGrades(gradeMap);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("[Submissions] Snapshot error (index may be missing):", error.message);
+        // Fallback: fetch without ordering if index is missing
+        getDocs(query(collection(db, "submissions"), where("assignment_id", "==", id)))
+          .then(async (snapshot) => {
+            const subs = snapshot.docs
+              .map((d) => ({ id: d.id, ...d.data() } as Submission))
+              .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+            setSubmissions(subs);
+
+            if (subs.length > 0) {
+              const gradeMap: Record<string, Grade> = {};
+              for (const sub of subs) {
+                const gSnap = await getDocs(
+                  query(collection(db, "grades"), where("submission_id", "==", sub.id))
+                );
+                gSnap.docs.forEach((gDoc) => {
+                  gradeMap[sub.id] = { id: gDoc.id, ...gDoc.data() } as Grade;
+                });
+              }
+              setGrades(gradeMap);
+            }
+            setLoading(false);
+          })
+          .catch(() => setLoading(false));
       }
-      setLoading(false);
-    });
+    );
 
     return () => unsubscribe();
   }, [id]);
