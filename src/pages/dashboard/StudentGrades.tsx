@@ -70,9 +70,14 @@ const StudentGrades = () => {
         const gSnap = await getDocs(
           query(collection(db, "grades"), where("submission_id", "==", s.id))
         );
-        gSnap.docs.forEach((gDoc) => {
-          gradeMap[s.id] = { id: gDoc.id, ...gDoc.data() };
-        });
+        // Use the most recent grade if multiple exist
+        const sortedDocs = [...gSnap.docs].sort((a, b) =>
+          (b.data().created_at || "").localeCompare(a.data().created_at || "")
+        );
+        if (sortedDocs.length > 0) {
+          const latest = sortedDocs[0];
+          gradeMap[s.id] = { id: latest.id, ...latest.data() };
+        }
       } catch { /* ignore */ }
     }
 
