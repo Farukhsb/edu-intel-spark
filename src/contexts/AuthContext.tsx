@@ -74,35 +74,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
-  const fetchProfileWithTimeout = async (uid: string, email: string | null): Promise<Profile | null> => {
-    return new Promise<Profile | null>((resolve) => {
-      const timeout = setTimeout(() => {
-        resolve(null);
-      }, 5000);
+  const signupProfileRef = useRef<{
+    email: string;
+    fullName: string;
+    role: AppRole;
+    cohortId?: string;
+    departmentId?: string;
+  } | null>(null);
 
-      getDoc(doc(db, "profiles", uid))
-        .then((snap) => {
-          clearTimeout(timeout);
-          if (snap.exists()) {
-            const data = snap.data();
-            resolve({
-              id: snap.id,
-              full_name: data.full_name || null,
-              email: data.email || email || null,
-              role: data.role || "student",
-              avatar_url: data.avatar_url || null,
-              cohort_id: data.cohort_id || null,
-              department_id: data.department_id || null,
-            });
-          } else {
-            resolve(null);
-          }
-        })
-        .catch(() => {
-          clearTimeout(timeout);
-          resolve(null);
-        });
-    });
+  const fetchProfileWithTimeout = async (uid: string, email: string | null): Promise<Profile | null> => {
+    const deadline = Date.now() + 5000;
+
+    while (Date.now() < deadline) {
+      try {
+        const snap = await getDoc(doc(db, "profiles", uid));
+
+        if (snap.exists()) {
+          const data = snap.data();
+          return {
+            id: snap.id,
+            full_name: data.full_name || null,
+            email: data.email || email || null,
+            role: data.role || "student",
+            avatar_url: data.avatar_url || null,
+            cohort_id: data.cohort_id || null,
+            department_id: data.department_id || null,
+          };
+        }
+      } catch {
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    return null;
   };
   // Pending profile data to write on auth state change if Firestore write failed during signup
   const pendingProfileRef = useRef<{ uid: string; data: any; role: AppRole } | null>(null);
@@ -123,6 +128,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         setProfileError(null);
+
+        const signupProfile = signupProfileRef.current;
+        if (signupProfile && signupProfile.email === firebaseUser.email) {
+          setProfile({
+            id: firebaseUser.uid,
+            full_name: signupProfile.fullName,
+            email: firebaseUser.email,
+            role: signupProfile.role,
+            avatar_url: null,
+            cohort_id: signupProfile.role === "student" ? (signupProfile.cohortId || null) : null,
+            department_id: signupProfile.departmentId || null,
+          });
+          posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
+          setLoading(false);
+          return;
+        }
 
         // If we have pending profile data from a failed signup write, retry it
         const pending = pendingProfileRef.current;
@@ -147,6 +168,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         fetchProfileWithTimeout(firebaseUser.uid, firebaseUser.email).then(async (p) => {
           if (p) {
+            signupProfileRef.current = null;
             setProfile(p);
             posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
           } else {
@@ -185,6 +207,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setLoading(false);
         });
       } else if (!isDemo) {
+        signupProfileRef.current = null;
+        pendingProfileRef.current = null;
         setProfile(null);
         setProfileError(null);
         posthog.reset();
@@ -197,6 +221,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters");
+    signupProfileRef.current = { email, fullName, role, cohortId, departmentId };
+
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     
     // Save displayName to Firebase Auth
@@ -241,9 +267,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (isDemo) {
       setIsDemo(false);
       setProfile(null);
+      signupProfileRef.current = null;
+      pendingProfileRef.current = null;
       return;
     }
     await firebaseSignOut(auth);
+    signupProfileRef.current = null;
+    pendingProfileRef.current = null;
     setProfile(null);
     setProfileError(null);
   };
@@ -261,6 +291,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const exitDemo = () => {
     setIsDemo(false);
     setProfile(null);
+    signupProfileRef.current = null;
   };
 
   return (
