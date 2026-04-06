@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   User as FirebaseUser,
   onAuthStateChanged,
@@ -104,17 +104,82 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
     });
   };
+  // Pending profile data to write on auth state change if Firestore write failed during signup
+  const pendingProfileRef = useRef<{ uid: string; data: any; role: AppRole } | null>(null);
+
+  const tryWriteProfile = async (uid: string, profileData: any, role: AppRole): Promise<boolean> => {
+    try {
+      await setDoc(doc(db, "profiles", uid), profileData);
+      await setDoc(doc(db, "user_roles", uid), { user_id: uid, role });
+      return true;
+    } catch (e) {
+      console.error("Firestore profile write failed:", e);
+      return false;
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         setProfileError(null);
-        fetchProfileWithTimeout(firebaseUser.uid, firebaseUser.email).then((p) => {
+
+        // If we have pending profile data from a failed signup write, retry it
+        const pending = pendingProfileRef.current;
+        if (pending && pending.uid === firebaseUser.uid) {
+          pendingProfileRef.current = null;
+          tryWriteProfile(firebaseUser.uid, pending.data, pending.role).then(() => {
+            // Set profile from pending data regardless of Firestore success
+            setProfile({
+              id: firebaseUser.uid,
+              full_name: pending.data.full_name,
+              email: pending.data.email,
+              role: pending.role,
+              avatar_url: null,
+              cohort_id: pending.data.cohort_id,
+              department_id: pending.data.department_id,
+            });
+            posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
+            setLoading(false);
+          });
+          return;
+        }
+
+        fetchProfileWithTimeout(firebaseUser.uid, firebaseUser.email).then(async (p) => {
           if (p) {
             setProfile(p);
             posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
           } else {
+            // Profile doesn't exist — maybe Firestore write failed during signup
+            // Try to create a basic profile from Firebase Auth data
+            const displayName = firebaseUser.displayName;
+            if (displayName) {
+              const fallbackData = {
+                full_name: displayName,
+                email: firebaseUser.email,
+                role: "student" as AppRole,
+                avatar_url: null,
+                cohort_id: null,
+                department_id: null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              const wrote = await tryWriteProfile(firebaseUser.uid, fallbackData, "student");
+              if (wrote) {
+                setProfile({
+                  id: firebaseUser.uid,
+                  full_name: displayName,
+                  email: firebaseUser.email,
+                  role: "student",
+                  avatar_url: null,
+                  cohort_id: null,
+                  department_id: null,
+                });
+                posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
+                setLoading(false);
+                return;
+              }
+            }
             setProfileError("Something went wrong loading your account. Please try again.");
           }
           setLoading(false);
@@ -148,16 +213,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Write profile doc with user's UID as the doc ID
-    await setDoc(doc(db, "profiles", cred.user.uid), profileData);
+    // Try writing to Firestore, but don't fail signup if it errors
+    const wrote = await tryWriteProfile(cred.user.uid, profileData, role);
 
-    // Also write to user_roles collection
-    await setDoc(doc(db, "user_roles", cred.user.uid), {
-      user_id: cred.user.uid,
-      role,
-    });
+    if (!wrote) {
+      // Store pending data so onAuthStateChanged can retry
+      pendingProfileRef.current = { uid: cred.user.uid, data: profileData, role };
+    }
 
-    // Set profile in state immediately (no need to re-fetch)
+    // Set profile in state immediately regardless
     setProfile({
       id: cred.user.uid,
       full_name: fullName,
