@@ -139,19 +139,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let lastError: unknown = null;
 
     while (Date.now() < deadline) {
-      for (const collectionName of PROFILE_COLLECTIONS) {
-        try {
-          const snap = await getDoc(doc(db, collectionName, uid));
+      try {
+        const snap = await getDoc(doc(db, PRIMARY_PROFILE_COLLECTION, uid));
 
-          if (snap.exists()) {
-            const profileData = snap.data() as StoredProfileData;
-            console.log(`[Auth] Profile found in '${collectionName}' with role: ${profileData.role}`);
-            return normalizeProfile(uid, profileData, email);
-          }
-        } catch (e) {
-          lastError = e;
-          console.warn(`[Auth] Error reading '${collectionName}' for ${uid}:`, e);
+        if (snap.exists()) {
+          const profileData = snap.data() as StoredProfileData;
+          console.log(`[Auth] Profile found in '${PRIMARY_PROFILE_COLLECTION}' with role: ${profileData.role}`);
+          return normalizeProfile(uid, profileData, email);
         }
+      } catch (e) {
+        lastError = e;
+        console.warn(`[Auth] Error reading '${PRIMARY_PROFILE_COLLECTION}' for ${uid}:`, e);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 250));
