@@ -180,6 +180,7 @@ const AssignmentDetail = () => {
     const file = e.target.files?.[0];
     if (!file || !id) return;
     setUploading(true);
+    setUploadProgress(0);
     try {
       const { fileUrl, fileName, fileType } = await uploadFile(file);
       await addDoc(collection(db, "submissions"), {
@@ -197,6 +198,7 @@ const AssignmentDetail = () => {
       toast.success("Submission uploaded!");
     } catch { toast.error("Upload failed"); }
     setUploading(false);
+    setUploadProgress(0);
     e.target.value = "";
   };
 
