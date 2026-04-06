@@ -28,7 +28,9 @@ const Assignments = lazy(() => import("./pages/dashboard/Assignments"));
 const AssignmentDetail = lazy(() => import("./pages/dashboard/AssignmentDetail"));
 const StudentProfile = lazy(() => import("./pages/dashboard/StudentProfile"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1 } },
+});
 
 const DashboardSkeleton = () => (
   <div className="space-y-4 p-4">
