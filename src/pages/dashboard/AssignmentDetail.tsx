@@ -200,9 +200,13 @@ const AssignmentDetail = () => {
               query(collection(db, "grades"), where("submission_id", "==", sub.id))
             );
 
-            const firstGrade = gSnap.docs[0];
-            return firstGrade
-              ? [sub.id, { id: firstGrade.id, ...firstGrade.data() } as Grade]
+            // Use the most recent grade if multiple exist
+            const sortedDocs = gSnap.docs.sort((a, b) =>
+              (b.data().created_at || "").localeCompare(a.data().created_at || "")
+            );
+            const latestGrade = sortedDocs[0];
+            return latestGrade
+              ? [sub.id, { id: latestGrade.id, ...latestGrade.data() } as Grade]
               : null;
           } catch (error) {
             console.warn(`[Grades] Skipping inaccessible grade lookup for submission ${sub.id}:`, error);
