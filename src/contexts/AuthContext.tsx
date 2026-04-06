@@ -7,6 +7,7 @@ import {
   signOut as firebaseSignOut,
   updateProfile,
   sendPasswordResetEmail,
+  sendEmailVerification,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -35,6 +36,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  resendVerification: () => Promise<void>;
   enterDemo: (demoRole: AppRole) => void;
   exitDemo: () => void;
 }
@@ -219,6 +221,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, [isDemo]);
 
+  const resendVerification = async () => {
+    if (user && !user.emailVerified) {
+      await sendEmailVerification(user);
+    }
+  };
+
   const signUp = async (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters");
     signupProfileRef.current = { email, fullName, role, cohortId, departmentId };
@@ -227,6 +235,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     // Save displayName to Firebase Auth
     await updateProfile(cred.user, { displayName: fullName });
+
+    // Send email verification
+    try { await sendEmailVerification(cred.user); } catch { /* ignore */ }
 
     const profileData = {
       full_name: fullName,
@@ -307,6 +318,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signIn,
         signOut: handleSignOut,
         resetPassword,
+        resendVerification,
         enterDemo,
         exitDemo,
       }}
