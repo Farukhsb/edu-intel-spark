@@ -118,6 +118,14 @@ const Assignments = () => {
         setSubmissionStats(statsMap);
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Assignments query error:", error);
+      if (error.message?.includes("index")) {
+        toast.error("Database index required. Check Firebase Console for the index creation link in the browser console.");
+      } else {
+        toast.error("Failed to load assignments. Check permissions.");
+      }
+      setLoading(false);
     });
 
     return () => unsubscribe();
