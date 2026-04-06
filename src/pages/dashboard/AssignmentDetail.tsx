@@ -100,6 +100,7 @@ const AssignmentDetail = () => {
   const [grades, setGrades] = useState<Record<string, Grade>>({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [grading, setGrading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
