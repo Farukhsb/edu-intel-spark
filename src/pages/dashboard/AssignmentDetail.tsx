@@ -789,7 +789,42 @@ const AssignmentDetail = () => {
                       </Badge>
                       {isLecturer && (sub.status === "ai_graded" || sub.status === "under_review") && (
                         <Button size="sm" variant="ghost" onClick={() => openReview(sub)}>
-                          <Edit className="h-3 w-3" />
+                          <Edit className="h-3 w-3 mr-1" />
+                          <span className="text-xs">Review</span>
+                        </Button>
+                      )}
+                      {isLecturer && sub.status === "ai_graded" && (
+                        <Button size="sm" variant="outline" className="text-xs h-7" onClick={async () => {
+                          const grade = grades[sub.id];
+                          if (grade) {
+                            try {
+                              await updateDoc(doc(db, "grades", grade.id), {
+                                final_score: grade.lecturer_score ?? grade.ai_score,
+                                final_feedback: grade.lecturer_feedback ?? grade.ai_feedback,
+                                reviewed_by: user!.uid,
+                                reviewed_at: new Date().toISOString(),
+                              });
+                            } catch (e) { console.warn("Grade update failed:", e); }
+                            try {
+                              await updateDoc(doc(db, "submissions", sub.id), { status: "approved" });
+                            } catch (e) { console.warn("Status update failed:", e); }
+                            toast.success("Submission approved");
+                          }
+                        }}>
+                          <CheckCheck className="h-3 w-3 mr-1" />Approve
+                        </Button>
+                      )}
+                      {isLecturer && sub.status === "approved" && (
+                        <Button size="sm" variant="default" className="text-xs h-7" onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, "submissions", sub.id), { status: "released" });
+                            toast.success("Grade released to student");
+                          } catch (e) {
+                            console.warn("Release failed:", e);
+                            toast.error("Failed to release grade");
+                          }
+                        }}>
+                          <Send className="h-3 w-3 mr-1" />Release
                         </Button>
                       )}
                     </div>
