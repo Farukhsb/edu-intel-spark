@@ -137,6 +137,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfileWithTimeout = async (uid: string, email: string | null): Promise<Profile | null> => {
     const deadline = Date.now() + 5000;
+    let lastError: unknown = null;
 
     while (Date.now() < deadline) {
       for (const collectionName of PROFILE_COLLECTIONS) {
@@ -144,15 +145,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const snap = await getDoc(doc(db, collectionName, uid));
 
           if (snap.exists()) {
-            return normalizeProfile(uid, snap.data() as StoredProfileData, email);
+            const profileData = snap.data() as StoredProfileData;
+            console.log(`[Auth] Profile found in '${collectionName}' with role: ${profileData.role}`);
+            return normalizeProfile(uid, profileData, email);
           }
-        } catch {
+        } catch (e) {
+          lastError = e;
+          console.warn(`[Auth] Error reading '${collectionName}' for ${uid}:`, e);
         }
       }
 
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
+    if (lastError) {
+      console.error("[Auth] Profile fetch failed after timeout. Last error:", lastError);
+    }
     return null;
   };
 
