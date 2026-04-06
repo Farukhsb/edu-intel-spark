@@ -210,22 +210,52 @@ const LecturerOverview = () => {
         <CardContent className="flex items-center justify-between p-4">
           <div>
             <p className="text-sm font-medium">Export Grades</p>
-            <p className="text-xs text-muted-foreground">Download all grades as CSV</p>
+            <p className="text-xs text-muted-foreground">Download all grades as CSV or PDF</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => {
-            const rows = [["Student", "Assignment", "Score", "Max Score", "Status", "Submitted"]];
-            recent.forEach(s => rows.push([s.student_name || "Unknown", s.assignment_title, String(s.score ?? ""), String(s.max_score), s.status, new Date(s.submitted_at).toLocaleDateString()]));
-            const csv = rows.map(r => r.join(",")).join("\n");
-            const blob = new Blob([csv], { type: "text/csv" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "grades_export.csv";
-            a.click();
-            URL.revokeObjectURL(url);
-          }}>
-            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => {
+              const rows = [["Student", "Assignment", "Score", "Max Score", "Status", "Submitted"]];
+              recent.forEach(s => rows.push([s.student_name || "Unknown", s.assignment_title, String(s.score ?? ""), String(s.max_score), s.status, new Date(s.submitted_at).toLocaleDateString()]));
+              const csv = rows.map(r => r.join(",")).join("\n");
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "grades_export.csv";
+              a.click();
+              URL.revokeObjectURL(url);
+            }}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={async () => {
+              const { default: jsPDF } = await import("jspdf");
+              await import("jspdf-autotable");
+              const doc = new jsPDF();
+              doc.setFontSize(16);
+              doc.text("GradeAI — Grade Report", 14, 20);
+              doc.setFontSize(10);
+              doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28);
+              doc.text(`Lecturer: ${profile?.full_name || "—"}`, 14, 34);
+              doc.text(`Total Submissions: ${stats.totalSubmissions} | Graded: ${stats.gradedCount} | Avg: ${stats.avgScore ?? "—"}%`, 14, 40);
+              (doc as any).autoTable({
+                startY: 48,
+                head: [["Student", "Assignment", "Score", "Max", "Status", "Date"]],
+                body: recent.map(s => [
+                  s.student_name || "Unknown",
+                  s.assignment_title,
+                  s.score != null ? String(s.score) : "—",
+                  String(s.max_score),
+                  s.status.replace(/_/g, " "),
+                  new Date(s.submitted_at).toLocaleDateString(),
+                ]),
+                styles: { fontSize: 9 },
+                headStyles: { fillColor: [59, 65, 122] },
+              });
+              doc.save("grades_report.pdf");
+            }}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
