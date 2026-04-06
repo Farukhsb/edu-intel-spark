@@ -10,8 +10,8 @@ serve(async (req) => {
 
   try {
     const { assignment, submissions } = await req.json();
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     if (!assignment || !submissions?.length) throw new Error("Missing assignment or submissions data");
 
@@ -44,16 +44,14 @@ Please grade this submission and respond with a JSON object containing:
 Be fair, constructive, and specific in your feedback. Respond ONLY with the JSON object.`;
 
       try {
-        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 2048,
+            model: "google/gemini-3-flash-preview",
             messages: [{ role: "user", content: prompt }],
           }),
         });
@@ -66,7 +64,7 @@ Be fair, constructive, and specific in your feedback. Respond ONLY with the JSON
         }
 
         const aiData = await aiResponse.json();
-        const content = aiData.content?.[0]?.text || "";
+        const content = aiData.choices?.[0]?.message?.content || "";
 
         let gradeResult;
         try {

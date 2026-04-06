@@ -10,8 +10,8 @@ serve(async (req) => {
 
   try {
     const { submissions } = await req.json();
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) throw new Error("Missing ANTHROPIC_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
 
     if (!submissions?.length || submissions.length < 2) {
       return new Response(JSON.stringify({ flags: [], message: "Need at least 2 submissions to compare" }), {
@@ -32,16 +32,14 @@ Respond with a JSON object containing:
 
 Respond ONLY with the JSON object.`;
 
-    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2048,
+        model: "google/gemini-3-flash-preview",
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -52,11 +50,16 @@ Respond ONLY with the JSON object.`;
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       throw new Error(`AI error: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
-    const content = aiData.content?.[0]?.text || "";
+    const content = aiData.choices?.[0]?.message?.content || "";
 
     let result = { flags: [], summary: "Analysis complete" };
     try {
