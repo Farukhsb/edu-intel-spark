@@ -224,28 +224,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return;
           }
 
-          // No profile found in Firestore — check recovery cache
+          // No profile found in Firestore — check recovery cache first
           const recoveredProfile = readRecoveryProfile(firebaseUser.uid);
-          
-          if (!recoveredProfile) {
-            // No recovery either — this is a returning user whose Firestore profile can't be read
-            // Show error instead of silently defaulting to "student"
-            console.error("[Auth] No profile found in Firestore and no recovery data for", firebaseUser.uid);
-            setProfileError("Something went wrong loading your account. Please try again.");
-            setLoading(false);
-            return;
-          }
 
+          // Build profile from recovery data OR Firebase Auth as last resort
           const fallbackProfileData: StoredProfileData = {
-            full_name: recoveredProfile.full_name ?? firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "User",
-            email: recoveredProfile.email ?? firebaseUser.email ?? null,
-            role: recoveredProfile.role,
-            avatar_url: recoveredProfile.avatar_url ?? null,
-            cohort_id: recoveredProfile.cohort_id ?? null,
-            department_id: recoveredProfile.department_id ?? null,
-            created_at: recoveredProfile.created_at ?? new Date().toISOString(),
+            full_name: recoveredProfile?.full_name ?? firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "User",
+            email: recoveredProfile?.email ?? firebaseUser.email ?? null,
+            role: recoveredProfile?.role ?? "student",
+            avatar_url: recoveredProfile?.avatar_url ?? null,
+            cohort_id: recoveredProfile?.cohort_id ?? null,
+            department_id: recoveredProfile?.department_id ?? null,
+            created_at: recoveredProfile?.created_at ?? new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
+
+          if (!recoveredProfile) {
+            console.warn("[Auth] No profile in Firestore or recovery cache for", firebaseUser.uid, "— auto-creating from Auth data");
+          }
 
           const wrote = await tryWriteProfile(firebaseUser.uid, fallbackProfileData);
           if (!wrote) {
