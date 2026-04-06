@@ -4,33 +4,18 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, ArrowRight, CheckCircle, Lightbulb, Target, Loader2 } from "lucide-react";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where, getDoc, doc } from "firebase/firestore";
 
-const DEMO_OUTCOMES = [
-  { outcome: "LO1: Understand data structures", achievement: 78, target: 70, status: "met" },
-  { outcome: "LO2: Apply algorithmic thinking", achievement: 52, target: 70, status: "at-risk" },
-  { outcome: "LO3: Implement sorting algorithms", achievement: 71, target: 70, status: "met" },
-  { outcome: "LO4: Analyse complexity", achievement: 45, target: 70, status: "below" },
-  { outcome: "LO5: Design recursive solutions", achievement: 38, target: 70, status: "below" },
-];
-
-const DEMO_TREND = [
-  { assessment: "Assignment 1", CS301: 68, CS205: 62, CS102: 75, CS401: 60 },
-  { assessment: "Midterm", CS301: 58, CS205: 55, CS102: 70, CS401: 58 },
-  { assessment: "Assignment 2", CS301: 62, CS205: 60, CS102: 72, CS401: 64 },
-  { assessment: "Lab Report", CS301: 71, CS205: 66, CS102: 78, CS401: 68 },
-  { assessment: "Assignment 3", CS301: 55, CS205: 52, CS102: 74, CS401: 62 },
-];
-
+// Demo fallbacks
 const DEMO_DIST = [
-  { band: "1st", count: 48, fill: "hsl(152, 56%, 45%)" },
-  { band: "2:1", count: 82, fill: "hsl(205, 80%, 55%)" },
-  { band: "2:2", count: 104, fill: "hsl(38, 92%, 60%)" },
-  { band: "3rd", count: 72, fill: "hsl(280, 55%, 55%)" },
-  { band: "Fail", count: 36, fill: "hsl(0, 72%, 55%)" },
+  { band: "1st (70+)", count: 48, fill: "hsl(152, 56%, 45%)" },
+  { band: "2:1 (60-69)", count: 82, fill: "hsl(205, 80%, 55%)" },
+  { band: "2:2 (50-59)", count: 104, fill: "hsl(38, 92%, 60%)" },
+  { band: "3rd (40-49)", count: 72, fill: "hsl(280, 55%, 55%)" },
+  { band: "Fail (<40)", count: 36, fill: "hsl(0, 72%, 55%)" },
 ];
 
 const DEMO_RECS = [
@@ -39,46 +24,88 @@ const DEMO_RECS = [
   { topic: "Dynamic Programming", reason: "Low engagement with practice problems", suggestion: "Gamify DP exercises with progressive difficulty levels", priority: "medium" },
 ];
 
-const DEMO_MODULES = [
-  { module: "CS301 - Data Structures", avgGrade: 62, submissions: 156, passRate: 74 },
-  { module: "CS205 - Algorithms", avgGrade: 58, submissions: 134, passRate: 68 },
-  { module: "CS102 - Intro to Prog", avgGrade: 71, submissions: 210, passRate: 89 },
-  { module: "CS401 - AI & ML", avgGrade: 66, submissions: 98, passRate: 78 },
-];
+interface ModuleData {
+  id: string;
+  code: string;
+  title: string;
+  avgGrade: number;
+  submissions: number;
+  passRate: number;
+}
 
 const CohortAnalytics = () => {
   const { isDemo } = useAuth();
   const [moduleFilter, setModuleFilter] = useState("all");
-  const [learningOutcomes, setLearningOutcomes] = useState(DEMO_OUTCOMES);
-  const [cohortTrend, setCohortTrend] = useState(DEMO_TREND);
   const [gradeDistChart, setGradeDistChart] = useState(DEMO_DIST);
-  const [recommendations, setRecommendations] = useState(DEMO_RECS);
-  const [moduleComparison, setModuleComparison] = useState(DEMO_MODULES);
+  const [recommendations] = useState(DEMO_RECS);
+  const [modules, setModules] = useState<ModuleData[]>([]);
   const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
     if (isDemo) return;
     const fetchData = async () => {
       try {
+        const assignmentsSnap = await getDocs(collection(db, "assignments"));
+        const subsSnap = await getDocs(collection(db, "submissions"));
         const gradesSnap = await getDocs(collection(db, "grades"));
-        const scores = gradesSnap.docs.map(d => d.data().final_score ?? d.data().ai_score).filter(s => s != null) as number[];
-        if (scores.length > 0) {
-          const dist = [
-            { band: "1st (70+)", count: scores.filter(s => s >= 70).length, fill: "hsl(152, 56%, 45%)" },
-            { band: "2:1 (60-69)", count: scores.filter(s => s >= 60 && s < 70).length, fill: "hsl(205, 80%, 55%)" },
-            { band: "2:2 (50-59)", count: scores.filter(s => s >= 50 && s < 60).length, fill: "hsl(38, 92%, 60%)" },
-            { band: "3rd (40-49)", count: scores.filter(s => s >= 40 && s < 50).length, fill: "hsl(280, 55%, 55%)" },
-            { band: "Fail (<40)", count: scores.filter(s => s < 40).length, fill: "hsl(0, 72%, 55%)" },
-          ];
-          setGradeDistChart(dist);
+
+        // Build grade lookup
+        const gradeBySubmission: Record<string, number> = {};
+        gradesSnap.docs.forEach(d => {
+          const data = d.data();
+          const score = data.final_score ?? data.ai_score;
+          if (score != null) gradeBySubmission[data.submission_id] = score;
+        });
+
+        // Build submission lookup by assignment
+        const subsByAssignment: Record<string, string[]> = {};
+        subsSnap.docs.forEach(d => {
+          const data = d.data();
+          if (!subsByAssignment[data.assignment_id]) subsByAssignment[data.assignment_id] = [];
+          subsByAssignment[data.assignment_id].push(d.id);
+        });
+
+        // All scores for distribution
+        const allScores = Object.values(gradeBySubmission);
+
+        if (allScores.length > 0) {
+          setGradeDistChart([
+            { band: "1st (70+)", count: allScores.filter(s => s >= 70).length, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69)", count: allScores.filter(s => s >= 60 && s < 70).length, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59)", count: allScores.filter(s => s >= 50 && s < 60).length, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49)", count: allScores.filter(s => s >= 40 && s < 50).length, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40)", count: allScores.filter(s => s < 40).length, fill: "hsl(0, 72%, 55%)" },
+          ]);
         }
-      } catch (err) { console.error("Failed to fetch cohort data:", err); }
+
+        // Per-module stats
+        const moduleData: ModuleData[] = assignmentsSnap.docs.map(d => {
+          const data = d.data();
+          const subIds = subsByAssignment[d.id] || [];
+          const scores = subIds.map(sid => gradeBySubmission[sid]).filter(s => s != null) as number[];
+          const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+          const pass = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 0;
+          return {
+            id: d.id,
+            code: data.module_code || "—",
+            title: data.title,
+            avgGrade: avg,
+            submissions: subIds.length,
+            passRate: pass,
+          };
+        });
+        setModules(moduleData);
+      } catch (err) {
+        console.error("Failed to fetch cohort data:", err);
+      }
       setLoading(false);
     };
     fetchData();
   }, [isDemo]);
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
+  const filteredModules = moduleFilter === "all" ? modules : modules.filter(m => m.id === moduleFilter);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -91,121 +118,81 @@ const CohortAnalytics = () => {
         </Card>
       )}
 
-      <div className="flex items-center gap-4">
-        <Select value={moduleFilter} onValueChange={setModuleFilter}>
-          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filter by module" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Modules</SelectItem>
-            <SelectItem value="CS301">CS301</SelectItem>
-            <SelectItem value="CS205">CS205</SelectItem>
-            <SelectItem value="CS102">CS102</SelectItem>
-            <SelectItem value="CS401">CS401</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {modules.length > 0 && (
+        <div className="flex items-center gap-4">
+          <Select value={moduleFilter} onValueChange={setModuleFilter}>
+            <SelectTrigger className="w-[260px]"><SelectValue placeholder="Filter by assignment" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assignments</SelectItem>
+              {modules.map(m => (
+                <SelectItem key={m.id} value={m.id}>{m.code !== "—" ? `${m.code} — ` : ""}{m.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
-      <Tabs defaultValue="trends">
+      <Tabs defaultValue="distribution">
         <TabsList>
-          <TabsTrigger value="trends">Performance Trends</TabsTrigger>
-          <TabsTrigger value="outcomes">Learning Outcomes</TabsTrigger>
-          <TabsTrigger value="modules">Module Comparison</TabsTrigger>
+          <TabsTrigger value="distribution">Grade Distribution</TabsTrigger>
+          <TabsTrigger value="modules">Assignment Comparison</TabsTrigger>
           <TabsTrigger value="recommendations">AI Recommendations</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="trends" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Average Grades by Module Over Time</CardTitle>
-              <CardDescription>Comparison across modules per assessment</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={cohortTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="assessment" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" domain={[0, 100]} />
-                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="CS301" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="CS205" stroke="hsl(var(--destructive))" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="CS102" stroke="hsl(var(--success))" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="CS401" stroke="hsl(var(--warning))" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+        <TabsContent value="distribution" className="mt-4 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Grade Distribution</CardTitle>
               <CardDescription>Cohort classification breakdown</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={gradeDistChart}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="band" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {gradeDistChart.map((entry, idx) => <Cell key={idx} fill={entry.fill} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="outcomes" className="mt-4 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Learning Outcome Achievement</CardTitle>
-              <CardDescription>CS301 — Data Structures & Algorithms</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {learningOutcomes.map((lo, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{lo.outcome}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold">{lo.achievement}%</span>
-                      {lo.status === "met" && <CheckCircle className="h-4 w-4 text-success" />}
-                      {lo.status === "at-risk" && <AlertTriangle className="h-4 w-4 text-warning" />}
-                      {lo.status === "below" && <AlertTriangle className="h-4 w-4 text-destructive" />}
-                    </div>
-                  </div>
-                  <div className="relative h-3 overflow-hidden rounded-full bg-muted">
-                    <div className={`absolute inset-y-0 left-0 rounded-full transition-all ${lo.status === "met" ? "bg-success" : lo.status === "at-risk" ? "bg-warning" : "bg-destructive"}`} style={{ width: `${lo.achievement}%` }} />
-                    <div className="absolute inset-y-0 w-0.5 bg-foreground/40" style={{ left: `${lo.target}%` }} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Target: {lo.target}%</p>
-                </div>
-              ))}
+              {gradeDistChart.every(d => d.count === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No graded submissions yet</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={gradeDistChart}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="band" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                      {gradeDistChart.map((entry, idx) => <Cell key={idx} fill={entry.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="modules" className="mt-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {moduleComparison.map((mod, i) => (
-              <Card key={i}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium text-sm">{mod.module}</p>
-                      <p className="mt-1 text-3xl font-bold font-display">{mod.avgGrade}%</p>
-                      <p className="text-xs text-muted-foreground">Average Grade</p>
+          {filteredModules.length === 0 ? (
+            <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No assignments found</CardContent></Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {filteredModules.map((mod) => (
+                <Card key={mod.id}>
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-sm">{mod.code !== "—" ? `${mod.code} — ` : ""}{mod.title}</p>
+                        <p className="mt-1 text-3xl font-bold font-display">{mod.avgGrade > 0 ? `${mod.avgGrade}%` : "—"}</p>
+                        <p className="text-xs text-muted-foreground">Average Grade</p>
+                      </div>
+                      {mod.submissions > 0 && (
+                        <Badge variant={mod.passRate >= 80 ? "default" : mod.passRate >= 70 ? "secondary" : "destructive"}>
+                          {mod.passRate}% pass
+                        </Badge>
+                      )}
                     </div>
-                    <Badge variant={mod.passRate >= 80 ? "default" : mod.passRate >= 70 ? "secondary" : "destructive"}>
-                      {mod.passRate}% pass
-                    </Badge>
-                  </div>
-                  <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>{mod.submissions} submissions</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>{mod.submissions} submissions</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="recommendations" className="mt-4 space-y-4">
