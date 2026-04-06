@@ -43,7 +43,7 @@ const DashboardSkeleton = () => (
 );
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, isDemo, profileError, signOut } = useAuth();
+  const { user, loading, isDemo, profileError, signOut, resendVerification } = useAuth();
 
   if (loading) {
     return (
@@ -73,6 +73,45 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (!user && !isDemo) return <Navigate to="/auth" replace />;
+
+  // Email verification check (skip for demo)
+  if (user && !isDemo && !user.emailVerified) {
+    return (
+      <div className="flex h-screen items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="h-12 w-12 mx-auto rounded-full bg-warning/10 flex items-center justify-center">
+            <span className="text-2xl">📧</span>
+          </div>
+          <h2 className="text-lg font-semibold">Verify your email</h2>
+          <p className="text-sm text-muted-foreground">
+            We sent a verification link to <strong>{user.email}</strong>. Please check your inbox and click the link to continue.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={async () => { await resendVerification(); window.location.reload(); }}
+              className="text-sm text-primary hover:underline"
+            >
+              Resend verification email
+            </button>
+            <span className="text-muted-foreground">·</span>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm text-primary hover:underline"
+            >
+              I've verified, refresh
+            </button>
+          </div>
+          <button
+            onClick={() => { signOut(); }}
+            className="text-xs text-muted-foreground hover:underline"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return <>{children}</>;
 };
 

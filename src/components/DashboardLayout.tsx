@@ -2,10 +2,14 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  BarChart3, BookOpen, Brain, GraduationCap, LayoutDashboard, LogOut,
-  Menu, MessageSquare, Search, Shield, Target, TrendingUp, University,
-  Upload, User, X, Users,
+  BarChart3, Bell, BookOpen, Brain, GraduationCap, LayoutDashboard, LogOut,
+  Menu, MessageSquare, Moon, Search, Shield, Sun, Target, TrendingUp, University,
+  Upload, User, X, Users, Download,
 } from "lucide-react";
+import { useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, query, where, orderBy, onSnapshot, limit } from "firebase/firestore";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +39,39 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("theme") === "dark";
+    return false;
+  });
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (isDemo || !profile) return;
+    try {
+      const q = query(
+        collection(db, "notifications"),
+        where("user_id", "==", profile.id),
+        where("read", "==", false),
+        orderBy("created_at", "desc"),
+        limit(10)
+      );
+      const unsub = onSnapshot(q, (snap) => {
+        setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, () => { /* notifications collection may not exist yet */ });
+      return () => unsub();
+    } catch { /* ignore */ }
+  }, [profile, isDemo]);
 
   const links = profile?.role === "lecturer" ? lecturerLinks : studentLinks;
 
@@ -114,11 +151,45 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           <h1 className="font-display text-lg font-semibold">
             {links.find((l) => l.to === location.pathname)?.label || "Dashboard"}
           </h1>
-          {isDemo && (
-            <Badge variant="secondary" className="ml-auto text-xs">
-              Demo Mode — Data is not saved
-            </Badge>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {isDemo && (
+              <Badge variant="secondary" className="text-xs">
+                Demo Mode
+              </Badge>
+            )}
+            <Button variant="ghost" size="icon" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
+              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <div className="relative">
+              <Button variant="ghost" size="icon" onClick={() => setShowNotifications(!showNotifications)}>
+                <Bell className="h-4 w-4" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground">
+                    {notifications.length}
+                  </span>
+                )}
+              </Button>
+              {showNotifications && (
+                <div className="absolute right-0 top-10 z-50 w-72 rounded-lg border bg-card shadow-lg">
+                  <div className="p-3 border-b">
+                    <p className="text-sm font-medium">Notifications</p>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="p-4 text-xs text-muted-foreground text-center">No new notifications</p>
+                    ) : (
+                      notifications.map((n) => (
+                        <div key={n.id} className="p-3 border-b last:border-0 hover:bg-muted/50">
+                          <p className="text-sm">{n.message}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
       </div>

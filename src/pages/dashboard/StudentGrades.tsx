@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, getDocs, getDoc, doc } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 
 interface StudentGrade {
   id: string;
@@ -15,6 +17,7 @@ interface StudentGrade {
   status: string;
   submittedAt: string;
   breakdown: any[] | null;
+  fileUrl: string | null;
 }
 
 const StudentGrades = () => {
@@ -33,26 +36,28 @@ const StudentGrades = () => {
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const submissions = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+      let submissions = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+
+      // Also check by email if no results by student_id
+      if (submissions.length === 0 && user.email) {
+        try {
+          const q2 = query(collection(db, "submissions"), where("student_email", "==", user.email), orderBy("submitted_at", "desc"));
+          const emailSnap = await getDocs(q2);
+          submissions = emailSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+        } catch { /* index may not exist */ }
+      }
 
       if (!submissions.length) { setLoading(false); return; }
 
       // Get assignments for context
-      const assignmentIds = [...new Set(submissions.map((s: any) => s.assignment_id))];
       const assignmentMap: Record<string, any> = {};
+      const assignmentIds = [...new Set(submissions.map((s: any) => s.assignment_id))];
       for (const aId of assignmentIds) {
-        const aSnap = await getDocs(
-          query(collection(db, "assignments"), where("__name__", "==", aId))
-        );
-        // Use getDoc instead for single doc
+        try {
+          const aSnap = await getDoc(doc(db, "assignments", aId));
+          if (aSnap.exists()) assignmentMap[aId] = { ...aSnap.data(), id: aSnap.id };
+        } catch { /* permission error */ }
       }
-      // Fetch all assignments and filter
-      const allAssignments = await getDocs(collection(db, "assignments"));
-      allAssignments.docs.forEach((d) => {
-        if (assignmentIds.includes(d.id)) {
-          assignmentMap[d.id] = { ...d.data(), id: d.id };
-        }
-      });
 
       // Get grades
       const gradeMap: Record<string, any> = {};
@@ -79,6 +84,7 @@ const StudentGrades = () => {
           status: s.status,
           submittedAt: s.submitted_at,
           breakdown: isReleased ? (g?.ai_breakdown || null) : null,
+          fileUrl: s.file_url || null,
         };
       });
 
@@ -174,6 +180,11 @@ const StudentGrades = () => {
                   </div>
                 )}
                 {g.feedback && <p className="text-sm text-muted-foreground">{g.feedback}</p>}
+                {g.fileUrl && g.score != null && (
+                  <Button variant="outline" size="sm" className="mt-1" onClick={() => window.open(g.fileUrl!, "_blank")}>
+                    <Download className="mr-1.5 h-3.5 w-3.5" /> Download Submission
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}

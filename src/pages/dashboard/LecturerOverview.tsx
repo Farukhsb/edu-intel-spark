@@ -4,8 +4,9 @@ import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, CheckCircle, Clock, FileText, TrendingDown, TrendingUp, Users, AlertTriangle, Target, Sparkles, Loader2 } from "lucide-react";
+import { BarChart3, CheckCircle, Clock, Download, FileText, TrendingDown, TrendingUp, Users, AlertTriangle, Target, Sparkles, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Button } from "@/components/ui/button";
 
 interface Stats {
   totalSubmissions: number; gradedCount: number; pendingCount: number;
@@ -197,13 +198,36 @@ const LecturerOverview = () => {
       </div>
 
       {stats.pendingCount > 5 && (
-        <Card className="border-warning">
+        <Card className="border-warning border-l-4">
           <CardContent className="flex items-center gap-3 p-4">
             <AlertTriangle className="h-5 w-5 text-warning" />
             <p className="text-sm"><span className="font-medium">{stats.pendingCount} submissions</span> are awaiting grading. Consider using AI grading.</p>
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardContent className="flex items-center justify-between p-4">
+          <div>
+            <p className="text-sm font-medium">Export Grades</p>
+            <p className="text-xs text-muted-foreground">Download all grades as CSV</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => {
+            const rows = [["Student", "Assignment", "Score", "Max Score", "Status", "Submitted"]];
+            recent.forEach(s => rows.push([s.student_name || "Unknown", s.assignment_title, String(s.score ?? ""), String(s.max_score), s.status, new Date(s.submitted_at).toLocaleDateString()]));
+            const csv = rows.map(r => r.join(",")).join("\n");
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "grades_export.csv";
+            a.click();
+            URL.revokeObjectURL(url);
+          }}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 };
