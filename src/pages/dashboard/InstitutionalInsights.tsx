@@ -31,6 +31,8 @@ const DEMO_ACCRED = [
 const InstitutionalInsights = () => {
   const { isDemo } = useAuth();
   const [departmentStats, setDepartmentStats] = useState(DEMO_DEPTS);
+  const [lowPerforming, setLowPerforming] = useState(DEMO_LOW);
+  const [accreditation, setAccreditation] = useState(DEMO_ACCRED);
   const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
