@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { db, storage as firebaseStorage } from "@/lib/firebase";
+import { auth, db, storage as firebaseStorage } from "@/lib/firebase";
 import {
   doc,
   getDoc,
@@ -14,7 +14,7 @@ import {
   updateDoc,
   getDocs,
 } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, type StorageReference } from "firebase/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,13 +41,18 @@ type SubmissionStatus = "submitted" | "ai_grading" | "ai_graded" | "under_review
 interface Submission {
   id: string;
   assignment_id: string;
+  assignmentId?: string;
   student_name: string | null;
   student_email: string | null;
   file_name: string;
+  file_type?: string | null;
   file_url: string;
+  fileUrl?: string;
   status: SubmissionStatus;
   submitted_at: string;
+  createdAt?: string;
   student_id: string | null;
+  studentId?: string | null;
 }
 
 interface Grade {
@@ -91,9 +96,51 @@ const statusConfig: Record<SubmissionStatus, { label: string; variant: string; i
   released: { label: "Released", variant: "default", icon: Send },
 };
 
+const normalizeSubmission = (id: string, data: Record<string, any>): Submission => ({
+  id,
+  assignment_id: data.assignment_id ?? data.assignmentId ?? "",
+  assignmentId: data.assignmentId ?? data.assignment_id ?? "",
+  student_name: data.student_name ?? null,
+  student_email: data.student_email ?? null,
+  file_name: data.file_name ?? data.fileName ?? "",
+  file_type: data.file_type ?? data.fileType ?? null,
+  file_url: data.file_url ?? data.fileUrl ?? "",
+  fileUrl: data.fileUrl ?? data.file_url ?? "",
+  status: data.status ?? "submitted",
+  submitted_at: data.submitted_at ?? data.createdAt ?? new Date().toISOString(),
+  createdAt: data.createdAt ?? data.submitted_at ?? new Date().toISOString(),
+  student_id: data.student_id ?? data.studentId ?? null,
+  studentId: data.studentId ?? data.student_id ?? null,
+});
+
+const getSubmissionErrorMessage = (error: any) => {
+  const errorCode = error?.code ?? "";
+  const errorMessage = (error?.message ?? "").toLowerCase();
+
+  if (errorCode.includes("permission") || errorCode.includes("unauthorized") || errorMessage.includes("permission")) {
+    return "Permission denied";
+  }
+
+  if (
+    errorCode.includes("network") ||
+    errorCode.includes("unavailable") ||
+    errorCode.includes("retry") ||
+    errorMessage.includes("network") ||
+    errorMessage.includes("timeout")
+  ) {
+    return "Network error";
+  }
+
+  if (errorMessage.includes("missing assignment")) {
+    return "Missing assignment";
+  }
+
+  return "Upload failed";
+};
+
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { role, user } = useAuth();
+  const { role, user, profile } = useAuth();
   const navigate = useNavigate();
 
   const [assignment, setAssignment] = useState<Assignment | null>(null);
@@ -134,7 +181,7 @@ const AssignmentDetail = () => {
       : query(collection(db, "submissions"), where("student_id", "==", user.uid));
 
     const normalizeSubmissions = (docs: any[]) => docs
-      .map((d) => ({ id: d.id, ...d.data() } as Submission))
+      .map((d) => normalizeSubmission(d.id, d.data() as Record<string, any>))
       .filter((sub) => role === "lecturer" ? sub.assignment_id === id : sub.assignment_id === id && sub.student_id === user.uid)
       .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
 
@@ -193,14 +240,20 @@ const AssignmentDetail = () => {
     return () => unsubscribe();
   }, [id, role, user?.uid]);
 
-  const uploadFile = async (file: File) => {
-    const filePath = `submissions/${user!.uid}/${id}/${Date.now()}_${file.name}`;
+  const uploadFile = async (file: File, currentUserId: string) => {
+    if (!id) {
+      throw new Error("Missing assignment");
+    }
+
+    const safeFileName = file.name.replace(/[\\/]/g, "_");
+    const filePath = `submissions/${currentUserId}/${id}/${safeFileName}`;
     console.log("[Upload] Starting upload to:", filePath, "Size:", file.size, "Type:", file.type);
     const storageRef = ref(firebaseStorage, filePath);
 
     try {
+      setUploadProgress(0);
       console.log("[Upload] Uploading file...");
-      const result = await new Promise<{ fileUrl: string; fileName: string; fileType: string }>((resolve, reject) => {
+      const result = await new Promise<{ fileUrl: string; fileName: string; fileType: string; storageRef: StorageReference }>((resolve, reject) => {
         let settled = false;
         let timeoutId = 0;
 
@@ -213,7 +266,12 @@ const AssignmentDetail = () => {
             const fileUrl = await getDownloadURL(taskRef);
             console.log("[Upload] Download URL obtained:", fileUrl.substring(0, 80) + "...");
             setUploadProgress(100);
-            resolve({ fileUrl, fileName: file.name, fileType: file.type });
+            resolve({
+              fileUrl,
+              fileName: safeFileName,
+              fileType: file.type || "application/octet-stream",
+              storageRef: taskRef,
+            });
           } catch (error) {
             reject(error);
           }
@@ -261,41 +319,90 @@ const AssignmentDetail = () => {
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !id) return;
+    const currentUserId = auth.currentUser?.uid ?? user?.uid ?? null;
+    const currentUserEmail = auth.currentUser?.email ?? user?.email ?? null;
+
+    if (!file) return;
+    if (!id || !assignment) {
+      toast.error("Missing assignment");
+      e.target.value = "";
+      return;
+    }
+    if (!currentUserId) {
+      toast.error("Permission denied");
+      e.target.value = "";
+      return;
+    }
+
+    const hasExistingSubmission = submissions.some(
+      (submission) => submission.student_id === currentUserId || (currentUserEmail && submission.student_email === currentUserEmail)
+    );
+
+    if (hasExistingSubmission) {
+      toast.error("You have already submitted this assignment");
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
     setUploadProgress(0);
+
+    let uploadedFile:
+      | { fileUrl: string; fileName: string; fileType: string; storageRef: StorageReference }
+      | null = null;
+    let submissionCreated = false;
+
     try {
-      const { fileUrl, fileName, fileType } = await uploadFile(file);
+      uploadedFile = await uploadFile(file, currentUserId);
+
+      const createdAt = new Date().toISOString();
       await addDoc(collection(db, "submissions"), {
         assignment_id: id,
-        student_id: user!.uid,
-        file_url: fileUrl,
-        file_name: fileName,
-        file_type: fileType,
-        uploaded_by: user!.uid,
+        assignmentId: id,
+        student_id: currentUserId,
+        studentId: currentUserId,
+        file_url: uploadedFile.fileUrl,
+        fileUrl: uploadedFile.fileUrl,
+        file_name: uploadedFile.fileName,
+        file_type: uploadedFile.fileType,
+        uploaded_by: currentUserId,
         status: "submitted",
-        submitted_at: new Date().toISOString(),
-        student_name: null,
-        student_email: user!.email || null,
+        submitted_at: createdAt,
+        createdAt,
+        student_name: profile?.full_name ?? auth.currentUser?.displayName ?? null,
+        student_email: currentUserEmail,
       });
-      toast.success("Submission uploaded!");
+
+      submissionCreated = true;
+      toast.success("Submission uploaded successfully");
     } catch (error: any) {
-      console.error("[Upload] Failed:", error);
-      toast.error(error?.message || "Upload failed");
+      console.error("[Submission] Failed:", error);
+
+      if (uploadedFile && !submissionCreated) {
+        try {
+          await deleteObject(uploadedFile.storageRef);
+          console.warn("[Submission] Removed uploaded file after Firestore write failure");
+        } catch (cleanupError) {
+          console.error("[Submission] Failed to clean up uploaded file:", cleanupError);
+        }
+      }
+
+      toast.error(getSubmissionErrorMessage(error));
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      e.target.value = "";
     }
-    setUploading(false);
-    setUploadProgress(0);
-    e.target.value = "";
   };
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || !id) return;
+    if (!files || !id || !user?.uid) return;
     setUploading(true);
     let success = 0;
     for (const file of Array.from(files)) {
       try {
-        const { fileUrl, fileName, fileType } = await uploadFile(file);
+        const { fileUrl, fileName, fileType } = await uploadFile(file, user.uid);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
         await addDoc(collection(db, "submissions"), {
           assignment_id: id,
@@ -504,6 +611,11 @@ const AssignmentDetail = () => {
   );
 
   const isLecturer = role === "lecturer";
+  const currentUserId = auth.currentUser?.uid ?? user?.uid ?? null;
+  const currentUserEmail = auth.currentUser?.email ?? user?.email ?? null;
+  const hasExistingSubmission = !isLecturer && submissions.some(
+    (submission) => submission.student_id === currentUserId || (currentUserEmail && submission.student_email === currentUserEmail)
+  );
   const selectedStatuses = submissions.filter((s) => selected.has(s.id)).map((s) => s.status);
   const hasSubmitted = selectedStatuses.some((s) => s === "submitted");
   const hasGraded = selectedStatuses.some((s) => s === "ai_graded" || s === "under_review");
@@ -552,9 +664,13 @@ const AssignmentDetail = () => {
         {!isLecturer && (
           <>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleStudentSubmit} />
-            <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-              <Upload className="mr-2 h-4 w-4" />{uploading ? `Uploading... ${uploadProgress}%` : "Submit My Work"}
+            <Button onClick={() => fileInputRef.current?.click()} disabled={uploading || hasExistingSubmission || !currentUserId || !assignment}>
+              {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              {uploading ? `Uploading... ${uploadProgress}%` : hasExistingSubmission ? "Already Submitted" : "Submit My Work"}
             </Button>
+            {hasExistingSubmission && (
+              <p className="text-sm text-muted-foreground">You have already submitted this assignment.</p>
+            )}
           </>
         )}
         {isLecturer && (
