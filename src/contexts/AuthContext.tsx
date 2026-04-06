@@ -29,6 +29,7 @@ interface AuthContextType {
   profile: Profile | null;
   role: AppRole | null;
   loading: boolean;
+  profileError: string | null;
   isDemo: boolean;
   signUp: (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -70,35 +71,60 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
-  const fetchProfile = async (uid: string) => {
-    const snap = await getDoc(doc(db, "profiles", uid));
-    if (snap.exists()) {
-      const data = snap.data();
-      setProfile({
-        id: snap.id,
-        full_name: data.full_name || null,
-        email: data.email || null,
-        role: data.role || "student",
-        avatar_url: data.avatar_url || null,
-        cohort_id: data.cohort_id || null,
-        department_id: data.department_id || null,
-      });
-    }
+  const fetchProfileWithTimeout = async (uid: string, email: string | null): Promise<Profile | null> => {
+    return new Promise<Profile | null>((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve(null);
+      }, 5000);
+
+      getDoc(doc(db, "profiles", uid))
+        .then((snap) => {
+          clearTimeout(timeout);
+          if (snap.exists()) {
+            const data = snap.data();
+            resolve({
+              id: snap.id,
+              full_name: data.full_name || null,
+              email: data.email || email || null,
+              role: data.role || "student",
+              avatar_url: data.avatar_url || null,
+              cohort_id: data.cohort_id || null,
+              department_id: data.department_id || null,
+            });
+          } else {
+            resolve(null);
+          }
+        })
+        .catch(() => {
+          clearTimeout(timeout);
+          resolve(null);
+        });
+    });
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        await fetchProfile(firebaseUser.uid);
-        posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
+        setProfileError(null);
+        fetchProfileWithTimeout(firebaseUser.uid, firebaseUser.email).then((p) => {
+          if (p) {
+            setProfile(p);
+            posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
+          } else {
+            setProfileError("Something went wrong loading your account. Please try again.");
+          }
+          setLoading(false);
+        });
       } else if (!isDemo) {
         setProfile(null);
+        setProfileError(null);
         posthog.reset();
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -107,9 +133,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signUp = async (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters");
     const cred = await createUserWithEmailAndPassword(auth, email, password);
+    
+    // Save displayName to Firebase Auth
     await updateProfile(cred.user, { displayName: fullName });
 
-    await setDoc(doc(db, "profiles", cred.user.uid), {
+    const profileData = {
       full_name: fullName,
       email,
       role,
@@ -118,14 +146,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       department_id: departmentId || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    };
 
+    // Write profile doc with user's UID as the doc ID
+    await setDoc(doc(db, "profiles", cred.user.uid), profileData);
+
+    // Also write to user_roles collection
     await setDoc(doc(db, "user_roles", cred.user.uid), {
       user_id: cred.user.uid,
       role,
     });
 
-    await fetchProfile(cred.user.uid);
+    // Set profile in state immediately (no need to re-fetch)
+    setProfile({
+      id: cred.user.uid,
+      full_name: fullName,
+      email,
+      role,
+      avatar_url: null,
+      cohort_id: role === "student" ? (cohortId || null) : null,
+      department_id: departmentId || null,
+    });
   };
 
   const signIn = async (email: string, password: string) => {
@@ -140,6 +181,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     await firebaseSignOut(auth);
     setProfile(null);
+    setProfileError(null);
   };
 
   const resetPassword = async (email: string) => {
@@ -164,6 +206,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profile,
         role: profile?.role ?? null,
         loading,
+        profileError,
         isDemo,
         signUp,
         signIn,

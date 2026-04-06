@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NetworkStatus } from "@/components/NetworkStatus";
+import { Suspense, lazy } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -12,24 +14,64 @@ import NotFound from "./pages/NotFound";
 import Install from "./pages/Install";
 import { DashboardLayout } from "./components/DashboardLayout";
 
-import LecturerOverview from "./pages/dashboard/LecturerOverview";
-import CohortAnalytics from "./pages/dashboard/CohortAnalytics";
-import PerformanceTrends from "./pages/dashboard/PerformanceTrends";
-import AcademicIntegrity from "./pages/dashboard/AcademicIntegrity";
-import InstitutionalInsights from "./pages/dashboard/InstitutionalInsights";
-import LearningOutcomes from "./pages/dashboard/LearningOutcomes";
-import StudentGrades from "./pages/dashboard/StudentGrades";
-import ExplainGrade from "./pages/dashboard/ExplainGrade";
-import ImprovementPlan from "./pages/dashboard/ImprovementPlan";
-import Assignments from "./pages/dashboard/Assignments";
-import AssignmentDetail from "./pages/dashboard/AssignmentDetail";
-import StudentProfile from "./pages/dashboard/StudentProfile";
+// Lazy-loaded dashboard pages
+const LecturerOverview = lazy(() => import("./pages/dashboard/LecturerOverview"));
+const CohortAnalytics = lazy(() => import("./pages/dashboard/CohortAnalytics"));
+const PerformanceTrends = lazy(() => import("./pages/dashboard/PerformanceTrends"));
+const AcademicIntegrity = lazy(() => import("./pages/dashboard/AcademicIntegrity"));
+const InstitutionalInsights = lazy(() => import("./pages/dashboard/InstitutionalInsights"));
+const LearningOutcomes = lazy(() => import("./pages/dashboard/LearningOutcomes"));
+const StudentGrades = lazy(() => import("./pages/dashboard/StudentGrades"));
+const ExplainGrade = lazy(() => import("./pages/dashboard/ExplainGrade"));
+const ImprovementPlan = lazy(() => import("./pages/dashboard/ImprovementPlan"));
+const Assignments = lazy(() => import("./pages/dashboard/Assignments"));
+const AssignmentDetail = lazy(() => import("./pages/dashboard/AssignmentDetail"));
+const StudentProfile = lazy(() => import("./pages/dashboard/StudentProfile"));
 
 const queryClient = new QueryClient();
 
+const DashboardSkeleton = () => (
+  <div className="space-y-4 p-4">
+    <Skeleton className="h-8 w-48" />
+    <div className="grid gap-4 md:grid-cols-3">
+      <Skeleton className="h-32" />
+      <Skeleton className="h-32" />
+      <Skeleton className="h-32" />
+    </div>
+    <Skeleton className="h-64" />
+  </div>
+);
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, isDemo } = useAuth();
-  if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  const { user, loading, isDemo, profileError, signOut } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading your account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <div className="flex h-screen items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-md">
+          <p className="text-destructive font-medium">{profileError}</p>
+          <button
+            onClick={() => { signOut(); }}
+            className="text-sm text-primary hover:underline"
+          >
+            Sign out and try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!user && !isDemo) return <Navigate to="/auth" replace />;
   return <>{children}</>;
 };
@@ -42,7 +84,11 @@ const DashboardRouter = () => {
 
 const DashboardRoute = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>
-    <DashboardLayout>{children}</DashboardLayout>
+    <DashboardLayout>
+      <Suspense fallback={<DashboardSkeleton />}>
+        {children}
+      </Suspense>
+    </DashboardLayout>
   </ProtectedRoute>
 );
 
