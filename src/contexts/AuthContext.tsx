@@ -54,7 +54,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 const PRIMARY_PROFILE_COLLECTION = "users";
-const PROFILE_COLLECTIONS = [PRIMARY_PROFILE_COLLECTION, "profiles"] as const;
 const recoveryStorageKey = (uid: string) => `gradeai-profile:${uid}`;
 
 const normalizeProfile = (
