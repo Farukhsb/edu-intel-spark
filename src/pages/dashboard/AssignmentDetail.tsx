@@ -14,7 +14,7 @@ import {
   updateDoc,
   getDocs,
 } from "firebase/firestore";
-import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -186,75 +186,24 @@ const AssignmentDetail = () => {
 
   const uploadFile = async (file: File) => {
     const filePath = `submissions/${user!.uid}/${id}/${Date.now()}_${file.name}`;
+    console.log("[Upload] Starting upload to:", filePath, "Size:", file.size, "Type:", file.type);
     const storageRef = ref(firebaseStorage, filePath);
 
-    return new Promise<{ fileUrl: string; fileName: string; fileType: string }>((resolve, reject) => {
-      const uploadTask = uploadBytesResumable(storageRef, file);
-      let settled = false;
-      let sawProgress = false;
-
-      const cleanup = () => {
-        window.clearTimeout(fallbackTimer);
-        window.clearTimeout(timeoutTimer);
-      };
-
-      const finish = async () => {
-        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
-        settled = true;
-        cleanup();
-        resolve({ fileUrl, fileName: file.name, fileType: file.type });
-      };
-
-      const fallbackTimer = window.setTimeout(async () => {
-        if (settled || sawProgress) return;
-
-        try {
-          uploadTask.cancel();
-        } catch {
-        }
-
-        try {
-          const snapshot = await uploadBytes(storageRef, file);
-          const fileUrl = await getDownloadURL(snapshot.ref);
-          settled = true;
-          cleanup();
-          setUploadProgress(100);
-          resolve({ fileUrl, fileName: file.name, fileType: file.type });
-        } catch (error) {
-          settled = true;
-          cleanup();
-          reject(error);
-        }
-      }, 3000);
-
-      const timeoutTimer = window.setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(new Error("Upload timed out. Please check your network and try again."));
-      }, 120000);
-
-      uploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          if (settled) return;
-          if (snapshot.bytesTransferred > 0) {
-            sawProgress = true;
-          }
-          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-          setUploadProgress(progress);
-        },
-        (error: any) => {
-          if (settled || error?.code === "storage/canceled") return;
-          settled = true;
-          cleanup();
-          reject(error);
-        },
-        () => {
-          void finish();
-        }
-      );
-    });
+    // Use simple uploadBytes (non-resumable) which is more reliable across origins
+    try {
+      setUploadProgress(10); // Show some initial progress
+      console.log("[Upload] Uploading file...");
+      const snapshot = await uploadBytes(storageRef, file);
+      console.log("[Upload] Upload complete, getting download URL...");
+      setUploadProgress(90);
+      const fileUrl = await getDownloadURL(snapshot.ref);
+      console.log("[Upload] Download URL obtained:", fileUrl.substring(0, 80) + "...");
+      setUploadProgress(100);
+      return { fileUrl, fileName: file.name, fileType: file.type };
+    } catch (error: any) {
+      console.error("[Upload] Upload failed:", error?.code, error?.message, error);
+      throw error;
+    }
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
