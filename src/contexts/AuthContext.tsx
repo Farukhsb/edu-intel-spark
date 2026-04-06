@@ -54,7 +54,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 const PRIMARY_PROFILE_COLLECTION = "users";
-const PROFILE_COLLECTIONS = [PRIMARY_PROFILE_COLLECTION, "profiles"] as const;
 const recoveryStorageKey = (uid: string) => `gradeai-profile:${uid}`;
 
 const normalizeProfile = (
@@ -140,19 +139,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let lastError: unknown = null;
 
     while (Date.now() < deadline) {
-      for (const collectionName of PROFILE_COLLECTIONS) {
-        try {
-          const snap = await getDoc(doc(db, collectionName, uid));
+      try {
+        const snap = await getDoc(doc(db, PRIMARY_PROFILE_COLLECTION, uid));
 
-          if (snap.exists()) {
-            const profileData = snap.data() as StoredProfileData;
-            console.log(`[Auth] Profile found in '${collectionName}' with role: ${profileData.role}`);
-            return normalizeProfile(uid, profileData, email);
-          }
-        } catch (e) {
-          lastError = e;
-          console.warn(`[Auth] Error reading '${collectionName}' for ${uid}:`, e);
+        if (snap.exists()) {
+          const profileData = snap.data() as StoredProfileData;
+          console.log(`[Auth] Profile found in '${PRIMARY_PROFILE_COLLECTION}' with role: ${profileData.role}`);
+          return normalizeProfile(uid, profileData, email);
         }
+      } catch (e) {
+        lastError = e;
+        console.warn(`[Auth] Error reading '${PRIMARY_PROFILE_COLLECTION}' for ${uid}:`, e);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -227,28 +224,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return;
           }
 
-          // No profile found in Firestore — check recovery cache
+          // No profile found in Firestore — check recovery cache first
           const recoveredProfile = readRecoveryProfile(firebaseUser.uid);
-          
-          if (!recoveredProfile) {
-            // No recovery either — this is a returning user whose Firestore profile can't be read
-            // Show error instead of silently defaulting to "student"
-            console.error("[Auth] No profile found in Firestore and no recovery data for", firebaseUser.uid);
-            setProfileError("Something went wrong loading your account. Please try again.");
-            setLoading(false);
-            return;
-          }
 
+          // Build profile from recovery data OR Firebase Auth as last resort
           const fallbackProfileData: StoredProfileData = {
-            full_name: recoveredProfile.full_name ?? firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "User",
-            email: recoveredProfile.email ?? firebaseUser.email ?? null,
-            role: recoveredProfile.role,
-            avatar_url: recoveredProfile.avatar_url ?? null,
-            cohort_id: recoveredProfile.cohort_id ?? null,
-            department_id: recoveredProfile.department_id ?? null,
-            created_at: recoveredProfile.created_at ?? new Date().toISOString(),
+            full_name: recoveredProfile?.full_name ?? firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "User",
+            email: recoveredProfile?.email ?? firebaseUser.email ?? null,
+            role: recoveredProfile?.role ?? "student",
+            avatar_url: recoveredProfile?.avatar_url ?? null,
+            cohort_id: recoveredProfile?.cohort_id ?? null,
+            department_id: recoveredProfile?.department_id ?? null,
+            created_at: recoveredProfile?.created_at ?? new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
+
+          if (!recoveredProfile) {
+            console.warn("[Auth] No profile in Firestore or recovery cache for", firebaseUser.uid, "— auto-creating from Auth data");
+          }
 
           const wrote = await tryWriteProfile(firebaseUser.uid, fallbackProfileData);
           if (!wrote) {
