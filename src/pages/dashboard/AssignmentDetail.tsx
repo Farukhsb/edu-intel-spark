@@ -14,7 +14,7 @@ import {
   updateDoc,
   getDocs,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,7 @@ const AssignmentDetail = () => {
   const [grades, setGrades] = useState<Record<string, Grade>>({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [grading, setGrading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -157,15 +158,29 @@ const AssignmentDetail = () => {
   const uploadFile = async (file: File) => {
     const filePath = `submissions/${user!.uid}/${id}/${Date.now()}_${file.name}`;
     const storageRef = ref(firebaseStorage, filePath);
-    await uploadBytes(storageRef, file);
-    const fileUrl = await getDownloadURL(storageRef);
-    return { fileUrl, fileName: file.name, fileType: file.type };
+    
+    return new Promise<{ fileUrl: string; fileName: string; fileType: string }>((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setUploadProgress(progress);
+        },
+        (error) => reject(error),
+        async () => {
+          const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve({ fileUrl, fileName: file.name, fileType: file.type });
+        }
+      );
+    });
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !id) return;
     setUploading(true);
+    setUploadProgress(0);
     try {
       const { fileUrl, fileName, fileType } = await uploadFile(file);
       await addDoc(collection(db, "submissions"), {
@@ -183,6 +198,7 @@ const AssignmentDetail = () => {
       toast.success("Submission uploaded!");
     } catch { toast.error("Upload failed"); }
     setUploading(false);
+    setUploadProgress(0);
     e.target.value = "";
   };
 
@@ -451,7 +467,7 @@ const AssignmentDetail = () => {
           <>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleStudentSubmit} />
             <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-              <Upload className="mr-2 h-4 w-4" />{uploading ? "Uploading..." : "Submit My Work"}
+              <Upload className="mr-2 h-4 w-4" />{uploading ? `Uploading... ${uploadProgress}%` : "Submit My Work"}
             </Button>
           </>
         )}
