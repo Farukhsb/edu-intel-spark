@@ -671,9 +671,9 @@ const AssignmentDetail = () => {
         )}
         {isLecturer && (
           <>
-            <input ref={bulkInputRef} type="file" multiple className="hidden" onChange={handleBulkUpload} />
+            <input ref={bulkInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.txt,.zip,.py,.java,.cpp,.c,.js,.ts,.html,.css" onChange={handleBulkUpload} />
             <Button onClick={() => bulkInputRef.current?.click()} disabled={uploading}>
-              <Upload className="mr-2 h-4 w-4" />{uploading ? "Uploading..." : "Bulk Upload"}
+              <Upload className="mr-2 h-4 w-4" />{uploading ? "Uploading..." : "Upload Submissions"}
             </Button>
             <Button variant="outline" onClick={handlePlagiarismCheck} disabled={checkingPlagiarism || submissions.length < 1}>
               {checkingPlagiarism ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
