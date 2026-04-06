@@ -2,7 +2,7 @@
 
 **AI-Powered Academic Marking & Intelligence Platform**
 
-GradeAI is a full-stack, production-ready EdTech platform that uses Claude AI to automate academic marking, detect academic integrity issues, and help students improve their grades through Socratic AI coaching. Built for universities and secondary schools.
+GradeAI is a full-stack, production-ready EdTech platform that uses AI to automate academic marking, detect academic integrity issues, and help students improve their grades through Socratic AI coaching. Built for universities and secondary schools.
 
 > Live demo: [edu-intel-spark.lovable.app](https://edu-intel-spark.lovable.app)
 
@@ -16,35 +16,56 @@ To bridge the gap between education and technology — making assessment fairer,
 
 ## ✅ What's Built & Working
 
-### Core Platform
+### 🔐 Authentication & User Management
 - **Firebase Authentication** — Email/password sign-up & sign-in with role selection (lecturer / student)
 - **Role-Based Access Control** — Separate dashboards and permissions for lecturers and students
-- **Real-time Updates** — Firestore onSnapshot listeners for live data across all pages
+- **Bulk Student Upload** — CSV import to create multiple student accounts at once with validation and error reporting
+- **User Profiles** — Role-based profiles with avatar support
 - **PWA Support** — Installable as a Progressive Web App on desktop and mobile
 
-### AI-Powered Features (Powered by Claude)
-- **AI Marking Engine** — Grades student submissions against lecturer-uploaded rubrics with detailed criterion-by-criterion breakdowns
-- **Grading Workflow** — Full state-based pipeline: `submitted → ai_grading → ai_graded → under_review → approved → released`
-- **Lecturer Grade Review** — Lecturers can override AI scores and feedback before releasing to students
-- **Plagiarism & Integrity Detection** — AI-powered similarity and AI-content analysis across submissions
-- **Explain My Grade (AI Chat)** — Streaming chat assistant that explains grades with actionable improvement tips
-- **Socratic Improvement Coach** — AI guides students to improve using questions, not just answers
-
-### Assignment Management
-- **Assignment Creation** — Lecturers create and publish assignments with rubrics, due dates, and module codes
+### 📝 Assignment Management
+- **Assignment Creation** — Lecturers create and publish assignments with title, description, module code, due date, and max score
 - **Rubric Builder** — Weighted marking criteria builder for structured, consistent grading
-- **File Upload** — Student submissions and bulk lecturer uploads via Firebase Storage
-- **Grade Release** — Batch approve and release grades to students
+- **Assignment Lifecycle** — Draft → Published → Closed status management
+- **File Attachments** — Attach reference materials to assignments
 
-### Analytics & Insights
-- **Lecturer Dashboard** — KPI cards, grade distribution charts, recent submissions, at-risk student counts
+### 📤 Submission Handling
+- **Single File Upload** — Students or lecturers upload submissions (PDF, DOCX, TXT, code files)
+- **Bulk Upload Submissions** — Upload multiple student PDFs/documents at once for batch processing
+- **Student Mapping** — Student name and email tracked per submission
+- **Submission Pipeline** — Visual status tracking: `Submitted → AI Grading → AI Graded → Under Review → Approved → Released`
+
+### 🤖 AI-Powered Grading
+- **AI Marking Engine** — Grades submissions against rubric criteria with detailed criterion-by-criterion score breakdowns
+- **AI Feedback Generation** — Detailed written feedback per submission
+- **Batch AI Grading** — Select multiple submissions and grade them all at once
+- **Timeout Indicator** — Shows estimated time remaining during AI grading so lecturers know it's still working
+- **Real-time Updates** — Firestore onSnapshot listeners for live data across all pages
+
+### 👨‍🏫 Lecturer Review Workflow
+- **Review Dialog** — Adjust AI-generated score, edit or rewrite feedback before finalising
+- **Approve** — Finalise the grade (keeps AI score if unchanged, or uses lecturer override)
+- **Release** — Send final grades to students with a single click
+- **Score Consistency** — Always displays the most recent grade record across all views
+
+### 🔍 Plagiarism & Academic Integrity
+- **AI-Content Detection** — Checks for AI-generated writing patterns (works on single submissions)
+- **Similarity Checking** — Cross-submission comparison (works with 1+ submissions)
+- **Academic Integrity Dashboard** — Overview of flagged submissions and integrity scores
+
+### 📊 Analytics & Insights
+- **Lecturer Overview Dashboard** — KPI cards, grade distribution charts, recent submissions, at-risk student counts
 - **Student Grades View** — Personal grade cards with UK degree classification (1st, 2:1, 2:2, 3rd) and percentage breakdowns
 - **Cohort Analytics** — Performance trends, grade distributions, learning outcomes, AI recommendations
 - **Performance Trends** — Assessment timeline, engagement heatmap, at-risk student list
 - **Institutional Insights** — Department comparisons, low-performing assessments, accreditation readiness (NSS, employment rates)
-- **Academic Integrity Dashboard** — AI-content detection scores, flagged submission overview
+- **Learning Outcomes** — Alignment with educational objectives
+- **Student Profile** — Individual student performance view
+
+### 🧠 Student Support
+- **Explain My Grade (AI Chat)** — Streaming chat assistant that explains grades with actionable improvement tips
+- **Socratic Improvement Coach** — AI guides students to improve using questions, not just answers
 - **Improvement Plan** — Student task checklists with AI-curated recommended resources
-- **PostHog Analytics** — User identification and event tracking
 
 ---
 
@@ -52,15 +73,35 @@ To bridge the gap between education and technology — making assessment fairer,
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React + TypeScript + Vite |
-| Styling | Tailwind CSS + shadcn/ui |
+| Frontend | React 18 + TypeScript + Vite 5 |
+| Styling | Tailwind CSS v3 + shadcn/ui |
 | Database | Firebase Firestore |
 | Authentication | Firebase Auth |
-| File Storage | Firebase Storage |
-| AI Engine | Anthropic Claude (claude-sonnet) |
+| File Storage | Supabase Storage + Firebase Storage |
+| AI Engine | Anthropic Claude (via Supabase Edge Functions) |
+| Backend Functions | Supabase Edge Functions |
 | Analytics | PostHog |
 | Hosting | Lovable (lovable.app) |
 | Version Control | GitHub |
+
+---
+
+## 📂 Project Structure
+
+```
+/src
+  /components       # Reusable UI components (RubricBuilder, BulkStudentUpload, NetworkStatus, etc.)
+  /components/ui    # shadcn/ui design system components
+  /contexts         # React context providers (AuthContext)
+  /hooks            # Custom React hooks
+  /integrations     # Supabase client and types
+  /lib              # Firebase config, PostHog, utilities
+  /pages            # Route pages
+    /dashboard      # All dashboard pages (lecturer + student views)
+/supabase
+  /functions        # Edge functions (grade-submission, check-plagiarism, explain-grade)
+/public             # Static assets
+```
 
 ---
 
@@ -75,13 +116,13 @@ To bridge the gap between education and technology — making assessment fairer,
 - Real AI marking with Claude
 - Role-based authentication
 - Full grading workflow
+- Lecturer review, approve, and release pipeline
+- Bulk student onboarding via CSV
 
 **Phase 3 — Pilot Ready** 🔄 In Progress
 - Connect all analytics pages to live Firestore data
 - Password reset flow
 - Email notifications for submissions and grade releases
-- Bulk student upload via CSV
-- Firestore security rules ✅ Done
 - Landing page and demo mode for investors
 
 **Phase 4 — Scale**
@@ -92,25 +133,12 @@ To bridge the gap between education and technology — making assessment fairer,
 
 ---
 
-## 📂 Project Structure
-
-```
-/src
-  /components       # Reusable UI components including RubricBuilder
-  /pages            # All dashboard pages (lecturer + student views)
-  /lib              # Firebase config and utility functions
-  /hooks            # Custom React hooks
-/supabase           # Legacy (migrated to Firebase)
-/public             # Static assets
-```
-
----
-
 ## 🔐 Security
 
 - Firestore Security Rules enforce role-based data access
 - Students can only access their own submissions and grades
 - Lecturers have read access to all submissions within their modules
+- Supabase RLS policies protect database tables with row-level security
 - All AI processing happens server-side via edge functions
 - No student data is stored beyond what is necessary for the platform
 
