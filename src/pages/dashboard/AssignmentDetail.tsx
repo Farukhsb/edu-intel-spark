@@ -158,9 +158,22 @@ const AssignmentDetail = () => {
   const uploadFile = async (file: File) => {
     const filePath = `submissions/${user!.uid}/${id}/${Date.now()}_${file.name}`;
     const storageRef = ref(firebaseStorage, filePath);
-    await uploadBytes(storageRef, file);
-    const fileUrl = await getDownloadURL(storageRef);
-    return { fileUrl, fileName: file.name, fileType: file.type };
+    
+    return new Promise<{ fileUrl: string; fileName: string; fileType: string }>((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setUploadProgress(progress);
+        },
+        (error) => reject(error),
+        async () => {
+          const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve({ fileUrl, fileName: file.name, fileType: file.type });
+        }
+      );
+    });
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
