@@ -410,7 +410,11 @@ const AssignmentDetail = () => {
 
     // Update status to ai_grading
     for (const sub of toGrade) {
-      await updateDoc(doc(db, "submissions", sub.id), { status: "ai_grading" });
+      try {
+        await updateDoc(doc(db, "submissions", sub.id), { status: "ai_grading" });
+      } catch (e) {
+        console.warn("Could not update submission status to ai_grading (Firestore permissions):", e);
+      }
     }
 
     try {
@@ -441,23 +445,35 @@ const AssignmentDetail = () => {
       for (const r of results) {
         if (r.success) {
           // Write grade to Firestore
-          await addDoc(collection(db, "grades"), {
-            submission_id: r.submissionId,
-            ai_score: r.score,
-            ai_feedback: r.feedback,
-            ai_breakdown: r.breakdown || [],
-            lecturer_score: null,
-            lecturer_feedback: null,
-            final_score: null,
-            final_feedback: null,
-            reviewed_by: null,
-            reviewed_at: null,
-            created_at: new Date().toISOString(),
-          });
-          await updateDoc(doc(db, "submissions", r.submissionId), { status: "ai_graded" });
+          try {
+            await addDoc(collection(db, "grades"), {
+              submission_id: r.submissionId,
+              ai_score: r.score,
+              ai_feedback: r.feedback,
+              ai_breakdown: r.breakdown || [],
+              lecturer_score: null,
+              lecturer_feedback: null,
+              final_score: null,
+              final_feedback: null,
+              reviewed_by: null,
+              reviewed_at: null,
+              created_at: new Date().toISOString(),
+            });
+          } catch (gradeErr) {
+            console.error("Failed to write grade to Firestore:", gradeErr);
+          }
+          try {
+            await updateDoc(doc(db, "submissions", r.submissionId), { status: "ai_graded" });
+          } catch (statusErr) {
+            console.warn("Could not update submission status to ai_graded:", statusErr);
+          }
           successCount++;
         } else {
-          await updateDoc(doc(db, "submissions", r.submissionId), { status: "submitted" });
+          try {
+            await updateDoc(doc(db, "submissions", r.submissionId), { status: "submitted" });
+          } catch (revertErr) {
+            console.warn("Could not revert submission status:", revertErr);
+          }
           failCount++;
         }
       }
@@ -467,7 +483,11 @@ const AssignmentDetail = () => {
     } catch (err: any) {
       toast.error(err?.message || "AI grading failed");
       for (const sub of toGrade) {
-        await updateDoc(doc(db, "submissions", sub.id), { status: "submitted" });
+        try {
+          await updateDoc(doc(db, "submissions", sub.id), { status: "submitted" });
+        } catch (revertErr) {
+          console.warn("Could not revert submission status:", revertErr);
+        }
       }
     }
 
