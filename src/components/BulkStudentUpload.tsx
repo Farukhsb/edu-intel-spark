@@ -94,13 +94,16 @@ export const BulkStudentUpload = () => {
         const tempPassword = `GradeAI_${Math.random().toString(36).slice(2, 10)}`;
         const cred = await createUserWithEmailAndPassword(auth, student.email, tempPassword);
         await updateProfile(cred.user, { displayName: student.name });
-        await setDoc(doc(db, "profiles", cred.user.uid), {
-          full_name: student.name, email: student.email, role: "student",
-          avatar_url: null, cohort_id: student.cohort_id || null,
+        await setDoc(doc(db, "users", cred.user.uid), {
+          full_name: student.name,
+          email: student.email,
+          role: "student",
+          avatar_url: null,
+          cohort_id: student.cohort_id || null,
           department_id: student.department_id || null,
-          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-        });
-        await setDoc(doc(db, "user_roles", cred.user.uid), { user_id: cred.user.uid, role: "student" });
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { merge: true });
         uploadResults.push({ email: student.email, success: true });
       } catch (err: any) {
         uploadResults.push({ email: student.email, success: false, error: err.message });

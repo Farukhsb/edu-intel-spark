@@ -25,6 +25,17 @@ interface Profile {
   department_id: string | null;
 }
 
+interface StoredProfileData {
+  full_name: string | null;
+  email: string | null;
+  role: AppRole;
+  avatar_url: string | null;
+  cohort_id: string | null;
+  department_id: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface AuthContextType {
   user: FirebaseUser | null;
   profile: Profile | null;
@@ -42,6 +53,44 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const PRIMARY_PROFILE_COLLECTION = "users";
+const PROFILE_COLLECTIONS = [PRIMARY_PROFILE_COLLECTION, "profiles"] as const;
+const recoveryStorageKey = (uid: string) => `gradeai-profile:${uid}`;
+
+const normalizeProfile = (
+  uid: string,
+  data: Partial<StoredProfileData> | undefined,
+  emailFallback: string | null,
+): Profile => ({
+  id: uid,
+  full_name: data?.full_name ?? null,
+  email: data?.email ?? emailFallback ?? null,
+  role: data?.role === "lecturer" ? "lecturer" : "student",
+  avatar_url: data?.avatar_url ?? null,
+  cohort_id: data?.cohort_id ?? null,
+  department_id: data?.department_id ?? null,
+});
+
+const persistRecoveryProfile = (uid: string, data: StoredProfileData) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(recoveryStorageKey(uid), JSON.stringify(data));
+};
+
+const readRecoveryProfile = (uid: string): StoredProfileData | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(recoveryStorageKey(uid));
+    return raw ? (JSON.parse(raw) as StoredProfileData) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearRecoveryProfile = (uid: string) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(recoveryStorageKey(uid));
+};
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
@@ -84,26 +133,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     departmentId?: string;
   } | null>(null);
 
+  const pendingProfileRef = useRef<{ uid: string; data: StoredProfileData } | null>(null);
+
   const fetchProfileWithTimeout = async (uid: string, email: string | null): Promise<Profile | null> => {
     const deadline = Date.now() + 5000;
 
     while (Date.now() < deadline) {
-      try {
-        const snap = await getDoc(doc(db, "profiles", uid));
+      for (const collectionName of PROFILE_COLLECTIONS) {
+        try {
+          const snap = await getDoc(doc(db, collectionName, uid));
 
-        if (snap.exists()) {
-          const data = snap.data();
-          return {
-            id: snap.id,
-            full_name: data.full_name || null,
-            email: data.email || email || null,
-            role: data.role || "student",
-            avatar_url: data.avatar_url || null,
-            cohort_id: data.cohort_id || null,
-            department_id: data.department_id || null,
-          };
+          if (snap.exists()) {
+            return normalizeProfile(uid, snap.data() as StoredProfileData, email);
+          }
+        } catch {
         }
-      } catch {
       }
 
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -111,13 +155,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return null;
   };
-  // Pending profile data to write on auth state change if Firestore write failed during signup
-  const pendingProfileRef = useRef<{ uid: string; data: any; role: AppRole } | null>(null);
 
-  const tryWriteProfile = async (uid: string, profileData: any, role: AppRole): Promise<boolean> => {
+  const tryWriteProfile = async (uid: string, profileData: StoredProfileData): Promise<boolean> => {
     try {
-      await setDoc(doc(db, "profiles", uid), profileData);
-      await setDoc(doc(db, "user_roles", uid), { user_id: uid, role });
+      await setDoc(
+        doc(db, PRIMARY_PROFILE_COLLECTION, uid),
+        {
+          ...profileData,
+          created_at: profileData.created_at ?? new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+      clearRecoveryProfile(uid);
       return true;
     } catch (e) {
       console.error("Firestore profile write failed:", e);
@@ -128,7 +178,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+
       if (firebaseUser) {
+        setLoading(true);
         setProfileError(null);
 
         const signupProfile = signupProfileRef.current;
@@ -147,65 +199,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           return;
         }
 
-        // If we have pending profile data from a failed signup write, retry it
         const pending = pendingProfileRef.current;
         if (pending && pending.uid === firebaseUser.uid) {
           pendingProfileRef.current = null;
-          tryWriteProfile(firebaseUser.uid, pending.data, pending.role).then(() => {
-            // Set profile from pending data regardless of Firestore success
-            setProfile({
-              id: firebaseUser.uid,
-              full_name: pending.data.full_name,
-              email: pending.data.email,
-              role: pending.role,
-              avatar_url: null,
-              cohort_id: pending.data.cohort_id,
-              department_id: pending.data.department_id,
-            });
-            posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
-            setLoading(false);
-          });
+          void tryWriteProfile(firebaseUser.uid, pending.data);
+          setProfile(normalizeProfile(firebaseUser.uid, pending.data, firebaseUser.email));
+          posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
+          setLoading(false);
           return;
         }
 
-        fetchProfileWithTimeout(firebaseUser.uid, firebaseUser.email).then(async (p) => {
-          if (p) {
+        fetchProfileWithTimeout(firebaseUser.uid, firebaseUser.email).then(async (existingProfile) => {
+          if (existingProfile) {
             signupProfileRef.current = null;
-            setProfile(p);
+            clearRecoveryProfile(firebaseUser.uid);
+            setProfile(existingProfile);
             posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
-          } else {
-            // Profile doesn't exist — maybe Firestore write failed during signup
-            // Try to create a basic profile from Firebase Auth data
-            const displayName = firebaseUser.displayName;
-            if (displayName) {
-              const fallbackData = {
-                full_name: displayName,
-                email: firebaseUser.email,
-                role: "student" as AppRole,
-                avatar_url: null,
-                cohort_id: null,
-                department_id: null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              };
-              const wrote = await tryWriteProfile(firebaseUser.uid, fallbackData, "student");
-              if (wrote) {
-                setProfile({
-                  id: firebaseUser.uid,
-                  full_name: displayName,
-                  email: firebaseUser.email,
-                  role: "student",
-                  avatar_url: null,
-                  cohort_id: null,
-                  department_id: null,
-                });
-                posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
-                setLoading(false);
-                return;
-              }
-            }
-            setProfileError("Something went wrong loading your account. Please try again.");
+            setLoading(false);
+            return;
           }
+
+          const recoveredProfile = readRecoveryProfile(firebaseUser.uid);
+          const fallbackProfileData: StoredProfileData = {
+            full_name: recoveredProfile?.full_name ?? firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "User",
+            email: recoveredProfile?.email ?? firebaseUser.email ?? null,
+            role: recoveredProfile?.role ?? "student",
+            avatar_url: recoveredProfile?.avatar_url ?? null,
+            cohort_id: recoveredProfile?.cohort_id ?? null,
+            department_id: recoveredProfile?.department_id ?? null,
+            created_at: recoveredProfile?.created_at ?? new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          const wrote = await tryWriteProfile(firebaseUser.uid, fallbackProfileData);
+          if (!wrote) {
+            pendingProfileRef.current = { uid: firebaseUser.uid, data: fallbackProfileData };
+            persistRecoveryProfile(firebaseUser.uid, fallbackProfileData);
+          }
+
+          signupProfileRef.current = null;
+          setProfile(normalizeProfile(firebaseUser.uid, fallbackProfileData, firebaseUser.email));
+          posthog.identify(firebaseUser.uid, { email: firebaseUser.email });
           setLoading(false);
         });
       } else if (!isDemo) {
@@ -232,14 +266,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signupProfileRef.current = { email, fullName, role, cohortId, departmentId };
 
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    
-    // Save displayName to Firebase Auth
+
     await updateProfile(cred.user, { displayName: fullName });
 
-    // Send email verification
-    try { await sendEmailVerification(cred.user); } catch { /* ignore */ }
+    try {
+      await sendEmailVerification(cred.user);
+    } catch {
+    }
 
-    const profileData = {
+    const profileData: StoredProfileData = {
       full_name: fullName,
       email,
       role,
@@ -250,24 +285,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Try writing to Firestore, but don't fail signup if it errors
-    const wrote = await tryWriteProfile(cred.user.uid, profileData, role);
+    persistRecoveryProfile(cred.user.uid, profileData);
+    const wrote = await tryWriteProfile(cred.user.uid, profileData);
 
     if (!wrote) {
-      // Store pending data so onAuthStateChanged can retry
-      pendingProfileRef.current = { uid: cred.user.uid, data: profileData, role };
+      pendingProfileRef.current = { uid: cred.user.uid, data: profileData };
     }
 
-    // Set profile in state immediately regardless
-    setProfile({
-      id: cred.user.uid,
-      full_name: fullName,
-      email,
-      role,
-      avatar_url: null,
-      cohort_id: role === "student" ? (cohortId || null) : null,
-      department_id: departmentId || null,
-    });
+    setProfile(normalizeProfile(cred.user.uid, profileData, email));
   };
 
   const signIn = async (email: string, password: string) => {
