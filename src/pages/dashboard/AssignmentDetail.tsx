@@ -465,7 +465,7 @@ const AssignmentDetail = () => {
           <>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleStudentSubmit} />
             <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-              <Upload className="mr-2 h-4 w-4" />{uploading ? "Uploading..." : "Submit My Work"}
+              <Upload className="mr-2 h-4 w-4" />{uploading ? `Uploading... ${uploadProgress}%` : "Submit My Work"}
             </Button>
           </>
         )}
