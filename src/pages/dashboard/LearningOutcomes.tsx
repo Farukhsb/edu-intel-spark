@@ -1,228 +1,217 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { AlertTriangle, CheckCircle, Loader2, TrendingDown, TrendingUp } from "lucide-react";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { AlertTriangle, CheckCircle, Target, TrendingDown, TrendingUp } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, ResponsiveContainer,
 } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 
-const modules = [
-  { code: "CS301", name: "Data Structures" },
-  { code: "CS205", name: "Algorithms" },
-  { code: "CS102", name: "Intro to Programming" },
-  { code: "CS401", name: "AI & ML" },
-];
+interface AssignmentOption { id: string; title: string; moduleCode: string | null }
 
-const learningOutcomesData: Record<string, Array<{
-  id: string;
-  outcome: string;
-  studentAvg: number;
-  target: number;
+interface OutcomeRow {
+  criterion: string;
+  avgScore: number;
+  maxScore: number;
+  pct: number;
   status: "above" | "approaching" | "below";
-  trend: Array<{ assessment: string; value: number }>;
-}>> = {
-  CS301: [
-    { id: "LO1", outcome: "Understand fundamental data structures", studentAvg: 78, target: 70, status: "above",
-      trend: [{ assessment: "A1", value: 65 }, { assessment: "A2", value: 72 }, { assessment: "A3", value: 78 }] },
-    { id: "LO2", outcome: "Apply algorithmic thinking to problems", studentAvg: 52, target: 70, status: "below",
-      trend: [{ assessment: "A1", value: 58 }, { assessment: "A2", value: 55 }, { assessment: "A3", value: 52 }] },
-    { id: "LO3", outcome: "Implement sorting algorithms", studentAvg: 71, target: 70, status: "above",
-      trend: [{ assessment: "A1", value: 60 }, { assessment: "A2", value: 68 }, { assessment: "A3", value: 71 }] },
-    { id: "LO4", outcome: "Analyse time and space complexity", studentAvg: 45, target: 70, status: "below",
-      trend: [{ assessment: "A1", value: 50 }, { assessment: "A2", value: 48 }, { assessment: "A3", value: 45 }] },
-    { id: "LO5", outcome: "Design recursive solutions", studentAvg: 63, target: 70, status: "approaching",
-      trend: [{ assessment: "A1", value: 55 }, { assessment: "A2", value: 60 }, { assessment: "A3", value: 63 }] },
-  ],
-  CS205: [
-    { id: "LO1", outcome: "Understand graph algorithms", studentAvg: 66, target: 70, status: "approaching",
-      trend: [{ assessment: "A1", value: 60 }, { assessment: "A2", value: 63 }, { assessment: "A3", value: 66 }] },
-    { id: "LO2", outcome: "Apply dynamic programming", studentAvg: 48, target: 70, status: "below",
-      trend: [{ assessment: "A1", value: 55 }, { assessment: "A2", value: 50 }, { assessment: "A3", value: 48 }] },
-    { id: "LO3", outcome: "Evaluate algorithm efficiency", studentAvg: 72, target: 70, status: "above",
-      trend: [{ assessment: "A1", value: 68 }, { assessment: "A2", value: 70 }, { assessment: "A3", value: 72 }] },
-  ],
-  CS102: [
-    { id: "LO1", outcome: "Write basic programs", studentAvg: 82, target: 70, status: "above",
-      trend: [{ assessment: "A1", value: 75 }, { assessment: "A2", value: 80 }, { assessment: "A3", value: 82 }] },
-    { id: "LO2", outcome: "Understand control flow", studentAvg: 76, target: 70, status: "above",
-      trend: [{ assessment: "A1", value: 70 }, { assessment: "A2", value: 74 }, { assessment: "A3", value: 76 }] },
-    { id: "LO3", outcome: "Use functions and modular design", studentAvg: 68, target: 70, status: "approaching",
-      trend: [{ assessment: "A1", value: 62 }, { assessment: "A2", value: 65 }, { assessment: "A3", value: 68 }] },
-  ],
-  CS401: [
-    { id: "LO1", outcome: "Understand ML fundamentals", studentAvg: 70, target: 70, status: "above",
-      trend: [{ assessment: "A1", value: 65 }, { assessment: "A2", value: 68 }, { assessment: "A3", value: 70 }] },
-    { id: "LO2", outcome: "Apply supervised learning", studentAvg: 58, target: 70, status: "below",
-      trend: [{ assessment: "A1", value: 55 }, { assessment: "A2", value: 56 }, { assessment: "A3", value: 58 }] },
-    { id: "LO3", outcome: "Evaluate model performance", studentAvg: 64, target: 70, status: "approaching",
-      trend: [{ assessment: "A1", value: 60 }, { assessment: "A2", value: 62 }, { assessment: "A3", value: 64 }] },
-  ],
-};
+}
 
-const studentTrajectories = [
-  { name: "Alice Chen", module: "CS301", grades: [72, 68, 75, 80], trend: "improving" },
-  { name: "David Lee", module: "CS301", grades: [65, 58, 45, 32], trend: "declining" },
-  { name: "Emma Walsh", module: "CS205", grades: [70, 62, 55, 48], trend: "declining" },
-  { name: "James Park", module: "CS102", grades: [60, 65, 70, 78], trend: "improving" },
-];
+interface StudentTrajectory {
+  name: string;
+  scores: number[];
+  trend: "improving" | "declining" | "stable";
+}
 
 const LearningOutcomes = () => {
-  const [selectedModule, setSelectedModule] = useState("CS301");
-  const [hoveredLO, setHoveredLO] = useState<string | null>(null);
+  const { isDemo } = useAuth();
+  const [assignments, setAssignments] = useState<AssignmentOption[]>([]);
+  const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
+  const [outcomes, setOutcomes] = useState<OutcomeRow[]>([]);
+  const [trajectories, setTrajectories] = useState<StudentTrajectory[]>([]);
+  const [loading, setLoading] = useState(!isDemo);
 
-  const outcomes = learningOutcomesData[selectedModule] || [];
+  useEffect(() => {
+    if (isDemo) { setLoading(false); return; }
+    const fetchData = async () => {
+      try {
+        const assignSnap = await getDocs(collection(db, "assignments"));
+        const opts: AssignmentOption[] = assignSnap.docs.map(d => ({
+          id: d.id, title: d.data().title, moduleCode: d.data().module_code || null,
+        }));
+        setAssignments(opts);
 
-  const statusIcon = (status: string) => {
-    if (status === "above") return <CheckCircle className="h-4 w-4 text-success" />;
-    if (status === "approaching") return <AlertTriangle className="h-4 w-4 text-warning" />;
-    return <AlertTriangle className="h-4 w-4 text-destructive" />;
-  };
+        const gradesSnap = await getDocs(collection(db, "grades"));
+        const subsSnap = await getDocs(collection(db, "submissions"));
 
-  const statusColor = (status: string) => {
-    if (status === "above") return "bg-success";
-    if (status === "approaching") return "bg-warning";
-    return "bg-destructive";
-  };
+        // Build maps
+        const subAssignment: Record<string, string> = {};
+        const subStudent: Record<string, string> = {};
+        subsSnap.docs.forEach(d => {
+          const data = d.data();
+          subAssignment[d.id] = data.assignment_id;
+          subStudent[d.id] = data.student_name || data.student_email || data.student_id || "Student";
+        });
 
-  const statusBadge = (status: string) => {
-    if (status === "above") return "default";
-    if (status === "approaching") return "secondary";
-    return "destructive";
-  };
+        // Collect rubric breakdowns per criterion
+        const criterionScores: Record<string, { total: number; max: number; count: number }> = {};
+        const studentScores: Record<string, number[]> = {};
+
+        gradesSnap.docs.forEach(d => {
+          const data = d.data();
+          const assignmentId = subAssignment[data.submission_id];
+          if (selectedAssignment !== "all" && assignmentId !== selectedAssignment) return;
+
+          const score = data.final_score ?? data.ai_score;
+          const studentKey = subStudent[data.submission_id] || "Student";
+          if (score != null) {
+            if (!studentScores[studentKey]) studentScores[studentKey] = [];
+            studentScores[studentKey].push(score);
+          }
+
+          if (data.ai_breakdown && Array.isArray(data.ai_breakdown)) {
+            data.ai_breakdown.forEach((b: any) => {
+              const key = b.criterion || b.name || "Unknown";
+              if (!criterionScores[key]) criterionScores[key] = { total: 0, max: 0, count: 0 };
+              criterionScores[key].total += (b.score ?? 0);
+              criterionScores[key].max += (b.max_score ?? 10);
+              criterionScores[key].count++;
+            });
+          }
+        });
+
+        const outcomeRows: OutcomeRow[] = Object.entries(criterionScores).map(([criterion, data]) => {
+          const avg = data.count > 0 ? Math.round(data.total / data.count * 10) / 10 : 0;
+          const maxAvg = data.count > 0 ? Math.round(data.max / data.count * 10) / 10 : 10;
+          const pct = maxAvg > 0 ? Math.round((avg / maxAvg) * 100) : 0;
+          return {
+            criterion,
+            avgScore: avg,
+            maxScore: maxAvg,
+            pct,
+            status: pct >= 70 ? "above" : pct >= 50 ? "approaching" : "below",
+          };
+        });
+        setOutcomes(outcomeRows);
+
+        const trajs: StudentTrajectory[] = Object.entries(studentScores)
+          .filter(([, scores]) => scores.length >= 2)
+          .slice(0, 8)
+          .map(([name, scores]) => {
+            const last = scores[scores.length - 1];
+            const prev = scores[scores.length - 2];
+            return {
+              name,
+              scores,
+              trend: last > prev + 3 ? "improving" : last < prev - 3 ? "declining" : "stable",
+            };
+          });
+        setTrajectories(trajs);
+      } catch (err) {
+        console.error("Learning outcomes fetch error:", err);
+      }
+      setLoading(false);
+    };
+    fetchData();
+  }, [isDemo, selectedAssignment]);
+
+  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
+  const statusColor = (s: string) => s === "above" ? "bg-success" : s === "approaching" ? "bg-warning" : "bg-destructive";
+  const statusBadge = (s: string) => s === "above" ? "default" : s === "approaching" ? "secondary" : "destructive";
+  const statusLabel = (s: string) => s === "above" ? "Above" : s === "approaching" ? "Near" : "Below";
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Module Filter */}
-      <div className="flex items-center gap-4">
-        <Select value={selectedModule} onValueChange={setSelectedModule}>
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Select module" />
-          </SelectTrigger>
-          <SelectContent>
-            {modules.map((m) => (
-              <SelectItem key={m.code} value={m.code}>
-                {m.code} - {m.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {isDemo && (
+        <Card className="border-warning bg-warning/5">
+          <CardContent className="flex items-center gap-2 p-3">
+            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
+            <span className="text-sm text-muted-foreground">Viewing demo learning outcomes</span>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Learning Outcomes Table */}
+      {assignments.length > 0 && (
+        <div className="flex items-center gap-4">
+          <Select value={selectedAssignment} onValueChange={setSelectedAssignment}>
+            <SelectTrigger className="w-[280px]"><SelectValue placeholder="Select assignment" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assignments</SelectItem>
+              {assignments.map(a => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.moduleCode ? `${a.moduleCode} — ` : ""}{a.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Learning Outcome Achievement</CardTitle>
-          <CardDescription>
-            {modules.find((m) => m.code === selectedModule)?.name} — Hover over an outcome to see the trend
-          </CardDescription>
+          <CardTitle className="text-base">Rubric Criterion Achievement</CardTitle>
+          <CardDescription>Average scores per rubric criterion across graded submissions</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px]">ID</TableHead>
-                <TableHead>Learning Outcome</TableHead>
-                <TableHead className="text-center w-[100px]">Avg %</TableHead>
-                <TableHead className="text-center w-[80px]">Target</TableHead>
-                <TableHead className="w-[200px]">Progress</TableHead>
-                <TableHead className="text-center w-[100px]">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {outcomes.map((lo) => (
-                <Tooltip key={lo.id}>
-                  <TooltipTrigger asChild>
-                    <TableRow
-                      className="cursor-pointer"
-                      onMouseEnter={() => setHoveredLO(lo.id)}
-                      onMouseLeave={() => setHoveredLO(null)}
-                    >
-                      <TableCell className="font-medium">{lo.id}</TableCell>
-                      <TableCell>{lo.outcome}</TableCell>
-                      <TableCell className="text-center font-bold">{lo.studentAvg}%</TableCell>
-                      <TableCell className="text-center text-muted-foreground">{lo.target}%</TableCell>
-                      <TableCell>
-                        <div className="relative h-3 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={`h-full rounded-full transition-all ${statusColor(lo.status)}`}
-                            style={{ width: `${Math.min(lo.studentAvg, 100)}%` }}
-                          />
-                          <div
-                            className="absolute inset-y-0 w-0.5 bg-foreground/50"
-                            style={{ left: `${lo.target}%` }}
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={statusBadge(lo.status) as any} className="text-xs">
-                          {lo.status === "above" ? "Above" : lo.status === "approaching" ? "Near" : "Below"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="p-3 w-[260px]">
-                    <p className="text-xs font-medium mb-2">{lo.id} Trend Over Assessments</p>
-                    <ResponsiveContainer width="100%" height={80}>
-                      <LineChart data={lo.trend}>
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth={2}
-                          dot={{ r: 3, fill: "hsl(var(--primary))" }}
-                        />
-                        <XAxis dataKey="assessment" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </TableBody>
-          </Table>
+          {outcomes.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No rubric breakdown data available yet. Grades need AI breakdown to populate this view.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Criterion</TableHead>
+                  <TableHead className="text-center w-[100px]">Avg Score</TableHead>
+                  <TableHead className="text-center w-[80px]">Max</TableHead>
+                  <TableHead className="w-[200px]">Progress</TableHead>
+                  <TableHead className="text-center w-[100px]">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {outcomes.map((lo, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-medium">{lo.criterion}</TableCell>
+                    <TableCell className="text-center font-bold">{lo.avgScore}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{lo.maxScore}</TableCell>
+                    <TableCell>
+                      <div className="relative h-3 overflow-hidden rounded-full bg-muted">
+                        <div className={`h-full rounded-full transition-all ${statusColor(lo.status)}`} style={{ width: `${Math.min(lo.pct, 100)}%` }} />
+                        <div className="absolute inset-y-0 w-0.5 bg-foreground/50" style={{ left: "70%" }} />
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={statusBadge(lo.status) as any} className="text-xs">{statusLabel(lo.status)}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
-      {/* Student Achievement Trajectories */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Student Achievement Trajectories</CardTitle>
-          <CardDescription>Click a student to view detailed performance</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {studentTrajectories
-            .filter((s) => s.module === selectedModule || selectedModule === "CS301")
-            .map((student, i) => {
-              const latest = student.grades[student.grades.length - 1];
-              const prev = student.grades[student.grades.length - 2];
+      {trajectories.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Student Achievement Trajectories</CardTitle>
+            <CardDescription>Students with multiple graded submissions</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {trajectories.map((student, i) => {
+              const latest = student.scores[student.scores.length - 1];
+              const prev = student.scores.length >= 2 ? student.scores[student.scores.length - 2] : latest;
               const diff = latest - prev;
-              const chartData = student.grades.map((g, idx) => ({ assessment: `A${idx + 1}`, grade: g }));
+              const chartData = student.scores.map((g, idx) => ({ a: `A${idx + 1}`, grade: g }));
 
               return (
                 <div key={i} className="flex items-center gap-4 rounded-lg border p-4">
@@ -231,9 +220,9 @@ const LearningOutcomes = () => {
                       <span className="text-sm font-medium">{student.name}</span>
                       {student.trend === "improving" ? (
                         <TrendingUp className="h-3.5 w-3.5 text-success" />
-                      ) : (
+                      ) : student.trend === "declining" ? (
                         <TrendingDown className="h-3.5 w-3.5 text-destructive" />
-                      )}
+                      ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Latest: {latest}% ({diff > 0 ? "+" : ""}{diff}%)
@@ -245,7 +234,7 @@ const LearningOutcomes = () => {
                         <Line
                           type="monotone"
                           dataKey="grade"
-                          stroke={student.trend === "improving" ? "hsl(var(--success))" : "hsl(var(--destructive))"}
+                          stroke={student.trend === "improving" ? "hsl(var(--success))" : student.trend === "declining" ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
                           strokeWidth={2}
                           dot={false}
                         />
@@ -255,8 +244,9 @@ const LearningOutcomes = () => {
                 </div>
               );
             })}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

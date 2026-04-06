@@ -31,29 +31,102 @@ const DEMO_ACCRED = [
 const InstitutionalInsights = () => {
   const { isDemo } = useAuth();
   const [departmentStats, setDepartmentStats] = useState(DEMO_DEPTS);
+  const [lowPerforming, setLowPerforming] = useState(DEMO_LOW);
+  const [accreditation, setAccreditation] = useState(DEMO_ACCRED);
   const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
     if (isDemo) return;
     const fetchData = async () => {
       try {
-        const profilesSnap = await getDocs(collection(db, "profiles"));
+        const usersSnap = await getDocs(collection(db, "users"));
         const gradesSnap = await getDocs(collection(db, "grades"));
+        const assignmentsSnap = await getDocs(collection(db, "assignments"));
         const subsSnap = await getDocs(collection(db, "submissions"));
-        const scores = gradesSnap.docs.map(d => d.data().final_score ?? d.data().ai_score).filter(s => s != null) as number[];
 
-        const deptMap: Record<string, number> = {};
-        profilesSnap.docs.forEach(d => {
+        const scores = gradesSnap.docs
+          .map(d => d.data().final_score ?? d.data().ai_score)
+          .filter(s => s != null) as number[];
+
+        // Build per-department stats from users collection
+        const deptStudents: Record<string, string[]> = {};
+        usersSnap.docs.forEach(d => {
           const data = d.data();
-          if (data.department_id) deptMap[data.department_id] = (deptMap[data.department_id] || 0) + 1;
+          if (data.department_id && data.role === "student") {
+            if (!deptStudents[data.department_id]) deptStudents[data.department_id] = [];
+            deptStudents[data.department_id].push(d.id);
+          }
         });
-        if (Object.keys(deptMap).length > 0) {
-          const avgAll = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 65;
-          const passAll = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 75;
-          setDepartmentStats(Object.entries(deptMap).map(([dept, count]) => ({
-            dept, students: count, avgGrade: avgAll, passRate: passAll, trend: "+0%",
-          })));
+
+        // Map submissions to students for per-dept scores
+        const studentSubmissions: Record<string, string[]> = {};
+        subsSnap.docs.forEach(d => {
+          const data = d.data();
+          const key = data.student_id || data.student_email;
+          if (key) {
+            if (!studentSubmissions[key]) studentSubmissions[key] = [];
+            studentSubmissions[key].push(d.id);
+          }
+        });
+
+        const gradeBySubmission: Record<string, number> = {};
+        gradesSnap.docs.forEach(d => {
+          const data = d.data();
+          const score = data.final_score ?? data.ai_score;
+          if (score != null) gradeBySubmission[data.submission_id] = score;
+        });
+
+        if (Object.keys(deptStudents).length > 0) {
+          const deptStats = Object.entries(deptStudents).map(([dept, studentIds]) => {
+            const deptScores: number[] = [];
+            studentIds.forEach(sid => {
+              const subIds = studentSubmissions[sid] || [];
+              subIds.forEach(subId => {
+                if (gradeBySubmission[subId] != null) deptScores.push(gradeBySubmission[subId]);
+              });
+            });
+            const avg = deptScores.length > 0 ? Math.round(deptScores.reduce((a, b) => a + b, 0) / deptScores.length) : 0;
+            const pass = deptScores.length > 0 ? Math.round((deptScores.filter(s => s >= 40).length / deptScores.length) * 100) : 0;
+            return { dept, students: studentIds.length, avgGrade: avg, passRate: pass, trend: "+0%" };
+          });
+          setDepartmentStats(deptStats);
         }
+
+        // Build low-performing assessments from real data
+        const assignmentScores: Record<string, { title: string; scores: number[]; students: number }> = {};
+        assignmentsSnap.docs.forEach(d => {
+          assignmentScores[d.id] = { title: d.data().title, scores: [], students: 0 };
+        });
+        subsSnap.docs.forEach(d => {
+          const data = d.data();
+          if (assignmentScores[data.assignment_id]) assignmentScores[data.assignment_id].students++;
+          const g = gradeBySubmission[d.id];
+          if (g != null && assignmentScores[data.assignment_id]) assignmentScores[data.assignment_id].scores.push(g);
+        });
+        const lowPerf = Object.values(assignmentScores)
+          .filter(a => a.scores.length > 0)
+          .map(a => ({
+            name: a.title,
+            avgGrade: Math.round(a.scores.reduce((x, y) => x + y, 0) / a.scores.length),
+            passRate: Math.round((a.scores.filter(s => s >= 40).length / a.scores.length) * 100),
+            students: a.students,
+            issue: a.scores.reduce((x, y) => x + y, 0) / a.scores.length < 50 ? "Low average — review needed" : "Moderate performance",
+          }))
+          .sort((a, b) => a.avgGrade - b.avgGrade)
+          .slice(0, 5);
+        if (lowPerf.length > 0) setLowPerforming(lowPerf);
+
+        // Accreditation from real scores
+        const passRate = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 0;
+        const completionRate = subsSnap.size > 0 && assignmentsSnap.size > 0
+          ? Math.round((subsSnap.size / (assignmentsSnap.size * usersSnap.docs.filter(d => d.data().role === "student").length || 1)) * 100)
+          : 0;
+        setAccreditation([
+          { metric: "Module Pass Rate (Avg)", value: passRate, target: 75, status: passRate >= 75 ? "met" : passRate >= 65 ? "at-risk" : "below" },
+          { metric: "Assessment Completion Rate", value: Math.min(completionRate, 100), target: 90, status: completionRate >= 90 ? "met" : completionRate >= 75 ? "at-risk" : "below" },
+          { metric: "Graded Submissions", value: Math.min(Math.round((gradesSnap.size / Math.max(subsSnap.size, 1)) * 100), 100), target: 95, status: gradesSnap.size >= subsSnap.size * 0.95 ? "met" : "at-risk" },
+          { metric: "Average Score", value: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0, target: 60, status: (scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0) >= 60 ? "met" : "at-risk" },
+        ]);
       } catch (err) { console.error("Failed to fetch institutional data:", err); }
       setLoading(false);
     };
@@ -106,7 +179,7 @@ const InstitutionalInsights = () => {
             <CardDescription>Assessments requiring curriculum review</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {DEMO_LOW.map((a, i) => (
+            {lowPerforming.map((a, i) => (
               <div key={i} className="rounded-lg border border-warning/20 bg-warning/5 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">{a.name}</span>
@@ -125,7 +198,7 @@ const InstitutionalInsights = () => {
             <CardDescription>Key metrics for regulatory compliance</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {DEMO_ACCRED.map((m, i) => (
+            {accreditation.map((m, i) => (
               <div key={i} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{m.metric}</span>
