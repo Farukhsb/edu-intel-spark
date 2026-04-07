@@ -146,9 +146,7 @@ To bridge the gap between education and technology — making assessment fairer,
 
 ## 👨‍💻 Built By
 
-Faruk Abdullahi — founder of GradeAI, applying for the UK Global Talent Visa (Tech Nation — Digital Technology).
-
-This project demonstrates exceptional technical ability in AI product development, full-stack engineering, and EdTech innovation.
+This project showcases an AI-augmented technical workflow, where I served as the Lead Architect and Product Engineer. I managed the full-stack development, cloud orchestration (Firebase/Supabase), and the design of the proprietary Socratic feedback logic.
 
 ---
 
