@@ -151,6 +151,8 @@ const App = () => (
             <Route path="/dashboard/performance" element={<DashboardRoute><PerformanceTrends /></DashboardRoute>} />
             <Route path="/dashboard/integrity" element={<DashboardRoute><AcademicIntegrity /></DashboardRoute>} />
             <Route path="/dashboard/institutional" element={<DashboardRoute><InstitutionalInsights /></DashboardRoute>} />
+            <Route path="/dashboard/accreditation" element={<DashboardRoute><AccreditationDashboard /></DashboardRoute>} />
+            <Route path="/dashboard/external-examiner" element={<DashboardRoute><ExternalExaminerExport /></DashboardRoute>} />
             <Route path="/dashboard/learning-outcomes" element={<DashboardRoute><LearningOutcomes /></DashboardRoute>} />
             <Route path="/dashboard/explain-grade" element={<DashboardRoute><ExplainGrade /></DashboardRoute>} />
             <Route path="/dashboard/improvements" element={<DashboardRoute><ImprovementPlan /></DashboardRoute>} />

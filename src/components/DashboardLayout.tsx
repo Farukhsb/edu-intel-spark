@@ -24,6 +24,8 @@ const lecturerLinks = [
   { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
   { to: "/dashboard/integrity", label: "Academic Integrity", icon: Shield },
   { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
+  { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
+  { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
 ];
 
 const studentLinks = [
