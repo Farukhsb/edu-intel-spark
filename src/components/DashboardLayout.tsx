@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  BarChart3, Bell, BookOpen, Brain, GraduationCap, LayoutDashboard, LogOut,
+  Award, BarChart3, Bell, BookOpen, Brain, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut,
   Menu, MessageSquare, Moon, Search, Shield, Sun, Target, TrendingUp, University,
-  Upload, User, X, Users, Download,
+  Upload, User, X, Users, Download, FileOutput,
 } from "lucide-react";
 import { useEffect } from "react";
 import { db } from "@/lib/firebase";
