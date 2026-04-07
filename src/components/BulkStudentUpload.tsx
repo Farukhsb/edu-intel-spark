@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, CheckCircle, AlertTriangle, Loader2, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
@@ -19,7 +18,9 @@ interface ParsedStudent {
 }
 
 interface UploadResult {
+  name: string;
   email: string;
+  password: string;
   success: boolean;
   error?: string;
 }
@@ -35,14 +36,8 @@ export const BulkStudentUpload = () => {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.endsWith(".csv")) {
-      toast.error("Please upload a CSV file");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("File too large (max 10MB)");
-      return;
-    }
+    if (!file.name.endsWith(".csv")) { toast.error("Please upload a CSV file"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("File too large (max 10MB)"); return; }
 
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -69,11 +64,7 @@ export const BulkStudentUpload = () => {
         if (!email || !email.includes("@")) errors.push("Invalid email");
         if (!name) errors.push("Missing name");
 
-        return {
-          name, email, cohort_id: cohort, department_id: dept,
-          valid: errors.length === 0,
-          error: errors.join(", "),
-        };
+        return { name, email, cohort_id: cohort, department_id: dept, valid: errors.length === 0, error: errors.join(", ") };
       });
 
       setParsed(students);
@@ -90,8 +81,8 @@ export const BulkStudentUpload = () => {
     const uploadResults: UploadResult[] = [];
 
     for (const student of valid) {
+      const tempPassword = `GradeAI_${Math.random().toString(36).slice(2, 10)}`;
       try {
-        const tempPassword = `GradeAI_${Math.random().toString(36).slice(2, 10)}`;
         const cred = await createUserWithEmailAndPassword(auth, student.email, tempPassword);
         await updateProfile(cred.user, { displayName: student.name });
         await setDoc(doc(db, "users", cred.user.uid), {
@@ -104,9 +95,9 @@ export const BulkStudentUpload = () => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }, { merge: true });
-        uploadResults.push({ email: student.email, success: true });
+        uploadResults.push({ name: student.name, email: student.email, password: tempPassword, success: true });
       } catch (err: any) {
-        uploadResults.push({ email: student.email, success: false, error: err.message });
+        uploadResults.push({ name: student.name, email: student.email, password: tempPassword, success: false, error: err.message });
       }
     }
 
@@ -116,6 +107,19 @@ export const BulkStudentUpload = () => {
     const successCount = uploadResults.filter(r => r.success).length;
     if (successCount > 0) toast.success(`${successCount} student(s) created`);
     if (uploadResults.some(r => !r.success)) toast.error(`${uploadResults.filter(r => !r.success).length} failed`);
+  };
+
+  const downloadCredentials = () => {
+    const successful = results.filter(r => r.success);
+    if (successful.length === 0) { toast.error("No successful accounts to export"); return; }
+    const csv = "Name,Email,Temporary Password\n" + successful.map(r => `"${r.name}","${r.email}","${r.password}"`).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `student_credentials_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const downloadTemplate = () => {
@@ -187,12 +191,22 @@ export const BulkStudentUpload = () => {
               <Badge variant="default">{results.filter(r => r.success).length} created</Badge>
               {results.some(r => !r.success) && <Badge variant="destructive">{results.filter(r => !r.success).length} failed</Badge>}
             </div>
-            <div className="max-h-60 overflow-y-auto space-y-1">
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>Important:</strong> Download the credentials CSV below and share it with your students. Passwords are only available now and cannot be retrieved later.
+            </div>
+
+            <Button onClick={downloadCredentials} className="w-full">
+              <Download className="mr-2 h-4 w-4" /> Download Credentials CSV
+            </Button>
+
+            <div className="max-h-48 overflow-y-auto space-y-1">
               {results.map((r, i) => (
                 <div key={i} className="flex items-center justify-between text-sm px-2 py-1 rounded bg-muted/50">
                   <div className="flex items-center gap-2">
                     {r.success ? <CheckCircle className="h-3.5 w-3.5 text-success" /> : <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
-                    <span>{r.email}</span>
+                    <span>{r.name}</span>
+                    <span className="text-muted-foreground">{r.email}</span>
                   </div>
                   {r.error && <span className="text-xs text-destructive truncate max-w-[200px]">{r.error}</span>}
                 </div>
