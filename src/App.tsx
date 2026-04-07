@@ -27,6 +27,8 @@ const ImprovementPlan = lazy(() => import("./pages/dashboard/ImprovementPlan"));
 const Assignments = lazy(() => import("./pages/dashboard/Assignments"));
 const AssignmentDetail = lazy(() => import("./pages/dashboard/AssignmentDetail"));
 const StudentProfile = lazy(() => import("./pages/dashboard/StudentProfile"));
+const AccreditationDashboard = lazy(() => import("./pages/dashboard/AccreditationDashboard"));
+const ExternalExaminerExport = lazy(() => import("./pages/dashboard/ExternalExaminerExport"));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
