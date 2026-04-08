@@ -376,27 +376,56 @@ const AssignmentDetail = () => {
     if (!files || !id || !user?.uid) return;
     setUploading(true);
     let success = 0;
+
+    // Get the Supabase auth user ID for uploaded_by
+    const { data: { user: supaUser } } = await supabase.auth.getUser();
+    const supaUserId = supaUser?.id;
+
     for (const file of Array.from(files)) {
       try {
+        const uploaderUid = supaUserId || user.uid;
         const { fileUrl, fileName, fileType } = await uploadFile(file, user.uid);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-        await addDoc(collection(db, "submissions"), {
-          assignment_id: id,
-          student_name: studentName,
-          file_url: fileUrl,
-          file_name: fileName,
-          file_type: fileType,
-          uploaded_by: user!.uid,
-          status: "submitted",
-          submitted_at: new Date().toISOString(),
-          student_id: null,
-          student_email: null,
-        });
+
+        if (supaUserId) {
+          // Write to Supabase submissions table
+          const { error: insertError } = await supabase.from("submissions").insert({
+            assignment_id: id,
+            student_name: studentName,
+            file_url: fileUrl,
+            file_name: fileName,
+            file_type: fileType,
+            uploaded_by: supaUserId,
+            status: "submitted" as const,
+            student_id: null,
+            student_email: null,
+          });
+          if (insertError) throw insertError;
+        } else {
+          // Fallback to Firestore
+          await addDoc(collection(db, "submissions"), {
+            assignment_id: id,
+            student_name: studentName,
+            file_url: fileUrl,
+            file_name: fileName,
+            file_type: fileType,
+            uploaded_by: uploaderUid,
+            status: "submitted",
+            submitted_at: new Date().toISOString(),
+            student_id: null,
+            student_email: null,
+          });
+        }
         success++;
-      } catch { toast.error(`Failed to upload ${file.name}`); }
+      } catch (err: any) {
+        console.error(`[BulkUpload] Failed for ${file.name}:`, err);
+        toast.error(`Failed to upload ${file.name}`);
+      }
     }
     toast.success(`${success} file(s) uploaded`);
     setUploading(false);
+    // Refresh submissions from Supabase
+    if (supaUserId) await refreshSupabaseSubmissions();
     e.target.value = "";
   };
 
