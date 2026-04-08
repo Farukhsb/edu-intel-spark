@@ -12,6 +12,7 @@ import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer,
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 
@@ -43,46 +44,47 @@ const LearningOutcomes = () => {
     if (isDemo) { setLoading(false); return; }
     const fetchData = async () => {
       try {
+        // Fetch assignments from Firebase
         const assignSnap = await getDocs(collection(db, "assignments"));
         const opts: AssignmentOption[] = assignSnap.docs.map(d => ({
           id: d.id, title: d.data().title, moduleCode: d.data().module_code || null,
         }));
         setAssignments(opts);
 
-        const gradesSnap = await getDocs(collection(db, "grades"));
-        const subsSnap = await getDocs(collection(db, "submissions"));
+        // Fetch grades and submissions from Supabase (where AI grading data lives)
+        const { data: gradesData } = await supabase.from("grades").select("*");
+        const { data: subsData } = await supabase.from("submissions").select("*");
 
         // Build maps
         const subAssignment: Record<string, string> = {};
         const subStudent: Record<string, string> = {};
-        subsSnap.docs.forEach(d => {
-          const data = d.data();
-          subAssignment[d.id] = data.assignment_id;
-          subStudent[d.id] = data.student_name || data.student_email || data.student_id || "Student";
+        (subsData || []).forEach(d => {
+          subAssignment[d.id] = d.assignment_id;
+          subStudent[d.id] = d.student_name || d.student_email || d.student_id || "Student";
         });
 
         // Collect rubric breakdowns per criterion
         const criterionScores: Record<string, { total: number; max: number; count: number }> = {};
         const studentScores: Record<string, number[]> = {};
 
-        gradesSnap.docs.forEach(d => {
-          const data = d.data();
-          const assignmentId = subAssignment[data.submission_id];
+        (gradesData || []).forEach(d => {
+          const assignmentId = subAssignment[d.submission_id];
           if (selectedAssignment !== "all" && assignmentId !== selectedAssignment) return;
 
-          const score = data.final_score ?? data.ai_score;
-          const studentKey = subStudent[data.submission_id] || "Student";
+          const score = d.final_score ?? d.ai_score;
+          const studentKey = subStudent[d.submission_id] || "Student";
           if (score != null) {
             if (!studentScores[studentKey]) studentScores[studentKey] = [];
-            studentScores[studentKey].push(score);
+            studentScores[studentKey].push(Number(score));
           }
 
-          if (data.ai_breakdown && Array.isArray(data.ai_breakdown)) {
-            data.ai_breakdown.forEach((b: any) => {
+          const breakdown = d.ai_breakdown as any;
+          if (breakdown && Array.isArray(breakdown)) {
+            breakdown.forEach((b: any) => {
               const key = b.criterion || b.name || "Unknown";
               if (!criterionScores[key]) criterionScores[key] = { total: 0, max: 0, count: 0 };
               criterionScores[key].total += (b.score ?? 0);
-              criterionScores[key].max += (b.max_score ?? 10);
+              criterionScores[key].max += (b.max_score ?? b.maxScore ?? 10);
               criterionScores[key].count++;
             });
           }
