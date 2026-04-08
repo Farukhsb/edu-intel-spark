@@ -427,32 +427,32 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [assignmentsSnap, subsSnap, gradesSnap] = await Promise.all([
-          getDocs(collection(db, "assignments")),
-          getDocs(collection(db, "submissions")),
-          getDocs(collection(db, "grades")),
+        const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }] = await Promise.all([
+          supabase.from("assignments").select("*"),
+          supabase.from("submissions").select("*"),
+          supabase.from("grades").select("*"),
         ]);
 
+        const assignments = assignmentsRaw || [];
+        const subs = subsRaw || [];
+        const grades = gradesRaw || [];
+
         const gradeBySubmission: Record<string, number> = {};
-        gradesSnap.docs.forEach(d => {
-          const data = d.data();
-          const score = data.final_score ?? data.ai_score;
-          if (score != null) gradeBySubmission[data.submission_id] = score;
+        grades.forEach(d => {
+          const score = d.final_score ?? d.ai_score;
+          if (score != null) gradeBySubmission[d.submission_id] = score;
         });
 
-        // Group by module_code
         const modules: Record<string, { title: string; scores: number[]; submissions: number; total: number }> = {};
-        assignmentsSnap.docs.forEach(d => {
-          const data = d.data();
-          const key = data.module_code || "Unassigned";
-          if (!modules[key]) modules[key] = { title: data.title, scores: [], submissions: 0, total: 0 };
+        assignments.forEach(d => {
+          const key = d.module_code || "Unassigned";
+          if (!modules[key]) modules[key] = { title: d.title, scores: [], submissions: 0, total: 0 };
         });
 
-        subsSnap.docs.forEach(d => {
-          const data = d.data();
-          const assignment = assignmentsSnap.docs.find(a => a.id === data.assignment_id);
+        subs.forEach(d => {
+          const assignment = assignments.find(a => a.id === d.assignment_id);
           if (assignment) {
-            const key = assignment.data().module_code || "Unassigned";
+            const key = assignment.module_code || "Unassigned";
             if (modules[key]) {
               modules[key].submissions++;
               const score = gradeBySubmission[d.id];
@@ -477,17 +477,8 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
       setLoading(false);
     };
 
-    if (isDemo) {
-      setProgrammes([
-        { code: "CS101", submissions: 45, graded: 42, avg: 64, passRate: 81, firstClass: 19, twoOne: 29, twoTwo: 21, third: 12, fail: 19 },
-        { code: "CS205", submissions: 38, graded: 35, avg: 58, passRate: 74, firstClass: 11, twoOne: 23, twoTwo: 26, third: 14, fail: 26 },
-        { code: "MATH301", submissions: 52, graded: 50, avg: 55, passRate: 70, firstClass: 8, twoOne: 20, twoTwo: 24, third: 18, fail: 30 },
-      ]);
-      setLoading(false);
-    } else {
-      fetchData();
-    }
-  }, [isDemo]);
+    fetchData();
+  }, []);
 
   const exportProgrammeReport = () => {
     const lines = ["Programme-Level Report — GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
