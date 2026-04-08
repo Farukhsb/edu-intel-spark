@@ -35,21 +35,8 @@ interface TEFIndicator {
   detail: string;
 }
 
-const DEMO_NSS: NSSMetric[] = [
-  { question: "Staff are good at explaining things", score: 82, benchmark: 80, trend: "+3%" },
-  { question: "Assessment criteria are clear in advance", score: 74, benchmark: 78, trend: "-2%" },
-  { question: "Feedback has been timely", score: 68, benchmark: 72, trend: "+5%" },
-  { question: "Feedback has helped clarify things", score: 71, benchmark: 75, trend: "+1%" },
-  { question: "The course is well organised", score: 79, benchmark: 77, trend: "+2%" },
-  { question: "Overall satisfaction with quality", score: 78, benchmark: 80, trend: "+1%" },
-];
-
-const DEMO_TEF: TEFIndicator[] = [
-  { name: "Teaching Quality", rating: "silver", score: 76, detail: "Student engagement and teaching excellence metrics" },
-  { name: "Learning Environment", rating: "gold", score: 85, detail: "Resources, support services, and learning spaces" },
-  { name: "Student Outcomes", rating: "silver", score: 72, detail: "Employment rates, continuation, and completion" },
-  { name: "Assessment & Feedback", rating: "bronze", score: 64, detail: "Timeliness, quality, and consistency of feedback" },
-];
+const tefRating = (score: number): "gold" | "silver" | "bronze" | "pending" =>
+  score >= 80 ? "gold" : score >= 65 ? "silver" : score >= 50 ? "bronze" : "pending";
 
 const AccreditationDashboard = () => {
   const { isDemo } = useAuth();
