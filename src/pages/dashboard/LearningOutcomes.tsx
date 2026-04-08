@@ -13,8 +13,6 @@ import {
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
 
 interface AssignmentOption { id: string; title: string; moduleCode: string | null }
 
@@ -44,10 +42,9 @@ const LearningOutcomes = () => {
     if (isDemo) { setLoading(false); return; }
     const fetchData = async () => {
       try {
-        // Fetch assignments from Firebase
-        const assignSnap = await getDocs(collection(db, "assignments"));
-        const opts: AssignmentOption[] = assignSnap.docs.map(d => ({
-          id: d.id, title: d.data().title, moduleCode: d.data().module_code || null,
+        const { data: assignData } = await supabase.from("assignments").select("*");
+        const opts: AssignmentOption[] = (assignData || []).map(d => ({
+          id: d.id, title: d.title, moduleCode: d.module_code || null,
         }));
         setAssignments(opts);
 
