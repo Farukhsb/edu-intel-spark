@@ -178,9 +178,29 @@ const writeGrade = async (sub: Submission, gradeData: any, userId: string): Prom
 // Helper to update a grade in the correct backend
 const updateGrade = async (grade: Grade, updates: Record<string, any>) => {
   if (grade._source === "supabase") {
+    const typedUpdates: {
+      ai_score?: number | null;
+      ai_feedback?: string | null;
+      ai_breakdown?: any;
+      lecturer_score?: number | null;
+      lecturer_feedback?: string | null;
+      final_score?: number | null;
+      final_feedback?: string | null;
+      reviewed_by?: string | null;
+      reviewed_at?: string | null;
+    } = {};
+    if ("ai_score" in updates) typedUpdates.ai_score = updates.ai_score;
+    if ("ai_feedback" in updates) typedUpdates.ai_feedback = updates.ai_feedback;
+    if ("ai_breakdown" in updates) typedUpdates.ai_breakdown = updates.ai_breakdown;
+    if ("lecturer_score" in updates) typedUpdates.lecturer_score = updates.lecturer_score;
+    if ("lecturer_feedback" in updates) typedUpdates.lecturer_feedback = updates.lecturer_feedback;
+    if ("final_score" in updates) typedUpdates.final_score = updates.final_score;
+    if ("final_feedback" in updates) typedUpdates.final_feedback = updates.final_feedback;
+    if ("reviewed_by" in updates) typedUpdates.reviewed_by = updates.reviewed_by;
+    if ("reviewed_at" in updates) typedUpdates.reviewed_at = updates.reviewed_at;
     const { error } = await supabase
       .from("grades")
-      .update(updates)
+      .update(typedUpdates)
       .eq("id", grade.id);
     if (error) throw error;
   } else {
