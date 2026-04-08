@@ -152,6 +152,37 @@ const AccreditationDashboard = () => {
         ];
 
         setQaaMetrics(metrics);
+
+        // Derive NSS-style metrics from real data
+        const rubricClarityScore = rubricPct;
+        const feedbackTimelinessScore = turnaroundDays.length > 0 ? Math.min(Math.round((compliantCount / turnaroundDays.length) * 100), 100) : 0;
+        const feedbackHelpfulness = grades.filter(g => g.ai_feedback && g.ai_feedback.length > 100).length;
+        const feedbackHelpPct = grades.length > 0 ? Math.min(Math.round((feedbackHelpfulness / grades.length) * 100), 100) : 0;
+        const organisationScore = assignments.filter(a => a.due_date && a.description).length;
+        const orgPct = assignments.length > 0 ? Math.min(Math.round((organisationScore / assignments.length) * 100), 100) : 0;
+        const overallSat = scores.length > 0 ? Math.min(Math.round(avgScore * 1.1), 100) : 0;
+
+        setNssMetrics([
+          { question: "Assessment criteria are clear in advance", score: rubricClarityScore, benchmark: 78, trend: rubricClarityScore >= 78 ? `+${rubricClarityScore - 78}%` : `${rubricClarityScore - 78}%` },
+          { question: "Feedback has been timely", score: feedbackTimelinessScore, benchmark: 72, trend: feedbackTimelinessScore >= 72 ? `+${feedbackTimelinessScore - 72}%` : `${feedbackTimelinessScore - 72}%` },
+          { question: "Feedback has helped clarify things", score: feedbackHelpPct, benchmark: 75, trend: feedbackHelpPct >= 75 ? `+${feedbackHelpPct - 75}%` : `${feedbackHelpPct - 75}%` },
+          { question: "The course is well organised", score: orgPct, benchmark: 77, trend: orgPct >= 77 ? `+${orgPct - 77}%` : `${orgPct - 77}%` },
+          { question: "Assessment is fair", score: passRate, benchmark: 80, trend: passRate >= 80 ? `+${passRate - 80}%` : `${passRate - 80}%` },
+          { question: "Overall satisfaction with quality", score: overallSat, benchmark: 80, trend: overallSat >= 80 ? `+${overallSat - 80}%` : `${overallSat - 80}%` },
+        ]);
+
+        // Derive TEF indicators from real data
+        const teachingScore = Math.min(Math.round((rubricClarityScore * 0.4 + feedbackHelpPct * 0.3 + orgPct * 0.3)), 100);
+        const outcomeScore = Math.min(Math.round((passRate * 0.5 + avgScore * 0.5)), 100);
+        const feedbackScore = Math.min(Math.round((feedbackTimelinessScore * 0.5 + feedbackHelpPct * 0.3 + moderationPct * 0.2)), 100);
+        const engagementScore = Math.min(Math.round((completionRate * 0.6 + gradedPct * 0.4)), 100);
+
+        setTefIndicators([
+          { name: "Teaching Quality", rating: tefRating(teachingScore), score: teachingScore, detail: `Based on rubric clarity (${rubricClarityScore}%), feedback quality, and organisation` },
+          { name: "Student Outcomes", rating: tefRating(outcomeScore), score: outcomeScore, detail: `Pass rate: ${passRate}%, average score: ${avgScore}%` },
+          { name: "Assessment & Feedback", rating: tefRating(feedbackScore), score: feedbackScore, detail: `Turnaround compliance: ${feedbackTimelinessScore}%, moderation: ${moderationPct}%` },
+          { name: "Student Engagement", rating: tefRating(engagementScore), score: engagementScore, detail: `Completion rate: ${completionRate}%, grading rate: ${gradedPct}%` },
+        ]);
       } catch (err) {
         console.error("Failed to fetch accreditation data:", err);
       }
