@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 
 type SubmissionStatus = "submitted" | "ai_grading" | "ai_graded" | "under_review" | "approved" | "released";
+type SubmissionSource = "supabase" | "firestore";
 
 interface Submission {
   id: string;
@@ -52,6 +53,7 @@ interface Submission {
   createdAt?: string;
   student_id: string | null;
   studentId?: string | null;
+  _source: SubmissionSource;
 }
 
 interface Grade {
@@ -64,6 +66,7 @@ interface Grade {
   lecturer_feedback: string | null;
   final_score: number | null;
   final_feedback: string | null;
+  _source: "supabase" | "firestore";
 }
 
 interface Assignment {
@@ -95,7 +98,7 @@ const statusConfig: Record<SubmissionStatus, { label: string; variant: string; i
   released: { label: "Released", variant: "default", icon: Send },
 };
 
-const normalizeSubmission = (id: string, data: Record<string, any>): Submission => ({
+const normalizeSubmission = (id: string, data: Record<string, any>, source: SubmissionSource): Submission => ({
   id,
   assignment_id: data.assignment_id ?? data.assignmentId ?? "",
   assignmentId: data.assignmentId ?? data.assignment_id ?? "",
@@ -110,30 +113,87 @@ const normalizeSubmission = (id: string, data: Record<string, any>): Submission 
   createdAt: data.createdAt ?? data.submitted_at ?? new Date().toISOString(),
   student_id: data.student_id ?? data.studentId ?? null,
   studentId: data.studentId ?? data.student_id ?? null,
+  _source: source,
 });
+
+// Helper to update submission status in the correct backend
+const updateSubmissionStatus = async (sub: Submission, status: SubmissionStatus) => {
+  if (sub._source === "supabase") {
+    const { error } = await supabase
+      .from("submissions")
+      .update({ status })
+      .eq("id", sub.id);
+    if (error) throw error;
+  } else {
+    await updateDoc(doc(db, "submissions", sub.id), { status });
+  }
+};
+
+// Helper to write a grade to the correct backend
+const writeGrade = async (sub: Submission, gradeData: any, userId: string): Promise<Grade> => {
+  if (sub._source === "supabase") {
+    const { data, error } = await supabase
+      .from("grades")
+      .insert({
+        submission_id: sub.id,
+        ai_score: gradeData.ai_score,
+        ai_feedback: gradeData.ai_feedback,
+        ai_breakdown: gradeData.ai_breakdown || [],
+        lecturer_score: null,
+        lecturer_feedback: null,
+        final_score: null,
+        final_feedback: null,
+        reviewed_by: null,
+        reviewed_at: null,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return { ...data, ai_breakdown: data.ai_breakdown as any[], _source: "supabase" };
+  } else {
+    const docRef = await addDoc(collection(db, "grades"), {
+      submission_id: sub.id,
+      ...gradeData,
+      lecturer_score: null,
+      lecturer_feedback: null,
+      final_score: null,
+      final_feedback: null,
+      reviewed_by: null,
+      reviewed_at: null,
+      created_at: new Date().toISOString(),
+    });
+    return {
+      id: docRef.id,
+      submission_id: sub.id,
+      ...gradeData,
+      lecturer_score: null,
+      lecturer_feedback: null,
+      final_score: null,
+      final_feedback: null,
+      _source: "firestore",
+    };
+  }
+};
+
+// Helper to update a grade in the correct backend
+const updateGrade = async (grade: Grade, updates: Record<string, any>) => {
+  if (grade._source === "supabase") {
+    const { error } = await supabase
+      .from("grades")
+      .update(updates)
+      .eq("id", grade.id);
+    if (error) throw error;
+  } else {
+    await updateDoc(doc(db, "grades", grade.id), updates);
+  }
+};
 
 const getSubmissionErrorMessage = (error: any) => {
   const errorCode = error?.code ?? "";
   const errorMessage = (error?.message ?? "").toLowerCase();
-
-  if (errorCode.includes("permission") || errorCode.includes("unauthorized") || errorMessage.includes("permission")) {
-    return "Permission denied";
-  }
-
-  if (
-    errorCode.includes("network") ||
-    errorCode.includes("unavailable") ||
-    errorCode.includes("retry") ||
-    errorMessage.includes("network") ||
-    errorMessage.includes("timeout")
-  ) {
-    return "Network error";
-  }
-
-  if (errorMessage.includes("missing assignment")) {
-    return "Missing assignment";
-  }
-
+  if (errorCode.includes("permission") || errorCode.includes("unauthorized") || errorMessage.includes("permission")) return "Permission denied";
+  if (errorCode.includes("network") || errorCode.includes("unavailable") || errorMessage.includes("network") || errorMessage.includes("timeout")) return "Network error";
+  if (errorMessage.includes("missing assignment")) return "Missing assignment";
   return "Upload failed";
 };
 
@@ -162,6 +222,7 @@ const AssignmentDetail = () => {
   const [checkingPlagiarism, setCheckingPlagiarism] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
+  const supabaseSubsRef = useRef<Submission[]>([]);
 
   // Fetch assignment
   useEffect(() => {
@@ -174,7 +235,73 @@ const AssignmentDetail = () => {
     fetchAssignment();
   }, [id]);
 
-  // Real-time submissions listener
+  // Load grades for a list of submissions from both backends
+  const loadGradesForSubmissions = async (subs: Submission[]) => {
+    if (subs.length === 0) { setGrades({}); return; }
+
+    const gradeMap: Record<string, Grade> = {};
+
+    // Load from Supabase
+    const supaSubIds = subs.filter(s => s._source === "supabase").map(s => s.id);
+    if (supaSubIds.length > 0) {
+      const { data } = await supabase
+        .from("grades")
+        .select("*")
+        .in("submission_id", supaSubIds);
+      if (data) {
+        for (const g of data) {
+          gradeMap[g.submission_id] = {
+            id: g.id,
+            submission_id: g.submission_id,
+            ai_score: g.ai_score,
+            ai_feedback: g.ai_feedback,
+            ai_breakdown: g.ai_breakdown as any[],
+            lecturer_score: g.lecturer_score,
+            lecturer_feedback: g.lecturer_feedback,
+            final_score: g.final_score,
+            final_feedback: g.final_feedback,
+            _source: "supabase",
+          };
+        }
+      }
+    }
+
+    // Load from Firestore
+    const firestoreSubs = subs.filter(s => s._source === "firestore");
+    for (const sub of firestoreSubs) {
+      try {
+        const gSnap = await getDocs(
+          query(collection(db, "grades"), where("submission_id", "==", sub.id))
+        );
+        const sortedDocs = gSnap.docs.sort((a, b) =>
+          (b.data().created_at || "").localeCompare(a.data().created_at || "")
+        );
+        const latest = sortedDocs[0];
+        if (latest) {
+          gradeMap[sub.id] = { id: latest.id, ...latest.data(), _source: "firestore" } as Grade;
+        }
+      } catch (error) {
+        console.warn(`[Grades] Skipping inaccessible grade for ${sub.id}:`, error);
+      }
+    }
+
+    setGrades(gradeMap);
+  };
+
+  // Merge Firestore + Supabase submissions, deduplicate by file_url
+  const mergeSubmissions = (firestoreSubs: Submission[], supaSubs: Submission[]): Submission[] => {
+    const byUrl = new Map<string, Submission>();
+    // Supabase takes priority
+    for (const s of supaSubs) byUrl.set(s.file_url, s);
+    for (const s of firestoreSubs) {
+      if (!byUrl.has(s.file_url)) byUrl.set(s.file_url, s);
+    }
+    return Array.from(byUrl.values()).sort((a, b) =>
+      new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
+    );
+  };
+
+  // Real-time Firestore submissions listener
   useEffect(() => {
     if (!id || !role || !user?.uid) return;
 
@@ -182,61 +309,27 @@ const AssignmentDetail = () => {
       ? query(collection(db, "submissions"), where("assignment_id", "==", id))
       : query(collection(db, "submissions"), where("student_id", "==", user.uid));
 
-    const normalizeSubmissions = (docs: any[]) => docs
-      .map((d) => normalizeSubmission(d.id, d.data() as Record<string, any>))
-      .filter((sub) => role === "lecturer" ? sub.assignment_id === id : sub.assignment_id === id && sub.student_id === user.uid)
-      .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
-
-    const loadGradesForSubmissions = async (subs: Submission[]) => {
-      if (subs.length === 0) {
-        setGrades({});
-        return;
-      }
-
-      const gradeEntries = await Promise.all(
-        subs.map(async (sub) => {
-          try {
-            const gSnap = await getDocs(
-              query(collection(db, "grades"), where("submission_id", "==", sub.id))
-            );
-
-            // Use the most recent grade if multiple exist
-            const sortedDocs = gSnap.docs.sort((a, b) =>
-              (b.data().created_at || "").localeCompare(a.data().created_at || "")
-            );
-            const latestGrade = sortedDocs[0];
-            return latestGrade
-              ? [sub.id, { id: latestGrade.id, ...latestGrade.data() } as Grade]
-              : null;
-          } catch (error) {
-            console.warn(`[Grades] Skipping inaccessible grade lookup for submission ${sub.id}:`, error);
-            return null;
-          }
-        })
-      );
-
-      setGrades(
-        Object.fromEntries(
-          gradeEntries.filter((entry): entry is [string, Grade] => Boolean(entry))
-        )
-      );
-    };
+    const normalizeFirestoreSubs = (docs: any[]) => docs
+      .map((d) => normalizeSubmission(d.id, d.data() as Record<string, any>, "firestore"))
+      .filter((sub) => sub.assignment_id === id);
 
     const unsubscribe = onSnapshot(
       submissionsQuery,
       async (snapshot) => {
-        const subs = normalizeSubmissions(snapshot.docs);
-        setSubmissions(subs);
-        await loadGradesForSubmissions(subs);
+        const fsSubs = normalizeFirestoreSubs(snapshot.docs);
+        const merged = mergeSubmissions(fsSubs, supabaseSubsRef.current);
+        setSubmissions(merged);
+        await loadGradesForSubmissions(merged);
         setLoading(false);
       },
       (error) => {
         console.error("[Submissions] Snapshot error:", error.message);
         getDocs(submissionsQuery)
           .then(async (snapshot) => {
-            const subs = normalizeSubmissions(snapshot.docs);
-            setSubmissions(subs);
-            await loadGradesForSubmissions(subs);
+            const fsSubs = normalizeFirestoreSubs(snapshot.docs);
+            const merged = mergeSubmissions(fsSubs, supabaseSubsRef.current);
+            setSubmissions(merged);
+            await loadGradesForSubmissions(merged);
             setLoading(false);
           })
           .catch(() => setLoading(false));
@@ -246,7 +339,7 @@ const AssignmentDetail = () => {
     return () => unsubscribe();
   }, [id, role, user?.uid]);
 
-  // Also load submissions from Supabase (where bulk uploads go)
+  // Load Supabase submissions
   useEffect(() => {
     if (!id) return;
     const loadSupabase = async () => {
@@ -267,32 +360,29 @@ const AssignmentDetail = () => {
           status: d.status as SubmissionStatus,
           submitted_at: d.submitted_at,
           student_id: d.student_id,
+          _source: "supabase" as const,
         }));
+        supabaseSubsRef.current = supaSubs;
         setSubmissions((prev) => {
-          const existingUrls = new Set(prev.map((s) => s.file_url));
-          const newSubs = supaSubs.filter((s) => !existingUrls.has(s.file_url));
-          if (newSubs.length === 0) return prev;
-          return [...prev, ...newSubs].sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+          const fsSubs = prev.filter(s => s._source === "firestore");
+          return mergeSubmissions(fsSubs, supaSubs);
         });
+        // Also load grades for these
+        const allSubs = mergeSubmissions([], supaSubs);
+        await loadGradesForSubmissions(allSubs);
       }
     };
     loadSupabase();
   }, [id]);
 
   const uploadFile = async (file: File, currentUserId: string) => {
-    if (!id) {
-      throw new Error("Missing assignment");
-    }
+    if (!id) throw new Error("Missing assignment");
 
     const safeFileName = file.name.replace(/[\\/]/g, "_");
     const filePath = `${currentUserId}/${id}/${Date.now()}_${safeFileName}`;
-    console.log("[Upload] Starting upload to:", filePath, "Size:", file.size, "Type:", file.type);
 
     try {
-      setUploadProgress(0);
       setUploadProgress(10);
-      console.log("[Upload] Uploading to Lovable Cloud storage...");
-
       const { data, error } = await supabase.storage
         .from("submissions")
         .upload(filePath, file, {
@@ -302,26 +392,22 @@ const AssignmentDetail = () => {
         });
 
       if (error) throw error;
-
       setUploadProgress(80);
-      console.log("[Upload] Upload complete, getting public URL...");
 
       const { data: urlData } = supabase.storage
         .from("submissions")
         .getPublicUrl(data.path);
 
-      const fileUrl = urlData.publicUrl;
-      console.log("[Upload] URL obtained:", fileUrl.substring(0, 80) + "...");
       setUploadProgress(100);
 
       return {
-        fileUrl,
+        fileUrl: urlData.publicUrl,
         fileName: safeFileName,
         fileType: file.type || "application/octet-stream",
         storagePath: data.path,
       };
     } catch (error: any) {
-      console.error("[Upload] Upload failed:", error?.code, error?.message, error);
+      console.error("[Upload] Upload failed:", error);
       throw error;
     }
   };
@@ -332,33 +418,18 @@ const AssignmentDetail = () => {
     const currentUserEmail = auth.currentUser?.email ?? user?.email ?? null;
 
     if (!file) return;
-    if (!id || !assignment) {
-      toast.error("Missing assignment");
-      e.target.value = "";
-      return;
-    }
-    if (!currentUserId) {
-      toast.error("Permission denied");
-      e.target.value = "";
-      return;
-    }
+    if (!id || !assignment) { toast.error("Missing assignment"); e.target.value = ""; return; }
+    if (!currentUserId) { toast.error("Permission denied"); e.target.value = ""; return; }
 
     const hasExistingSubmission = submissions.some(
       (submission) => submission.student_id === currentUserId || (currentUserEmail && submission.student_email === currentUserEmail)
     );
-
-    if (hasExistingSubmission) {
-      toast.error("You have already submitted this assignment");
-      e.target.value = "";
-      return;
-    }
+    if (hasExistingSubmission) { toast.error("You have already submitted this assignment"); e.target.value = ""; return; }
 
     setUploading(true);
     setUploadProgress(0);
 
-    let uploadedFile:
-      | { fileUrl: string; fileName: string; fileType: string; storagePath: string }
-      | null = null;
+    let uploadedFile: { fileUrl: string; fileName: string; fileType: string; storagePath: string } | null = null;
     let submissionCreated = false;
 
     try {
@@ -386,16 +457,9 @@ const AssignmentDetail = () => {
       toast.success("Submission uploaded successfully");
     } catch (error: any) {
       console.error("[Submission] Failed:", error);
-
       if (uploadedFile && !submissionCreated) {
-        try {
-          await supabase.storage.from("submissions").remove([uploadedFile.storagePath]);
-          console.warn("[Submission] Removed uploaded file after Firestore write failure");
-        } catch (cleanupError) {
-          console.error("[Submission] Failed to clean up uploaded file:", cleanupError);
-        }
+        try { await supabase.storage.from("submissions").remove([uploadedFile.storagePath]); } catch {}
       }
-
       toast.error(getSubmissionErrorMessage(error));
     } finally {
       setUploading(false);
@@ -406,12 +470,12 @@ const AssignmentDetail = () => {
 
   const refreshSupabaseSubmissions = async () => {
     if (!id) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("submissions")
       .select("*")
       .eq("assignment_id", id)
       .order("submitted_at", { ascending: false });
-    if (!error && data) {
+    if (data) {
       const supaSubs: Submission[] = data.map((d) => ({
         id: d.id,
         assignment_id: d.assignment_id,
@@ -423,13 +487,14 @@ const AssignmentDetail = () => {
         status: d.status as SubmissionStatus,
         submitted_at: d.submitted_at,
         student_id: d.student_id,
+        _source: "supabase" as const,
       }));
-      // Merge with existing Firestore submissions (avoid duplicates by file_url)
+      supabaseSubsRef.current = supaSubs;
       setSubmissions((prev) => {
-        const existingUrls = new Set(prev.map((s) => s.file_url));
-        const newSubs = supaSubs.filter((s) => !existingUrls.has(s.file_url));
-        return [...prev, ...newSubs].sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+        const fsSubs = prev.filter(s => s._source === "firestore");
+        return mergeSubmissions(fsSubs, supaSubs);
       });
+      await loadGradesForSubmissions(supaSubs);
     }
   };
 
@@ -439,18 +504,15 @@ const AssignmentDetail = () => {
     setUploading(true);
     let success = 0;
 
-    // Get the Supabase auth user ID for uploaded_by
     const { data: { user: supaUser } } = await supabase.auth.getUser();
     const supaUserId = supaUser?.id;
 
     for (const file of Array.from(files)) {
       try {
-        const uploaderUid = supaUserId || user.uid;
         const { fileUrl, fileName, fileType } = await uploadFile(file, user.uid);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
 
         if (supaUserId) {
-          // Write to Supabase submissions table
           const { error: insertError } = await supabase.from("submissions").insert({
             assignment_id: id,
             student_name: studentName,
@@ -464,14 +526,13 @@ const AssignmentDetail = () => {
           });
           if (insertError) throw insertError;
         } else {
-          // Fallback to Firestore
           await addDoc(collection(db, "submissions"), {
             assignment_id: id,
             student_name: studentName,
             file_url: fileUrl,
             file_name: fileName,
             file_type: fileType,
-            uploaded_by: uploaderUid,
+            uploaded_by: user.uid,
             status: "submitted",
             submitted_at: new Date().toISOString(),
             student_id: null,
@@ -486,12 +547,11 @@ const AssignmentDetail = () => {
     }
     toast.success(`${success} file(s) uploaded`);
     setUploading(false);
-    // Refresh submissions from Supabase
     if (supaUserId) await refreshSupabaseSubmissions();
     e.target.value = "";
   };
 
-  // AI Grade — send data to edge function, write results to Firestore
+  // AI Grade — routes updates to correct backend
   const handleAIGrade = async () => {
     const toGrade = submissions.filter((s) => selected.has(s.id) && s.status === "submitted");
     if (toGrade.length === 0) { toast.error("Select submitted files to grade"); return; }
@@ -505,10 +565,8 @@ const AssignmentDetail = () => {
 
     // Update status to ai_grading
     for (const sub of toGrade) {
-      try {
-        await updateDoc(doc(db, "submissions", sub.id), { status: "ai_grading" });
-      } catch (e) {
-        console.warn("Could not update submission status to ai_grading (Firestore permissions):", e);
+      try { await updateSubmissionStatus(sub, "ai_grading"); } catch (e) {
+        console.warn("Could not update status to ai_grading:", e);
       }
     }
 
@@ -538,37 +596,28 @@ const AssignmentDetail = () => {
       let failCount = 0;
 
       for (const r of results) {
+        const sub = toGrade.find(s => s.id === r.submissionId);
+        if (!sub) continue;
+
         if (r.success) {
-          // Write grade to Firestore
           try {
-            await addDoc(collection(db, "grades"), {
-              submission_id: r.submissionId,
+            const newGrade = await writeGrade(sub, {
               ai_score: r.score,
               ai_feedback: r.feedback,
               ai_breakdown: r.breakdown || [],
-              lecturer_score: null,
-              lecturer_feedback: null,
-              final_score: null,
-              final_feedback: null,
-              reviewed_by: null,
-              reviewed_at: null,
-              created_at: new Date().toISOString(),
-            });
+            }, user!.uid);
+            setGrades(prev => ({ ...prev, [sub.id]: newGrade }));
           } catch (gradeErr) {
-            console.error("Failed to write grade to Firestore:", gradeErr);
+            console.error("Failed to write grade:", gradeErr);
           }
-          try {
-            await updateDoc(doc(db, "submissions", r.submissionId), { status: "ai_graded" });
-          } catch (statusErr) {
-            console.warn("Could not update submission status to ai_graded:", statusErr);
+          try { await updateSubmissionStatus(sub, "ai_graded"); } catch (e) {
+            console.warn("Could not update status to ai_graded:", e);
           }
+          // Update local state
+          setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, status: "ai_graded" as SubmissionStatus } : s));
           successCount++;
         } else {
-          try {
-            await updateDoc(doc(db, "submissions", r.submissionId), { status: "submitted" });
-          } catch (revertErr) {
-            console.warn("Could not revert submission status:", revertErr);
-          }
+          try { await updateSubmissionStatus(sub, "submitted"); } catch {}
           failCount++;
         }
       }
@@ -578,11 +627,7 @@ const AssignmentDetail = () => {
     } catch (err: any) {
       toast.error(err?.message || "AI grading failed");
       for (const sub of toGrade) {
-        try {
-          await updateDoc(doc(db, "submissions", sub.id), { status: "submitted" });
-        } catch (revertErr) {
-          console.warn("Could not revert submission status:", revertErr);
-        }
+        try { await updateSubmissionStatus(sub, "submitted"); } catch {}
       }
     }
 
@@ -598,14 +643,17 @@ const AssignmentDetail = () => {
     for (const sub of toApprove) {
       const grade = grades[sub.id];
       if (grade) {
-        await updateDoc(doc(db, "grades", grade.id), {
-          final_score: grade.lecturer_score ?? grade.ai_score,
-          final_feedback: grade.lecturer_feedback ?? grade.ai_feedback,
-          reviewed_by: user!.uid,
-          reviewed_at: new Date().toISOString(),
-        });
+        try {
+          await updateGrade(grade, {
+            final_score: grade.lecturer_score ?? grade.ai_score,
+            final_feedback: grade.lecturer_feedback ?? grade.ai_feedback,
+            reviewed_by: user!.uid,
+            reviewed_at: new Date().toISOString(),
+          });
+        } catch (e) { console.warn("Grade update failed:", e); }
       }
-      await updateDoc(doc(db, "submissions", sub.id), { status: "approved" });
+      try { await updateSubmissionStatus(sub, "approved"); } catch (e) { console.warn("Status update failed:", e); }
+      setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, status: "approved" as SubmissionStatus } : s));
     }
     toast.success(`${toApprove.length} submission(s) approved`);
     setSelected(new Set());
@@ -616,8 +664,8 @@ const AssignmentDetail = () => {
     if (toRelease.length === 0) { toast.error("Select approved submissions to release"); return; }
 
     for (const sub of toRelease) {
-      await updateDoc(doc(db, "submissions", sub.id), { status: "released" });
-      // Create notification for student
+      try { await updateSubmissionStatus(sub, "released"); } catch (e) { console.warn("Release failed:", e); }
+      setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, status: "released" as SubmissionStatus } : s));
       if (sub.student_id) {
         try {
           await addDoc(collection(db, "notifications"), {
@@ -626,7 +674,7 @@ const AssignmentDetail = () => {
             read: false,
             created_at: new Date().toISOString(),
           });
-        } catch { /* notifications collection may not exist yet */ }
+        } catch {}
       }
     }
     toast.success(`${toRelease.length} grade(s) released to students`);
@@ -671,12 +719,18 @@ const AssignmentDetail = () => {
     const grade = grades[reviewSubmission.id];
     if (!grade) { toast.error("No AI grade found"); return; }
 
-    await updateDoc(doc(db, "grades", grade.id), {
-      lecturer_score: Number(editScore) || null,
-      lecturer_feedback: editFeedback || null,
-    });
-    await updateDoc(doc(db, "submissions", reviewSubmission.id), { status: "under_review" });
-    toast.success("Review saved");
+    try {
+      await updateGrade(grade, {
+        lecturer_score: Number(editScore) || null,
+        lecturer_feedback: editFeedback || null,
+      });
+      await updateSubmissionStatus(reviewSubmission, "under_review");
+      setSubmissions(prev => prev.map(s => s.id === reviewSubmission.id ? { ...s, status: "under_review" as SubmissionStatus } : s));
+      toast.success("Review saved");
+    } catch (e) {
+      console.error("Save review failed:", e);
+      toast.error("Failed to save review");
+    }
     setReviewOpen(false);
   };
 
@@ -890,21 +944,22 @@ const AssignmentDetail = () => {
                       )}
                       {isLecturer && grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
                         <Button size="sm" variant="outline" className="text-xs h-7" onClick={async () => {
-                          const grade = grades[sub.id];
-                          if (grade) {
+                          const g = grades[sub.id];
+                          if (g) {
                             try {
-                              await updateDoc(doc(db, "grades", grade.id), {
-                                final_score: grade.lecturer_score ?? grade.ai_score,
-                                final_feedback: grade.lecturer_feedback ?? grade.ai_feedback,
+                              await updateGrade(g, {
+                                final_score: g.lecturer_score ?? g.ai_score,
+                                final_feedback: g.lecturer_feedback ?? g.ai_feedback,
                                 reviewed_by: user!.uid,
                                 reviewed_at: new Date().toISOString(),
                               });
                             } catch (e) { console.warn("Grade update failed:", e); }
                             try {
-                              await updateDoc(doc(db, "submissions", sub.id), { status: "approved" });
+                              await updateSubmissionStatus(sub, "approved");
+                              setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, status: "approved" as SubmissionStatus } : s));
                             } catch (e) {
                               console.warn("Status update failed:", e);
-                              toast.error("Could not update status — check Firestore rules");
+                              toast.error("Could not update status");
                             }
                             toast.success("Submission approved");
                           }
@@ -915,7 +970,8 @@ const AssignmentDetail = () => {
                       {isLecturer && sub.status === "approved" && (
                         <Button size="sm" variant="default" className="text-xs h-7" onClick={async () => {
                           try {
-                            await updateDoc(doc(db, "submissions", sub.id), { status: "released" });
+                            await updateSubmissionStatus(sub, "released");
+                            setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, status: "released" as SubmissionStatus } : s));
                             toast.success("Grade released to student");
                           } catch (e) {
                             console.warn("Release failed:", e);
