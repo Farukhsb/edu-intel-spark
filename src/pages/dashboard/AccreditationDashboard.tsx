@@ -9,8 +9,7 @@ import {
   Download, BarChart3, Shield, Users, Loader2, BookOpen,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 
 interface QAAMetric {
   id: string;
@@ -63,34 +62,38 @@ const AccreditationDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [gradesSnap, subsSnap, assignmentsSnap, usersSnap] = await Promise.all([
-          getDocs(collection(db, "grades")),
-          getDocs(collection(db, "submissions")),
-          getDocs(collection(db, "assignments")),
-          getDocs(collection(db, "users")),
+        const [{ data: gradesRaw }, { data: subsRaw }, { data: assignmentsRaw }, { data: profilesRaw }] = await Promise.all([
+          supabase.from("grades").select("*"),
+          supabase.from("submissions").select("*"),
+          supabase.from("assignments").select("*"),
+          supabase.from("profiles").select("*"),
         ]);
 
-        const scores = gradesSnap.docs
-          .map(d => d.data().final_score ?? d.data().ai_score)
+        const grades = gradesRaw || [];
+        const subs = subsRaw || [];
+        const assignments = assignmentsRaw || [];
+        const profiles = profilesRaw || [];
+
+        const scores = grades
+          .map(d => d.final_score ?? d.ai_score)
           .filter((s): s is number => s != null);
 
-        const studentCount = usersSnap.docs.filter(d => d.data().role === "student").length;
+        const studentCount = profiles.filter(d => d.role === "student").length;
         const passRate = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 0;
         const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-        const completionRate = subsSnap.size > 0 && assignmentsSnap.size > 0 && studentCount > 0
-          ? Math.min(Math.round((subsSnap.size / (assignmentsSnap.size * studentCount)) * 100), 100)
+        const completionRate = subs.length > 0 && assignments.length > 0 && studentCount > 0
+          ? Math.min(Math.round((subs.length / (assignments.length * studentCount)) * 100), 100)
           : 0;
-        const gradedPct = Math.min(Math.round((gradesSnap.size / Math.max(subsSnap.size, 1)) * 100), 100);
+        const gradedPct = Math.min(Math.round((grades.length / Math.max(subs.length, 1)) * 100), 100);
 
-        // Feedback turnaround: time between submission and grade
+        // Feedback turnaround
         let turnaroundDays: number[] = [];
         const gradeMap: Record<string, any> = {};
-        gradesSnap.docs.forEach(d => { gradeMap[d.data().submission_id] = d.data(); });
-        subsSnap.docs.forEach(d => {
-          const sub = d.data();
+        grades.forEach(d => { gradeMap[d.submission_id] = d; });
+        subs.forEach(d => {
           const grade = gradeMap[d.id];
-          if (grade?.created_at && sub.submitted_at) {
-            const diff = (new Date(grade.created_at).getTime() - new Date(sub.submitted_at).getTime()) / (1000 * 60 * 60 * 24);
+          if (grade?.created_at && d.submitted_at) {
+            const diff = (new Date(grade.created_at).getTime() - new Date(d.submitted_at).getTime()) / (1000 * 60 * 60 * 24);
             if (diff >= 0) turnaroundDays.push(diff);
           }
         });
@@ -98,26 +101,24 @@ const AccreditationDashboard = () => {
         const compliantCount = turnaroundDays.filter(d => d <= 15).length;
         setFeedbackTurnaround({ avg: avgTurnaround, target: 15, compliant: compliantCount, total: turnaroundDays.length });
 
-        // Rubric coverage: assignments with rubrics
-        const withRubric = assignmentsSnap.docs.filter(d => {
-          const r = d.data().rubric;
-          return r && Array.isArray(r) && r.length > 0;
+        const withRubric = assignments.filter(d => {
+          const r = d.rubric;
+          return r && Array.isArray(r) && (r as any[]).length > 0;
         }).length;
-        const rubricPct = assignmentsSnap.size > 0 ? Math.round((withRubric / assignmentsSnap.size) * 100) : 0;
+        const rubricPct = assignments.length > 0 ? Math.round((withRubric / assignments.length) * 100) : 0;
 
-        // Moderation evidence: grades with lecturer review
-        const moderated = gradesSnap.docs.filter(d => d.data().reviewed_by || d.data().lecturer_score != null).length;
-        const moderationPct = gradesSnap.size > 0 ? Math.round((moderated / gradesSnap.size) * 100) : 0;
+        const moderated = grades.filter(d => d.reviewed_by || d.lecturer_score != null).length;
+        const moderationPct = grades.length > 0 ? Math.round((moderated / grades.length) * 100) : 0;
 
-        const released = subsSnap.docs.filter(d => d.data().status === "released").length;
-        const releasedPct = subsSnap.size > 0 ? Math.round((released / subsSnap.size) * 100) : 0;
+        const released = subs.filter(d => d.status === "released").length;
+        const releasedPct = subs.length > 0 ? Math.round((released / subs.length) * 100) : 0;
 
         const metrics: QAAMetric[] = [
           {
             id: "criteria-transparency", category: "Assessment Design",
             metric: "Assessment Criteria Transparency", value: rubricPct, target: 100,
             status: rubricPct >= 90 ? "met" : rubricPct >= 70 ? "at-risk" : "below",
-            detail: `${withRubric}/${assignmentsSnap.size} assignments have published rubrics`,
+            detail: `${withRubric}/${assignments.length} assignments have published rubrics`,
           },
           {
             id: "feedback-turnaround", category: "Feedback Quality",
@@ -129,7 +130,7 @@ const AccreditationDashboard = () => {
             id: "moderation", category: "Quality Assurance",
             metric: "Moderation Evidence", value: moderationPct, target: 100,
             status: moderationPct >= 90 ? "met" : moderationPct >= 70 ? "at-risk" : "below",
-            detail: `${moderated}/${gradesSnap.size} grades have lecturer review/moderation`,
+            detail: `${moderated}/${grades.length} grades have lecturer review/moderation`,
           },
           {
             id: "pass-rate", category: "Student Outcomes",
@@ -141,19 +142,19 @@ const AccreditationDashboard = () => {
             id: "completion", category: "Student Engagement",
             metric: "Assessment Completion Rate", value: completionRate, target: 85,
             status: completionRate >= 85 ? "met" : completionRate >= 70 ? "at-risk" : "below",
-            detail: `${subsSnap.size} submissions across ${assignmentsSnap.size} assignments`,
+            detail: `${subs.length} submissions across ${assignments.length} assignments`,
           },
           {
             id: "grade-release", category: "Feedback Quality",
             metric: "Grade Release Rate", value: releasedPct, target: 95,
             status: releasedPct >= 95 ? "met" : releasedPct >= 80 ? "at-risk" : "below",
-            detail: `${released}/${subsSnap.size} grades released to students`,
+            detail: `${released}/${subs.length} grades released to students`,
           },
           {
             id: "graded", category: "Quality Assurance",
             metric: "Graded Submissions", value: gradedPct, target: 95,
             status: gradedPct >= 95 ? "met" : gradedPct >= 80 ? "at-risk" : "below",
-            detail: `${gradesSnap.size}/${subsSnap.size} submissions graded`,
+            detail: `${grades.length}/${subs.length} submissions graded`,
           },
           {
             id: "avg-score", category: "Student Outcomes",
@@ -170,23 +171,8 @@ const AccreditationDashboard = () => {
       setLoading(false);
     };
 
-    if (isDemo) {
-      // Generate demo QAA metrics
-      setQaaMetrics([
-        { id: "criteria-transparency", category: "Assessment Design", metric: "Assessment Criteria Transparency", value: 85, target: 100, status: "at-risk", detail: "17/20 assignments have published rubrics" },
-        { id: "feedback-turnaround", category: "Feedback Quality", metric: "Feedback Turnaround (≤15 days)", value: 72, target: 90, status: "at-risk", detail: "108/150 submissions graded within 15 days (avg: 12 days)" },
-        { id: "moderation", category: "Quality Assurance", metric: "Moderation Evidence", value: 94, target: 100, status: "met", detail: "141/150 grades have lecturer review/moderation" },
-        { id: "pass-rate", category: "Student Outcomes", metric: "Module Pass Rate", value: 76, target: 75, status: "met", detail: "380/500 students passed (≥40%)" },
-        { id: "completion", category: "Student Engagement", metric: "Assessment Completion Rate", value: 88, target: 85, status: "met", detail: "440 submissions across 20 assignments" },
-        { id: "grade-release", category: "Feedback Quality", metric: "Grade Release Rate", value: 91, target: 95, status: "at-risk", detail: "136/150 grades released to students" },
-        { id: "graded", category: "Quality Assurance", metric: "Graded Submissions", value: 97, target: 95, status: "met", detail: "146/150 submissions graded" },
-        { id: "avg-score", category: "Student Outcomes", metric: "Average Assessment Score", value: 62, target: 55, status: "met", detail: "Mean score across all graded submissions" },
-      ]);
-      setLoading(false);
-    } else {
-      fetchData();
-    }
-  }, [isDemo]);
+    fetchData();
+  }, []);
 
   const statusIcon = (s: string) => {
     if (s === "met") return <CheckCircle className="h-4 w-4 text-success" />;
@@ -441,32 +427,32 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [assignmentsSnap, subsSnap, gradesSnap] = await Promise.all([
-          getDocs(collection(db, "assignments")),
-          getDocs(collection(db, "submissions")),
-          getDocs(collection(db, "grades")),
+        const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }] = await Promise.all([
+          supabase.from("assignments").select("*"),
+          supabase.from("submissions").select("*"),
+          supabase.from("grades").select("*"),
         ]);
 
+        const assignments = assignmentsRaw || [];
+        const subs = subsRaw || [];
+        const grades = gradesRaw || [];
+
         const gradeBySubmission: Record<string, number> = {};
-        gradesSnap.docs.forEach(d => {
-          const data = d.data();
-          const score = data.final_score ?? data.ai_score;
-          if (score != null) gradeBySubmission[data.submission_id] = score;
+        grades.forEach(d => {
+          const score = d.final_score ?? d.ai_score;
+          if (score != null) gradeBySubmission[d.submission_id] = score;
         });
 
-        // Group by module_code
         const modules: Record<string, { title: string; scores: number[]; submissions: number; total: number }> = {};
-        assignmentsSnap.docs.forEach(d => {
-          const data = d.data();
-          const key = data.module_code || "Unassigned";
-          if (!modules[key]) modules[key] = { title: data.title, scores: [], submissions: 0, total: 0 };
+        assignments.forEach(d => {
+          const key = d.module_code || "Unassigned";
+          if (!modules[key]) modules[key] = { title: d.title, scores: [], submissions: 0, total: 0 };
         });
 
-        subsSnap.docs.forEach(d => {
-          const data = d.data();
-          const assignment = assignmentsSnap.docs.find(a => a.id === data.assignment_id);
+        subs.forEach(d => {
+          const assignment = assignments.find(a => a.id === d.assignment_id);
           if (assignment) {
-            const key = assignment.data().module_code || "Unassigned";
+            const key = assignment.module_code || "Unassigned";
             if (modules[key]) {
               modules[key].submissions++;
               const score = gradeBySubmission[d.id];
@@ -491,17 +477,8 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
       setLoading(false);
     };
 
-    if (isDemo) {
-      setProgrammes([
-        { code: "CS101", submissions: 45, graded: 42, avg: 64, passRate: 81, firstClass: 19, twoOne: 29, twoTwo: 21, third: 12, fail: 19 },
-        { code: "CS205", submissions: 38, graded: 35, avg: 58, passRate: 74, firstClass: 11, twoOne: 23, twoTwo: 26, third: 14, fail: 26 },
-        { code: "MATH301", submissions: 52, graded: 50, avg: 55, passRate: 70, firstClass: 8, twoOne: 20, twoTwo: 24, third: 18, fail: 30 },
-      ]);
-      setLoading(false);
-    } else {
-      fetchData();
-    }
-  }, [isDemo]);
+    fetchData();
+  }, []);
 
   const exportProgrammeReport = () => {
     const lines = ["Programme-Level Report — GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];

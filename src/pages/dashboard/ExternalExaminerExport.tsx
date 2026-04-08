@@ -6,8 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, FileText, Loader2, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface ExportData {
@@ -55,38 +54,37 @@ const ExternalExaminerExport = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [assignmentsSnap, subsSnap, gradesSnap, usersSnap] = await Promise.all([
-          getDocs(collection(db, "assignments")),
-          getDocs(collection(db, "submissions")),
-          getDocs(collection(db, "grades")),
-          getDocs(collection(db, "users")),
+        const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }, { data: profilesRaw }] = await Promise.all([
+          supabase.from("assignments").select("*"),
+          supabase.from("submissions").select("*"),
+          supabase.from("grades").select("*"),
+          supabase.from("profiles").select("*"),
         ]);
 
-        const assignmentList = assignmentsSnap.docs.map(d => ({
+        const assignmentList = (assignmentsRaw || []).map(d => ({
           id: d.id,
-          title: d.data().title,
-          moduleCode: d.data().module_code || "—",
+          title: d.title,
+          moduleCode: d.module_code || "—",
         }));
         setAssignments(assignmentList);
 
         const userMap: Record<string, string> = {};
-        usersSnap.docs.forEach(d => { userMap[d.id] = d.data().full_name || d.data().email || "Unknown"; });
+        (profilesRaw || []).forEach(d => { userMap[d.id] = d.full_name || d.email || "Unknown"; });
 
         const gradeMap: Record<string, any> = {};
-        gradesSnap.docs.forEach(d => { gradeMap[d.data().submission_id] = d.data(); });
+        (gradesRaw || []).forEach(d => { gradeMap[d.submission_id] = d; });
 
         const assignmentMap: Record<string, any> = {};
-        assignmentsSnap.docs.forEach(d => { assignmentMap[d.id] = d.data(); });
+        (assignmentsRaw || []).forEach(d => { assignmentMap[d.id] = d; });
 
-        const data: ExportData[] = subsSnap.docs.map(d => {
-          const sub = d.data();
+        const data: ExportData[] = (subsRaw || []).map(d => {
           const grade = gradeMap[d.id] || {};
-          const assignment = assignmentMap[sub.assignment_id] || {};
+          const assignment = assignmentMap[d.assignment_id] || {};
           const finalScore = grade.final_score ?? grade.lecturer_score ?? grade.ai_score ?? null;
 
           return {
-            studentName: sub.student_name || userMap[sub.student_id] || "Unknown",
-            studentEmail: sub.student_email || "—",
+            studentName: d.student_name || userMap[d.student_id || ""] || "Unknown",
+            studentEmail: d.student_email || "—",
             assignmentTitle: assignment.title || "—",
             moduleCode: assignment.module_code || "—",
             aiScore: grade.ai_score ?? null,
@@ -95,8 +93,8 @@ const ExternalExaminerExport = () => {
             aiFeedback: grade.ai_feedback || "",
             lecturerFeedback: grade.lecturer_feedback || "",
             finalFeedback: grade.final_feedback || "",
-            status: sub.status || "—",
-            submittedAt: sub.submitted_at ? new Date(sub.submitted_at).toISOString().slice(0, 10) : "—",
+            status: d.status || "—",
+            submittedAt: d.submitted_at ? new Date(d.submitted_at).toISOString().slice(0, 10) : "—",
             reviewedAt: grade.reviewed_at ? new Date(grade.reviewed_at).toISOString().slice(0, 10) : "—",
             reviewedBy: grade.reviewed_by ? (userMap[grade.reviewed_by] || grade.reviewed_by) : "—",
             classification: getClassification(finalScore),
@@ -108,20 +106,8 @@ const ExternalExaminerExport = () => {
       setLoading(false);
     };
 
-    if (isDemo) {
-      setAssignments([
-        { id: "1", title: "Smart Donation Tracker", moduleCode: "CS101" },
-        { id: "2", title: "Data Structures Assignment", moduleCode: "CS205" },
-      ]);
-      setExportData([
-        { studentName: "Abdullahi Faruk", studentEmail: "faruk@uni.ac.uk", assignmentTitle: "Smart Donation Tracker", moduleCode: "CS101", aiScore: 76, lecturerScore: 78, finalScore: 78, aiFeedback: "Strong implementation...", lecturerFeedback: "Good work overall.", finalFeedback: "Good work overall.", status: "released", submittedAt: "2026-04-06", reviewedAt: "2026-04-06", reviewedBy: "Dr Smith", classification: "1st" },
-        { studentName: "Amina Yusuf", studentEmail: "amina@uni.ac.uk", assignmentTitle: "Smart Donation Tracker", moduleCode: "CS101", aiScore: 62, lecturerScore: 65, finalScore: 65, aiFeedback: "Decent effort...", lecturerFeedback: "Needs more depth.", finalFeedback: "Needs more depth.", status: "released", submittedAt: "2026-04-05", reviewedAt: "2026-04-06", reviewedBy: "Dr Smith", classification: "2:1" },
-      ]);
-      setLoading(false);
-    } else {
-      fetchData();
-    }
-  }, [isDemo]);
+    fetchData();
+  }, []);
 
   const filteredData = selectedAssignment === "all"
     ? exportData
