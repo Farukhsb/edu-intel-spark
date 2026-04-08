@@ -29,6 +29,7 @@ const AssignmentDetail = lazy(() => import("./pages/dashboard/AssignmentDetail")
 const StudentProfile = lazy(() => import("./pages/dashboard/StudentProfile"));
 const AccreditationDashboard = lazy(() => import("./pages/dashboard/AccreditationDashboard"));
 const ExternalExaminerExport = lazy(() => import("./pages/dashboard/ExternalExaminerExport"));
+const Settings = lazy(() => import("./pages/dashboard/Settings"));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
@@ -159,6 +160,7 @@ const App = () => (
             <Route path="/dashboard/assignments" element={<DashboardRoute><Assignments /></DashboardRoute>} />
             <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
             <Route path="/dashboard/student/:studentId" element={<DashboardRoute><StudentProfile /></DashboardRoute>} />
+            <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
             <Route path="/install" element={<Install />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
