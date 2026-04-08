@@ -42,8 +42,8 @@ const AccreditationDashboard = () => {
   const { isDemo } = useAuth();
   const [loading, setLoading] = useState(!isDemo);
   const [qaaMetrics, setQaaMetrics] = useState<QAAMetric[]>([]);
-  const [nssMetrics, setNssMetrics] = useState<NSSMetric[]>(DEMO_NSS);
-  const [tefIndicators, setTefIndicators] = useState<TEFIndicator[]>(DEMO_TEF);
+  const [nssMetrics, setNssMetrics] = useState<NSSMetric[]>([]);
+  const [tefIndicators, setTefIndicators] = useState<TEFIndicator[]>([]);
   const [feedbackTurnaround, setFeedbackTurnaround] = useState({ avg: 0, target: 15, compliant: 0, total: 0 });
 
   useEffect(() => {
