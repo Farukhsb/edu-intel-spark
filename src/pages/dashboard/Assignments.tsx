@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, doc, getDocs,
+  collection, query, where, onSnapshot, addDoc, updateDoc, doc, getDocs,
 } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,14 +81,14 @@ const Assignments = () => {
 
     let q;
     if (role === "student") {
-      q = query(collection(db, "assignments"), where("status", "==", "published"), orderBy("created_at", "desc"));
+      q = query(collection(db, "assignments"), where("status", "==", "published"));
     } else {
-      q = query(collection(db, "assignments"), where("lecturer_id", "==", user.uid), orderBy("created_at", "desc"));
+      q = query(collection(db, "assignments"), where("lecturer_id", "==", user.uid));
     }
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       let data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Assignment));
-
+      data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       // Filter for student's cohort/department
       if (role === "student" && profile) {
         data = data.filter((a) => {
