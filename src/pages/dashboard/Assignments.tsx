@@ -81,9 +81,9 @@ const Assignments = () => {
 
     let q;
     if (role === "student") {
-      q = query(collection(db, "assignments"), where("status", "==", "published"), orderBy("created_at", "desc"));
+      q = query(collection(db, "assignments"), where("status", "==", "published"));
     } else {
-      q = query(collection(db, "assignments"), where("lecturer_id", "==", user.uid), orderBy("created_at", "desc"));
+      q = query(collection(db, "assignments"), where("lecturer_id", "==", user.uid));
     }
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
