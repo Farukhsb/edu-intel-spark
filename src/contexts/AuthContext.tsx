@@ -50,7 +50,7 @@ interface AuthContextType {
   resendVerification: () => Promise<void>;
   enterDemo: (demoRole: AppRole) => void;
   exitDemo: () => void;
-  updateRole: (newRole: AppRole) => Promise<void>;
+  
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -322,30 +322,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await sendPasswordResetEmail(auth, email);
   };
 
-  const updateRole = async (newRole: AppRole) => {
-    if (!user) throw new Error("Not authenticated");
-    
-    const uid = user.uid;
-    const currentProfile = profile;
-    
-    // Update Firestore
-    await setDoc(
-      doc(db, PRIMARY_PROFILE_COLLECTION, uid),
-      { role: newRole, updated_at: new Date().toISOString() },
-      { merge: true },
-    );
-    
-    // Update local recovery cache
-    const recoveryData = readRecoveryProfile(uid);
-    if (recoveryData) {
-      persistRecoveryProfile(uid, { ...recoveryData, role: newRole });
-    }
-    
-    // Update local state immediately
-    if (currentProfile) {
-      setProfile({ ...currentProfile, role: newRole });
-    }
-  };
 
   const enterDemo = (demoRole: AppRole) => {
     setIsDemo(true);
@@ -375,7 +351,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         resendVerification,
         enterDemo,
         exitDemo,
-        updateRole,
+        
       }}
     >
       {children}
