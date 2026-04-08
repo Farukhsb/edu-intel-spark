@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, Award, Building2, Loader2, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 
 const DEMO_DEPTS = [
   { dept: "Computer Science", students: 842, avgGrade: 62, passRate: 76, trend: "+2%" },
@@ -39,70 +37,38 @@ const InstitutionalInsights = () => {
     if (isDemo) return;
     const fetchData = async () => {
       try {
-        const usersSnap = await getDocs(collection(db, "users"));
-        const gradesSnap = await getDocs(collection(db, "grades"));
-        const assignmentsSnap = await getDocs(collection(db, "assignments"));
-        const subsSnap = await getDocs(collection(db, "submissions"));
+        const [assignRes, subRes, gradeRes] = await Promise.all([
+          supabase.from("assignments").select("*"),
+          supabase.from("submissions").select("*"),
+          supabase.from("grades").select("*"),
+        ]);
 
-        const scores = gradesSnap.docs
-          .map(d => d.data().final_score ?? d.data().ai_score)
+        const assignments = assignRes.data || [];
+        const submissions = subRes.data || [];
+        const grades = gradeRes.data || [];
+
+        const scores = grades
+          .map(g => g.final_score ?? g.ai_score)
           .filter(s => s != null) as number[];
 
-        // Build per-department stats from users collection
-        const deptStudents: Record<string, string[]> = {};
-        usersSnap.docs.forEach(d => {
-          const data = d.data();
-          if (data.department_id && data.role === "student") {
-            if (!deptStudents[data.department_id]) deptStudents[data.department_id] = [];
-            deptStudents[data.department_id].push(d.id);
-          }
-        });
-
-        // Map submissions to students for per-dept scores
-        const studentSubmissions: Record<string, string[]> = {};
-        subsSnap.docs.forEach(d => {
-          const data = d.data();
-          const key = data.student_id || data.student_email;
-          if (key) {
-            if (!studentSubmissions[key]) studentSubmissions[key] = [];
-            studentSubmissions[key].push(d.id);
-          }
-        });
-
+        // Build grade lookup by submission_id
         const gradeBySubmission: Record<string, number> = {};
-        gradesSnap.docs.forEach(d => {
-          const data = d.data();
-          const score = data.final_score ?? data.ai_score;
-          if (score != null) gradeBySubmission[data.submission_id] = score;
+        grades.forEach(g => {
+          const score = g.final_score ?? g.ai_score;
+          if (score != null) gradeBySubmission[g.submission_id] = score;
         });
 
-        if (Object.keys(deptStudents).length > 0) {
-          const deptStats = Object.entries(deptStudents).map(([dept, studentIds]) => {
-            const deptScores: number[] = [];
-            studentIds.forEach(sid => {
-              const subIds = studentSubmissions[sid] || [];
-              subIds.forEach(subId => {
-                if (gradeBySubmission[subId] != null) deptScores.push(gradeBySubmission[subId]);
-              });
-            });
-            const avg = deptScores.length > 0 ? Math.round(deptScores.reduce((a, b) => a + b, 0) / deptScores.length) : 0;
-            const pass = deptScores.length > 0 ? Math.round((deptScores.filter(s => s >= 40).length / deptScores.length) * 100) : 0;
-            return { dept, students: studentIds.length, avgGrade: avg, passRate: pass, trend: "+0%" };
-          });
-          setDepartmentStats(deptStats);
-        }
-
-        // Build low-performing assessments from real data
+        // Build per-assignment stats for low-performing assessments
         const assignmentScores: Record<string, { title: string; scores: number[]; students: number }> = {};
-        assignmentsSnap.docs.forEach(d => {
-          assignmentScores[d.id] = { title: d.data().title, scores: [], students: 0 };
+        assignments.forEach(a => {
+          assignmentScores[a.id] = { title: a.title, scores: [], students: 0 };
         });
-        subsSnap.docs.forEach(d => {
-          const data = d.data();
-          if (assignmentScores[data.assignment_id]) assignmentScores[data.assignment_id].students++;
-          const g = gradeBySubmission[d.id];
-          if (g != null && assignmentScores[data.assignment_id]) assignmentScores[data.assignment_id].scores.push(g);
+        submissions.forEach(s => {
+          if (assignmentScores[s.assignment_id]) assignmentScores[s.assignment_id].students++;
+          const g = gradeBySubmission[s.id];
+          if (g != null && assignmentScores[s.assignment_id]) assignmentScores[s.assignment_id].scores.push(g);
         });
+
         const lowPerf = Object.values(assignmentScores)
           .filter(a => a.scores.length > 0)
           .map(a => ({
@@ -116,18 +82,41 @@ const InstitutionalInsights = () => {
           .slice(0, 5);
         if (lowPerf.length > 0) setLowPerforming(lowPerf);
 
-        // Accreditation from real scores
+        // Group by module_code for department-like stats
+        const moduleGroups: Record<string, number[]> = {};
+        assignments.forEach(a => {
+          const key = a.module_code || "Unknown";
+          if (!moduleGroups[key]) moduleGroups[key] = [];
+        });
+        submissions.forEach(s => {
+          const assignment = assignments.find(a => a.id === s.assignment_id);
+          const key = assignment?.module_code || "Unknown";
+          if (!moduleGroups[key]) moduleGroups[key] = [];
+          const g = gradeBySubmission[s.id];
+          if (g != null) moduleGroups[key].push(g);
+        });
+
+        const deptStats = Object.entries(moduleGroups).map(([mod, modScores]) => {
+          const avg = modScores.length > 0 ? Math.round(modScores.reduce((a, b) => a + b, 0) / modScores.length) : 0;
+          const pass = modScores.length > 0 ? Math.round((modScores.filter(s => s >= 40).length / modScores.length) * 100) : 0;
+          return { dept: mod, students: modScores.length, avgGrade: avg, passRate: pass, trend: "+0%" };
+        });
+        if (deptStats.length > 0) setDepartmentStats(deptStats);
+
+        // Accreditation metrics from real data
         const passRate = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 0;
-        const completionRate = subsSnap.size > 0 && assignmentsSnap.size > 0
-          ? Math.round((subsSnap.size / (assignmentsSnap.size * usersSnap.docs.filter(d => d.data().role === "student").length || 1)) * 100)
-          : 0;
+        const gradedPct = submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
+        const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
         setAccreditation([
           { metric: "Module Pass Rate (Avg)", value: passRate, target: 75, status: passRate >= 75 ? "met" : passRate >= 65 ? "at-risk" : "below" },
-          { metric: "Assessment Completion Rate", value: Math.min(completionRate, 100), target: 90, status: completionRate >= 90 ? "met" : completionRate >= 75 ? "at-risk" : "below" },
-          { metric: "Graded Submissions", value: Math.min(Math.round((gradesSnap.size / Math.max(subsSnap.size, 1)) * 100), 100), target: 95, status: gradesSnap.size >= subsSnap.size * 0.95 ? "met" : "at-risk" },
-          { metric: "Average Score", value: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0, target: 60, status: (scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0) >= 60 ? "met" : "at-risk" },
+          { metric: "Graded Submissions", value: gradedPct, target: 95, status: gradedPct >= 95 ? "met" : "at-risk" },
+          { metric: "Average Score", value: avgScore, target: 60, status: avgScore >= 60 ? "met" : "at-risk" },
+          { metric: "Assessment Completion Rate", value: submissions.length > 0 ? Math.min(Math.round((submissions.length / Math.max(assignments.length, 1)) * 100), 100) : 0, target: 90, status: "at-risk" },
         ]);
-      } catch (err) { console.error("Failed to fetch institutional data:", err); }
+      } catch (err) {
+        console.error("Failed to fetch institutional data:", err);
+      }
       setLoading(false);
     };
     fetchData();
