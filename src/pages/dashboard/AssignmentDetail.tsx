@@ -997,10 +997,11 @@ const AssignmentDetail = () => {
                           const g = grades[sub.id];
                           if (g) {
                             try {
+                              const reviewerId = g._source === "supabase" && supabaseUserId ? supabaseUserId : user!.uid;
                               await updateGrade(g, {
                                 final_score: g.lecturer_score ?? g.ai_score,
                                 final_feedback: g.lecturer_feedback ?? g.ai_feedback,
-                                reviewed_by: user!.uid,
+                                reviewed_by: reviewerId,
                                 reviewed_at: new Date().toISOString(),
                               });
                             } catch (e) { console.warn("Grade update failed:", e); }
