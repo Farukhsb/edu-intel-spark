@@ -432,7 +432,7 @@ const AssignmentDetail = () => {
     }
   };
 
-
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !id || !user?.uid) return;
     setUploading(true);
