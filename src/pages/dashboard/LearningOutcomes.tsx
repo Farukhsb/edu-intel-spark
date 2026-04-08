@@ -12,6 +12,7 @@ import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer,
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 
