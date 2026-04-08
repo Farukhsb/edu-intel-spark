@@ -248,6 +248,28 @@ const AssignmentDetail = () => {
   useEffect(() => {
     if (!id) return;
     const fetchAssignment = async () => {
+      // Try Supabase first
+      const { data: supaAssignment } = await supabase
+        .from("assignments")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (supaAssignment) {
+        setAssignment({
+          id: supaAssignment.id,
+          title: supaAssignment.title,
+          description: supaAssignment.description,
+          module_code: supaAssignment.module_code,
+          max_score: supaAssignment.max_score,
+          due_date: supaAssignment.due_date,
+          status: supaAssignment.status,
+          lecturer_id: supaAssignment.lecturer_id,
+          rubric: supaAssignment.rubric as any[] | null,
+        });
+        setLoading(false);
+        return;
+      }
+      // Fallback to Firebase
       const snap = await getDoc(doc(db, "assignments", id));
       if (snap.exists()) setAssignment({ id: snap.id, ...snap.data() } as Assignment);
       setLoading(false);
