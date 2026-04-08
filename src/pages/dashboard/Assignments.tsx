@@ -88,7 +88,7 @@ const Assignments = () => {
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       let data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Assignment));
-
+      data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       // Filter for student's cohort/department
       if (role === "student" && profile) {
         data = data.filter((a) => {
