@@ -243,7 +243,14 @@ const AssignmentDetail = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const supabaseSubsRef = useRef<Submission[]>([]);
+  const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
 
+  // Get Supabase user ID for grade writes
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setSupabaseUserId(data.user.id);
+    });
+  }, []);
   // Fetch assignment
   useEffect(() => {
     if (!id) return;
@@ -686,10 +693,11 @@ const AssignmentDetail = () => {
       const grade = grades[sub.id];
       if (grade) {
         try {
+          const reviewerId = grade._source === "supabase" && supabaseUserId ? supabaseUserId : user!.uid;
           await updateGrade(grade, {
             final_score: grade.lecturer_score ?? grade.ai_score,
             final_feedback: grade.lecturer_feedback ?? grade.ai_feedback,
-            reviewed_by: user!.uid,
+            reviewed_by: reviewerId,
             reviewed_at: new Date().toISOString(),
           });
         } catch (e) { console.warn("Grade update failed:", e); }
