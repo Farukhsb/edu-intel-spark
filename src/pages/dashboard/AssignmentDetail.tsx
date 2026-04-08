@@ -246,7 +246,40 @@ const AssignmentDetail = () => {
     return () => unsubscribe();
   }, [id, role, user?.uid]);
 
-  const uploadFile = async (file: File, currentUserId: string) => {
+  // Also load submissions from Supabase (where bulk uploads go)
+  useEffect(() => {
+    if (!id) return;
+    const loadSupabase = async () => {
+      const { data } = await supabase
+        .from("submissions")
+        .select("*")
+        .eq("assignment_id", id)
+        .order("submitted_at", { ascending: false });
+      if (data && data.length > 0) {
+        const supaSubs: Submission[] = data.map((d) => ({
+          id: d.id,
+          assignment_id: d.assignment_id,
+          student_name: d.student_name,
+          student_email: d.student_email,
+          file_name: d.file_name,
+          file_type: d.file_type,
+          file_url: d.file_url,
+          status: d.status as SubmissionStatus,
+          submitted_at: d.submitted_at,
+          student_id: d.student_id,
+        }));
+        setSubmissions((prev) => {
+          const existingUrls = new Set(prev.map((s) => s.file_url));
+          const newSubs = supaSubs.filter((s) => !existingUrls.has(s.file_url));
+          if (newSubs.length === 0) return prev;
+          return [...prev, ...newSubs].sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+        });
+      }
+    };
+    loadSupabase();
+  }, [id]);
+
+
     if (!id) {
       throw new Error("Missing assignment");
     }
