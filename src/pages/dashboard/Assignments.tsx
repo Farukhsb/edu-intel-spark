@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import {
-  collection, query, where, onSnapshot, addDoc, updateDoc, doc, getDocs,
-} from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,8 +37,6 @@ interface Assignment {
   status: "draft" | "published" | "closed";
   created_at: string;
   rubric: RubricCriterion[] | null;
-  cohort_ids?: string[];
-  department_ids?: string[];
 }
 
 const statusVariant = (status: string) => {
@@ -67,11 +62,11 @@ const Assignments = () => {
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
-  useEffect(() => {
+  const fetchAssignments = async () => {
     if (isDemo) {
       setAssignments([
-        { id: "demo-1", title: "Assignment 1 - Data Structures", description: "Implement a binary search tree", module_code: "CS301", max_score: 100, due_date: new Date(Date.now() + 7 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null, cohort_ids: ["200", "300"], department_ids: ["Computer Science"] },
-        { id: "demo-2", title: "Algorithms Coursework", description: "Dynamic programming problems", module_code: "CS205", max_score: 80, due_date: new Date(Date.now() + 14 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null, cohort_ids: ["200"], department_ids: ["Computer Science"] },
+        { id: "demo-1", title: "Assignment 1 - Data Structures", description: "Implement a binary search tree", module_code: "CS301", max_score: 100, due_date: new Date(Date.now() + 7 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null },
+        { id: "demo-2", title: "Algorithms Coursework", description: "Dynamic programming problems", module_code: "CS205", max_score: 80, due_date: new Date(Date.now() + 14 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null },
         { id: "demo-3", title: "Lab Report - Sorting", description: "Compare sorting algorithms", module_code: "CS301", max_score: 50, due_date: null, status: "draft", created_at: new Date().toISOString(), rubric: null },
       ]);
       setLoading(false);
@@ -79,57 +74,59 @@ const Assignments = () => {
     }
     if (!user) return;
 
-    let q;
+    let query = supabase.from("assignments").select("*").order("created_at", { ascending: false });
+
     if (role === "student") {
-      q = query(collection(db, "assignments"), where("status", "==", "published"));
+      query = query.eq("status", "published");
     } else {
-      q = query(collection(db, "assignments"), where("lecturer_id", "==", user.uid));
+      query = query.eq("lecturer_id", user.id);
     }
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      let data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Assignment));
-      data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      // Filter for student's cohort/department
-      if (role === "student" && profile) {
-        data = data.filter((a) => {
-          const matchCohort = !a.cohort_ids || a.cohort_ids.length === 0 || (profile.cohort_id && a.cohort_ids.includes(profile.cohort_id));
-          const matchDept = !a.department_ids || a.department_ids.length === 0 || (profile.department_id && a.department_ids.includes(profile.department_id));
-          return matchCohort && matchDept;
-        });
-        data = data.filter((a) => !a.due_date || new Date(a.due_date) > new Date());
-      }
+    const { data, error } = await query;
+    if (error) {
+      console.error("Assignments query error:", error);
+      toast.error("Failed to load assignments");
+      setLoading(false);
+      return;
+    }
 
-      setAssignments(data);
+    const mapped: Assignment[] = (data || []).map((a) => ({
+      id: a.id,
+      title: a.title,
+      description: a.description,
+      module_code: a.module_code,
+      max_score: a.max_score,
+      due_date: a.due_date,
+      status: a.status,
+      created_at: a.created_at,
+      rubric: a.rubric as RubricCriterion[] | null,
+    }));
 
-      if (data.length > 0 && role === "lecturer") {
+    setAssignments(mapped);
+
+    // Load submission stats for lecturer
+    if (role === "lecturer" && mapped.length > 0) {
+      const { data: subs } = await supabase.from("submissions").select("id, assignment_id, status");
+      if (subs) {
         const statsMap: Record<string, { total: number; graded: number; approved: number; released: number }> = {};
-        for (const a of data) {
-          const subsSnap = await getDocs(query(collection(db, "submissions"), where("assignment_id", "==", a.id)));
-          const stats = { total: 0, graded: 0, approved: 0, released: 0 };
-          subsSnap.docs.forEach((d) => {
-            const s = d.data();
-            stats.total++;
-            if (["ai_graded", "under_review", "approved", "released"].includes(s.status)) stats.graded++;
-            if (["approved", "released"].includes(s.status)) stats.approved++;
-            if (s.status === "released") stats.released++;
-          });
-          statsMap[a.id] = stats;
+        for (const a of mapped) {
+          const aSubs = subs.filter(s => s.assignment_id === a.id);
+          statsMap[a.id] = {
+            total: aSubs.length,
+            graded: aSubs.filter(s => ["ai_graded", "under_review", "approved", "released"].includes(s.status)).length,
+            approved: aSubs.filter(s => ["approved", "released"].includes(s.status)).length,
+            released: aSubs.filter(s => s.status === "released").length,
+          };
         }
         setSubmissionStats(statsMap);
       }
-      setLoading(false);
-    }, (error) => {
-      console.error("Assignments query error:", error);
-      if (error.message?.includes("index")) {
-        toast.error("Database index required. Check Firebase Console for the index creation link in the browser console.");
-      } else {
-        toast.error("Failed to load assignments. Check permissions.");
-      }
-      setLoading(false);
-    });
+    }
+    setLoading(false);
+  };
 
-    return () => unsubscribe();
-  }, [role, user, profile, isDemo]);
+  useEffect(() => {
+    fetchAssignments();
+  }, [role, user, isDemo]);
 
   const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const toggleDepartment = (val: string) => setSelectedDepartments(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
@@ -138,24 +135,22 @@ const Assignments = () => {
     if (!title.trim() || !user) { toast.error("Title is required"); return; }
     setCreating(true);
     try {
-      await addDoc(collection(db, "assignments"), {
+      const { error } = await supabase.from("assignments").insert({
         title: title.trim(),
         description: description.trim() || null,
         module_code: moduleCode.trim() || null,
         max_score: Number(maxScore) || 100,
         due_date: dueDate || null,
-        lecturer_id: user.uid,
-        status: "draft",
+        lecturer_id: user.id,
+        status: "draft" as const,
         rubric: rubric.length > 0 ? rubric : null,
-        cohort_ids: selectedCohorts.length > 0 ? selectedCohorts : null,
-        department_ids: selectedDepartments.length > 0 ? selectedDepartments : null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       });
+      if (error) throw error;
       toast.success("Assignment created");
       setTitle(""); setDescription(""); setModuleCode(""); setMaxScore("100");
       setDueDate(""); setRubric([]); setSelectedCohorts([]); setSelectedDepartments([]);
       setDialogOpen(false);
+      fetchAssignments();
     } catch {
       toast.error("Failed to create assignment");
     }
@@ -165,8 +160,10 @@ const Assignments = () => {
   const handlePublish = async (id: string) => {
     if (isDemo) { toast.info("Publishing disabled in demo mode"); return; }
     try {
-      await updateDoc(doc(db, "assignments", id), { status: "published", updated_at: new Date().toISOString() });
+      const { error } = await supabase.from("assignments").update({ status: "published" as const }).eq("id", id);
+      if (error) throw error;
       toast.success("Assignment published — students can now submit");
+      fetchAssignments();
     } catch {
       toast.error("Failed to publish");
     }
@@ -224,7 +221,6 @@ const Assignments = () => {
                   </div>
                 </div>
 
-                {/* Cohort & Department Selection */}
                 <div className="space-y-2">
                   <Label>Target Cohorts (optional)</Label>
                   <div className="flex flex-wrap gap-2">
@@ -279,9 +275,6 @@ const Assignments = () => {
                       <Badge variant={statusVariant(a.status)} className="capitalize">{a.status}</Badge>
                       {a.rubric && Array.isArray(a.rubric) && a.rubric.length > 0 && (
                         <Badge variant="outline" className="text-xs">{a.rubric.length} criteria</Badge>
-                      )}
-                      {a.cohort_ids && a.cohort_ids.length > 0 && (
-                        <Badge variant="outline" className="text-xs">L{a.cohort_ids.join(",L")}</Badge>
                       )}
                     </div>
                     {a.module_code && <p className="text-xs text-muted-foreground">{a.module_code}</p>}

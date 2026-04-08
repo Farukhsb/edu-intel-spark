@@ -5,8 +5,6 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { BookOpen, CheckCircle2, Circle, Target, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -54,32 +52,36 @@ const ImprovementPlan = () => {
 
   useEffect(() => {
     if (isDemo || !user) return;
-    fetchPlanFromFirestore();
+    fetchPlan();
   }, [user, isDemo]);
 
-  const fetchPlanFromFirestore = async () => {
+  const fetchPlan = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const subsSnap = await getDocs(query(collection(db, "submissions"), where("student_id", "==", user.uid)));
-      if (subsSnap.empty) { setLoading(false); return; }
+      const { data: subs } = await supabase
+        .from("submissions")
+        .select("*")
+        .or(`student_id.eq.${user.id},student_email.eq.${user.email}`);
 
-      const submissions = subsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      const assignmentIds = [...new Set(submissions.map((s: any) => s.assignment_id))];
-      
-      const allAssignments = await getDocs(collection(db, "assignments"));
+      if (!subs || subs.length === 0) { setLoading(false); return; }
+
+      const subIds = subs.map(s => s.id);
+      const assignmentIds = [...new Set(subs.map(s => s.assignment_id))];
+
+      const [{ data: grades }, { data: assignments }] = await Promise.all([
+        supabase.from("grades").select("*").in("submission_id", subIds),
+        supabase.from("assignments").select("*").in("id", assignmentIds),
+      ]);
+
       const assignmentMap: Record<string, any> = {};
-      allAssignments.docs.forEach(d => { if (assignmentIds.includes(d.id)) assignmentMap[d.id] = { ...d.data(), id: d.id }; });
+      (assignments || []).forEach(a => { assignmentMap[a.id] = a; });
 
       const gradeMap: Record<string, any> = {};
-      for (const s of submissions) {
-        const gSnap = await getDocs(query(collection(db, "grades"), where("submission_id", "==", s.id)));
-        gSnap.docs.forEach(gDoc => { gradeMap[s.id] = { id: gDoc.id, ...gDoc.data() }; });
-      }
+      (grades || []).forEach(g => { gradeMap[g.submission_id] = g; });
 
-      // Build plan from actual grades
       const moduleScores: Record<string, { scores: number[]; maxScores: number[] }> = {};
-      submissions.forEach((s: any) => {
+      subs.forEach(s => {
         const a = assignmentMap[s.assignment_id];
         const g = gradeMap[s.id];
         if (!a || !g) return;
@@ -117,7 +119,7 @@ const ImprovementPlan = () => {
     try {
       const { data, error } = await supabase.functions.invoke("explain-grade", {
         body: {
-          messages: [{ role: "user", content: `Based on these modules and grades, give me 4 specific improvement resources with title, type, estimated duration, and relevance percentage:\n${plan.map(p => `${p.module}: ${p.currentGrade}% (target: ${p.targetGrade}%)`).join("\n")}` }],
+          messages: [{ role: "user", content: `Based on these modules and grades, give me 4 specific improvement resources:\n${plan.map(p => `${p.module}: ${p.currentGrade}% (target: ${p.targetGrade}%)`).join("\n")}` }],
           gradeContext: { plan },
         },
       });

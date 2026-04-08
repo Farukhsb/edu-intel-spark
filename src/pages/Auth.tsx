@@ -19,18 +19,12 @@ const COHORTS = [
   { value: "400", label: "Level 400 (Year 4)" },
 ];
 
-const getFirebaseErrorMessage = (code: string): string => {
-  switch (code) {
-    case "auth/email-already-in-use": return "This email is already registered. Try signing in instead.";
-    case "auth/invalid-email": return "Please enter a valid email address.";
-    case "auth/weak-password": return "Password is too weak. Use at least 8 characters.";
-    case "auth/user-not-found": return "No account found with this email.";
-    case "auth/wrong-password": return "Incorrect password. Please try again.";
-    case "auth/invalid-credential": return "Invalid email or password.";
-    case "auth/too-many-requests": return "Too many attempts. Please wait a moment and try again.";
-    case "auth/network-request-failed": return "Network error. Check your connection and try again.";
-    default: return "Something went wrong. Please try again.";
-  }
+const getErrorMessage = (message: string): string => {
+  if (message.includes("already registered") || message.includes("already been registered")) return "This email is already registered. Try signing in instead.";
+  if (message.includes("Invalid login")) return "Invalid email or password.";
+  if (message.includes("Email not confirmed")) return "Please check your email to confirm your account.";
+  if (message.includes("rate limit") || message.includes("too many")) return "Too many attempts. Please wait a moment and try again.";
+  return message || "Something went wrong. Please try again.";
 };
 
 const getPasswordStrength = (password: string): { score: number; label: string; color: string } => {
@@ -79,7 +73,7 @@ const Auth = () => {
       await signIn(loginEmail, loginPassword);
       navigate("/dashboard");
     } catch (err: any) {
-      toast({ title: "Login failed", description: getFirebaseErrorMessage(err.code), variant: "destructive" });
+      toast({ title: "Login failed", description: getErrorMessage(err.message), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -109,7 +103,7 @@ const Auth = () => {
       toast({ title: "Account created!", description: "Welcome to GradeAI." });
       navigate("/dashboard");
     } catch (err: any) {
-      toast({ title: "Signup failed", description: getFirebaseErrorMessage(err.code), variant: "destructive" });
+      toast({ title: "Signup failed", description: getErrorMessage(err.message), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -127,7 +121,7 @@ const Auth = () => {
       toast({ title: "Reset email sent", description: "Check your inbox for a password reset link." });
       setShowForgotPassword(false);
     } catch (err: any) {
-      toast({ title: "Reset failed", description: getFirebaseErrorMessage(err.code), variant: "destructive" });
+      toast({ title: "Reset failed", description: getErrorMessage(err.message), variant: "destructive" });
     } finally {
       setLoading(false);
     }
