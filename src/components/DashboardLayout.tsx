@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Award, BarChart3, Bell, BookOpen, Brain, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut,
-  Menu, MessageSquare, Moon, Search, Shield, Sun, Target, TrendingUp, University,
+  Menu, MessageSquare, Moon, Search, Settings, Shield, Sun, Target, TrendingUp, University,
   Upload, User, X, Users, Download, FileOutput,
 } from "lucide-react";
 import { useEffect } from "react";
@@ -26,6 +26,7 @@ const lecturerLinks = [
   { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
   { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
   { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
+  { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 const studentLinks = [
@@ -33,6 +34,7 @@ const studentLinks = [
   { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
   { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
   { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
+  { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
