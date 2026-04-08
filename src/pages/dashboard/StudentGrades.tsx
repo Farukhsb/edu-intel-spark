@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 
 interface StudentGrade {
   id: string;
@@ -26,109 +25,73 @@ const StudentGrades = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ avg: 0, count: 0, highest: 0, lowest: 0 });
 
-  const loadSubmissions = async (uid: string, email: string | null) => {
-    let submissions: any[] = [];
-
-    // Try student_id first, then email – use getDocs to avoid needing composite index
-    try {
-      const q1 = query(collection(db, "submissions"), where("student_id", "==", uid));
-      const snap1 = await getDocs(q1);
-      submissions = snap1.docs.map((d) => ({ id: d.id, ...d.data() }));
-    } catch { /* index / permission */ }
-
-    if (submissions.length === 0 && email) {
-      try {
-        const q2 = query(collection(db, "submissions"), where("student_email", "==", email));
-        const snap2 = await getDocs(q2);
-        submissions = snap2.docs.map((d) => ({ id: d.id, ...d.data() }));
-      } catch { /* ignore */ }
-    }
-
-    if (!submissions.length) {
-      setGrades([]);
-      setLoading(false);
-      return;
-    }
-
-    // Sort client-side instead of relying on composite index
-    submissions.sort((a, b) => (b.submitted_at || "").localeCompare(a.submitted_at || ""));
-
-    // Get assignments for context
-    const assignmentMap: Record<string, any> = {};
-    const assignmentIds = [...new Set(submissions.map((s: any) => s.assignment_id))];
-    for (const aId of assignmentIds) {
-      try {
-        const aSnap = await getDoc(doc(db, "assignments", aId));
-        if (aSnap.exists()) assignmentMap[aId] = { ...aSnap.data(), id: aSnap.id };
-      } catch { /* permission error */ }
-    }
-
-    // Get grades
-    const gradeMap: Record<string, any> = {};
-    for (const s of submissions) {
-      try {
-        const gSnap = await getDocs(
-          query(collection(db, "grades"), where("submission_id", "==", s.id))
-        );
-        // Use the most recent grade if multiple exist
-        const sortedDocs = [...gSnap.docs].sort((a, b) =>
-          (b.data().created_at || "").localeCompare(a.data().created_at || "")
-        );
-        if (sortedDocs.length > 0) {
-          const latest = sortedDocs[0];
-          gradeMap[s.id] = { id: latest.id, ...latest.data() };
-        }
-      } catch { /* ignore */ }
-    }
-
-    const studentGrades: StudentGrade[] = submissions.map((s: any) => {
-      const a = assignmentMap[s.assignment_id];
-      const g = gradeMap[s.id];
-      const isReleased = s.status === "released";
-      return {
-        id: s.id,
-        assignmentTitle: a?.title || "Unknown",
-        moduleCode: a?.module_code || null,
-        score: isReleased ? (g?.final_score ?? g?.ai_score ?? null) : null,
-        maxScore: a?.max_score || 100,
-        feedback: isReleased ? (g?.final_feedback ?? g?.ai_feedback ?? null) : null,
-        status: s.status,
-        submittedAt: s.submitted_at,
-        breakdown: isReleased ? (g?.ai_breakdown || null) : null,
-        fileUrl: s.file_url || null,
-      };
-    });
-
-    setGrades(studentGrades);
-
-    const releasedScores = studentGrades.filter((g) => g.score != null).map((g) => g.score!);
-    if (releasedScores.length > 0) {
-      setStats({
-        avg: Math.round((releasedScores.reduce((a, b) => a + b, 0) / releasedScores.length) * 10) / 10,
-        count: releasedScores.length,
-        highest: Math.max(...releasedScores),
-        lowest: Math.min(...releasedScores),
-      });
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    loadSubmissions(user.uid, user.email ?? null);
+
+    const fetchGrades = async () => {
+      try {
+        // Fetch all data in parallel
+        const [subRes, gradeRes, assignRes] = await Promise.all([
+          supabase.from("submissions").select("*"),
+          supabase.from("grades").select("*"),
+          supabase.from("assignments").select("*"),
+        ]);
+
+        const allSubs = (subRes.data || [])
+          .filter(s => s.student_id === user.uid || s.student_email === user.email || s.uploaded_by === user.uid)
+          .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+
+        const assignmentMap: Record<string, any> = {};
+        (assignRes.data || []).forEach(a => { assignmentMap[a.id] = a; });
+
+        const gradeMap: Record<string, any> = {};
+        (gradeRes.data || []).forEach(g => { gradeMap[g.submission_id] = g; });
+
+        const studentGrades: StudentGrade[] = allSubs.map(s => {
+          const a = assignmentMap[s.assignment_id];
+          const g = gradeMap[s.id];
+          const isReleased = s.status === "released";
+          return {
+            id: s.id,
+            assignmentTitle: a?.title || "Unknown",
+            moduleCode: a?.module_code || null,
+            score: isReleased ? (g?.final_score ?? g?.ai_score ?? null) : null,
+            maxScore: a?.max_score || 100,
+            feedback: isReleased ? (g?.final_feedback ?? g?.ai_feedback ?? null) : null,
+            status: s.status,
+            submittedAt: s.submitted_at,
+            breakdown: isReleased ? (g?.ai_breakdown || null) : null,
+            fileUrl: s.file_url || null,
+          };
+        });
+
+        setGrades(studentGrades);
+
+        const releasedScores = studentGrades.filter(g => g.score != null).map(g => g.score!);
+        if (releasedScores.length > 0) {
+          setStats({
+            avg: Math.round((releasedScores.reduce((a, b) => a + b, 0) / releasedScores.length) * 10) / 10,
+            count: releasedScores.length,
+            highest: Math.max(...releasedScores),
+            lowest: Math.min(...releasedScores),
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch student grades:", err);
+      }
+      setLoading(false);
+    };
+
+    fetchGrades();
   }, [user]);
 
   if (loading) return (
-    <div className="space-y-4 p-4 animate-pulse">
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {[1,2,3,4].map(i => <div key={i} className="h-20 rounded-lg bg-muted" />)}
-      </div>
-      <div className="h-32 rounded-lg bg-muted" />
-      <div className="h-32 rounded-lg bg-muted" />
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
     </div>
   );
 
-  const releasedGrades = grades.filter((g) => g.score != null);
+  const releasedGrades = grades.filter(g => g.score != null);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -159,7 +122,7 @@ const StudentGrades = () => {
         </CardContent></Card>
       ) : (
         <div className="space-y-3">
-          {grades.map((g) => (
+          {grades.map(g => (
             <Card key={g.id}>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between">
