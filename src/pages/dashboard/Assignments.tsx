@@ -99,7 +99,7 @@ const Assignments = () => {
       due_date: a.due_date,
       status: a.status,
       created_at: a.created_at,
-      rubric: a.rubric as RubricCriterion[] | null,
+      rubric: a.rubric as unknown as RubricCriterion[] | null,
     }));
 
     setAssignments(mapped);
@@ -135,7 +135,7 @@ const Assignments = () => {
     if (!title.trim() || !user) { toast.error("Title is required"); return; }
     setCreating(true);
     try {
-      const { error } = await supabase.from("assignments").insert({
+      const { error } = await supabase.from("assignments").insert([{
         title: title.trim(),
         description: description.trim() || null,
         module_code: moduleCode.trim() || null,
@@ -143,8 +143,8 @@ const Assignments = () => {
         due_date: dueDate || null,
         lecturer_id: user.id,
         status: "draft" as const,
-        rubric: rubric.length > 0 ? rubric : null,
-      });
+        rubric: (rubric.length > 0 ? rubric : null) as any,
+      }]);
       if (error) throw error;
       toast.success("Assignment created");
       setTitle(""); setDescription(""); setModuleCode(""); setMaxScore("100");

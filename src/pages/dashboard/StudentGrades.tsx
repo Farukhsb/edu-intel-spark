@@ -38,7 +38,7 @@ const StudentGrades = () => {
         ]);
 
         const allSubs = (subRes.data || [])
-          .filter(s => s.student_id === user.uid || s.student_email === user.email || s.uploaded_by === user.uid)
+          .filter(s => s.student_id === user.id || s.student_email === user.email || s.uploaded_by === user.id)
           .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
 
         const assignmentMap: Record<string, any> = {};
