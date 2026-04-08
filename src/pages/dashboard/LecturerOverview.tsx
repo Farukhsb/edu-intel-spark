@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, onSnapshot } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, CheckCircle, Clock, Download, FileText, TrendingDown, TrendingUp, Users, AlertTriangle, Target, Sparkles, Loader2 } from "lucide-react";
+import { BarChart3, CheckCircle, Clock, Download, FileText, Users, AlertTriangle, Target, Sparkles, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 
@@ -19,53 +18,48 @@ interface RecentSubmission {
   submitted_at: string; assignment_title: string; score: number | null; max_score: number;
 }
 
-const DEMO_STATS: Stats = {
-  totalSubmissions: 342, gradedCount: 280, pendingCount: 62,
-  avgScore: 64.5, activeStudents: 120, assignmentCount: 8, onTarget: 95, atRisk: 25,
+const EMPTY_STATS: Stats = {
+  totalSubmissions: 0, gradedCount: 0, pendingCount: 0,
+  avgScore: null, activeStudents: 0, assignmentCount: 0, onTarget: 0, atRisk: 0,
 };
 
-const DEMO_RECENT: RecentSubmission[] = [
-  { id: "1", student_name: "Alice Chen", file_name: "assignment1.pdf", status: "released", submitted_at: new Date().toISOString(), assignment_title: "Data Structures A1", score: 78, max_score: 100 },
-  { id: "2", student_name: "David Lee", file_name: "algorithms.pdf", status: "ai_graded", submitted_at: new Date().toISOString(), assignment_title: "Algorithms CW", score: 45, max_score: 100 },
-  { id: "3", student_name: "Emma Walsh", file_name: "report.pdf", status: "submitted", submitted_at: new Date().toISOString(), assignment_title: "Lab Report 1", score: null, max_score: 100 },
-];
-
-const DEMO_DIST = [
-  { label: "90-100%", count: 18, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
-  { label: "70-89%", count: 65, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
-  { label: "50-69%", count: 128, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
-  { label: "< 50%", count: 69, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
-];
-
 const LecturerOverview = () => {
-  const { profile, isDemo } = useAuth();
-  const [stats, setStats] = useState<Stats>(DEMO_STATS);
-  const [recent, setRecent] = useState<RecentSubmission[]>(DEMO_RECENT);
-  const [gradeDistribution, setGradeDistribution] = useState(DEMO_DIST);
-  const [loading, setLoading] = useState(!isDemo);
+  const { profile } = useAuth();
+  const [stats, setStats] = useState<Stats>(EMPTY_STATS);
+  const [recent, setRecent] = useState<RecentSubmission[]>([]);
+  const [gradeDistribution, setGradeDistribution] = useState([
+    { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
+    { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
+    { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
+    { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
+  ]);
+  const [loading, setLoading] = useState(true);
 
   const fetchDashboard = async () => {
     try {
-      const assignmentsSnap = await getDocs(collection(db, "assignments"));
+      const [assignRes, subRes, gradeRes] = await Promise.all([
+        supabase.from("assignments").select("*"),
+        supabase.from("submissions").select("*"),
+        supabase.from("grades").select("*"),
+      ]);
+
+      const assignments = assignRes.data || [];
+      const allSubs = (subRes.data || []).sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+      const allGrades = gradeRes.data || [];
+
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
-      assignmentsSnap.docs.forEach((d) => { const data = d.data(); assignmentMap[d.id] = { title: data.title, max_score: data.max_score }; });
+      assignments.forEach((a) => { assignmentMap[a.id] = { title: a.title, max_score: a.max_score }; });
 
-      const subsSnap = await getDocs(collection(db, "submissions"));
-      const allSubs = subsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
-      allSubs.sort((a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
-
-      const gradesSnap = await getDocs(collection(db, "grades"));
-      const allGrades = gradesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
       const gradeMap: Record<string, any> = {};
-      allGrades.forEach((g: any) => { gradeMap[g.submission_id] = g; });
+      allGrades.forEach((g) => { gradeMap[g.submission_id] = g; });
 
-      const gradedSubs = allSubs.filter((s: any) => ["ai_graded", "under_review", "approved", "released"].includes(s.status));
-      const pendingSubs = allSubs.filter((s: any) => ["submitted", "ai_grading"].includes(s.status));
-      const scores = allGrades.filter((g: any) => g.final_score != null || g.ai_score != null).map((g: any) => g.final_score ?? g.ai_score);
-      const avgScore = scores.length > 0 ? Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10 : null;
+      const gradedSubs = allSubs.filter((s) => ["ai_graded", "under_review", "approved", "released"].includes(s.status));
+      const pendingSubs = allSubs.filter((s) => ["submitted", "ai_grading"].includes(s.status));
+      const scores = allGrades.filter((g) => g.final_score != null || g.ai_score != null).map((g) => g.final_score ?? g.ai_score) as number[];
+      const avgScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
 
       const studentScores: Record<string, number[]> = {};
-      allSubs.forEach((s: any) => {
+      allSubs.forEach((s) => {
         const key = s.student_id || s.student_name || s.student_email;
         if (!key) return;
         const g = gradeMap[s.id]; const score = g?.final_score ?? g?.ai_score;
@@ -74,9 +68,9 @@ const LecturerOverview = () => {
       let onTarget = 0, atRisk = 0;
       Object.values(studentScores).forEach((ss) => { const avg = ss.reduce((a, b) => a + b, 0) / ss.length; if (avg >= 50) onTarget++; else atRisk++; });
 
-      const uniqueStudents = new Set(allSubs.map((s: any) => s.student_id || s.student_name || s.student_email).filter(Boolean));
+      const uniqueStudents = new Set(allSubs.map((s) => s.student_id || s.student_name || s.student_email).filter(Boolean));
 
-      setStats({ totalSubmissions: allSubs.length, gradedCount: gradedSubs.length, pendingCount: pendingSubs.length, avgScore, activeStudents: uniqueStudents.size, assignmentCount: assignmentsSnap.size, onTarget, atRisk });
+      setStats({ totalSubmissions: allSubs.length, gradedCount: gradedSubs.length, pendingCount: pendingSubs.length, avgScore, activeStudents: uniqueStudents.size, assignmentCount: assignments.length, onTarget, atRisk });
 
       const dist = [
         { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
@@ -84,10 +78,10 @@ const LecturerOverview = () => {
         { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
         { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
       ];
-      scores.forEach((s: number) => { if (s >= 90) dist[0].count++; else if (s >= 70) dist[1].count++; else if (s >= 50) dist[2].count++; else dist[3].count++; });
+      scores.forEach((s) => { if (s >= 90) dist[0].count++; else if (s >= 70) dist[1].count++; else if (s >= 50) dist[2].count++; else dist[3].count++; });
       setGradeDistribution(dist);
 
-      const recentSubs: RecentSubmission[] = allSubs.slice(0, 6).map((s: any) => {
+      const recentSubs: RecentSubmission[] = allSubs.slice(0, 6).map((s) => {
         const a = assignmentMap[s.assignment_id]; const g = gradeMap[s.id];
         return { id: s.id, student_name: s.student_name || s.student_email || "Student", file_name: s.file_name, status: s.status, submitted_at: s.submitted_at, assignment_title: a?.title || "Unknown", score: g?.final_score ?? g?.ai_score ?? null, max_score: a?.max_score || 100 };
       });
@@ -97,12 +91,8 @@ const LecturerOverview = () => {
   };
 
   useEffect(() => {
-    if (isDemo) { setLoading(false); return; }
     fetchDashboard();
-    const unsubSubs = onSnapshot(collection(db, "submissions"), () => fetchDashboard());
-    const unsubGrades = onSnapshot(collection(db, "grades"), () => fetchDashboard());
-    return () => { unsubSubs(); unsubGrades(); };
-  }, [isDemo]);
+  }, []);
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
@@ -110,15 +100,6 @@ const LecturerOverview = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo && (
-        <Card className="border-warning bg-warning/5">
-          <CardContent className="flex items-center gap-2 p-3">
-            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo dashboard data</span>
-          </CardContent>
-        </Card>
-      )}
-
       <Card className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-primary/20">
         <CardContent className="flex items-center gap-4 p-6">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Sparkles className="h-6 w-6" /></div>
