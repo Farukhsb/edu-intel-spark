@@ -2,10 +2,8 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertTriangle, Bot, Eye, FileSearch, Shield, ShieldAlert, Loader2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { AlertTriangle, Bot, FileSearch, Shield, ShieldAlert, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OverviewStat {
   label: string;
@@ -23,59 +21,41 @@ interface FlaggedSubmission {
   flags: string[];
 }
 
-const DEMO_OVERVIEW: OverviewStat[] = [
-  { label: "Submissions Scanned", value: "1,247", icon: FileSearch },
-  { label: "Flagged for Review", value: "23", icon: AlertTriangle },
-  { label: "AI-Content Detected", value: "14", icon: Bot },
-  { label: "Cleared", value: "1,210", icon: Shield },
-];
-
-const DEMO_FLAGGED: FlaggedSubmission[] = [
-  { student: "Anonymous #47", assignment: "CS301", aiProbability: 89, styleMismatch: 76, structuralScore: 82, riskLevel: "high", flags: ["AI-generated probability high", "Writing style inconsistent"] },
-  { student: "Anonymous #112", assignment: "CS205", aiProbability: 72, styleMismatch: 65, structuralScore: 58, riskLevel: "high", flags: ["Vocabulary complexity jump", "Structural patterns match AI"] },
-  { student: "Anonymous #203", assignment: "CS301", aiProbability: 54, styleMismatch: 42, structuralScore: 61, riskLevel: "medium", flags: ["Moderate AI indicators"] },
-  { student: "Anonymous #88", assignment: "CS102", aiProbability: 38, styleMismatch: 55, structuralScore: 35, riskLevel: "low", flags: ["Style shift noted", "Likely legitimate"] },
-];
-
 const AcademicIntegrity = () => {
-  const { isDemo } = useAuth();
-  const [overview, setOverview] = useState<OverviewStat[]>(DEMO_OVERVIEW);
-  const [flagged, setFlagged] = useState<FlaggedSubmission[]>(DEMO_FLAGGED);
-  const [loading, setLoading] = useState(!isDemo);
+  const [overview, setOverview] = useState<OverviewStat[]>([]);
+  const [flagged, setFlagged] = useState<FlaggedSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isDemo) return;
     const fetchData = async () => {
       try {
-        const subsSnap = await getDocs(collection(db, "submissions"));
-        const gradesSnap = await getDocs(collection(db, "grades"));
-        const assignmentsSnap = await getDocs(collection(db, "assignments"));
+        const [{ data: subsData }, { data: gradesData }, { data: assignmentsData }] = await Promise.all([
+          supabase.from("submissions").select("*"),
+          supabase.from("grades").select("*"),
+          supabase.from("assignments").select("*"),
+        ]);
 
-        const totalScanned = subsSnap.size;
+        const totalScanned = subsData?.length ?? 0;
         const assignmentMap: Record<string, string> = {};
-        assignmentsSnap.docs.forEach(d => { assignmentMap[d.id] = d.data().title; });
+        assignmentsData?.forEach(a => { assignmentMap[a.id] = a.title; });
 
         const subAssignment: Record<string, string> = {};
         const subStudent: Record<string, string> = {};
-        subsSnap.docs.forEach(d => {
-          const data = d.data();
-          subAssignment[d.id] = data.assignment_id;
-          subStudent[d.id] = data.student_name || data.student_email || `Student ${d.id.slice(0, 6)}`;
+        subsData?.forEach(s => {
+          subAssignment[s.id] = s.assignment_id;
+          subStudent[s.id] = s.student_name || s.student_email || `Student ${s.id.slice(0, 6)}`;
         });
 
-        // Analyse grades for integrity signals
         let flaggedCount = 0;
         const flaggedItems: FlaggedSubmission[] = [];
 
-        gradesSnap.docs.forEach(d => {
-          const data = d.data();
-          const breakdown = data.ai_breakdown;
-          const score = data.final_score ?? data.ai_score;
-          const assignmentId = subAssignment[data.submission_id];
-          const studentName = subStudent[data.submission_id] || "Anonymous";
+        gradesData?.forEach(d => {
+          const breakdown = d.ai_breakdown as any;
+          const score = d.final_score ?? d.ai_score;
+          const assignmentId = subAssignment[d.submission_id];
+          const studentName = subStudent[d.submission_id] || "Anonymous";
           const assignmentTitle = assignmentMap[assignmentId] || "Unknown";
 
-          // Flag if score is suspiciously high with no rubric variation or if AI feedback mentions concerns
           let aiProb = 0;
           let styleMismatch = 0;
           let structural = 0;
@@ -88,9 +68,10 @@ const AcademicIntegrity = () => {
 
           if (breakdown && Array.isArray(breakdown)) {
             const scores = breakdown.map((b: any) => b.score ?? 0);
-            const maxScores = breakdown.map((b: any) => b.max_score ?? 10);
+            const maxScores = breakdown.map((b: any) => b.max_score ?? b.maxScore ?? 10);
             const ratios = scores.map((s: number, i: number) => maxScores[i] > 0 ? s / maxScores[i] : 0);
-            const variance = ratios.length > 1 ? ratios.reduce((sum, r) => sum + Math.pow(r - ratios.reduce((a, b) => a + b, 0) / ratios.length, 2), 0) / ratios.length : 0;
+            const avg = ratios.length > 0 ? ratios.reduce((a: number, b: number) => a + b, 0) / ratios.length : 0;
+            const variance = ratios.length > 1 ? ratios.reduce((sum: number, r: number) => sum + Math.pow(r - avg, 2), 0) / ratios.length : 0;
 
             if (variance < 0.01 && ratios.length > 2) {
               aiProb += 40;
@@ -98,15 +79,15 @@ const AcademicIntegrity = () => {
               flags.push("Uniform scores across criteria — possible AI generation");
             }
 
-            const perfectCount = ratios.filter(r => r >= 0.95).length;
+            const perfectCount = ratios.filter((r: number) => r >= 0.95).length;
             if (perfectCount >= ratios.length * 0.8 && ratios.length > 2) {
               structural += 40;
               flags.push("Near-perfect across all rubric criteria");
             }
           }
 
-          if (data.ai_feedback && typeof data.ai_feedback === "string") {
-            const feedback = data.ai_feedback.toLowerCase();
+          if (d.ai_feedback && typeof d.ai_feedback === "string") {
+            const feedback = d.ai_feedback.toLowerCase();
             if (feedback.includes("ai-generated") || feedback.includes("machine-generated")) {
               aiProb += 30;
               flags.push("AI grader flagged potential AI content");
@@ -119,9 +100,10 @@ const AcademicIntegrity = () => {
 
           if (aiProb > 30 || styleMismatch > 30 || structural > 30) {
             flaggedCount++;
-            const riskLevel = (aiProb + styleMismatch + structural) > 80 ? "high" : (aiProb + styleMismatch + structural) > 40 ? "medium" : "low";
+            const total = aiProb + styleMismatch + structural;
+            const riskLevel = total > 80 ? "high" : total > 40 ? "medium" : "low";
             flaggedItems.push({
-              student: `Anonymous #${studentName.slice(-4)}`,
+              student: studentName,
               assignment: assignmentTitle,
               aiProbability: Math.min(aiProb, 100),
               styleMismatch: Math.min(styleMismatch, 100),
@@ -141,14 +123,14 @@ const AcademicIntegrity = () => {
           { label: "Cleared", value: (totalScanned - flaggedCount).toString(), icon: Shield },
         ]);
 
-        if (flaggedItems.length > 0) setFlagged(flaggedItems.slice(0, 10));
+        setFlagged(flaggedItems.slice(0, 10));
       } catch (err) {
         console.error("Failed to fetch integrity data:", err);
       }
       setLoading(false);
     };
     fetchData();
-  }, [isDemo]);
+  }, []);
 
   const riskColor = (level: string) => level === "high" ? "destructive" : level === "medium" ? "secondary" : "outline";
   const scoreColor = (score: number) => score >= 70 ? "text-destructive" : score >= 50 ? "text-warning" : "text-success";
@@ -157,15 +139,6 @@ const AcademicIntegrity = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo && (
-        <Card className="border-warning bg-warning/5">
-          <CardContent className="flex items-center gap-2 p-3">
-            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo integrity data</span>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {overview.map((stat) => (
           <Card key={stat.label}>
@@ -192,7 +165,7 @@ const AcademicIntegrity = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {flagged.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No flagged submissions</p>
+            <p className="text-sm text-muted-foreground text-center py-6">No flagged submissions — all submissions look clean</p>
           ) : flagged.map((sub, i) => (
             <div key={i} className="rounded-lg border p-4 space-y-3">
               <div className="flex items-center justify-between">
