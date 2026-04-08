@@ -279,8 +279,7 @@ const AssignmentDetail = () => {
     loadSupabase();
   }, [id]);
 
-
-    if (!id) {
+  const uploadFile = async (file: File, currentUserId: string) => {
       throw new Error("Missing assignment");
     }
 
