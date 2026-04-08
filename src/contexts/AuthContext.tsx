@@ -50,6 +50,7 @@ interface AuthContextType {
   resendVerification: () => Promise<void>;
   enterDemo: (demoRole: AppRole) => void;
   exitDemo: () => void;
+  updateRole: (newRole: AppRole) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -77,7 +78,6 @@ const persistRecoveryProfile = (uid: string, data: StoredProfileData) => {
 
 const readRecoveryProfile = (uid: string): StoredProfileData | null => {
   if (typeof window === "undefined") return null;
-
   try {
     const raw = window.localStorage.getItem(recoveryStorageKey(uid));
     return raw ? (JSON.parse(raw) as StoredProfileData) : null;
@@ -141,7 +141,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     while (Date.now() < deadline) {
       try {
         const snap = await getDoc(doc(db, PRIMARY_PROFILE_COLLECTION, uid));
-
         if (snap.exists()) {
           const profileData = snap.data() as StoredProfileData;
           console.log(`[Auth] Profile found in '${PRIMARY_PROFILE_COLLECTION}' with role: ${profileData.role}`);
@@ -151,7 +150,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         lastError = e;
         console.warn(`[Auth] Error reading '${PRIMARY_PROFILE_COLLECTION}' for ${uid}:`, e);
       }
-
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
@@ -224,10 +222,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return;
           }
 
-          // No profile found in Firestore — check recovery cache first
           const recoveredProfile = readRecoveryProfile(firebaseUser.uid);
 
-          // Build profile from recovery data OR Firebase Auth as last resort
           const fallbackProfileData: StoredProfileData = {
             full_name: recoveredProfile?.full_name ?? firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "User",
             email: recoveredProfile?.email ?? firebaseUser.email ?? null,
@@ -278,13 +274,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signupProfileRef.current = { email, fullName, role, cohortId, departmentId };
 
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-
     await updateProfile(cred.user, { displayName: fullName });
 
-    try {
-      await sendEmailVerification(cred.user);
-    } catch {
-    }
+    try { await sendEmailVerification(cred.user); } catch {}
 
     const profileData: StoredProfileData = {
       full_name: fullName,
@@ -330,6 +322,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await sendPasswordResetEmail(auth, email);
   };
 
+  const updateRole = async (newRole: AppRole) => {
+    if (!user) throw new Error("Not authenticated");
+    
+    const uid = user.uid;
+    const currentProfile = profile;
+    
+    // Update Firestore
+    await setDoc(
+      doc(db, PRIMARY_PROFILE_COLLECTION, uid),
+      { role: newRole, updated_at: new Date().toISOString() },
+      { merge: true },
+    );
+    
+    // Update local recovery cache
+    const recoveryData = readRecoveryProfile(uid);
+    if (recoveryData) {
+      persistRecoveryProfile(uid, { ...recoveryData, role: newRole });
+    }
+    
+    // Update local state immediately
+    if (currentProfile) {
+      setProfile({ ...currentProfile, role: newRole });
+    }
+  };
+
   const enterDemo = (demoRole: AppRole) => {
     setIsDemo(true);
     setProfile(demoRole === "lecturer" ? DEMO_LECTURER_PROFILE : DEMO_STUDENT_PROFILE);
@@ -358,6 +375,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         resendVerification,
         enterDemo,
         exitDemo,
+        updateRole,
       }}
     >
       {children}
