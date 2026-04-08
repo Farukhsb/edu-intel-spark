@@ -182,15 +182,7 @@ export type Database = {
           submitted_at?: string
           uploaded_by?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "submissions_assignment_id_fkey"
-            columns: ["assignment_id"]
-            isOneToOne: false
-            referencedRelation: "assignments"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_roles: {
         Row: {

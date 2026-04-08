@@ -246,6 +246,39 @@ const AssignmentDetail = () => {
     return () => unsubscribe();
   }, [id, role, user?.uid]);
 
+  // Also load submissions from Supabase (where bulk uploads go)
+  useEffect(() => {
+    if (!id) return;
+    const loadSupabase = async () => {
+      const { data } = await supabase
+        .from("submissions")
+        .select("*")
+        .eq("assignment_id", id)
+        .order("submitted_at", { ascending: false });
+      if (data && data.length > 0) {
+        const supaSubs: Submission[] = data.map((d) => ({
+          id: d.id,
+          assignment_id: d.assignment_id,
+          student_name: d.student_name,
+          student_email: d.student_email,
+          file_name: d.file_name,
+          file_type: d.file_type,
+          file_url: d.file_url,
+          status: d.status as SubmissionStatus,
+          submitted_at: d.submitted_at,
+          student_id: d.student_id,
+        }));
+        setSubmissions((prev) => {
+          const existingUrls = new Set(prev.map((s) => s.file_url));
+          const newSubs = supaSubs.filter((s) => !existingUrls.has(s.file_url));
+          if (newSubs.length === 0) return prev;
+          return [...prev, ...newSubs].sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+        });
+      }
+    };
+    loadSupabase();
+  }, [id]);
+
   const uploadFile = async (file: File, currentUserId: string) => {
     if (!id) {
       throw new Error("Missing assignment");
@@ -371,32 +404,90 @@ const AssignmentDetail = () => {
     }
   };
 
+  const refreshSupabaseSubmissions = async () => {
+    if (!id) return;
+    const { data, error } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("assignment_id", id)
+      .order("submitted_at", { ascending: false });
+    if (!error && data) {
+      const supaSubs: Submission[] = data.map((d) => ({
+        id: d.id,
+        assignment_id: d.assignment_id,
+        student_name: d.student_name,
+        student_email: d.student_email,
+        file_name: d.file_name,
+        file_type: d.file_type,
+        file_url: d.file_url,
+        status: d.status as SubmissionStatus,
+        submitted_at: d.submitted_at,
+        student_id: d.student_id,
+      }));
+      // Merge with existing Firestore submissions (avoid duplicates by file_url)
+      setSubmissions((prev) => {
+        const existingUrls = new Set(prev.map((s) => s.file_url));
+        const newSubs = supaSubs.filter((s) => !existingUrls.has(s.file_url));
+        return [...prev, ...newSubs].sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+      });
+    }
+  };
+
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !id || !user?.uid) return;
     setUploading(true);
     let success = 0;
+
+    // Get the Supabase auth user ID for uploaded_by
+    const { data: { user: supaUser } } = await supabase.auth.getUser();
+    const supaUserId = supaUser?.id;
+
     for (const file of Array.from(files)) {
       try {
+        const uploaderUid = supaUserId || user.uid;
         const { fileUrl, fileName, fileType } = await uploadFile(file, user.uid);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-        await addDoc(collection(db, "submissions"), {
-          assignment_id: id,
-          student_name: studentName,
-          file_url: fileUrl,
-          file_name: fileName,
-          file_type: fileType,
-          uploaded_by: user!.uid,
-          status: "submitted",
-          submitted_at: new Date().toISOString(),
-          student_id: null,
-          student_email: null,
-        });
+
+        if (supaUserId) {
+          // Write to Supabase submissions table
+          const { error: insertError } = await supabase.from("submissions").insert({
+            assignment_id: id,
+            student_name: studentName,
+            file_url: fileUrl,
+            file_name: fileName,
+            file_type: fileType,
+            uploaded_by: supaUserId,
+            status: "submitted" as const,
+            student_id: null,
+            student_email: null,
+          });
+          if (insertError) throw insertError;
+        } else {
+          // Fallback to Firestore
+          await addDoc(collection(db, "submissions"), {
+            assignment_id: id,
+            student_name: studentName,
+            file_url: fileUrl,
+            file_name: fileName,
+            file_type: fileType,
+            uploaded_by: uploaderUid,
+            status: "submitted",
+            submitted_at: new Date().toISOString(),
+            student_id: null,
+            student_email: null,
+          });
+        }
         success++;
-      } catch { toast.error(`Failed to upload ${file.name}`); }
+      } catch (err: any) {
+        console.error(`[BulkUpload] Failed for ${file.name}:`, err);
+        toast.error(`Failed to upload ${file.name}`);
+      }
     }
     toast.success(`${success} file(s) uploaded`);
     setUploading(false);
+    // Refresh submissions from Supabase
+    if (supaUserId) await refreshSupabaseSubmissions();
     e.target.value = "";
   };
 
