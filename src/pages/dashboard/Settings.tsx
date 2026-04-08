@@ -79,7 +79,7 @@ const Settings = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
-            <Select value={newRole} onValueChange={setNewRole}>
+            <Select value={newRole} onValueChange={(v) => setNewRole(v as "lecturer" | "student")}>
               <SelectTrigger className="w-48">
                 <SelectValue />
               </SelectTrigger>
