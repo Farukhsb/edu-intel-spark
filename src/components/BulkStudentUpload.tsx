@@ -4,9 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, CheckCircle, AlertTriangle, Loader2, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { auth, db } from "@/lib/firebase";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ParsedStudent {
   name: string;
@@ -83,18 +81,19 @@ export const BulkStudentUpload = () => {
     for (const student of valid) {
       const tempPassword = `GradeAI_${Math.random().toString(36).slice(2, 10)}`;
       try {
-        const cred = await createUserWithEmailAndPassword(auth, student.email, tempPassword);
-        await updateProfile(cred.user, { displayName: student.name });
-        await setDoc(doc(db, "users", cred.user.uid), {
-          full_name: student.name,
+        // Sign up student via Supabase Auth admin invite pattern
+        // Since we can't use admin API from client, we sign them up with a temp password
+        const { data, error } = await supabase.auth.signUp({
           email: student.email,
-          role: "student",
-          avatar_url: null,
-          cohort_id: student.cohort_id || null,
-          department_id: student.department_id || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { merge: true });
+          password: tempPassword,
+          options: {
+            data: {
+              full_name: student.name,
+              role: "student",
+            },
+          },
+        });
+        if (error) throw error;
         uploadResults.push({ name: student.name, email: student.email, password: tempPassword, success: true });
       } catch (err: any) {
         uploadResults.push({ name: student.name, email: student.email, password: tempPassword, success: false, error: err.message });
@@ -191,15 +190,12 @@ export const BulkStudentUpload = () => {
               <Badge variant="default">{results.filter(r => r.success).length} created</Badge>
               {results.some(r => !r.success) && <Badge variant="destructive">{results.filter(r => !r.success).length} failed</Badge>}
             </div>
-
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
               <strong>Important:</strong> Download the credentials CSV below and share it with your students. Passwords are only available now and cannot be retrieved later.
             </div>
-
             <Button onClick={downloadCredentials} className="w-full">
               <Download className="mr-2 h-4 w-4" /> Download Credentials CSV
             </Button>
-
             <div className="max-h-48 overflow-y-auto space-y-1">
               {results.map((r, i) => (
                 <div key={i} className="flex items-center justify-between text-sm px-2 py-1 rounded bg-muted/50">
