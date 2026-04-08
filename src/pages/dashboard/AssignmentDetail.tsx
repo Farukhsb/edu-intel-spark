@@ -280,6 +280,7 @@ const AssignmentDetail = () => {
   }, [id]);
 
   const uploadFile = async (file: File, currentUserId: string) => {
+    if (!id) {
       throw new Error("Missing assignment");
     }
 
