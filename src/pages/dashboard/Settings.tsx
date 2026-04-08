@@ -1,40 +1,11 @@
-import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
-import { User, Shield, Loader2 } from "lucide-react";
+import { User, Shield } from "lucide-react";
 
 const Settings = () => {
-  const { profile, updateRole, signOut } = useAuth();
-  const [newRole, setNewRole] = useState(profile?.role || "student");
-  const [saving, setSaving] = useState(false);
-
-  const handleRoleUpdate = async () => {
-    if (newRole === profile?.role) {
-      toast.info("Role is already set to " + newRole);
-      return;
-    }
-    setSaving(true);
-    try {
-      await updateRole(newRole as "lecturer" | "student");
-      toast.success(`Role updated to ${newRole}. The page will reload.`);
-      setTimeout(() => window.location.reload(), 1000);
-    } catch (err: any) {
-      console.error("Role update failed:", err);
-      toast.error("Failed to update role: " + (err?.message || "Unknown error"));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const { profile, signOut } = useAuth();
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -61,7 +32,7 @@ const Settings = () => {
             <span className="text-sm font-medium">{profile?.email || "—"}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Current Role</span>
+            <span className="text-sm text-muted-foreground">Role</span>
             <Badge variant={profile?.role === "lecturer" ? "default" : "secondary"}>
               {profile?.role || "—"}
             </Badge>
@@ -73,35 +44,19 @@ const Settings = () => {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Shield className="h-4 w-4" />
-            Role Management
+            Role Information
           </CardTitle>
-          <CardDescription>Change your account role. This determines which dashboard and features you see.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Select value={newRole} onValueChange={(v) => setNewRole(v as "lecturer" | "student")}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="lecturer">Lecturer</SelectItem>
-                <SelectItem value="student">Student</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={handleRoleUpdate} disabled={saving || newRole === profile?.role}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {saving ? "Updating..." : "Update Role"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Changing your role will reload the page to apply the new dashboard layout.
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Your role was assigned when your account was created. If you need to change your role, please contact your institution's administrator.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
+          <CardTitle className="text-base text-destructive">Account</CardTitle>
         </CardHeader>
         <CardContent>
           <Button variant="destructive" onClick={signOut}>
