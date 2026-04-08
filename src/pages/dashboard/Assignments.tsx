@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, doc, getDocs,
+  collection, query, where, onSnapshot, addDoc, updateDoc, doc, getDocs,
 } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
