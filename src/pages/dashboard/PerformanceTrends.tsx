@@ -140,11 +140,7 @@ const PerformanceTrends = () => {
     const fetchLiveData = async () => {
       try {
         // Fetch assignments (lecturer's own)
-        let assignmentsQuery = supabase.from("assignments").select("*");
-        if (!isDemo && profile?.id) {
-          assignmentsQuery = assignmentsQuery.eq("lecturer_id", profile.id);
-        }
-        const { data: assignments } = await assignmentsQuery;
+        const { data: assignments } = await supabase.from("assignments").select("*");
         if (!assignments || assignments.length === 0) {
           setLoading(false);
           return;
