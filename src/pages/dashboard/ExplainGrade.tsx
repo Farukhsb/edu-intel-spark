@@ -3,52 +3,58 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Brain, ChevronDown, ChevronUp, Send, Sparkles, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
-const gradeBreakdown = {
-  assessment: "CS301 - Assignment 1: Data Structures",
-  totalGrade: 68,
-  band: "2:1",
-  components: [
-    { name: "Code Implementation", weight: 40, score: 75, maxScore: 100 },
-    { name: "Algorithm Analysis", weight: 25, score: 58, maxScore: 100 },
-    { name: "Documentation", weight: 15, score: 80, maxScore: 100 },
-    { name: "Testing & Edge Cases", weight: 10, score: 50, maxScore: 100 },
-    { name: "Code Style & Structure", weight: 10, score: 70, maxScore: 100 },
-  ],
-  improvementAreas: [
-    {
-      area: "Algorithm Analysis",
-      currentBand: "2:2",
-      nextBand: "2:1",
-      pointsNeeded: 12,
-      tips: [
-        "Include Big-O analysis for all operations",
-        "Compare your solution with at least two alternative approaches",
-        "Add space complexity analysis alongside time complexity",
-      ],
-    },
-    {
-      area: "Testing & Edge Cases",
-      currentBand: "2:2",
-      nextBand: "2:1",
-      pointsNeeded: 10,
-      tips: [
-        "Test with empty inputs and boundary values",
-        "Include at least 5 edge case scenarios",
-        "Document your test reasoning",
-      ],
-    },
-  ],
-};
+interface GradeBreakdown {
+  assessment: string;
+  totalGrade: number;
+  band: string;
+  components: { name: string; weight: number; score: number; maxScore: number }[];
+  improvementAreas: { area: string; currentBand: string; nextBand: string; pointsNeeded: number; tips: string[] }[];
+}
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
 
+const getBand = (pct: number) => {
+  if (pct >= 70) return "1st";
+  if (pct >= 60) return "2:1";
+  if (pct >= 50) return "2:2";
+  if (pct >= 40) return "3rd";
+  return "Fail";
+};
+
+const getNextBand = (band: string) => {
+  if (band === "3rd") return "2:2";
+  if (band === "2:2") return "2:1";
+  if (band === "2:1") return "1st";
+  return "1st";
+};
+
+const getNextBandThreshold = (band: string) => {
+  if (band === "3rd") return 50;
+  if (band === "2:2") return 60;
+  if (band === "2:1") return 70;
+  return 80;
+};
+
+interface SubmissionOption {
+  gradeId: string;
+  submissionId: string;
+  label: string;
+  totalGrade: number;
+  breakdown: GradeBreakdown;
+}
+
 const ExplainGrade = () => {
+  const [submissions, setSubmissions] = useState<SubmissionOption[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
   const [expandedArea, setExpandedArea] = useState<number | null>(0);
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
@@ -61,13 +67,98 @@ const ExplainGrade = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    fetchGrades();
+  }, []);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
+  const fetchGrades = async () => {
+    try {
+      const { data: grades } = await supabase.from("grades").select("*");
+      const { data: subs } = await supabase.from("submissions").select("*");
+      const { data: assignments } = await supabase.from("assignments").select("*");
+
+      if (!grades?.length || !subs?.length) {
+        setLoading(false);
+        return;
+      }
+
+      const subMap = Object.fromEntries((subs || []).map(s => [s.id, s]));
+      const assignMap = Object.fromEntries((assignments || []).map(a => [a.id, a]));
+
+      const options: SubmissionOption[] = grades
+        .filter(g => (g.ai_score != null || g.final_score != null) && g.ai_breakdown)
+        .map(g => {
+          const sub = subMap[g.submission_id];
+          const assignment = sub ? assignMap[sub.assignment_id] : null;
+          const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
+          const breakdown = g.ai_breakdown as any[];
+          const totalMax = breakdown?.reduce((s: number, b: any) => s + (b.max_score ?? b.maxScore ?? 10), 0) || 100;
+
+          const components = (breakdown || []).map((b: any) => ({
+            name: b.criterion || b.name || "Unknown",
+            weight: Math.round(((b.max_score ?? b.maxScore ?? 10) / totalMax) * 100),
+            score: Math.round(((b.score ?? 0) / (b.max_score ?? b.maxScore ?? 10)) * 100),
+            maxScore: 100,
+          }));
+
+          const improvementAreas = components
+            .filter(c => c.score < 70)
+            .sort((a, b) => a.score - b.score)
+            .slice(0, 3)
+            .map(c => {
+              const band = getBand(c.score);
+              const next = getNextBand(band);
+              const threshold = getNextBandThreshold(band);
+              return {
+                area: c.name,
+                currentBand: band,
+                nextBand: next,
+                pointsNeeded: Math.max(threshold - c.score, 0),
+                tips: [
+                  `Focus on strengthening your ${c.name.toLowerCase()} skills`,
+                  `Review the rubric criteria for ${c.name}`,
+                  `Seek specific feedback on this area from your lecturer`,
+                ],
+              };
+            });
+
+          const label = assignment
+            ? `${assignment.module_code || ""} ${assignment.title}`.trim()
+            : sub?.student_name || sub?.file_name || g.submission_id;
+
+          return {
+            gradeId: g.id,
+            submissionId: g.submission_id,
+            label,
+            totalGrade,
+            breakdown: {
+              assessment: label,
+              totalGrade,
+              band: getBand(totalGrade),
+              components,
+              improvementAreas,
+            },
+          };
+        });
+
+      setSubmissions(options);
+      if (options.length > 0) setSelectedId(options[0].gradeId);
+    } catch (err) {
+      console.error("Failed to fetch grades:", err);
+    }
+    setLoading(false);
+  };
+
+  const selected = submissions.find(s => s.gradeId === selectedId);
+  const gradeBreakdown = selected?.breakdown;
+
   const handleSend = async () => {
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading || !gradeBreakdown) return;
     const userMsg: ChatMsg = { role: "user", content: inputValue };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
@@ -139,7 +230,6 @@ const ExplainGrade = () => {
         }
       }
 
-      // Final flush
       if (textBuffer.trim()) {
         for (let raw of textBuffer.split("\n")) {
           if (!raw) continue;
@@ -163,9 +253,37 @@ const ExplainGrade = () => {
     }
   };
 
+  if (loading) {
+    return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (!gradeBreakdown) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">No graded submissions found. Grades will appear here once assignments are graded by AI.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Grade Breakdown */}
+      {submissions.length > 1 && (
+        <Select value={selectedId} onValueChange={(v) => { setSelectedId(v); setMessages([messages[0]]); }}>
+          <SelectTrigger className="w-full"><SelectValue placeholder="Select a submission" /></SelectTrigger>
+          <SelectContent>
+            {submissions.map(s => (
+              <SelectItem key={s.gradeId} value={s.gradeId}>
+                {s.label} — {s.totalGrade}%
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -200,47 +318,47 @@ const ExplainGrade = () => {
         </CardContent>
       </Card>
 
-      {/* Improvement Areas */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">How to Improve</CardTitle>
-          <CardDescription>Specific guidance to raise your grade band</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {gradeBreakdown.improvementAreas.map((area, i) => (
-            <div key={i} className="rounded-lg border p-3">
-              <button
-                className="flex w-full items-center justify-between text-left"
-                onClick={() => setExpandedArea(expandedArea === i ? null : i)}
-              >
-                <div>
-                  <span className="text-sm font-medium">{area.area}</span>
-                  <p className="text-xs text-muted-foreground">
-                    +{area.pointsNeeded} points to reach {area.nextBand}
-                  </p>
-                </div>
-                {expandedArea === i ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+      {gradeBreakdown.improvementAreas.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">How to Improve</CardTitle>
+            <CardDescription>Specific guidance to raise your grade band</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {gradeBreakdown.improvementAreas.map((area, i) => (
+              <div key={i} className="rounded-lg border p-3">
+                <button
+                  className="flex w-full items-center justify-between text-left"
+                  onClick={() => setExpandedArea(expandedArea === i ? null : i)}
+                >
+                  <div>
+                    <span className="text-sm font-medium">{area.area}</span>
+                    <p className="text-xs text-muted-foreground">
+                      +{area.pointsNeeded} points to reach {area.nextBand}
+                    </p>
+                  </div>
+                  {expandedArea === i ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+                {expandedArea === i && (
+                  <div className="mt-3 space-y-2 border-t pt-3">
+                    {area.tips.map((tip, j) => (
+                      <div key={j} className="flex items-start gap-2 text-sm">
+                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        {tip}
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </button>
-              {expandedArea === i && (
-                <div className="mt-3 space-y-2 border-t pt-3">
-                  {area.tips.map((tip, j) => (
-                    <div key={j} className="flex items-start gap-2 text-sm">
-                      <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                      {tip}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
-      {/* AI Chat */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
