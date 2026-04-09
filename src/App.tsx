@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import TestSupabase from '@/pages/TestSupabase';
+import { lazy, Suspense } from 'react';
+const TestSupabase = lazy(() => import('@/pages/TestSupabase'));
 
 function App() {
   return (
