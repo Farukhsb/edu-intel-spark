@@ -34,29 +34,33 @@ const ResetPassword = () => {
   useEffect(() => {
     let mounted = true;
 
-    const checkRecoverySession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-
-      setRecoveryReady(Boolean(data.session) || isRecoveryLink);
-      setLinkChecked(true);
-    };
-
-    checkRecoverySession();
-
+    // Listen for auth events FIRST — the token exchange from the URL hash
+    // fires PASSWORD_RECOVERY before getSession resolves.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
-        setRecoveryReady(Boolean(session) || isRecoveryLink);
+        setRecoveryReady(true);
         setLinkChecked(true);
       }
     });
 
+    // Give Supabase a moment to exchange the hash tokens, then check session
+    const timeout = setTimeout(async () => {
+      if (!mounted) return;
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      // If we already got a PASSWORD_RECOVERY event, don't overwrite
+      setRecoveryReady((prev) => prev || Boolean(data.session) || isRecoveryLink);
+      setLinkChecked(true);
+    }, 1500);
+
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, [isRecoveryLink]);
