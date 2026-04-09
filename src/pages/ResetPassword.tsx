@@ -34,36 +34,41 @@ const ResetPassword = () => {
   useEffect(() => {
     let mounted = true;
 
-    // Listen for auth events FIRST — the token exchange from the URL hash
-    // fires PASSWORD_RECOVERY before getSession resolves.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
-        setRecoveryReady(true);
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+        setRecoveryReady(Boolean(session));
         setLinkChecked(true);
       }
     });
 
-    // Give Supabase a moment to exchange the hash tokens, then check session
-    const timeout = setTimeout(async () => {
+    // Fallback: check session after a short delay (tokens may already be exchanged by AuthContext)
+    const poll = setInterval(async () => {
       if (!mounted) return;
       const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
+      if (data.session) {
+        setRecoveryReady(true);
+        setLinkChecked(true);
+        clearInterval(poll);
+      }
+    }, 500);
 
-      // If we already got a PASSWORD_RECOVERY event, don't overwrite
-      setRecoveryReady((prev) => prev || Boolean(data.session) || isRecoveryLink);
+    // Final fallback after 5s — show invalid link
+    const timeout = setTimeout(() => {
+      if (!mounted) return;
       setLinkChecked(true);
-    }, 1500);
+      clearInterval(poll);
+    }, 5000);
 
     return () => {
       mounted = false;
+      clearInterval(poll);
       clearTimeout(timeout);
       subscription.unsubscribe();
     };
-  }, [isRecoveryLink]);
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -133,7 +138,10 @@ const ResetPassword = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {!linkChecked ? (
-              <p className="text-sm text-muted-foreground">Checking your reset link...</p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Verifying your reset link...
+              </div>
             ) : !recoveryReady ? (
               <Alert>
                 <AlertTitle>Invalid or expired link</AlertTitle>
