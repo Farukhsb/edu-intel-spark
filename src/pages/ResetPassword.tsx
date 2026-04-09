@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,20 @@ const getHashParams = () => {
   return new URLSearchParams(hash);
 };
 
+const getRecoveryParams = () => {
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = getHashParams();
+
+  return {
+    code: searchParams.get("code"),
+    tokenHash: searchParams.get("token_hash") ?? hashParams.get("token_hash"),
+    type: searchParams.get("type") ?? hashParams.get("type"),
+    accessToken: hashParams.get("access_token"),
+    refreshToken: hashParams.get("refresh_token"),
+    errorCode: searchParams.get("error_code") ?? hashParams.get("error_code"),
+  };
+};
+
 const ResetPassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -24,48 +38,91 @@ const ResetPassword = () => {
   const [linkChecked, setLinkChecked] = useState(false);
   const [isRecovered, setIsRecovered] = useState(false);
 
-  const isRecoveryLink = useMemo(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const hashParams = getHashParams();
-
-    return searchParams.get("type") === "recovery" || hashParams.get("type") === "recovery";
-  }, []);
-
   useEffect(() => {
     let mounted = true;
+
+    const markReady = (ready: boolean) => {
+      if (!mounted) return;
+      setRecoveryReady(ready);
+      setLinkChecked(true);
+    };
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-        setRecoveryReady(Boolean(session));
-        setLinkChecked(true);
+      if (event === "PASSWORD_RECOVERY") {
+        markReady(true);
+        return;
+      }
+
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") && session) {
+        markReady(true);
       }
     });
 
-    // Fallback: check session after a short delay (tokens may already be exchanged by AuthContext)
-    const poll = setInterval(async () => {
-      if (!mounted) return;
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setRecoveryReady(true);
-        setLinkChecked(true);
-        clearInterval(poll);
-      }
-    }, 500);
+    const initializeRecovery = async () => {
+      const {
+        code,
+        tokenHash,
+        type,
+        accessToken,
+        refreshToken,
+        errorCode,
+      } = getRecoveryParams();
 
-    // Final fallback after 5s — show invalid link
-    const timeout = setTimeout(() => {
+      const { data: initialSession } = await supabase.auth.getSession();
+      if (initialSession.session) {
+        markReady(true);
+        return;
+      }
+
+      const isRecoveryFlow = type === "recovery";
+      if (!isRecoveryFlow || errorCode) {
+        markReady(false);
+        return;
+      }
+
+      let error = null;
+
+      if (code) {
+        ({ error } = await supabase.auth.exchangeCodeForSession(code));
+      } else if (tokenHash) {
+        ({ error } = await supabase.auth.verifyOtp({
+          type: "recovery",
+          token_hash: tokenHash,
+        }));
+      } else if (accessToken && refreshToken) {
+        ({ error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }));
+      } else {
+        markReady(false);
+        return;
+      }
+
+      if (error) {
+        markReady(false);
+        return;
+      }
+
+      const { data: restoredSession } = await supabase.auth.getSession();
       if (!mounted) return;
-      setLinkChecked(true);
-      clearInterval(poll);
-    }, 5000);
+
+      if (restoredSession.session) {
+        window.history.replaceState({}, document.title, "/reset-password");
+        markReady(true);
+        return;
+      }
+
+      markReady(false);
+    };
+
+    void initializeRecovery();
 
     return () => {
       mounted = false;
-      clearInterval(poll);
-      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -146,7 +203,7 @@ const ResetPassword = () => {
               <Alert>
                 <AlertTitle>Invalid or expired link</AlertTitle>
                 <AlertDescription>
-                  Request a new password reset email and open the latest link from your inbox.
+                  Request a new password reset email and open the latest link directly in your browser, since some email apps can consume one-time reset links early.
                 </AlertDescription>
               </Alert>
             ) : isRecovered ? (
