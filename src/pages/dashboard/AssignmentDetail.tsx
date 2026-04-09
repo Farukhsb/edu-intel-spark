@@ -191,12 +191,10 @@ const AssignmentDetail = () => {
       .from("submissions")
       .upload(filePath, file, { cacheControl: "3600", upsert: false, contentType: file.type || "application/octet-stream" });
     if (error) throw error;
-    setUploadProgress(80);
-
-    const { data: urlData } = supabase.storage.from("submissions").getPublicUrl(data.path);
     setUploadProgress(100);
 
-    return { fileUrl: urlData.publicUrl, fileName: safeFileName, fileType: file.type || "application/octet-stream", storagePath: data.path };
+    // Store the storage path, not a public URL (bucket is private)
+    return { fileUrl: data.path, fileName: safeFileName, fileType: file.type || "application/octet-stream", storagePath: data.path };
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {

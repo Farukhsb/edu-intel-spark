@@ -1,29 +1,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-async function fetchFileContent(sub: any): Promise<string> {
-  if (!sub.file_url) return "";
-  try {
-    const resp = await fetch(sub.file_url);
-    if (!resp.ok) return "";
-    const contentType = resp.headers.get("content-type") || "";
-    const isPdf = contentType.includes("pdf") || sub.file_name?.toLowerCase().endsWith(".pdf");
-    if (isPdf) {
-      const buf = await resp.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      return btoa(binary);
-    }
-    return await resp.text();
-  } catch {
-    return "";
-  }
-}
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function fetchFileContent(supabaseAdmin: any, sub: any): Promise<string> {
+  if (!sub.file_url) return "";
+  try {
+    const { data, error } = await supabaseAdmin.storage
+      .from("submissions")
+      .download(sub.file_url);
+    if (error || !data) return "";
+    
+    const isPdf = data.type?.includes("pdf") || sub.file_name?.toLowerCase().endsWith(".pdf");
+    if (isPdf) {
+      const buf = await data.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+    return await data.text();
+  } catch {
+    return "";
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -32,6 +35,11 @@ serve(async (req) => {
     const { submissions } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
+
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
     if (!submissions?.length) {
       return new Response(JSON.stringify({ flags: [], summary: "No submissions provided" }), {
@@ -44,7 +52,7 @@ serve(async (req) => {
     // Fetch file content for AI analysis
     const fileContents: string[] = [];
     for (const sub of submissions) {
-      const content = await fetchFileContent(sub);
+      const content = await fetchFileContent(supabaseAdmin, sub);
       fileContents.push(content);
       console.log(`Fetched file for ${sub.student_name}: ${content.length} chars`);
     }
@@ -99,7 +107,6 @@ Analyze the content for suspicious similarity and AI-generation patterns.`;
       messages.push({ role: "user", content: userPrompt });
     }
 
-    // Use tool calling for structured output
     const tools = [
       {
         type: "function",
@@ -175,7 +182,7 @@ Analyze the content for suspicious similarity and AI-generation patterns.`;
         result = JSON.parse(jsonMatch[1].trim());
       }
     } catch (parseErr) {
-      console.error("Failed to parse integrity response:", JSON.stringify(aiData).substring(0, 500));
+      console.error("Failed to parse integrity response");
     }
 
     return new Response(JSON.stringify(result), {
