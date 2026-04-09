@@ -45,11 +45,13 @@ const StudentGrades = () => {
           ? await supabase.from("grades").select("*").in("submission_id", subIds)
           : { data: [] };
 
+        const gradeData = gradeRes.data || [];
+
         const assignmentMap: Record<string, any> = {};
         (assignRes.data || []).forEach(a => { assignmentMap[a.id] = a; });
 
         const gradeMap: Record<string, any> = {};
-        (gradeRes.data || []).forEach(g => { gradeMap[g.submission_id] = g; });
+        gradeData.forEach(g => { gradeMap[g.submission_id] = g; });
 
         const studentGrades: StudentGrade[] = allSubs.map(s => {
           const a = assignmentMap[s.assignment_id];
