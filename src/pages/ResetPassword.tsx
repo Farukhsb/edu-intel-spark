@@ -155,9 +155,17 @@ const ResetPassword = () => {
     setLoading(false);
 
     if (error) {
+      const isWeakOrCompromised =
+        error.message.toLowerCase().includes("weak") ||
+        error.message.toLowerCase().includes("compromised") ||
+        error.message.toLowerCase().includes("hibp") ||
+        error.status === 422;
+
       toast({
-        title: "Password reset failed",
-        description: error.message,
+        title: isWeakOrCompromised ? "Password not secure enough" : "Password reset failed",
+        description: isWeakOrCompromised
+          ? "This password has appeared in a data breach and cannot be used. Please choose a stronger, unique password."
+          : error.message,
         variant: "destructive",
       });
       return;
