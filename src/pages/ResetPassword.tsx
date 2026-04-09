@@ -138,7 +138,10 @@ const ResetPassword = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {!linkChecked ? (
-              <p className="text-sm text-muted-foreground">Checking your reset link...</p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Verifying your reset link...
+              </div>
             ) : !recoveryReady ? (
               <Alert>
                 <AlertTitle>Invalid or expired link</AlertTitle>
