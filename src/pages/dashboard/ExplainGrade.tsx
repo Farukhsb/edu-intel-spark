@@ -52,10 +52,21 @@ interface SubmissionOption {
   breakdown: GradeBreakdown;
 }
 
+const DEMO_SUBMISSIONS: SubmissionOption[] = [
+  {
+    gradeId: "demo-g1", submissionId: "demo-s1", label: "CS301 Assignment 1 - Data Structures", totalGrade: 72,
+    breakdown: { assessment: "CS301 Assignment 1 - Data Structures", totalGrade: 72, band: "2:1",
+      components: [{ name: "Correctness", weight: 25, score: 72, maxScore: 100 }, { name: "Code Quality", weight: 25, score: 80, maxScore: 100 }, { name: "Documentation", weight: 25, score: 64, maxScore: 100 }, { name: "Testing", weight: 25, score: 72, maxScore: 100 }],
+      improvementAreas: [{ area: "Documentation", currentBand: "2:1", nextBand: "1st", pointsNeeded: 6, tips: ["Add clearer inline comments", "Include complexity analysis", "Improve README structure"] }],
+    },
+  },
+];
+
 const ExplainGrade = () => {
-  const [submissions, setSubmissions] = useState<SubmissionOption[]>([]);
-  const [selectedId, setSelectedId] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const { isDemo } = useAuth();
+  const [submissions, setSubmissions] = useState<SubmissionOption[]>(isDemo ? DEMO_SUBMISSIONS : []);
+  const [selectedId, setSelectedId] = useState<string>(isDemo ? "demo-g1" : "");
+  const [loading, setLoading] = useState(!isDemo);
   const [expandedArea, setExpandedArea] = useState<number | null>(0);
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
@@ -68,8 +79,9 @@ const ExplainGrade = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (isDemo) return;
     fetchGrades();
-  }, []);
+  }, [isDemo]);
 
   useEffect(() => {
     if (scrollRef.current) {
