@@ -47,6 +47,11 @@ const AccreditationDashboard = () => {
   const [feedbackTurnaround, setFeedbackTurnaround] = useState({ avg: 0, target: 15, compliant: 0, total: 0 });
 
   useEffect(() => {
+    if (isDemo) {
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       try {
         const [{ data: gradesRaw }, { data: subsRaw }, { data: assignmentsRaw }, { data: profilesRaw }] = await Promise.all([
@@ -190,7 +195,7 @@ const AccreditationDashboard = () => {
     };
 
     fetchData();
-  }, []);
+  }, [isDemo]);
 
   const statusIcon = (s: string) => {
     if (s === "met") return <CheckCircle className="h-4 w-4 text-success" />;
@@ -234,6 +239,14 @@ const AccreditationDashboard = () => {
           <CardContent className="flex items-center gap-2 p-3">
             <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
             <span className="text-sm text-muted-foreground">Viewing demo accreditation data</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isDemo && qaaMetrics.length === 0 && (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading.
           </CardContent>
         </Card>
       )}
