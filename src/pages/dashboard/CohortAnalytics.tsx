@@ -175,7 +175,9 @@ const CohortAnalytics = () => {
         </TabsContent>
 
         <TabsContent value="recommendations" className="mt-4 space-y-4">
-          {recommendations.map((rec, i) => (
+          {recommendations.length === 0 ? (
+            <Card><CardContent className="py-12 text-center"><p className="text-muted-foreground">AI recommendations will appear here once enough grading data is available.</p></CardContent></Card>
+          ) : recommendations.map((rec, i) => (
             <Card key={i} className="border-l-4 border-l-primary">
               <CardContent className="p-5">
                 <div className="flex items-start gap-3">
