@@ -137,18 +137,18 @@ const App = () => (
               }
             />
             <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
-            <Route path="/dashboard/cohort-analytics" element={<DashboardRoute><CohortAnalytics /></DashboardRoute>} />
-            <Route path="/dashboard/performance" element={<DashboardRoute><PerformanceTrends /></DashboardRoute>} />
-            <Route path="/dashboard/integrity" element={<DashboardRoute><AcademicIntegrity /></DashboardRoute>} />
-            <Route path="/dashboard/institutional" element={<DashboardRoute><InstitutionalInsights /></DashboardRoute>} />
-            <Route path="/dashboard/accreditation" element={<DashboardRoute><AccreditationDashboard /></DashboardRoute>} />
-            <Route path="/dashboard/external-examiner" element={<DashboardRoute><ExternalExaminerExport /></DashboardRoute>} />
-            <Route path="/dashboard/learning-outcomes" element={<DashboardRoute><LearningOutcomes /></DashboardRoute>} />
-            <Route path="/dashboard/explain-grade" element={<DashboardRoute><ExplainGrade /></DashboardRoute>} />
-            <Route path="/dashboard/improvements" element={<DashboardRoute><ImprovementPlan /></DashboardRoute>} />
+            <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
+            <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
+            <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
+            <Route path="/dashboard/institutional" element={<DashboardRoute allowedRole="lecturer"><InstitutionalInsights /></DashboardRoute>} />
+            <Route path="/dashboard/accreditation" element={<DashboardRoute allowedRole="lecturer"><AccreditationDashboard /></DashboardRoute>} />
+            <Route path="/dashboard/external-examiner" element={<DashboardRoute allowedRole="lecturer"><ExternalExaminerExport /></DashboardRoute>} />
+            <Route path="/dashboard/learning-outcomes" element={<DashboardRoute allowedRole="lecturer"><LearningOutcomes /></DashboardRoute>} />
+            <Route path="/dashboard/explain-grade" element={<DashboardRoute allowedRole="student"><ExplainGrade /></DashboardRoute>} />
+            <Route path="/dashboard/improvements" element={<DashboardRoute allowedRole="student"><ImprovementPlan /></DashboardRoute>} />
             <Route path="/dashboard/assignments" element={<DashboardRoute><Assignments /></DashboardRoute>} />
             <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
-            <Route path="/dashboard/student/:studentId" element={<DashboardRoute><StudentProfile /></DashboardRoute>} />
+            <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />
             <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
             <Route path="/install" element={<Install />} />
             <Route path="*" element={<NotFound />} />
