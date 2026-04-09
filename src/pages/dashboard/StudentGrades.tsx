@@ -19,13 +19,24 @@ interface StudentGrade {
   fileUrl: string | null;
 }
 
+const DEMO_GRADES: StudentGrade[] = [
+  { id: "demo-1", assignmentTitle: "Assignment 1 - Data Structures", moduleCode: "CS301", score: 72, maxScore: 100, feedback: "Good understanding of binary trees. Consider edge cases in your traversal implementation.", status: "released", submittedAt: new Date(Date.now() - 7 * 86400000).toISOString(), breakdown: [{ criterion: "Correctness", score: 18, max_score: 25 }, { criterion: "Code Quality", score: 20, max_score: 25 }, { criterion: "Documentation", score: 16, max_score: 25 }, { criterion: "Testing", score: 18, max_score: 25 }], fileUrl: null },
+  { id: "demo-2", assignmentTitle: "Assignment 2 - Algorithms", moduleCode: "CS205", score: 65, maxScore: 100, feedback: "Solid attempt at dynamic programming. Review time complexity analysis.", status: "released", submittedAt: new Date(Date.now() - 14 * 86400000).toISOString(), breakdown: [{ criterion: "Algorithm Design", score: 16, max_score: 25 }, { criterion: "Efficiency", score: 14, max_score: 25 }, { criterion: "Analysis", score: 17, max_score: 25 }, { criterion: "Presentation", score: 18, max_score: 25 }], fileUrl: null },
+  { id: "demo-3", assignmentTitle: "Midterm Essay", moduleCode: "CS301", score: null, maxScore: 100, feedback: null, status: "submitted", submittedAt: new Date(Date.now() - 2 * 86400000).toISOString(), breakdown: null, fileUrl: null },
+];
+
 const StudentGrades = () => {
-  const { user } = useAuth();
-  const [grades, setGrades] = useState<StudentGrade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, isDemo } = useAuth();
+  const [grades, setGrades] = useState<StudentGrade[]>(isDemo ? DEMO_GRADES : []);
+  const [loading, setLoading] = useState(!isDemo);
   const [stats, setStats] = useState({ avg: 0, count: 0, highest: 0, lowest: 0 });
 
   useEffect(() => {
+    if (isDemo) {
+      const scores = DEMO_GRADES.filter(g => g.score != null).map(g => g.score!);
+      setStats({ avg: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10, count: scores.length, highest: Math.max(...scores), lowest: Math.min(...scores) });
+      return;
+    }
     if (!user) { setLoading(false); return; }
 
     const fetchGrades = async () => {
