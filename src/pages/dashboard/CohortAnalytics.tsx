@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowRight, Lightbulb, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ModuleData {
   id: string;
@@ -23,6 +24,7 @@ const DEMO_RECS = [
 ];
 
 const CohortAnalytics = () => {
+  const { isDemo } = useAuth();
   const [moduleFilter, setModuleFilter] = useState("all");
   const [gradeDistChart, setGradeDistChart] = useState([
     { band: "1st (70+)", count: 0, fill: "hsl(152, 56%, 45%)" },
@@ -31,11 +33,12 @@ const CohortAnalytics = () => {
     { band: "3rd (40-49)", count: 0, fill: "hsl(280, 55%, 55%)" },
     { band: "Fail (<40)", count: 0, fill: "hsl(0, 72%, 55%)" },
   ]);
-  const [recommendations] = useState(DEMO_RECS);
+  const [recommendations, setRecommendations] = useState(isDemo ? DEMO_RECS : []);
   const [modules, setModules] = useState<ModuleData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
+    if (isDemo) return;
     const fetchData = async () => {
       try {
         const [assignRes, subRes, gradeRes] = await Promise.all([
