@@ -1,13 +1,120 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 224 40% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 40% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 40% 10%;
+
+    --primary: 230 65% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 50% 45%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 38 92% 60%;
+    --accent-foreground: 224 40% 10%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 16% 88%;
+    --input: 220 16% 88%;
+    --ring: 230 65% 52%;
+
+    --radius: 0.75rem;
+
+    --success: 152 56% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 224 40% 10%;
+    --info: 205 80% 55%;
+    --info-foreground: 0 0% 100%;
+
+    --sidebar-background: 230 35% 14%;
+    --sidebar-foreground: 220 14% 85%;
+    --sidebar-primary: 230 65% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 30% 20%;
+    --sidebar-accent-foreground: 220 14% 92%;
+    --sidebar-border: 230 25% 22%;
+    --sidebar-ring: 230 65% 52%;
+
+    --chart-1: 230 65% 52%;
+    --chart-2: 172 50% 45%;
+    --chart-3: 38 92% 60%;
+    --chart-4: 280 55% 55%;
+    --chart-5: 0 72% 55%;
+  }
+
+  .dark {
+    --background: 224 40% 6%;
+    --foreground: 220 14% 92%;
+
+    --card: 224 35% 10%;
+    --card-foreground: 220 14% 92%;
+
+    --popover: 224 35% 10%;
+    --popover-foreground: 220 14% 92%;
+
+    --primary: 230 65% 62%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 50% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 224 25% 16%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 38 85% 55%;
+    --accent-foreground: 224 40% 10%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 224 25% 18%;
+    --input: 224 25% 18%;
+    --ring: 230 65% 62%;
+
+    --sidebar-background: 224 40% 6%;
+    --sidebar-foreground: 220 14% 85%;
+    --sidebar-primary: 230 65% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 224 30% 14%;
+    --sidebar-accent-foreground: 220 14% 92%;
+    --sidebar-border: 224 25% 14%;
+    --sidebar-ring: 230 65% 62%;
+
+    --chart-1: 230 65% 62%;
+    --chart-2: 172 50% 50%;
+    --chart-3: 38 85% 55%;
+    --chart-4: 280 55% 60%;
+    --chart-5: 0 62% 55%;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
 }
