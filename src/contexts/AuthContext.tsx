@@ -124,7 +124,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, [isDemo]);
+  }, [isDemo, location.pathname, navigate]);
 
   const signUp = async (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters");
