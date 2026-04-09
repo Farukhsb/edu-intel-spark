@@ -30,22 +30,28 @@ const StudentGrades = () => {
 
     const fetchGrades = async () => {
       try {
-        // Fetch all data in parallel
-        const [subRes, gradeRes, assignRes] = await Promise.all([
-          supabase.from("submissions").select("*"),
-          supabase.from("grades").select("*"),
+        // Fetch only this student's submissions (RLS enforces this server-side too)
+        const [subRes, assignRes] = await Promise.all([
+          supabase.from("submissions").select("*").eq("student_id", user.id),
           supabase.from("assignments").select("*"),
         ]);
 
         const allSubs = (subRes.data || [])
-          .filter(s => s.student_id === user.id || s.student_email === user.email || s.uploaded_by === user.id)
           .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+
+        // Fetch grades only for the student's submissions
+        const subIds = allSubs.map(s => s.id);
+        const gradeRes = subIds.length > 0
+          ? await supabase.from("grades").select("*").in("submission_id", subIds)
+          : { data: [] };
+
+        const gradeData = gradeRes.data || [];
 
         const assignmentMap: Record<string, any> = {};
         (assignRes.data || []).forEach(a => { assignmentMap[a.id] = a; });
 
         const gradeMap: Record<string, any> = {};
-        (gradeRes.data || []).forEach(g => { gradeMap[g.submission_id] = g; });
+        gradeData.forEach(g => { gradeMap[g.submission_id] = g; });
 
         const studentGrades: StudentGrade[] = allSubs.map(s => {
           const a = assignmentMap[s.assignment_id];

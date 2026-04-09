@@ -78,9 +78,16 @@ const ExplainGrade = () => {
 
   const fetchGrades = async () => {
     try {
-      const { data: grades } = await supabase.from("grades").select("*");
+      // RLS ensures students only see their own submissions/grades
       const { data: subs } = await supabase.from("submissions").select("*");
-      const { data: assignments } = await supabase.from("assignments").select("*");
+      const subIds = (subs || []).map(s => s.id);
+      const { data: grades } = subIds.length > 0
+        ? await supabase.from("grades").select("*").in("submission_id", subIds)
+        : { data: [] as any[] };
+      const assignmentIds = [...new Set((subs || []).map(s => s.assignment_id))];
+      const { data: assignments } = assignmentIds.length > 0
+        ? await supabase.from("assignments").select("*").in("id", assignmentIds)
+        : { data: [] as any[] };
 
       if (!grades?.length || !subs?.length) {
         setLoading(false);

@@ -45,9 +45,9 @@ const DEMO_RESOURCES: Resource[] = [
 
 const ImprovementPlan = () => {
   const { user, isDemo } = useAuth();
-  const [plan, setPlan] = useState<PlanModule[]>(DEMO_PLAN);
-  const [resources, setResources] = useState<Resource[]>(DEMO_RESOURCES);
-  const [loading, setLoading] = useState(false);
+  const [plan, setPlan] = useState<PlanModule[]>(isDemo ? DEMO_PLAN : []);
+  const [resources, setResources] = useState<Resource[]>(isDemo ? DEMO_RESOURCES : []);
+  const [loading, setLoading] = useState(!isDemo);
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
@@ -62,7 +62,7 @@ const ImprovementPlan = () => {
       const { data: subs } = await supabase
         .from("submissions")
         .select("*")
-        .or(`student_id.eq.${user.id},student_email.eq.${user.email}`);
+        .eq("student_id", user.id);
 
       if (!subs || subs.length === 0) { setLoading(false); return; }
 
