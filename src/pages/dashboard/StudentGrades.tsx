@@ -182,7 +182,10 @@ const StudentGrades = () => {
                 )}
                 {g.feedback && <p className="text-sm text-muted-foreground">{g.feedback}</p>}
                 {g.fileUrl && g.score != null && (
-                  <Button variant="outline" size="sm" className="mt-1" onClick={() => window.open(g.fileUrl!, "_blank")}>
+                  <Button variant="outline" size="sm" className="mt-1" onClick={async () => {
+                    const { data } = await supabase.storage.from("submissions").createSignedUrl(g.fileUrl!, 3600);
+                    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                  }}>
                     <Download className="mr-1.5 h-3.5 w-3.5" /> Download Submission
                   </Button>
                 )}
