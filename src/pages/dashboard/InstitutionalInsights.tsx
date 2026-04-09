@@ -263,24 +263,31 @@ const InstitutionalInsights = () => {
             <CardDescription>Live compliance indicators based on uploaded marking activity</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {accreditation.map((metric) => (
-              <div key={metric.metric} className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{metric.metric}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">{metric.value}%</span>
-                    <Badge variant={metric.status === "met" ? "default" : metric.status === "at-risk" ? "secondary" : "destructive"} className="text-xs">
-                      {metric.status === "met" ? "Met" : metric.status === "at-risk" ? "At Risk" : "Below"}
-                    </Badge>
+            {!isDemo && !hasRealData ? (
+              <EmptyState
+                title="No accreditation metrics yet"
+                description="Compliance indicators appear here once assignments, submissions, and grading data start building up."
+              />
+            ) : (
+              accreditation.map((metric) => (
+                <div key={metric.metric} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{metric.metric}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{metric.value}%</span>
+                      <Badge variant={metric.status === "met" ? "default" : metric.status === "at-risk" ? "secondary" : "destructive"} className="text-xs">
+                        {metric.status === "met" ? "Met" : metric.status === "at-risk" ? "At Risk" : "Below"}
+                      </Badge>
+                    </div>
                   </div>
+                  <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+                    <div className={`h-full rounded-full ${metric.status === "met" ? "bg-success" : metric.status === "at-risk" ? "bg-warning" : "bg-destructive"}`} style={{ width: `${metric.value}%` }} />
+                    <div className="absolute inset-y-0 w-0.5 bg-foreground/40" style={{ left: `${metric.target}%` }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Target: {metric.target}%</p>
                 </div>
-                <div className="relative h-2 overflow-hidden rounded-full bg-muted">
-                  <div className={`h-full rounded-full ${metric.status === "met" ? "bg-success" : metric.status === "at-risk" ? "bg-warning" : "bg-destructive"}`} style={{ width: `${metric.value}%` }} />
-                  <div className="absolute inset-y-0 w-0.5 bg-foreground/40" style={{ left: `${metric.target}%` }} />
-                </div>
-                <p className="text-xs text-muted-foreground">Target: {metric.target}%</p>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
