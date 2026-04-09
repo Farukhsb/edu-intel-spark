@@ -14,7 +14,7 @@ import NotFound from "./pages/NotFound";
 import Install from "./pages/Install";
 import { DashboardLayout } from "./components/DashboardLayout";
 
-// Lazy-loaded dashboard pages
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const LecturerOverview = lazy(() => import("./pages/dashboard/LecturerOverview"));
 const CohortAnalytics = lazy(() => import("./pages/dashboard/CohortAnalytics"));
 const PerformanceTrends = lazy(() => import("./pages/dashboard/PerformanceTrends"));
@@ -47,14 +47,23 @@ const DashboardSkeleton = () => (
   </div>
 );
 
+const PageSkeleton = () => (
+  <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="w-full max-w-md space-y-4">
+      <Skeleton className="h-10 w-28" />
+      <Skeleton className="h-80 w-full" />
+    </div>
+  </div>
+);
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, isDemo, profileError, signOut, resendVerification } = useAuth();
+  const { user, loading, isDemo, profileError, signOut } = useAuth();
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="space-y-3 text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           <p className="text-sm text-muted-foreground">Loading your account...</p>
         </div>
       </div>
@@ -64,10 +73,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (profileError) {
     return (
       <div className="flex h-screen items-center justify-center p-4">
-        <div className="text-center space-y-4 max-w-md">
-          <p className="text-destructive font-medium">{profileError}</p>
+        <div className="max-w-md space-y-4 text-center">
+          <p className="font-medium text-destructive">{profileError}</p>
           <button
-            onClick={() => { signOut(); }}
+            onClick={() => {
+              void signOut();
+            }}
             className="text-sm text-primary hover:underline"
           >
             Sign out and try again
@@ -91,9 +102,7 @@ const DashboardRouter = () => {
 const DashboardRoute = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>
     <DashboardLayout>
-      <Suspense fallback={<DashboardSkeleton />}>
-        {children}
-      </Suspense>
+      <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
     </DashboardLayout>
   </ProtectedRoute>
 );
@@ -109,6 +118,14 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route
+              path="/reset-password"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <ResetPassword />
+                </Suspense>
+              }
+            />
             <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
             <Route path="/dashboard/cohort-analytics" element={<DashboardRoute><CohortAnalytics /></DashboardRoute>} />
             <Route path="/dashboard/performance" element={<DashboardRoute><PerformanceTrends /></DashboardRoute>} />
