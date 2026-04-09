@@ -99,13 +99,23 @@ const DashboardRouter = () => {
   return <StudentGrades />;
 };
 
-const DashboardRoute = ({ children }: { children: React.ReactNode }) => (
+const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => (
   <ProtectedRoute>
-    <DashboardLayout>
-      <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
-    </DashboardLayout>
+    <RoleGate allowedRole={allowedRole}>
+      <DashboardLayout>
+        <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
+      </DashboardLayout>
+    </RoleGate>
   </ProtectedRoute>
 );
+
+const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
+  const { role } = useAuth();
+  if (allowedRole && role && role !== allowedRole) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
