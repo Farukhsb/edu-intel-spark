@@ -15,6 +15,7 @@ import Install from "./pages/Install";
 import { DashboardLayout } from "./components/DashboardLayout";
 
 // Lazy-loaded dashboard pages
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const LecturerOverview = lazy(() => import("./pages/dashboard/LecturerOverview"));
 const CohortAnalytics = lazy(() => import("./pages/dashboard/CohortAnalytics"));
 const PerformanceTrends = lazy(() => import("./pages/dashboard/PerformanceTrends"));
@@ -30,85 +31,18 @@ const StudentProfile = lazy(() => import("./pages/dashboard/StudentProfile"));
 const AccreditationDashboard = lazy(() => import("./pages/dashboard/AccreditationDashboard"));
 const ExternalExaminerExport = lazy(() => import("./pages/dashboard/ExternalExaminerExport"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
-
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1 } },
-});
-
-const DashboardSkeleton = () => (
-  <div className="space-y-4 p-4">
-    <Skeleton className="h-8 w-48" />
-    <div className="grid gap-4 md:grid-cols-3">
-      <Skeleton className="h-32" />
-      <Skeleton className="h-32" />
-      <Skeleton className="h-32" />
-    </div>
-    <Skeleton className="h-64" />
-  </div>
-);
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, isDemo, profileError, signOut, resendVerification } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="h-8 w-8 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading your account...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (profileError) {
-    return (
-      <div className="flex h-screen items-center justify-center p-4">
-        <div className="text-center space-y-4 max-w-md">
-          <p className="text-destructive font-medium">{profileError}</p>
-          <button
-            onClick={() => { signOut(); }}
-            className="text-sm text-primary hover:underline"
-          >
-            Sign out and try again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user && !isDemo) return <Navigate to="/auth" replace />;
-
-  return <>{children}</>;
-};
-
-const DashboardRouter = () => {
-  const { role } = useAuth();
-  if (role === "lecturer") return <LecturerOverview />;
-  return <StudentGrades />;
-};
-
-const DashboardRoute = ({ children }: { children: React.ReactNode }) => (
-  <ProtectedRoute>
-    <DashboardLayout>
-      <Suspense fallback={<DashboardSkeleton />}>
-        {children}
-      </Suspense>
-    </DashboardLayout>
-  </ProtectedRoute>
-);
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <NetworkStatus />
-      <BrowserRouter>
-        <AuthProvider>
+...
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route
+              path="/reset-password"
+              element={
+                <Suspense fallback={<DashboardSkeleton />}>
+                  <ResetPassword />
+                </Suspense>
+              }
+            />
             <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
             <Route path="/dashboard/cohort-analytics" element={<DashboardRoute><CohortAnalytics /></DashboardRoute>} />
             <Route path="/dashboard/performance" element={<DashboardRoute><PerformanceTrends /></DashboardRoute>} />

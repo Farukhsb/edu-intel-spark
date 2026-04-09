@@ -118,7 +118,7 @@ const Auth = () => {
     setLoading(true);
     try {
       await resetPassword(resetEmail);
-      toast({ title: "Reset email sent", description: "Check your inbox for a password reset link." });
+      toast({ title: "Reset email sent", description: "Check your inbox for a password reset link to choose a new password." });
       setShowForgotPassword(false);
     } catch (err: any) {
       toast({ title: "Reset failed", description: getErrorMessage(err.message), variant: "destructive" });
