@@ -60,6 +60,16 @@ const DEMO_STUDENT_PROFILE: Profile = {
   department_id: "Computer Science",
 };
 
+const getPasswordResetRedirectUrl = () => {
+  const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+  if (isLocalhost) {
+    return `${window.location.origin}/reset-password`;
+  }
+
+  return "https://edu-intel-spark.lovable.app/reset-password";
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -108,7 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (isDemo) return;
 
       if (event === "PASSWORD_RECOVERY" && location.pathname !== "/reset-password") {
-        navigate("/reset-password");
+        navigate(`/reset-password${window.location.search}${window.location.hash}`, { replace: true });
       }
 
       if (session?.user) {
@@ -173,7 +183,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: getPasswordResetRedirectUrl(),
     });
     if (error) throw error;
   };
