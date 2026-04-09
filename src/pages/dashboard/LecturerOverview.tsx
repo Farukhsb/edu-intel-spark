@@ -23,17 +23,35 @@ const EMPTY_STATS: Stats = {
   avgScore: null, activeStudents: 0, assignmentCount: 0, onTarget: 0, atRisk: 0,
 };
 
+const DEMO_STATS: Stats = {
+  totalSubmissions: 42, gradedCount: 35, pendingCount: 7,
+  avgScore: 64.3, activeStudents: 28, assignmentCount: 5, onTarget: 22, atRisk: 6,
+};
+
+const DEMO_RECENT: RecentSubmission[] = [
+  { id: "d1", student_name: "Alice Johnson", file_name: "trees.py", status: "released", submitted_at: new Date(Date.now() - 86400000).toISOString(), assignment_title: "Data Structures", score: 78, max_score: 100 },
+  { id: "d2", student_name: "Bob Smith", file_name: "essay.pdf", status: "ai_graded", submitted_at: new Date(Date.now() - 2 * 86400000).toISOString(), assignment_title: "Algorithms", score: 55, max_score: 100 },
+  { id: "d3", student_name: "Carol White", file_name: "report.docx", status: "submitted", submitted_at: new Date(Date.now() - 3 * 86400000).toISOString(), assignment_title: "Database Design", score: null, max_score: 100 },
+];
+
+const DEMO_DIST = [
+  { label: "90-100%", count: 4, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
+  { label: "70-89%", count: 12, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
+  { label: "50-69%", count: 14, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
+  { label: "< 50%", count: 5, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
+];
+
 const LecturerOverview = () => {
-  const { profile } = useAuth();
-  const [stats, setStats] = useState<Stats>(EMPTY_STATS);
-  const [recent, setRecent] = useState<RecentSubmission[]>([]);
-  const [gradeDistribution, setGradeDistribution] = useState([
+  const { profile, isDemo } = useAuth();
+  const [stats, setStats] = useState<Stats>(isDemo ? DEMO_STATS : EMPTY_STATS);
+  const [recent, setRecent] = useState<RecentSubmission[]>(isDemo ? DEMO_RECENT : []);
+  const [gradeDistribution, setGradeDistribution] = useState(isDemo ? DEMO_DIST : [
     { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
     { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
     { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
     { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
   ]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isDemo);
 
   const fetchDashboard = async () => {
     try {
@@ -91,8 +109,9 @@ const LecturerOverview = () => {
   };
 
   useEffect(() => {
+    if (isDemo) return;
     fetchDashboard();
-  }, []);
+  }, [isDemo]);
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 

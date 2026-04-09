@@ -8,6 +8,7 @@ import { Brain, ChevronDown, ChevronUp, Send, Sparkles, Loader2 } from "lucide-r
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface GradeBreakdown {
   assessment: string;
