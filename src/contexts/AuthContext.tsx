@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { posthog } from "@/lib/posthog";
 import type { User } from "@supabase/supabase-js";
@@ -60,6 +61,8 @@ const DEMO_STUDENT_PROFILE: Profile = {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,8 +104,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (isDemo) return;
+
+      if (event === "PASSWORD_RECOVERY" && location.pathname !== "/reset-password") {
+        navigate("/reset-password");
+      }
+
       if (session?.user) {
         setUser(session.user);
         fetchProfile(session.user.id, session.user.email).finally(() => setLoading(false));
@@ -116,7 +124,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, [isDemo]);
+  }, [isDemo, location.pathname, navigate]);
 
   const signUp = async (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters");
