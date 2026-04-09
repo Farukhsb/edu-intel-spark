@@ -7,7 +7,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<div>Welcome to Edu Intel Spark</div>} />
-        <Route path="/test" element={<TestSupabase />} />
+        <Route path="/test" element={<Suspense fallback={<div>Loading...</div>}><TestSupabase /></Suspense>} />
       </Routes>
     </BrowserRouter>
   );
