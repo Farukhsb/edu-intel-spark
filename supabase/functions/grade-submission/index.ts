@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { decode as base64Decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +16,12 @@ serve(async (req) => {
 
     if (!assignment || !submissions?.length) throw new Error("Missing assignment or submissions data");
 
+    // Create admin client to access private storage
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
     const rubric = assignment.rubric || [];
     const rubricText = Array.isArray(rubric) && rubric.length > 0
       ? rubric.map((r: any) => `- ${r.criterion} (${r.weight} pts): ${r.description || ""}`).join("\n")
@@ -26,31 +32,33 @@ serve(async (req) => {
     for (const sub of submissions) {
       console.log(`Processing submission ${sub.id} - ${sub.file_name}`);
 
-      // Fetch the actual file content from the URL
       let fileContent = "";
       let isPdf = false;
       try {
-        const fileResp = await fetch(sub.file_url);
-        if (!fileResp.ok) {
-          console.error(`Failed to fetch file for ${sub.id}: ${fileResp.status}`);
-          results.push({ submissionId: sub.id, error: `Failed to download file: ${fileResp.status}` });
+        // Download from private storage using admin client
+        const storagePath = sub.file_url;
+        const { data: fileData, error: dlError } = await supabaseAdmin.storage
+          .from("submissions")
+          .download(storagePath);
+        
+        if (dlError || !fileData) {
+          console.error(`Failed to download file for ${sub.id}:`, dlError);
+          results.push({ submissionId: sub.id, error: `Failed to download file` });
           continue;
         }
-        const contentType = fileResp.headers.get("content-type") || "";
-        isPdf = contentType.includes("pdf") || sub.file_name?.toLowerCase().endsWith(".pdf");
-        
+
+        isPdf = sub.file_name?.toLowerCase().endsWith(".pdf") || fileData.type?.includes("pdf");
+
         if (isPdf) {
-          // For PDFs, convert to base64 for the AI to read
-          const arrayBuf = await fileResp.arrayBuffer();
+          const arrayBuf = await fileData.arrayBuffer();
           const bytes = new Uint8Array(arrayBuf);
-          // Convert to base64
           let binary = "";
           for (let i = 0; i < bytes.length; i++) {
             binary += String.fromCharCode(bytes[i]);
           }
           fileContent = btoa(binary);
         } else {
-          fileContent = await fileResp.text();
+          fileContent = await fileData.text();
         }
         console.log(`File fetched for ${sub.id}, size: ${fileContent.length}, isPdf: ${isPdf}`);
       } catch (fetchErr) {
@@ -146,7 +154,6 @@ ${isPdf ? "The student's PDF submission content is attached as an inline documen
 
 Grade this submission carefully.`;
 
-      // Build messages - use multimodal for PDFs
       const messages: any[] = [
         { role: "system", content: systemPrompt },
       ];
@@ -215,7 +222,7 @@ Grade this submission carefully.`;
         if (!aiResponse.ok) {
           const errText = await aiResponse.text();
           console.error("AI error for submission", sub.id, aiResponse.status, errText);
-          results.push({ submissionId: sub.id, error: `AI error: ${aiResponse.status} - ${errText.substring(0, 200)}` });
+          results.push({ submissionId: sub.id, error: `AI error: ${aiResponse.status}` });
           continue;
         }
 
@@ -228,13 +235,12 @@ Grade this submission carefully.`;
           if (toolCall?.function?.arguments) {
             gradeResult = JSON.parse(toolCall.function.arguments);
           } else {
-            // Fallback: try parsing content directly
             const content = aiData.choices?.[0]?.message?.content || "";
             const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
             gradeResult = JSON.parse(jsonMatch[1].trim());
           }
         } catch (parseErr) {
-          console.error("Failed to parse AI response for", sub.id, JSON.stringify(aiData).substring(0, 500));
+          console.error("Failed to parse AI response for", sub.id);
           results.push({ submissionId: sub.id, error: "Failed to parse AI response" });
           continue;
         }
