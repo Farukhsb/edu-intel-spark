@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
+import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 
 const lecturerLinks = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
