@@ -1,8 +1,5 @@
-/** @deprecated use HotPayload */
-export type HMRPayload = HotPayload
-export type HotPayload =
+export type HMRPayload =
   | ConnectedPayload
-  | PingPayload
   | UpdatePayload
   | FullReloadPayload
   | CustomPayload
@@ -13,10 +10,6 @@ export interface ConnectedPayload {
   type: 'connected'
 }
 
-export interface PingPayload {
-  type: 'ping'
-}
-
 export interface UpdatePayload {
   type: 'update'
   updates: Update[]
@@ -24,12 +17,6 @@ export interface UpdatePayload {
 
 export interface Update {
   type: 'js-update' | 'css-update'
-  /**
-   * URL of HMR patch chunk
-   *
-   * This only exists when full-bundle mode is enabled.
-   */
-  url?: string
   path: string
   acceptedPath: string
   timestamp: number
@@ -38,9 +25,7 @@ export interface Update {
   /** @internal */
   isWithinCircularImport?: boolean
   /** @internal */
-  firstInvalidatedBy?: string
-  /** @internal */
-  invalidates?: string[]
+  ssrInvalidates?: string[]
 }
 
 export interface PrunePayload {
