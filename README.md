@@ -68,6 +68,39 @@ To bridge the gap between education and technology — making assessment fairer,
 - **Improvement Plan** — Student task checklists with AI-curated recommended resources
 
 ---
+## 🧠 Engineering Decisions
+
+### Why rule-based at-risk scoring instead of machine learning?
+
+In the early stages of the platform, the available dataset is relatively small and lacks sufficiently labelled outcomes. Under these conditions, a deterministic, rule-based model provides more reliable and stable performance than an undertrained machine learning model.
+
+The current scoring system uses a weighted formula based on:
+- Submission rate  
+- Grade trend  
+- Average performance  
+- Completion consistency  
+
+This approach was deliberately chosen because it is:
+- **Fully interpretable** — educators can clearly understand why a student is flagged  
+- **Auditable** — important for academic accountability and institutional trust  
+- **Deterministic** — ensures consistent outputs without model variance  
+
+### Scalability Path
+
+The system is designed with modularity in mind. As the platform scales and accumulates labelled data (e.g. pass/fail outcomes, intervention effectiveness), the scoring engine can be replaced with a supervised learning model.
+
+This allows a smooth transition from:
+> Rule-based system → Data-driven ML model
+
+without requiring a redesign of the surrounding architecture.
+
+### Design Principle
+
+The platform prioritises **explainability over complexity** in its early stages, ensuring that all outputs can be trusted and validated by non-technical stakeholders before introducing more complex models.
+
+
+---
+
 
 ## 🛠 Tech Stack
 
