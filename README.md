@@ -108,7 +108,7 @@ The platform prioritises **explainability over complexity** in its early stages,
 |-------|-----------|
 | Frontend | React 18 + TypeScript + Vite 5 |
 | Styling | Tailwind CSS v3 + shadcn/ui |
-| Database | Supabase Supastore |
+| firebase | firebase firestore |
 | Authentication | Firebase Auth |
 | File Storage | Supabase Storage + Firebase Storage |
 | AI Engine | Anthropic Claude (via Supabase Edge Functions) |
