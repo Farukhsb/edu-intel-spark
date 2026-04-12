@@ -4,7 +4,7 @@
 
 GradeAI is a full-stack, production-ready EdTech platform that uses AI to automate academic marking, detect academic integrity issues, and help students improve their grades through Socratic AI coaching. Built for universities and secondary schools.
 
-> Live demo: [https://edu-intel-spark.pages.dev](https://https://edu-intel-spark.pages.dev)
+> Live demo: [https://222c377b.edu-intel-spark.pages.dev](https://https://edu-intel-spark.pages.dev)
 
 ---
 
