@@ -108,13 +108,13 @@ The platform prioritises **explainability over complexity** in its early stages,
 |-------|-----------|
 | Frontend | React 18 + TypeScript + Vite 5 |
 | Styling | Tailwind CSS v3 + shadcn/ui |
-| Database | Firebase Firestore |
+| Database | Supabase Supastore |
 | Authentication | Firebase Auth |
 | File Storage | Supabase Storage + Firebase Storage |
 | AI Engine | Anthropic Claude (via Supabase Edge Functions) |
 | Backend Functions | Supabase Edge Functions |
 | Analytics | PostHog |
-| Hosting | Lovable (lovable.app) |
+| Hosting | Cloudflare |
 | Version Control | GitHub |
 
 ---
