@@ -160,13 +160,22 @@ const AssignmentDetail = () => {
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
+
     const fetchAssignment = async () => {
-      const { data } = await supabase
+      setLoading(true);
+
+      let query = supabase
         .from("assignments")
         .select("*")
-        .eq("id", id)
-        .maybeSingle();
+        .eq("id", id);
+
+      if (role === "lecturer") {
+        query = query.eq("lecturer_id", user.id);
+      }
+
+      const { data } = await query.maybeSingle();
+
       if (data) {
         setAssignment({
           id: data.id,
@@ -179,7 +188,12 @@ const AssignmentDetail = () => {
           lecturer_id: data.lecturer_id,
           rubric: data.rubric as any[] | null,
         });
+      } else {
+        setAssignment(null);
+        setSubmissions([]);
+        setGrades({});
       }
+
       setLoading(false);
     };
     void fetchAssignment();
@@ -245,10 +259,78 @@ const AssignmentDetail = () => {
     void loadSubmissions();
   }, [id]);
 
+    void fetchAssignment();
+  }, [id, role, user]);
+
+  const loadGrades = async (subs: Submission[]) => {
+    if (subs.length === 0) {
+      setGrades({});
+      return;
+    }
+
+    const { data } = await supabase
+      .from("grades")
+      .select("*")
+      .in("submission_id", subs.map((s) => s.id));
+
+    if (data) {
+      const gradeMap: Record<string, Grade> = {};
+      for (const g of data) {
+        gradeMap[g.submission_id] = {
+          id: g.id,
+          submission_id: g.submission_id,
+          ai_score: g.ai_score,
+          ai_feedback: g.ai_feedback,
+          ai_breakdown: g.ai_breakdown as any[],
+          lecturer_score: g.lecturer_score,
+          lecturer_feedback: g.lecturer_feedback,
+          final_score: g.final_score,
+          final_feedback: g.final_feedback,
+        };
+      }
+      setGrades(gradeMap);
+    }
+  };
+
+  const loadSubmissions = async () => {
+    if (!assignment) return;
+
+    const { data } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("assignment_id", assignment.id)
+      .order("submitted_at", { ascending: false });
+
+    if (data) {
+      const subs: Submission[] = data.map((d) => ({
+        id: d.id,
+        assignment_id: d.assignment_id,
+        student_name: d.student_name,
+        student_email: d.student_email,
+        file_name: d.file_name,
+        file_type: d.file_type,
+        file_url: d.file_url,
+        status: d.status as SubmissionStatus,
+        submitted_at: d.submitted_at,
+        student_id: d.student_id,
+      }));
+      setSubmissions(subs);
+      await loadGrades(subs);
+    } else {
+      setSubmissions([]);
+      setGrades({});
+    }
+  };
+
+  useEffect(() => {
+    if (!assignment) return;
+    void loadSubmissions();
+  }, [assignment?.id]);
+
   const uploadFile = async (file: File, userId: string) => {
-    if (!id) throw new Error("Missing assignment");
+    if (!assignment) throw new Error("Missing assignment");
     const safeFileName = file.name.replace(/[\\/]/g, "_");
-    const filePath = `${userId}/${id}/${Date.now()}_${safeFileName}`;
+    const filePath = `${userId}/${assignment.id}/${Date.now()}_${safeFileName}`;
 
     setUploadProgress(10);
     const { data, error } = await supabase.storage
@@ -267,6 +349,7 @@ const AssignmentDetail = () => {
       fileType: file.type || "application/octet-stream",
       storagePath: data.path,
     };
+    return { fileUrl: data.path, fileName: safeFileName, fileType: file.type || "application/octet-stream", storagePath: data.path };
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,6 +358,7 @@ const AssignmentDetail = () => {
       e.target.value = "";
       return;
     }
+    if (!file || !assignment || !user?.id) { e.target.value = ""; return; }
 
     const hasExisting = submissions.some(
       (s) => s.student_id === user.id || (user.email && s.student_email === user.email)
@@ -290,7 +374,7 @@ const AssignmentDetail = () => {
     try {
       const uploaded = await uploadFile(file, user.id);
       const { error } = await supabase.from("submissions").insert({
-        assignment_id: id,
+        assignment_id: assignment.id,
         student_id: user.id,
         file_url: uploaded.fileUrl,
         file_name: uploaded.fileName,
@@ -315,7 +399,7 @@ const AssignmentDetail = () => {
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || !id || !user?.id) return;
+    if (!files || !assignment || !user?.id) return;
     setUploading(true);
     let success = 0;
 
@@ -324,7 +408,7 @@ const AssignmentDetail = () => {
         const { fileUrl, fileName, fileType } = await uploadFile(file, user.id);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
         const { error } = await supabase.from("submissions").insert({
-          assignment_id: id,
+          assignment_id: assignment.id,
           student_name: studentName,
           file_url: fileUrl,
           file_name: fileName,
@@ -492,7 +576,7 @@ const AssignmentDetail = () => {
   };
 
   const handlePlagiarismCheck = async () => {
-    if (!id) return;
+    if (!assignment) return;
     setCheckingPlagiarism(true);
     try {
       const { data, error } = await supabase.functions.invoke("check-plagiarism", {
@@ -591,6 +675,13 @@ const AssignmentDetail = () => {
         <Button variant="link" onClick={() => navigate("/dashboard/assignments")}>Back to assignments</Button>
       </div>
     );
+  if (loading) return <div className="flex items-center justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>;
+  if (!assignment) return (
+    <div className="text-center py-12">
+      <p className="text-muted-foreground">Assignment not found or access denied</p>
+      <Button variant="link" onClick={() => navigate("/dashboard/assignments")}>Back to assignments</Button>
+    </div>
+  );
 
   const isLecturer = role === "lecturer";
   const currentUserId = user?.id ?? null;
