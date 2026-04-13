@@ -8,42 +8,84 @@ export class HttpError extends Error {
   }
 }
 
-export function createAdminClient() {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  return createClient(supabaseUrl, serviceRoleKey);
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+  throw new Error("Supabase environment variables are not configured");
 }
 
-export function jsonError(error: unknown, corsHeaders: Record<string, string>) {
-  const status = error instanceof HttpError ? error.status : 500;
-  const message = error instanceof Error ? error.message : "Internal server error";
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+function getAuthorizationHeader(req: Request) {
+  const header = req.headers.get("Authorization");
+  if (!header) {
+    throw new HttpError(401, "Missing Authorization header");
+  }
+
+  return header;
+}
+
+export function createUserClient(req: Request) {
+  const authHeader = getAuthorizationHeader(req);
+
+  return createClient(supabaseUrl!, anonKey!, {
+    global: {
+      headers: {
+        Authorization: authHeader,
+      },
+    },
   });
+}
+
+export function createAdminClient() {
+  return createClient(supabaseUrl!, serviceRoleKey!);
+}
+
+export async function requireUser(req: Request) {
+  const supabase = createUserClient(req);
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data.user) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
+  return { supabase, user: data.user };
 }
 
 export async function requireLecturer(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new HttpError(401, "Missing authorization header");
+  const { supabase, user } = await requireUser(req);
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const supabase = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new HttpError(401, "Unauthorized");
-
-  const { data: roles } = await supabase
+  const { data: role, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", user.id)
     .eq("role", "lecturer")
     .maybeSingle();
 
-  if (!roles) throw new HttpError(403, "Lecturer role required");
+  if (error) {
+    throw new HttpError(500, "Failed to verify lecturer role");
+  }
 
-  return user;
+  if (!role) {
+    throw new HttpError(403, "Lecturer access required");
+  }
+
+  return { supabase, user };
+}
+
+export function jsonError(error: unknown, corsHeaders: Record<string, string>) {
+  if (error instanceof HttpError) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(
+    JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+    {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }

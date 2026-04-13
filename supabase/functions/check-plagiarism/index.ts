@@ -1,12 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function fetchFileContent(supabaseAdmin: any, sub: any): Promise<string> {
+async function fetchFileContent(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  sub: { file_url?: string; file_name?: string },
+): Promise<string> {
   if (!sub.file_url) return "";
   try {
     const { data, error } = await supabaseAdmin.storage
@@ -32,19 +36,47 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { submissions } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("Missing LOVABLE_API_KEY");
+    const body = await req.json();
+    const integrityModel = getModel("OPENAI_INTEGRITY_MODEL", "gpt-5.4-mini");
+    const { user } = await requireLecturer(req);
+    const requestedAssignmentId = body?.assignmentId ?? null;
+    const requestedSubmissionIds = Array.isArray(body?.submissionIds)
+      ? body.submissionIds
+      : Array.isArray(body?.submissions)
+        ? body.submissions
+            .map((submission: { id?: string } | string) =>
+              typeof submission === "string" ? submission : submission?.id,
+            )
+            .filter(Boolean)
+        : [];
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    if (!submissions?.length) {
+    if (!requestedAssignmentId || requestedSubmissionIds.length === 0) {
       return new Response(JSON.stringify({ flags: [], summary: "No submissions provided" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const supabaseAdmin = createAdminClient();
+    const { data: assignment, error: assignmentError } = await supabaseAdmin
+      .from("assignments")
+      .select("id, lecturer_id")
+      .eq("id", requestedAssignmentId)
+      .maybeSingle();
+
+    if (assignmentError) throw new Error("Failed to load assignment");
+    if (!assignment || assignment.lecturer_id !== user.id) {
+      throw new HttpError(403, "You do not have access to this assignment");
+    }
+
+    const { data: submissions, error: submissionsError } = await supabaseAdmin
+      .from("submissions")
+      .select("id, assignment_id, student_name, file_name, file_url")
+      .eq("assignment_id", requestedAssignmentId)
+      .in("id", requestedSubmissionIds);
+
+    if (submissionsError) throw new Error("Failed to load submissions");
+    if (!submissions || submissions.length !== requestedSubmissionIds.length) {
+      throw new HttpError(403, "One or more submissions are not accessible");
     }
 
     const isSingleMode = submissions.length === 1;
@@ -62,7 +94,7 @@ serve(async (req) => {
       : "You are an academic integrity analyst. Compare student submissions for suspicious similarity and also check each for AI-generated content patterns.";
 
     let userPrompt: string;
-    const messages: any[] = [{ role: "system", content: systemPrompt }];
+    const userContent: Array<Record<string, string>> = [];
 
     if (isSingleMode) {
       const sub = submissions[0];
@@ -87,33 +119,40 @@ Check for:
 Provide your analysis.`;
 
       if (isPdf && content) {
-        messages.push({
-          role: "user",
-          content: [
-            { type: "text", text: userPrompt },
-            { type: "image_url", image_url: { url: `data:application/pdf;base64,${content}` } },
-          ],
+        userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
+        userContent.push({
+          type: "input_file",
+          filename: sub.file_name || "submission.pdf",
+          file_data: `data:application/pdf;base64,${content}`,
         });
       } else {
-        messages.push({ role: "user", content: userPrompt });
+        userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
       }
     } else {
       userPrompt = `Analyze these ${submissions.length} student submissions for the same assignment. Check for similarity between submissions AND for AI-generated content in each.
 
 Submissions:
-${submissions.map((s: any, i: number) => `${i + 1}. ${s.student_name} - ${s.file_name}`).join("\n")}
+${submissions.map((s: { student_name: string | null; file_name: string }, i: number) => {
+  const content = fileContents[i] || "";
+  const excerpt = content ? content.substring(0, 5000) : "[content unavailable]";
+  return `${i + 1}. ${s.student_name} - ${s.file_name}\nContent excerpt:\n${excerpt}`;
+}).join("\n\n---\n\n")}
 
 Analyze the content for suspicious similarity and AI-generation patterns.`;
-      messages.push({ role: "user", content: userPrompt });
+      userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
     }
 
-    const tools = [
-      {
-        type: "function",
-        function: {
+    const aiData = await createResponse({
+      model: integrityModel,
+      input: [
+        { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
+        { role: "user", content: userContent },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
           name: "report_integrity_results",
-          description: "Report the academic integrity analysis results",
-          parameters: {
+          schema: {
             type: "object",
             properties: {
               flags: {
@@ -121,66 +160,32 @@ Analyze the content for suspicious similarity and AI-generation patterns.`;
                 items: {
                   type: "object",
                   properties: {
-                    student_a: { type: "string", description: "Name of first student (or only student for AI detection)" },
-                    student_b: { type: "string", description: "Name of second student, or 'AI Content' for AI detection flags" },
+                    student_a: { type: "string" },
+                    student_b: { type: "string" },
                     submission_a_id: { type: "string" },
-                    submission_b_id: { type: "string", description: "Use 'ai-detection' for AI content flags" },
-                    similarity_score: { type: "number", description: "Confidence 0-100 that this is plagiarized or AI-generated" },
-                    reason: { type: "string", description: "Detailed explanation of why this was flagged" },
+                    submission_b_id: { type: "string" },
+                    similarity_score: { type: "number" },
+                    reason: { type: "string" },
                     severity: { type: "string", enum: ["low", "medium", "high"] },
                   },
                   required: ["student_a", "student_b", "submission_a_id", "submission_b_id", "similarity_score", "reason", "severity"],
+                  additionalProperties: false,
                 },
               },
-              summary: { type: "string", description: "Overall integrity assessment" },
+              summary: { type: "string" },
             },
             required: ["flags", "summary"],
+            additionalProperties: false,
           },
+          strict: true,
         },
       },
-    ];
-
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages,
-        tools,
-        tool_choice: { type: "function", function: { name: "report_integrity_results" } },
-      }),
     });
-
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited. Try again shortly." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`AI error: ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
     console.log("AI integrity response received");
 
     let result = { flags: [], summary: "Analysis complete" };
     try {
-      const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-      if (toolCall?.function?.arguments) {
-        result = JSON.parse(toolCall.function.arguments);
-      } else {
-        const content = aiData.choices?.[0]?.message?.content || "";
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        result = JSON.parse(jsonMatch[1].trim());
-      }
+      result = parseJsonText(extractOutputText(aiData));
     } catch (parseErr) {
       console.error("Failed to parse integrity response");
     }
@@ -190,9 +195,6 @@ Analyze the content for suspicious similarity and AI-generation patterns.`;
     });
   } catch (e) {
     console.error("check-plagiarism error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonError(e, corsHeaders);
   }
 });
