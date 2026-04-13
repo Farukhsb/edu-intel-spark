@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +13,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Install from "./pages/Install";
 import { DashboardLayout } from "./components/DashboardLayout";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const LecturerOverview = lazy(() => import("./pages/dashboard/LecturerOverview"));
@@ -99,15 +100,21 @@ const DashboardRouter = () => {
   return <StudentGrades />;
 };
 
-const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => (
-  <ProtectedRoute>
-    <RoleGate allowedRole={allowedRole}>
-      <DashboardLayout>
-        <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
-      </DashboardLayout>
-    </RoleGate>
-  </ProtectedRoute>
-);
+const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
+  const location = useLocation();
+
+  return (
+    <ProtectedRoute>
+      <RoleGate allowedRole={allowedRole}>
+        <DashboardLayout>
+          <AppErrorBoundary title="Dashboard page failed to load" resetKey={location.pathname}>
+            <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
+          </AppErrorBoundary>
+        </DashboardLayout>
+      </RoleGate>
+    </ProtectedRoute>
+  );
+};
 
 const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
   const { role } = useAuth();

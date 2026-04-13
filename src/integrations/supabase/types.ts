@@ -115,7 +115,9 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          cohort_id: string | null
           created_at: string
+          department_id: string | null
           email: string | null
           full_name: string | null
           id: string
@@ -124,7 +126,9 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          cohort_id?: string | null
           created_at?: string
+          department_id?: string | null
           email?: string | null
           full_name?: string | null
           id: string
@@ -133,7 +137,9 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          cohort_id?: string | null
           created_at?: string
+          department_id?: string | null
           email?: string | null
           full_name?: string | null
           id?: string

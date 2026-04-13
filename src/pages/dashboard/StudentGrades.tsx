@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
+import { safeToLocaleDate } from "@/lib/date";
 
 interface StudentGrade {
   id: string;
@@ -109,9 +110,21 @@ const StudentGrades = () => {
   );
 
   const releasedGrades = grades.filter(g => g.score != null);
+  const pendingGrades = grades.filter(g => g.score == null);
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardContent className="p-4">
+          <p className="text-sm font-medium">Your grade view</p>
+          <p className="text-xs text-muted-foreground">
+            {pendingGrades.length > 0
+              ? `${pendingGrades.length} submission(s) are still being reviewed. Released grades appear below with feedback and downloads.`
+              : "All released grades and feedback for your submitted work are shown below."}
+          </p>
+        </CardContent>
+      </Card>
+
       {releasedGrades.length > 0 && (
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           <Card><CardContent className="p-4 text-center">
@@ -135,7 +148,8 @@ const StudentGrades = () => {
 
       {grades.length === 0 ? (
         <Card><CardContent className="py-12 text-center">
-          <p className="text-muted-foreground">No submissions yet. Head to Assignments to submit your work.</p>
+          <p className="font-medium">No submissions yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Head to Assignments to submit your work.</p>
         </CardContent></Card>
       ) : (
         <div className="space-y-3">
@@ -147,7 +161,7 @@ const StudentGrades = () => {
                     <p className="text-sm font-medium">{g.assignmentTitle}</p>
                     <p className="text-xs text-muted-foreground">
                       {g.moduleCode && `${g.moduleCode} · `}
-                      {new Date(g.submittedAt).toLocaleDateString()}
+                      {safeToLocaleDate(g.submittedAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -183,7 +197,11 @@ const StudentGrades = () => {
                 {g.feedback && <p className="text-sm text-muted-foreground">{g.feedback}</p>}
                 {g.fileUrl && g.score != null && (
                   <Button variant="outline" size="sm" className="mt-1" onClick={async () => {
-                    const { data } = await supabase.storage.from("submissions").createSignedUrl(g.fileUrl!, 3600);
+                    const { data, error } = await supabase.storage.from("submissions").createSignedUrl(g.fileUrl!, 3600);
+                    if (error) {
+                      console.error("Failed to create signed URL:", error);
+                      return;
+                    }
                     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
                   }}>
                     <Download className="mr-1.5 h-3.5 w-3.5" /> Download Submission

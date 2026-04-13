@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Upload, FileText, CheckCircle, Clock, Brain, Eye,
-  CheckCheck, Edit, Send, Shield, AlertTriangle, Loader2,
+  CheckCheck, Edit, Send, Shield, AlertTriangle, Loader2, Users, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { safeFormatDate } from "@/lib/date";
 
 type SubmissionStatus = "submitted" | "ai_grading" | "ai_graded" | "under_review" | "approved" | "released";
 
@@ -284,20 +284,8 @@ const AssignmentDetail = () => {
     try {
       const { data, error } = await supabase.functions.invoke("grade-submission", {
         body: {
-          assignment: {
-            title: assignment.title,
-            description: assignment.description,
-            module_code: assignment.module_code,
-            max_score: assignment.max_score,
-            rubric: assignment.rubric,
-          },
-          submissions: toGrade.map((s) => ({
-            id: s.id,
-            student_name: s.student_name || s.student_email || "Anonymous",
-            file_name: s.file_name,
-            file_type: null,
-            file_url: s.file_url,
-          })),
+          assignmentId: assignment.id,
+          submissions: toGrade.map((s) => ({ id: s.id })),
         },
       });
 
@@ -382,7 +370,10 @@ const AssignmentDetail = () => {
     setCheckingPlagiarism(true);
     try {
       const { data, error } = await supabase.functions.invoke("check-plagiarism", {
-        body: { submissions: submissions.map((s) => ({ id: s.id, student_name: s.student_name || s.student_email || "Anonymous", file_name: s.file_name, file_url: s.file_url })) },
+        body: {
+          assignmentId: assignment.id,
+          submissionIds: submissions.map((s) => s.id),
+        },
       });
       if (error) throw error;
       setPlagiarismFlags(data?.flags || []);
@@ -448,6 +439,12 @@ const AssignmentDetail = () => {
   const hasExistingSubmission = !isLecturer && submissions.some(
     (s) => s.student_id === currentUserId || (currentUserEmail && s.student_email === currentUserEmail)
   );
+  const summary = {
+    total: submissions.length,
+    submitted: submissions.filter((s) => s.status === "submitted").length,
+    graded: submissions.filter((s) => ["ai_graded", "under_review", "approved", "released"].includes(s.status)).length,
+    released: submissions.filter((s) => s.status === "released").length,
+  };
   const selectedStatuses = submissions.filter((s) => selected.has(s.id)).map((s) => s.status);
   const hasSubmitted = selectedStatuses.some((s) => s === "submitted");
   const hasGraded = selectedStatuses.some((s) => s === "ai_graded" || s === "under_review");
@@ -464,9 +461,28 @@ const AssignmentDetail = () => {
           <p className="text-sm text-muted-foreground">
             {assignment.module_code && `${assignment.module_code} · `}
             Max {assignment.max_score} pts
-            {assignment.due_date && ` · Due ${format(new Date(assignment.due_date), "MMM d, yyyy")}`}
+            {assignment.due_date && ` · Due ${safeFormatDate(assignment.due_date, "MMM d, yyyy")}`}
           </p>
         </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-muted-foreground">Total submissions</p>
+          <p className="text-2xl font-semibold">{summary.total}</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-muted-foreground">Ready to grade</p>
+          <p className="text-2xl font-semibold">{summary.submitted}</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-muted-foreground">Graded / reviewed</p>
+          <p className="text-2xl font-semibold text-primary">{summary.graded}</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-xs text-muted-foreground">Released</p>
+          <p className="text-2xl font-semibold text-success">{summary.released}</p>
+        </CardContent></Card>
       </div>
 
       {assignment.description && (
@@ -492,13 +508,31 @@ const AssignmentDetail = () => {
         </Card>
       )}
 
-      <div className="flex flex-wrap gap-3">
+      <Card>
+        <CardContent className="space-y-4 p-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-sm font-medium">{isLecturer ? "Lecturer workflow" : "Student action"}</p>
+              <p className="text-xs text-muted-foreground">
+                {isLecturer
+                  ? "Upload submissions, run checks, then grade, approve, and release in order."
+                  : hasExistingSubmission
+                    ? "Your submission is on file. You can track status below."
+                    : "Upload your work once. You will see grading updates here after review."}
+              </p>
+            </div>
+            {isLecturer && selected.size > 0 && (
+              <Badge variant="outline">{selected.size} selected</Badge>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-3">
         {!isLecturer && (
           <>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleStudentSubmit} />
             <Button onClick={() => fileInputRef.current?.click()} disabled={uploading || hasExistingSubmission || !currentUserId}>
               {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              {uploading ? `Uploading... ${uploadProgress}%` : hasExistingSubmission ? "Already Submitted" : "Submit My Work"}
+              {uploading ? `Uploading... ${uploadProgress}%` : hasExistingSubmission ? "Submission Received" : "Submit My Work"}
             </Button>
           </>
         )}
@@ -512,6 +546,9 @@ const AssignmentDetail = () => {
               {checkingPlagiarism ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
               {checkingPlagiarism ? "Checking..." : submissions.length === 1 ? "AI Content Check" : "Plagiarism Check"}
             </Button>
+            {selected.size > 0 && (
+              <Button variant="ghost" onClick={() => setSelected(new Set())}>Clear Selection</Button>
+            )}
             {selected.size > 0 && (
               <>
                 {hasSubmitted && (
@@ -548,7 +585,16 @@ const AssignmentDetail = () => {
             )}
           </>
         )}
-      </div>
+          </div>
+
+          {isLecturer && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">Recommended order</p>
+              <p className="mt-1">1. Upload submissions. 2. Run plagiarism or AI-content check. 3. Select submitted work and run AI grading. 4. Review outliers. 5. Approve and release.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {plagiarismFlags.length > 0 && (
         <Card className="border-warning">
@@ -578,13 +624,19 @@ const AssignmentDetail = () => {
         <CardHeader><CardTitle className="text-base">Submissions ({submissions.length})</CardTitle></CardHeader>
         <CardContent>
           {submissions.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No submissions yet</p>
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="font-medium">No submissions yet</p>
+              <p className="text-sm text-muted-foreground">
+                {isLecturer ? "Upload submission files or wait for students to submit." : "Your submission will appear here once uploaded."}
+              </p>
+            </div>
           ) : (
             <div className="space-y-2">
               {isLecturer && (
                 <div className="flex items-center gap-2 pb-2 border-b">
                   <Checkbox checked={selected.size === submissions.length && submissions.length > 0} onCheckedChange={toggleAll} />
-                  <span className="text-xs text-muted-foreground">Select all</span>
+                  <span className="text-xs text-muted-foreground">Select all visible submissions</span>
                 </div>
               )}
               {submissions.map((sub) => {
@@ -596,8 +648,16 @@ const AssignmentDetail = () => {
                     {isLecturer && <Checkbox checked={selected.has(sub.id)} onCheckedChange={() => toggleSelect(sub.id)} />}
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{sub.student_name || sub.student_email || "Student"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{sub.file_name} · {format(new Date(sub.submitted_at), "MMM d, HH:mm")}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{sub.student_name || sub.student_email || "Student"}</p>
+                        {grade?.ai_breakdown && (
+                          <Badge variant="outline" className="text-[10px]">
+                            <Sparkles className="mr-1 h-3 w-3" />
+                            AI feedback ready
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{sub.file_name} · {safeFormatDate(sub.submitted_at, "MMM d, HH:mm")}</p>
                       {grade?.ai_breakdown && Array.isArray(grade.ai_breakdown) && grade.ai_breakdown.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {grade.ai_breakdown.map((b: any, i: number) => (

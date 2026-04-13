@@ -93,8 +93,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: data.email ?? email ?? null,
         role: data.role === "lecturer" ? "lecturer" : "student",
         avatar_url: data.avatar_url,
-        cohort_id: null,
-        department_id: null,
+        cohort_id: data.cohort_id ?? null,
+        department_id: data.department_id ?? null,
       });
       posthog.identify(userId, { email });
     } else {
@@ -146,6 +146,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         data: {
           full_name: fullName,
           role,
+          cohort_id: role === "student" ? (cohortId || null) : null,
+          department_id: departmentId || null,
         },
       },
     });
