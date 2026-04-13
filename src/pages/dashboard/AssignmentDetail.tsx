@@ -199,68 +199,7 @@ const AssignmentDetail = () => {
     void fetchAssignment();
   }, [id]);
 
-  const loadGrades = async (subs: Submission[]) => {
-    if (subs.length === 0) {
-      setGrades({});
-      return;
-    }
-    const { data } = await supabase
-      .from("grades")
-      .select("*")
-      .in(
-        "submission_id",
-        subs.map((s) => s.id)
-      );
-    if (data) {
-      const gradeMap: Record<string, Grade> = {};
-      for (const g of data) {
-        gradeMap[g.submission_id] = {
-          id: g.id,
-          submission_id: g.submission_id,
-          ai_score: g.ai_score,
-          ai_feedback: g.ai_feedback,
-          ai_breakdown: g.ai_breakdown as any[],
-          lecturer_score: g.lecturer_score,
-          lecturer_feedback: g.lecturer_feedback,
-          final_score: g.final_score,
-          final_feedback: g.final_feedback,
-        };
-      }
-      setGrades(gradeMap);
-    }
-  };
 
-  const loadSubmissions = async () => {
-    if (!id) return;
-    const { data } = await supabase
-      .from("submissions")
-      .select("*")
-      .eq("assignment_id", id)
-      .order("submitted_at", { ascending: false });
-    if (data) {
-      const subs: Submission[] = data.map((d) => ({
-        id: d.id,
-        assignment_id: d.assignment_id,
-        student_name: d.student_name,
-        student_email: d.student_email,
-        file_name: d.file_name,
-        file_type: d.file_type,
-        file_url: d.file_url,
-        status: d.status as SubmissionStatus,
-        submitted_at: d.submitted_at,
-        student_id: d.student_id,
-      }));
-      setSubmissions(subs);
-      await loadGrades(subs);
-    }
-  };
-
-  useEffect(() => {
-    void loadSubmissions();
-  }, [id]);
-
-    void fetchAssignment();
-  }, [id, role, user]);
 
   const loadGrades = async (subs: Submission[]) => {
     if (subs.length === 0) {
