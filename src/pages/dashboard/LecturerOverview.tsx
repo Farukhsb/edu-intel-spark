@@ -151,10 +151,10 @@ const LecturerOverview = () => {
         });
         setRecent([]);
         setGradeDistribution([
-          { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
-          { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
-          { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
-          { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
+          { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
+          { label: "70-89%", count: 0, fill: "hsl(230, 65%, 52%)" },
+          { label: "50-69%", count: 0, fill: "hsl(38, 92%, 60%)" },
+          { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
         ]);
         setLoading(false);
         return;
@@ -167,11 +167,21 @@ const LecturerOverview = () => {
 
       if (submissionsError) throw submissionsError;
 
-      const assignments = assignRes.data || [];
-      const allSubs = (subRes.data || []).sort(
-        (a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
+      const submissionIds = (submissionsData || []).map((s) => s.id);
+      let gradesData: any[] = [];
+      if (submissionIds.length > 0) {
+        const { data: gData, error: gradesError } = await supabase
+          .from("grades")
+          .select("*")
+          .in("submission_id", submissionIds);
+        if (gradesError) throw gradesError;
+        gradesData = gData || [];
+      }
+
+      const allSubs = (submissionsData || []).sort(
+        (a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
       );
-      const allGrades = gradeRes.data || [];
+      const allGrades = gradesData;
 
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
       assignments.forEach((a) => {
