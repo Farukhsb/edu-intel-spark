@@ -67,7 +67,7 @@ const getPasswordResetRedirectUrl = () => {
     return `${window.location.origin}/reset-password`;
   }
 
-  return "https://edu-intel-spark.lovable.app/reset-password";
+  return "https://edu-intel-spark.pages.dev/reset-password";
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -103,7 +103,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
@@ -113,7 +112,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (isDemo) return;
 
@@ -152,8 +150,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (error) throw error;
     if (!data.user) throw new Error("Signup failed");
 
-    // The handle_new_user trigger creates the profile automatically.
-    // Set profile optimistically.
     setProfile({
       id: data.user.id,
       full_name: fullName,
@@ -189,7 +185,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const resendVerification = async () => {
-    // Supabase auto-confirms, so this is a no-op
   };
 
   const enterDemo = (demoRole: AppRole) => {
