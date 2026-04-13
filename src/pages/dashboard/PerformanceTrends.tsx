@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,6 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-
-// ── Predictive model helpers ──
 
 interface StudentTrajectory {
   name: string;
@@ -22,7 +20,7 @@ interface AtRiskStudent {
   name: string;
   email: string | null;
   studentId: string;
-  riskScore: number; // 0-100, higher = more at risk
+  riskScore: number;
   riskLevel: "critical" | "high" | "moderate";
   avgGrade: number;
   lastGrade: number;
@@ -36,9 +34,15 @@ interface AtRiskStudent {
 function linearRegression(values: number[]): { slope: number; intercept: number } {
   const n = values.length;
   if (n < 2) return { slope: 0, intercept: values[0] ?? 0 };
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumXX = 0;
   for (let i = 0; i < n; i++) {
-    sumX += i; sumY += values[i]; sumXY += i * values[i]; sumXX += i * i;
+    sumX += i;
+    sumY += values[i];
+    sumXY += i * values[i];
+    sumXX += i * i;
   }
   const denom = n * sumXX - sumX * sumX;
   const slope = denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
@@ -46,9 +50,8 @@ function linearRegression(values: number[]): { slope: number; intercept: number 
   return { slope, intercept };
 }
 
-// ── NEW: Calculate risk score using the new function ──
 function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
-  const scores = t.scores.map(s => s.score);
+  const scores = t.scores.map((s) => s.score);
   if (scores.length === 0) return null;
 
   const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -56,38 +59,51 @@ function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
   const { slope, intercept } = linearRegression(scores);
   const predictedNext = Math.max(0, Math.min(100, slope * scores.length + intercept));
 
-  // ── Risk factors (each contributes to 0-100 risk score) ──
   let riskScore = 0;
   const flags: string[] = [];
 
-  // 1. Low average (below 50%)
-  if (avg < 40) { riskScore += 30; flags.push("Average below 40%"); }
-  else if (avg < 50) { riskScore += 20; flags.push("Average below 50%"); }
+  if (avg < 40) {
+    riskScore += 30;
+    flags.push("Average below 40%");
+  } else if (avg < 50) {
+    riskScore += 20;
+    flags.push("Average below 50%");
+  }
 
-  // 2. Declining trajectory
-  if (slope < -3) { riskScore += 25; flags.push("Steep grade decline"); }
-  else if (slope < -1) { riskScore += 15; flags.push("Gradual grade decline"); }
+  if (slope < -3) {
+    riskScore += 25;
+    flags.push("Steep grade decline");
+  } else if (slope < -1) {
+    riskScore += 15;
+    flags.push("Gradual grade decline");
+  }
 
-  // 3. Last grade significantly below average
-  if (scores.length >= 2 && last < avg - 15) { riskScore += 15; flags.push("Sudden drop in last grade"); }
+  if (scores.length >= 2 && last < avg - 15) {
+    riskScore += 15;
+    flags.push("Sudden drop in last grade");
+  }
 
-  // 4. Predicted next score below pass
-  if (predictedNext < 40) { riskScore += 15; flags.push(`Predicted next: ${Math.round(predictedNext)}%`); }
+  if (predictedNext < 40) {
+    riskScore += 15;
+    flags.push(`Predicted next: ${Math.round(predictedNext)}%`);
+  }
 
-  // 5. Volatility (high standard deviation)
   if (scores.length >= 3) {
     const mean = avg;
     const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / scores.length;
     const stdDev = Math.sqrt(variance);
-    if (stdDev > 15) { riskScore += 10; flags.push("Highly inconsistent grades"); }
+    if (stdDev > 15) {
+      riskScore += 10;
+      flags.push("Highly inconsistent grades");
+    }
   }
 
-  // 6. Few submissions relative to expectations (if only 1 score vs multiple assignments)
-  if (scores.length === 1 && last < 50) { riskScore += 10; flags.push("Only 1 submission graded"); }
+  if (scores.length === 1 && last < 50) {
+    riskScore += 10;
+    flags.push("Only 1 submission graded");
+  }
 
   riskScore = Math.min(100, riskScore);
-
-  // Minimum threshold to flag
   if (riskScore < 25) return null;
 
   const trend: AtRiskStudent["trend"] =
@@ -96,14 +112,15 @@ function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
   const riskLevel: AtRiskStudent["riskLevel"] =
     riskScore >= 70 ? "critical" : riskScore >= 45 ? "high" : "moderate";
 
-  // AI-style recommendations based on risk factors
   const recommendations: string[] = [];
   if (slope < -3) recommendations.push("Urgent: schedule 1-on-1 meeting to discuss grade trajectory.");
   if (avg < 40) recommendations.push("Refer to student support services and consider tutoring.");
   if (last < avg - 15) recommendations.push("Recent performance dip — check for personal or academic issues.");
   if (predictedNext < 40) recommendations.push("Predicted to fail next assessment — consider intervention before deadline.");
   if (scores.length === 1) recommendations.push("Limited data — monitor closely after next submission.");
-  if (recommendations.length === 0) recommendations.push("Schedule check-in to discuss study strategies and provide additional resources.");
+  if (recommendations.length === 0) {
+    recommendations.push("Schedule check-in to discuss study strategies and provide additional resources.");
+  }
 
   return {
     name: t.name,
@@ -121,159 +138,137 @@ function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
   };
 }
 
-// ── NEW: Calculate risk score function (from riskCalculator.ts) ──
-function calculateRiskScore({
-  submissions,
-  grades,
-  totalAssignments
-}: {
-  submissions: any[];
-  grades: any[];
-  totalAssignments: number;
-}) {
-  const submissionRate = submissions.length / totalAssignments;
-  let submissionRisk =
-    submissionRate >= 0.9 ? 10 :
-    submissionRate >= 0.7 ? 40 : 80;
-
-  const scores = grades
-    .map(g => g.final_score ?? g.ai_score)
-    .filter(Boolean);
-
-  const avg = scores.length
-    ? scores.reduce((a, b) => a + b, 0) / scores.length
-    : 0;
-
-  let avgRisk =
-    avg >= 70 ? 20 :
-    avg >= 50 ? 50 : 80;
-
-  let trendRisk = 50;
-  if (scores.length >= 4) {
-    const mid = Math.floor(scores.length / 2);
-    const first = scores.slice(0, mid);
-    const last = scores.slice(mid);
-
-    const firstAvg = first.reduce((a, b) => a + b, 0) / first.length;
-    const lastAvg = last.reduce((a, b) => a + b, 0) / last.length;
-
-    if (lastAvg > firstAvg) trendRisk = 20;
-    else if (lastAvg < firstAvg) trendRisk = 80;
-  }
-
-  let completionRisk = submissionRisk;
-
-  const riskScore =
-    submissionRisk * 0.3 +
-    trendRisk * 0.25 +
-    avgRisk * 0.25 +
-    completionRisk * 0.2;
-
-  return Math.round(riskScore);
-}
-
-// ── NEW: Get risk label function (from riskCalculator.ts) ──
-function getRiskLabel(score: number) {
-  if (score <= 30) return { label: "Low", color: "green" };
-  if (score <= 60) return { label: "Medium", color: "orange" };
-  return { label: "High", color: "red" };
-}
-
-// ── Component ──
-
 const PerformanceTrends = () => {
-  const { profile, isDemo } = useAuth();
+  const { user, isDemo } = useAuth();
   const { toast } = useToast();
   const [moduleFilter, setModuleFilter] = useState("all");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [alertsDismissed, setAlertsDismissed] = useState(false);
 
-  // Live data state
   const [modules, setModules] = useState<string[]>([]);
   const [assessmentTrends, setAssessmentTrends] = useState<{ name: string; avgGrade: number; participation: number }[]>([]);
   const [gradeDist, setGradeDist] = useState<{ band: string; count: number; percentage: number; fill: string }[]>([]);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
 
   useEffect(() => {
+    if (isDemo) {
+      setLoading(false);
+      return;
+    }
+
+    if (!user) return;
+
     const fetchLiveData = async () => {
       try {
-        // Fetch assignments (lecturer's own)
-        const { data: assignments } = await supabase.from("assignments").select("*");
-        if (!assignments || assignments.length === 0) {
+        const { data: assignmentsData, error: assignmentsError } = await supabase
+          .from("assignments")
+          .select("*")
+          .eq("lecturer_id", user.id);
+
+        if (assignmentsError) throw assignmentsError;
+
+        const assignments = assignmentsData || [];
+        if (assignments.length === 0) {
+          setModules([]);
+          setAssessmentTrends([]);
+          setGradeDist([
+            { band: "1st (70-100%)", count: 0, percentage: 0, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69%)", count: 0, percentage: 0, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59%)", count: 0, percentage: 0, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49%)", count: 0, percentage: 0, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40%)", count: 0, percentage: 0, fill: "hsl(0, 72%, 55%)" },
+          ]);
+          setAtRiskStudents([]);
           setLoading(false);
           return;
         }
 
-        const assignmentIds = assignments.map(a => a.id);
-        const moduleSet = new Set(assignments.map(a => a.module_code).filter(Boolean) as string[]);
+        const assignmentIds = assignments.map((a) => a.id);
+        const moduleSet = new Set(assignments.map((a) => a.module_code).filter(Boolean) as string[]);
         setModules(Array.from(moduleSet));
 
-        // Fetch submissions for those assignments
-        const { data: submissions } = await supabase
+        const { data: submissionsData, error: submissionsError } = await supabase
           .from("submissions")
           .select("*")
           .in("assignment_id", assignmentIds);
 
-        if (!submissions || submissions.length === 0) {
+        if (submissionsError) throw submissionsError;
+
+        const submissions = submissionsData || [];
+        if (submissions.length === 0) {
+          setAssessmentTrends([]);
+          setGradeDist([
+            { band: "1st (70-100%)", count: 0, percentage: 0, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69%)", count: 0, percentage: 0, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59%)", count: 0, percentage: 0, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49%)", count: 0, percentage: 0, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40%)", count: 0, percentage: 0, fill: "hsl(0, 72%, 55%)" },
+          ]);
+          setAtRiskStudents([]);
           setLoading(false);
           return;
         }
 
-        const submissionIds = submissions.map(s => s.id);
+        const submissionIds = submissions.map((s) => s.id);
+        let grades: any[] = [];
+        if (submissionIds.length > 0) {
+          const { data: gradesData, error: gradesError } = await supabase
+            .from("grades")
+            .select("*")
+            .in("submission_id", submissionIds);
 
-        // Fetch grades
-        const { data: grades } = await supabase
-          .from("grades")
-          .select("*")
-          .in("submission_id", submissionIds);
+          if (gradesError) throw gradesError;
+          grades = gradesData || [];
+        }
 
-        // ── Filter by module if needed ──
-        const filteredAssignments = moduleFilter === "all"
-          ? assignments
-          : assignments.filter(a => a.module_code === moduleFilter);
-        const filteredAssignmentIds = new Set(filteredAssignments.map(a => a.id));
-        const filteredSubs = submissions.filter(s => filteredAssignmentIds.has(s.assignment_id));
-        const filteredSubIds = new Set(filteredSubs.map(s => s.id));
-        const filteredGrades = (grades || []).filter(g => filteredSubIds.has(g.submission_id));
+        const filteredAssignments =
+          moduleFilter === "all"
+            ? assignments
+            : assignments.filter((a) => a.module_code === moduleFilter);
+        const filteredAssignmentIds = new Set(filteredAssignments.map((a) => a.id));
+        const filteredSubs = submissions.filter((s) => filteredAssignmentIds.has(s.assignment_id));
+        const filteredSubIds = new Set(filteredSubs.map((s) => s.id));
+        const filteredGrades = grades.filter((g) => filteredSubIds.has(g.submission_id));
 
-        // ── Assessment trend data ──
-        const assignmentMap = new Map(filteredAssignments.map(a => [a.id, a]));
+        const assignmentMap = new Map(filteredAssignments.map((a) => [a.id, a]));
         const perAssignment: Record<string, { scores: number[]; totalSubs: number }> = {};
-        filteredSubs.forEach(s => {
+        filteredSubs.forEach((s) => {
           const a = assignmentMap.get(s.assignment_id);
           if (!a) return;
           const key = a.title;
           if (!perAssignment[key]) perAssignment[key] = { scores: [], totalSubs: 0 };
           perAssignment[key].totalSubs++;
-          const g = filteredGrades.find(gr => gr.submission_id === s.id);
+          const g = filteredGrades.find((gr) => gr.submission_id === s.id);
           const score = g?.final_score ?? g?.ai_score;
           if (score != null) perAssignment[key].scores.push(Number(score));
         });
 
         const trends = Object.entries(perAssignment).map(([name, d]) => ({
-          name: name.length > 20 ? name.slice(0, 18) + "…" : name,
+          name: name.length > 20 ? `${name.slice(0, 18)}…` : name,
           avgGrade: d.scores.length > 0 ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : 0,
           participation: filteredSubs.length > 0 ? Math.round((d.totalSubs / filteredSubs.length) * 100) : 0,
         }));
         setAssessmentTrends(trends);
 
-        // ── Grade distribution ──
-        const allScores = filteredGrades.map(g => Number(g.final_score ?? g.ai_score)).filter(s => !isNaN(s));
+        const allScores = filteredGrades
+          .map((g) => Number(g.final_score ?? g.ai_score))
+          .filter((s) => !isNaN(s));
         const total = allScores.length || 1;
         const dist = [
-          { band: "1st (70-100%)", count: allScores.filter(s => s >= 70).length, percentage: 0, fill: "hsl(152, 56%, 45%)" },
-          { band: "2:1 (60-69%)", count: allScores.filter(s => s >= 60 && s < 70).length, percentage: 0, fill: "hsl(205, 80%, 55%)" },
-          { band: "2:2 (50-59%)", count: allScores.filter(s => s >= 50 && s < 60).length, percentage: 0, fill: "hsl(38, 92%, 60%)" },
-          { band: "3rd (40-49%)", count: allScores.filter(s => s >= 40 && s < 50).length, percentage: 0, fill: "hsl(280, 55%, 55%)" },
-          { band: "Fail (<40%)", count: allScores.filter(s => s < 40).length, percentage: 0, fill: "hsl(0, 72%, 55%)" },
+          { band: "1st (70-100%)", count: allScores.filter((s) => s >= 70).length, percentage: 0, fill: "hsl(152, 56%, 45%)" },
+          { band: "2:1 (60-69%)", count: allScores.filter((s) => s >= 60 && s < 70).length, percentage: 0, fill: "hsl(205, 80%, 55%)" },
+          { band: "2:2 (50-59%)", count: allScores.filter((s) => s >= 50 && s < 60).length, percentage: 0, fill: "hsl(38, 92%, 60%)" },
+          { band: "3rd (40-49%)", count: allScores.filter((s) => s >= 40 && s < 50).length, percentage: 0, fill: "hsl(280, 55%, 55%)" },
+          { band: "Fail (<40%)", count: allScores.filter((s) => s < 40).length, percentage: 0, fill: "hsl(0, 72%, 55%)" },
         ];
-        dist.forEach(d => d.percentage = Math.round((d.count / total) * 100));
+        dist.forEach((d) => {
+          d.percentage = Math.round((d.count / total) * 100);
+        });
         setGradeDist(dist);
 
-        // ── Predictive at-risk model ──
         const trajectories: Record<string, StudentTrajectory> = {};
-        filteredSubs.forEach(s => {
+        filteredSubs.forEach((s) => {
           const key = s.student_id || s.student_email || s.student_name || "unknown";
           if (!trajectories[key]) {
             trajectories[key] = {
@@ -283,7 +278,7 @@ const PerformanceTrends = () => {
               scores: [],
             };
           }
-          const g = filteredGrades.find(gr => gr.submission_id === s.id);
+          const g = filteredGrades.find((gr) => gr.submission_id === s.id);
           const score = g?.final_score ?? g?.ai_score;
           if (score != null) {
             const a = assignmentMap.get(s.assignment_id);
@@ -295,8 +290,7 @@ const PerformanceTrends = () => {
           }
         });
 
-        // Sort each student's scores by date
-        Object.values(trajectories).forEach(t => {
+        Object.values(trajectories).forEach((t) => {
           t.scores.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         });
 
@@ -312,39 +306,40 @@ const PerformanceTrends = () => {
       setLoading(false);
     };
 
-    fetchLiveData();
-  }, [isDemo, profile?.id, moduleFilter]);
+    void fetchLiveData();
+  }, [isDemo, user?.id, moduleFilter]);
 
-  // ── Fire alerts for critical/high-risk students ──
   useEffect(() => {
     if (alertsDismissed || atRiskStudents.length === 0) return;
-    const critical = atRiskStudents.filter(s => s.riskLevel === "critical");
-    const high = atRiskStudents.filter(s => s.riskLevel === "high");
+    const critical = atRiskStudents.filter((s) => s.riskLevel === "critical");
+    const high = atRiskStudents.filter((s) => s.riskLevel === "high");
 
     if (critical.length > 0) {
       toast({
         variant: "destructive",
         title: `⚠️ ${critical.length} Critical At-Risk Student${critical.length > 1 ? "s" : ""}`,
-        description: critical.map(s => s.name).join(", ") + " — immediate intervention recommended.",
+        description: `${critical.map((s) => s.name).join(", ")} — immediate intervention recommended.`,
       });
     }
     if (high.length > 0) {
       toast({
         title: `🔔 ${high.length} High-Risk Student${high.length > 1 ? "s" : ""} Detected`,
-        description: high.map(s => s.name).join(", ") + " — review their trajectories.",
+        description: `${high.map((s) => s.name).join(", ")} — review their trajectories.`,
       });
     }
     setAlertsDismissed(true);
   }, [atRiskStudents, alertsDismissed, toast]);
 
   const riskBorder = (level: AtRiskStudent["riskLevel"]) =>
-    level === "critical" ? "border-destructive/40 bg-destructive/10" :
-    level === "high" ? "border-destructive/20 bg-destructive/5" :
-    "border-warning/30 bg-warning/5";
+    level === "critical"
+      ? "border-destructive/40 bg-destructive/10"
+      : level === "high"
+      ? "border-destructive/20 bg-destructive/5"
+      : "border-warning/30 bg-warning/5";
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
-  const noData = assessmentTrends.length === 0 && gradeDist.every(d => d.count === 0);
+  const noData = assessmentTrends.length === 0 && gradeDist.every((d) => d.count === 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -353,7 +348,7 @@ const PerformanceTrends = () => {
           <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filter by module" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Modules</SelectItem>
-            {modules.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            {modules.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
           </SelectContent>
         </Select>
         {atRiskStudents.length > 0 && (
@@ -373,7 +368,6 @@ const PerformanceTrends = () => {
         </Card>
       ) : (
         <>
-          {/* Average Grades Over Time */}
           {assessmentTrends.length > 0 && (
             <Card>
               <CardHeader>
@@ -395,7 +389,6 @@ const PerformanceTrends = () => {
             </Card>
           )}
 
-          {/* Grade Distribution */}
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -417,7 +410,6 @@ const PerformanceTrends = () => {
               </CardContent>
             </Card>
 
-            {/* Risk Score Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Risk Score Summary</CardTitle>
@@ -431,13 +423,19 @@ const PerformanceTrends = () => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {atRiskStudents.slice(0, 5).map(s => (
+                    {atRiskStudents.slice(0, 5).map((s) => (
                       <div key={s.studentId} className="flex items-center justify-between gap-2">
                         <span className="text-sm truncate flex-1">{s.name}</span>
                         <div className="flex items-center gap-2">
                           <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${s.riskLevel === "critical" ? "bg-destructive" : s.riskLevel === "high" ? "bg-warning" : "bg-orange-400"}`}
+                              className={`h-full rounded-full ${
+                                s.riskLevel === "critical"
+                                  ? "bg-destructive"
+                                  : s.riskLevel === "high"
+                                  ? "bg-warning"
+                                  : "bg-orange-400"
+                              }`}
                               style={{ width: `${s.riskScore}%` }}
                             />
                           </div>
@@ -454,7 +452,6 @@ const PerformanceTrends = () => {
             </Card>
           </div>
 
-          {/* At-Risk Students with Predictive Details */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -471,7 +468,7 @@ const PerformanceTrends = () => {
                   No at-risk students detected based on current grading data.
                 </p>
               ) : (
-                atRiskStudents.map((s, i) => {
+                atRiskStudents.map((s) => {
                   const sparkData = s.sparkline.map((v, idx) => ({ x: idx, y: v }));
                   const isExpanded = expandedStudent === s.studentId;
                   return (
