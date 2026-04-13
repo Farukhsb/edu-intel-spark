@@ -14,6 +14,10 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
+const ASSIGNMENT_FIELDS = "id, title, module_code";
+const GRADE_FIELDS = "submission_id, ai_score, final_score, ai_breakdown";
+const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email";
+
 interface AssignmentOption { id: string; title: string; moduleCode: string | null }
 
 interface OutcomeRow {
@@ -42,15 +46,15 @@ const LearningOutcomes = () => {
     if (isDemo) { setLoading(false); return; }
     const fetchData = async () => {
       try {
-        const { data: assignData } = await supabase.from("assignments").select("*");
+        const { data: assignData } = await supabase.from("assignments").select(ASSIGNMENT_FIELDS);
         const opts: AssignmentOption[] = (assignData || []).map(d => ({
           id: d.id, title: d.title, moduleCode: d.module_code || null,
         }));
         setAssignments(opts);
 
         // Fetch grades and submissions from Supabase (where AI grading data lives)
-        const { data: gradesData } = await supabase.from("grades").select("*");
-        const { data: subsData } = await supabase.from("submissions").select("*");
+        const { data: gradesData } = await supabase.from("grades").select(GRADE_FIELDS);
+        const { data: subsData } = await supabase.from("submissions").select(SUBMISSION_FIELDS);
 
         // Build maps
         const subAssignment: Record<string, string> = {};

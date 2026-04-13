@@ -1,30 +1,26 @@
-export function safeFormatDate(dateStr: string | null | undefined, fallback = "N/A"): string {
-  if (!dateStr) return fallback;
-  try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return fallback;
-  }
-}
+import { format } from "date-fns";
 
-export function safeToLocaleDate(dateStr: string | null | undefined, fallback = "N/A"): string {
-  return safeFormatDate(dateStr, fallback);
-}
+const coerceDate = (value: string | Date | null | undefined) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 
-export function format(date: Date, pattern: string): string {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  
-  return pattern
-    .replace("yyyy", date.getFullYear().toString())
-    .replace("MMM", months[date.getMonth()])
-    .replace("dd", pad(date.getDate()))
-    .replace("d", date.getDate().toString())
-    .replace("HH", pad(date.getHours()))
-    .replace("mm", pad(date.getMinutes()))
-    .replace(/'/g, "");
-}
+export const safeFormatDate = (
+  value: string | Date | null | undefined,
+  pattern: string,
+  fallback = "-"
+) => {
+  const date = coerceDate(value);
+  if (!date) return fallback;
+  return format(date, pattern);
+};
+
+export const safeToLocaleDate = (
+  value: string | Date | null | undefined,
+  fallback = "-"
+) => {
+  const date = coerceDate(value);
+  if (!date) return fallback;
+  return date.toLocaleDateString();
+};

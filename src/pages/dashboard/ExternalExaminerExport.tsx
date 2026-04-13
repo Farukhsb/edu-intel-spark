@@ -8,6 +8,12 @@ import { Download, FileText, Loader2, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { safeFormatDate } from "@/lib/date";
+
+const ASSIGNMENT_FIELDS = "id, title, module_code";
+const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
+const GRADE_FIELDS = "submission_id, ai_score, lecturer_score, final_score, ai_feedback, lecturer_feedback, final_feedback, reviewed_at, reviewed_by";
+const PROFILE_FIELDS = "id, full_name, email";
 
 interface ExportData {
   studentName: string;
@@ -55,10 +61,10 @@ const ExternalExaminerExport = () => {
     const fetchData = async () => {
       try {
         const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }, { data: profilesRaw }] = await Promise.all([
-          supabase.from("assignments").select("*"),
-          supabase.from("submissions").select("*"),
-          supabase.from("grades").select("*"),
-          supabase.from("profiles").select("*"),
+          supabase.from("assignments").select(ASSIGNMENT_FIELDS),
+          supabase.from("submissions").select(SUBMISSION_FIELDS),
+          supabase.from("grades").select(GRADE_FIELDS),
+          supabase.from("profiles").select(PROFILE_FIELDS),
         ]);
 
         const assignmentList = (assignmentsRaw || []).map(d => ({
@@ -94,8 +100,8 @@ const ExternalExaminerExport = () => {
             lecturerFeedback: grade.lecturer_feedback || "",
             finalFeedback: grade.final_feedback || "",
             status: d.status || "—",
-            submittedAt: d.submitted_at ? new Date(d.submitted_at).toISOString().slice(0, 10) : "—",
-            reviewedAt: grade.reviewed_at ? new Date(grade.reviewed_at).toISOString().slice(0, 10) : "—",
+            submittedAt: safeFormatDate(d.submitted_at, "yyyy-MM-dd", "—"),
+            reviewedAt: safeFormatDate(grade.reviewed_at, "yyyy-MM-dd", "—"),
             reviewedBy: grade.reviewed_by ? (userMap[grade.reviewed_by] || grade.reviewed_by) : "—",
             classification: getClassification(finalScore),
           };
