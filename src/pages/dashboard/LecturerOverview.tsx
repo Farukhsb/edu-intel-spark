@@ -126,10 +126,6 @@ const LecturerOverview = () => {
           { label: "70–89%", count: 0, fill: "hsl(230, 65%, 52%)" },
           { label: "50–69%", count: 0, fill: "hsl(38, 92%, 60%)" },
           { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
-          { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
-          { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
-          { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
-          { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
         ]
   );
   const [loading, setLoading] = useState(!isDemo);
