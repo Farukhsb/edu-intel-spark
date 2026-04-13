@@ -152,7 +152,12 @@ const LecturerOverview = () => {
       if (assignmentIds.length === 0) {
         setStats({ ...EMPTY_STATS, assignmentCount: 0 });
         setRecent([]);
-        setGradeDistribution(EMPTY_DIST);
+        setGradeDistribution([
+          { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
+          { label: "70-89%", count: 0, fill: "hsl(230, 65%, 52%)" },
+          { label: "50-69%", count: 0, fill: "hsl(38, 92%, 60%)" },
+          { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
+        ]);
         setLoading(false);
         return;
       }
@@ -164,22 +169,21 @@ const LecturerOverview = () => {
 
       if (submissionsError) throw submissionsError;
 
-      const allSubs = (submissionsData || []).sort(
-        (a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
-      );
-
-      const submissionIds = allSubs.map((submission) => submission.id);
-      let allGrades: Array<{ submission_id: string; final_score: number | null; ai_score: number | null }> = [];
-
+      const submissionIds = (submissionsData || []).map((s) => s.id);
+      let gradesData: any[] = [];
       if (submissionIds.length > 0) {
-        const { data: gradesData, error: gradesError } = await supabase
+        const { data: gData, error: gradesError } = await supabase
           .from("grades")
-          .select(GRADE_FIELDS)
+          .select("*")
           .in("submission_id", submissionIds);
-
         if (gradesError) throw gradesError;
-        allGrades = gradesData || [];
+        gradesData = gData || [];
       }
+
+      const allSubs = (submissionsData || []).sort(
+        (a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
+      );
+      const allGrades = gradesData;
 
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
       assignments.forEach((assignment) => {

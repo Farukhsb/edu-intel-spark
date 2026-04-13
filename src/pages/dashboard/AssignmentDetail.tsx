@@ -33,7 +33,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { safeFormatDate } from "@/lib/date";
+import { safeFormatDate, format } from "@/lib/date";
 
 type SubmissionStatus =
   | "submitted"
@@ -199,18 +199,19 @@ const AssignmentDetail = () => {
     void fetchAssignment();
   }, [id]);
 
+
+
   const loadGrades = async (subs: Submission[]) => {
     if (subs.length === 0) {
       setGrades({});
       return;
     }
+
     const { data } = await supabase
       .from("grades")
       .select("*")
-      .in(
-        "submission_id",
-        subs.map((s) => s.id)
-      );
+      .in("submission_id", subs.map((s) => s.id));
+
     if (data) {
       const gradeMap: Record<string, Grade> = {};
       for (const g of data) {
@@ -231,12 +232,14 @@ const AssignmentDetail = () => {
   };
 
   const loadSubmissions = async () => {
-    if (!id) return;
+    if (!assignment) return;
+
     const { data } = await supabase
       .from("submissions")
       .select("*")
-      .eq("assignment_id", id)
+      .eq("assignment_id", assignment.id)
       .order("submitted_at", { ascending: false });
+
     if (data) {
       const subs: Submission[] = data.map((d) => ({
         id: d.id,
@@ -252,12 +255,16 @@ const AssignmentDetail = () => {
       }));
       setSubmissions(subs);
       await loadGrades(subs);
+    } else {
+      setSubmissions([]);
+      setGrades({});
     }
   };
 
   useEffect(() => {
+    if (!assignment) return;
     void loadSubmissions();
-  }, [id]);
+  }, [assignment?.id]);
 
   const uploadFile = async (file: File, userId: string) => {
     if (!assignment) throw new Error("Missing assignment");
