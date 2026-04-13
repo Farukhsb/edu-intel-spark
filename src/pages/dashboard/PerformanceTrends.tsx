@@ -9,6 +9,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+const ASSIGNMENT_FIELDS = "id, title, module_code";
+const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, submitted_at";
+const GRADE_FIELDS = "submission_id, ai_score, final_score";
+
 interface StudentTrajectory {
   name: string;
   email: string | null;
@@ -34,6 +38,7 @@ interface AtRiskStudent {
 function linearRegression(values: number[]): { slope: number; intercept: number } {
   const n = values.length;
   if (n < 2) return { slope: 0, intercept: values[0] ?? 0 };
+
   let sumX = 0;
   let sumY = 0;
   let sumXY = 0;
@@ -44,14 +49,15 @@ function linearRegression(values: number[]): { slope: number; intercept: number 
     sumXY += i * values[i];
     sumXX += i * i;
   }
+
   const denom = n * sumXX - sumX * sumX;
   const slope = denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
   const intercept = (sumY - slope * sumX) / n;
   return { slope, intercept };
 }
 
-function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
-  const scores = t.scores.map((s) => s.score);
+function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null {
+  const scores = trajectory.scores.map((entry) => entry.score);
   if (scores.length === 0) return null;
 
   const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -90,7 +96,7 @@ function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
 
   if (scores.length >= 3) {
     const mean = avg;
-    const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / scores.length;
+    const variance = scores.reduce((sum, value) => sum + (value - mean) ** 2, 0) / scores.length;
     const stdDev = Math.sqrt(variance);
     if (stdDev > 15) {
       riskScore += 10;
@@ -106,26 +112,23 @@ function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
   riskScore = Math.min(100, riskScore);
   if (riskScore < 25) return null;
 
-  const trend: AtRiskStudent["trend"] =
-    slope < -1 ? "declining" : avg < 50 ? "stable-low" : "volatile";
-
-  const riskLevel: AtRiskStudent["riskLevel"] =
-    riskScore >= 70 ? "critical" : riskScore >= 45 ? "high" : "moderate";
+  const trend: AtRiskStudent["trend"] = slope < -1 ? "declining" : avg < 50 ? "stable-low" : "volatile";
+  const riskLevel: AtRiskStudent["riskLevel"] = riskScore >= 70 ? "critical" : riskScore >= 45 ? "high" : "moderate";
 
   const recommendations: string[] = [];
   if (slope < -3) recommendations.push("Urgent: schedule 1-on-1 meeting to discuss grade trajectory.");
   if (avg < 40) recommendations.push("Refer to student support services and consider tutoring.");
-  if (last < avg - 15) recommendations.push("Recent performance dip — check for personal or academic issues.");
-  if (predictedNext < 40) recommendations.push("Predicted to fail next assessment — consider intervention before deadline.");
-  if (scores.length === 1) recommendations.push("Limited data — monitor closely after next submission.");
+  if (last < avg - 15) recommendations.push("Recent performance dip - check for personal or academic issues.");
+  if (predictedNext < 40) recommendations.push("Predicted to fail next assessment - consider intervention before deadline.");
+  if (scores.length === 1) recommendations.push("Limited data - monitor closely after next submission.");
   if (recommendations.length === 0) {
     recommendations.push("Schedule check-in to discuss study strategies and provide additional resources.");
   }
 
   return {
-    name: t.name,
-    email: t.email,
-    studentId: t.studentId,
+    name: trajectory.name,
+    email: trajectory.email,
+    studentId: trajectory.studentId,
     riskScore,
     riskLevel,
     avgGrade: Math.round(avg),
@@ -138,6 +141,14 @@ function computeRisk(t: StudentTrajectory): AtRiskStudent | null {
   };
 }
 
+const EMPTY_GRADE_DIST = [
+  { band: "1st (70-100%)", count: 0, percentage: 0, fill: "hsl(152, 56%, 45%)" },
+  { band: "2:1 (60-69%)", count: 0, percentage: 0, fill: "hsl(205, 80%, 55%)" },
+  { band: "2:2 (50-59%)", count: 0, percentage: 0, fill: "hsl(38, 92%, 60%)" },
+  { band: "3rd (40-49%)", count: 0, percentage: 0, fill: "hsl(280, 55%, 55%)" },
+  { band: "Fail (<40%)", count: 0, percentage: 0, fill: "hsl(0, 72%, 55%)" },
+];
+
 const PerformanceTrends = () => {
   const { user, isDemo } = useAuth();
   const { toast } = useToast();
@@ -145,10 +156,9 @@ const PerformanceTrends = () => {
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [alertsDismissed, setAlertsDismissed] = useState(false);
-
   const [modules, setModules] = useState<string[]>([]);
   const [assessmentTrends, setAssessmentTrends] = useState<{ name: string; avgGrade: number; participation: number }[]>([]);
-  const [gradeDist, setGradeDist] = useState<{ band: string; count: number; percentage: number; fill: string }[]>([]);
+  const [gradeDist, setGradeDist] = useState(EMPTY_GRADE_DIST);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
 
   useEffect(() => {
@@ -163,7 +173,7 @@ const PerformanceTrends = () => {
       try {
         const { data: assignmentsData, error: assignmentsError } = await supabase
           .from("assignments")
-          .select("*")
+          .select(ASSIGNMENT_FIELDS)
           .eq("lecturer_id", user.id);
 
         if (assignmentsError) throw assignmentsError;
@@ -172,25 +182,19 @@ const PerformanceTrends = () => {
         if (assignments.length === 0) {
           setModules([]);
           setAssessmentTrends([]);
-          setGradeDist([
-            { band: "1st (70-100%)", count: 0, percentage: 0, fill: "hsl(152, 56%, 45%)" },
-            { band: "2:1 (60-69%)", count: 0, percentage: 0, fill: "hsl(205, 80%, 55%)" },
-            { band: "2:2 (50-59%)", count: 0, percentage: 0, fill: "hsl(38, 92%, 60%)" },
-            { band: "3rd (40-49%)", count: 0, percentage: 0, fill: "hsl(280, 55%, 55%)" },
-            { band: "Fail (<40%)", count: 0, percentage: 0, fill: "hsl(0, 72%, 55%)" },
-          ]);
+          setGradeDist(EMPTY_GRADE_DIST);
           setAtRiskStudents([]);
           setLoading(false);
           return;
         }
 
-        const assignmentIds = assignments.map((a) => a.id);
-        const moduleSet = new Set(assignments.map((a) => a.module_code).filter(Boolean) as string[]);
+        const assignmentIds = assignments.map((assignment) => assignment.id);
+        const moduleSet = new Set(assignments.map((assignment) => assignment.module_code).filter(Boolean) as string[]);
         setModules(Array.from(moduleSet));
 
         const { data: submissionsData, error: submissionsError } = await supabase
           .from("submissions")
-          .select("*")
+          .select(SUBMISSION_FIELDS)
           .in("assignment_id", assignmentIds);
 
         if (submissionsError) throw submissionsError;
@@ -198,24 +202,18 @@ const PerformanceTrends = () => {
         const submissions = submissionsData || [];
         if (submissions.length === 0) {
           setAssessmentTrends([]);
-          setGradeDist([
-            { band: "1st (70-100%)", count: 0, percentage: 0, fill: "hsl(152, 56%, 45%)" },
-            { band: "2:1 (60-69%)", count: 0, percentage: 0, fill: "hsl(205, 80%, 55%)" },
-            { band: "2:2 (50-59%)", count: 0, percentage: 0, fill: "hsl(38, 92%, 60%)" },
-            { band: "3rd (40-49%)", count: 0, percentage: 0, fill: "hsl(280, 55%, 55%)" },
-            { band: "Fail (<40%)", count: 0, percentage: 0, fill: "hsl(0, 72%, 55%)" },
-          ]);
+          setGradeDist(EMPTY_GRADE_DIST);
           setAtRiskStudents([]);
           setLoading(false);
           return;
         }
 
-        const submissionIds = submissions.map((s) => s.id);
-        let grades: any[] = [];
+        const submissionIds = submissions.map((submission) => submission.id);
+        let grades: Array<{ submission_id: string; ai_score: number | null; final_score: number | null }> = [];
         if (submissionIds.length > 0) {
           const { data: gradesData, error: gradesError } = await supabase
             .from("grades")
-            .select("*")
+            .select(GRADE_FIELDS)
             .in("submission_id", submissionIds);
 
           if (gradesError) throw gradesError;
@@ -225,84 +223,94 @@ const PerformanceTrends = () => {
         const filteredAssignments =
           moduleFilter === "all"
             ? assignments
-            : assignments.filter((a) => a.module_code === moduleFilter);
-        const filteredAssignmentIds = new Set(filteredAssignments.map((a) => a.id));
-        const filteredSubs = submissions.filter((s) => filteredAssignmentIds.has(s.assignment_id));
-        const filteredSubIds = new Set(filteredSubs.map((s) => s.id));
-        const filteredGrades = grades.filter((g) => filteredSubIds.has(g.submission_id));
+            : assignments.filter((assignment) => assignment.module_code === moduleFilter);
+        const filteredAssignmentIds = new Set(filteredAssignments.map((assignment) => assignment.id));
+        const filteredSubs = submissions.filter((submission) => filteredAssignmentIds.has(submission.assignment_id));
+        const filteredSubIds = new Set(filteredSubs.map((submission) => submission.id));
+        const filteredGrades = grades.filter((grade) => filteredSubIds.has(grade.submission_id));
 
-        const assignmentMap = new Map(filteredAssignments.map((a) => [a.id, a]));
+        const assignmentMap = new Map(filteredAssignments.map((assignment) => [assignment.id, assignment]));
+        const gradeBySubmission = new Map(
+          filteredGrades.map((grade) => [grade.submission_id, Number(grade.final_score ?? grade.ai_score)])
+        );
+
         const perAssignment: Record<string, { scores: number[]; totalSubs: number }> = {};
-        filteredSubs.forEach((s) => {
-          const a = assignmentMap.get(s.assignment_id);
-          if (!a) return;
-          const key = a.title;
-          if (!perAssignment[key]) perAssignment[key] = { scores: [], totalSubs: 0 };
+        filteredSubs.forEach((submission) => {
+          const assignment = assignmentMap.get(submission.assignment_id);
+          if (!assignment) return;
+
+          const key = assignment.title;
+          if (!perAssignment[key]) {
+            perAssignment[key] = { scores: [], totalSubs: 0 };
+          }
+
           perAssignment[key].totalSubs++;
-          const g = filteredGrades.find((gr) => gr.submission_id === s.id);
-          const score = g?.final_score ?? g?.ai_score;
-          if (score != null) perAssignment[key].scores.push(Number(score));
+          const score = gradeBySubmission.get(submission.id);
+          if (score != null && !Number.isNaN(score)) {
+            perAssignment[key].scores.push(score);
+          }
         });
 
-        const trends = Object.entries(perAssignment).map(([name, d]) => ({
-          name: name.length > 20 ? `${name.slice(0, 18)}…` : name,
-          avgGrade: d.scores.length > 0 ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : 0,
-          participation: filteredSubs.length > 0 ? Math.round((d.totalSubs / filteredSubs.length) * 100) : 0,
+        const trends = Object.entries(perAssignment).map(([name, data]) => ({
+          name: name.length > 20 ? `${name.slice(0, 18)}...` : name,
+          avgGrade: data.scores.length > 0 ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length) : 0,
+          participation: filteredSubs.length > 0 ? Math.round((data.totalSubs / filteredSubs.length) * 100) : 0,
         }));
         setAssessmentTrends(trends);
 
         const allScores = filteredGrades
-          .map((g) => Number(g.final_score ?? g.ai_score))
-          .filter((s) => !isNaN(s));
+          .map((grade) => Number(grade.final_score ?? grade.ai_score))
+          .filter((score) => !Number.isNaN(score));
         const total = allScores.length || 1;
         const dist = [
-          { band: "1st (70-100%)", count: allScores.filter((s) => s >= 70).length, percentage: 0, fill: "hsl(152, 56%, 45%)" },
-          { band: "2:1 (60-69%)", count: allScores.filter((s) => s >= 60 && s < 70).length, percentage: 0, fill: "hsl(205, 80%, 55%)" },
-          { band: "2:2 (50-59%)", count: allScores.filter((s) => s >= 50 && s < 60).length, percentage: 0, fill: "hsl(38, 92%, 60%)" },
-          { band: "3rd (40-49%)", count: allScores.filter((s) => s >= 40 && s < 50).length, percentage: 0, fill: "hsl(280, 55%, 55%)" },
-          { band: "Fail (<40%)", count: allScores.filter((s) => s < 40).length, percentage: 0, fill: "hsl(0, 72%, 55%)" },
+          { band: "1st (70-100%)", count: allScores.filter((score) => score >= 70).length, percentage: 0, fill: "hsl(152, 56%, 45%)" },
+          { band: "2:1 (60-69%)", count: allScores.filter((score) => score >= 60 && score < 70).length, percentage: 0, fill: "hsl(205, 80%, 55%)" },
+          { band: "2:2 (50-59%)", count: allScores.filter((score) => score >= 50 && score < 60).length, percentage: 0, fill: "hsl(38, 92%, 60%)" },
+          { band: "3rd (40-49%)", count: allScores.filter((score) => score >= 40 && score < 50).length, percentage: 0, fill: "hsl(280, 55%, 55%)" },
+          { band: "Fail (<40%)", count: allScores.filter((score) => score < 40).length, percentage: 0, fill: "hsl(0, 72%, 55%)" },
         ];
-        dist.forEach((d) => {
-          d.percentage = Math.round((d.count / total) * 100);
+        dist.forEach((entry) => {
+          entry.percentage = Math.round((entry.count / total) * 100);
         });
         setGradeDist(dist);
 
         const trajectories: Record<string, StudentTrajectory> = {};
-        filteredSubs.forEach((s) => {
-          const key = s.student_id || s.student_email || s.student_name || "unknown";
+        filteredSubs.forEach((submission) => {
+          const key = submission.student_id || submission.student_email || submission.student_name || "unknown";
           if (!trajectories[key]) {
             trajectories[key] = {
-              name: s.student_name || s.student_email || "Unknown Student",
-              email: s.student_email,
+              name: submission.student_name || submission.student_email || "Unknown Student",
+              email: submission.student_email,
               studentId: key,
               scores: [],
             };
           }
-          const g = filteredGrades.find((gr) => gr.submission_id === s.id);
-          const score = g?.final_score ?? g?.ai_score;
-          if (score != null) {
-            const a = assignmentMap.get(s.assignment_id);
+
+          const score = gradeBySubmission.get(submission.id);
+          if (score != null && !Number.isNaN(score)) {
+            const assignment = assignmentMap.get(submission.assignment_id);
             trajectories[key].scores.push({
-              score: Number(score),
-              date: s.submitted_at,
-              assignmentTitle: a?.title || "Assignment",
+              score,
+              date: submission.submitted_at,
+              assignmentTitle: assignment?.title || "Assignment",
             });
           }
         });
 
-        Object.values(trajectories).forEach((t) => {
-          t.scores.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        Object.values(trajectories).forEach((trajectory) => {
+          trajectory.scores.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         });
 
         const risks = Object.values(trajectories)
           .map(computeRisk)
-          .filter((r): r is AtRiskStudent => r !== null)
+          .filter((risk): risk is AtRiskStudent => risk !== null)
           .sort((a, b) => b.riskScore - a.riskScore);
 
         setAtRiskStudents(risks);
-      } catch (err) {
-        console.error("Failed to fetch performance data:", err);
+      } catch (error) {
+        console.error("Failed to fetch performance data:", error);
       }
+
       setLoading(false);
     };
 
@@ -311,22 +319,25 @@ const PerformanceTrends = () => {
 
   useEffect(() => {
     if (alertsDismissed || atRiskStudents.length === 0) return;
-    const critical = atRiskStudents.filter((s) => s.riskLevel === "critical");
-    const high = atRiskStudents.filter((s) => s.riskLevel === "high");
+
+    const critical = atRiskStudents.filter((student) => student.riskLevel === "critical");
+    const high = atRiskStudents.filter((student) => student.riskLevel === "high");
 
     if (critical.length > 0) {
       toast({
         variant: "destructive",
-        title: `⚠️ ${critical.length} Critical At-Risk Student${critical.length > 1 ? "s" : ""}`,
-        description: `${critical.map((s) => s.name).join(", ")} — immediate intervention recommended.`,
+        title: `Critical At-Risk Student${critical.length > 1 ? "s" : ""}`,
+        description: `${critical.map((student) => student.name).join(", ")} - immediate intervention recommended.`,
       });
     }
+
     if (high.length > 0) {
       toast({
-        title: `🔔 ${high.length} High-Risk Student${high.length > 1 ? "s" : ""} Detected`,
-        description: `${high.map((s) => s.name).join(", ")} — review their trajectories.`,
+        title: `${high.length} High-Risk Student${high.length > 1 ? "s" : ""} Detected`,
+        description: `${high.map((student) => student.name).join(", ")} - review their trajectories.`,
       });
     }
+
     setAlertsDismissed(true);
   }, [atRiskStudents, alertsDismissed, toast]);
 
@@ -334,21 +345,31 @@ const PerformanceTrends = () => {
     level === "critical"
       ? "border-destructive/40 bg-destructive/10"
       : level === "high"
-      ? "border-destructive/20 bg-destructive/5"
-      : "border-warning/30 bg-warning/5";
+        ? "border-destructive/20 bg-destructive/5"
+        : "border-warning/30 bg-warning/5";
 
-  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-  const noData = assessmentTrends.length === 0 && gradeDist.every((d) => d.count === 0);
+  const noData = assessmentTrends.length === 0 && gradeDist.every((entry) => entry.count === 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <Select value={moduleFilter} onValueChange={setModuleFilter}>
-          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filter by module" /></SelectTrigger>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by module" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Modules</SelectItem>
-            {modules.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            {modules.map((module) => (
+              <SelectItem key={module} value={module}>{module}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         {atRiskStudents.length > 0 && (
@@ -362,7 +383,7 @@ const PerformanceTrends = () => {
       {noData ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <TrendingUp className="h-10 w-10 text-muted-foreground mb-3" />
+            <TrendingUp className="mb-3 h-10 w-10 text-muted-foreground" />
             <p className="text-muted-foreground">No graded submissions yet. Performance trends will appear once assignments are graded.</p>
           </CardContent>
         </Card>
@@ -403,7 +424,9 @@ const PerformanceTrends = () => {
                     <YAxis type="category" dataKey="band" tick={{ fontSize: 10 }} width={100} stroke="hsl(var(--muted-foreground))" />
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} formatter={(value: number) => [`${value} students`, "Count"]} />
                     <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                      {gradeDist.map((entry, idx) => <Cell key={idx} fill={entry.fill} />)}
+                      {gradeDist.map((entry, index) => (
+                        <Cell key={index} fill={entry.fill} />
+                      ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -413,37 +436,31 @@ const PerformanceTrends = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Risk Score Summary</CardTitle>
-                <CardDescription>Predictive model output — higher score = greater risk</CardDescription>
+                <CardDescription>Predictive model output - higher score = greater risk</CardDescription>
               </CardHeader>
               <CardContent>
                 {atRiskStudents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-                    <TrendingUp className="h-8 w-8 mb-2 text-success" />
+                    <TrendingUp className="mb-2 h-8 w-8 text-success" />
                     <p className="text-sm">No at-risk students detected. All students are performing above threshold.</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {atRiskStudents.slice(0, 5).map((s) => (
-                      <div key={s.studentId} className="flex items-center justify-between gap-2">
-                        <span className="text-sm truncate flex-1">{s.name}</span>
+                    {atRiskStudents.slice(0, 5).map((student) => (
+                      <div key={student.studentId} className="flex items-center justify-between gap-2">
+                        <span className="flex-1 truncate text-sm">{student.name}</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
                             <div
-                              className={`h-full rounded-full ${
-                                s.riskLevel === "critical"
-                                  ? "bg-destructive"
-                                  : s.riskLevel === "high"
-                                  ? "bg-warning"
-                                  : "bg-orange-400"
-                              }`}
-                              style={{ width: `${s.riskScore}%` }}
+                              className={`h-full rounded-full ${student.riskLevel === "critical" ? "bg-destructive" : student.riskLevel === "high" ? "bg-warning" : "bg-orange-400"}`}
+                              style={{ width: `${student.riskScore}%` }}
                             />
                           </div>
-                          <span className="text-xs font-mono w-8 text-right">{s.riskScore}</span>
+                          <span className="w-8 text-right font-mono text-xs">{student.riskScore}</span>
                         </div>
                       </div>
                     ))}
-                    <p className="text-[10px] text-muted-foreground mt-2">
+                    <p className="mt-2 text-[10px] text-muted-foreground">
                       Model factors: grade trajectory (linear regression), average score, volatility, predicted next score, submission frequency
                     </p>
                   </div>
@@ -459,43 +476,44 @@ const PerformanceTrends = () => {
                 <CardTitle className="text-base">Predictive At-Risk Detection</CardTitle>
               </div>
               <CardDescription>
-                Students flagged by the predictive model — click for trajectory analysis and intervention recommendations
+                Students flagged by the predictive model - click for trajectory analysis and intervention recommendations
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {atRiskStudents.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
+                <p className="py-6 text-center text-sm text-muted-foreground">
                   No at-risk students detected based on current grading data.
                 </p>
               ) : (
-                atRiskStudents.map((s) => {
-                  const sparkData = s.sparkline.map((v, idx) => ({ x: idx, y: v }));
-                  const isExpanded = expandedStudent === s.studentId;
+                atRiskStudents.map((student) => {
+                  const sparkData = student.sparkline.map((value, index) => ({ x: index, y: value }));
+                  const isExpanded = expandedStudent === student.studentId;
+
                   return (
                     <div
-                      key={s.studentId}
-                      className={`rounded-lg border p-4 space-y-3 cursor-pointer transition-all hover:shadow-md ${riskBorder(s.riskLevel)}`}
-                      onClick={() => setExpandedStudent(isExpanded ? null : s.studentId)}
+                      key={student.studentId}
+                      className={`cursor-pointer space-y-3 rounded-lg border p-4 transition-all hover:shadow-md ${riskBorder(student.riskLevel)}`}
+                      onClick={() => setExpandedStudent(isExpanded ? null : student.studentId)}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${s.riskLevel === "critical" ? "bg-destructive/20" : "bg-destructive/10"}`}>
+                          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${student.riskLevel === "critical" ? "bg-destructive/20" : "bg-destructive/10"}`}>
                             <User className="h-4 w-4 text-destructive" />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{s.name}</span>
-                              <Badge variant={s.riskLevel === "critical" ? "destructive" : "outline"} className="text-[10px] uppercase">
-                                {s.riskLevel}
+                              <span className="text-sm font-medium">{student.name}</span>
+                              <Badge variant={student.riskLevel === "critical" ? "destructive" : "outline"} className="text-[10px] uppercase">
+                                {student.riskLevel}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              Avg: {s.avgGrade}% · Risk Score: {s.riskScore}/100 · Predicted Next: {s.predictedNext}%
+                              Avg: {student.avgGrade}% - Risk Score: {student.riskScore}/100 - Predicted Next: {student.predictedNext}%
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="w-[80px] h-[30px]">
+                          <div className="h-[30px] w-[80px]">
                             <ResponsiveContainer width="100%" height="100%">
                               <LineChart data={sparkData}>
                                 <Line type="monotone" dataKey="y" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
@@ -503,45 +521,50 @@ const PerformanceTrends = () => {
                             </ResponsiveContainer>
                           </div>
                           <div className="text-right">
-                            <span className="text-lg font-bold text-destructive">{s.lastGrade}%</span>
-                            {s.trend === "declining" && <TrendingDown className="inline-block ml-1 h-4 w-4 text-destructive" />}
+                            <span className="text-lg font-bold text-destructive">{student.lastGrade}%</span>
+                            {student.trend === "declining" && <TrendingDown className="ml-1 inline-block h-4 w-4 text-destructive" />}
                           </div>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {s.flags.map((f, j) => (
-                          <Badge key={j} variant="outline" className="border-destructive/30 text-xs text-destructive">{f}</Badge>
+                        {student.flags.map((flag, index) => (
+                          <Badge key={index} variant="outline" className="border-destructive/30 text-xs text-destructive">{flag}</Badge>
                         ))}
                       </div>
                       {isExpanded && (
-                        <div className="rounded-lg bg-card border p-3 mt-2 space-y-2 animate-fade-in">
+                        <div className="mt-2 animate-fade-in space-y-2 rounded-lg border bg-card p-3">
                           <div className="flex items-start gap-2">
-                            <Lightbulb className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                            <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                             <div>
-                              <p className="text-xs font-medium text-primary mb-1">Intervention Recommendation</p>
-                              <p className="text-sm text-muted-foreground">{s.recommendation}</p>
+                              <p className="mb-1 text-xs font-medium text-primary">Intervention Recommendation</p>
+                              <p className="text-sm text-muted-foreground">{student.recommendation}</p>
                             </div>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-center text-xs mt-2">
+                          <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
                             <div className="rounded bg-muted p-2">
-                              <p className="font-medium">{s.avgGrade}%</p>
+                              <p className="font-medium">{student.avgGrade}%</p>
                               <p className="text-muted-foreground">Average</p>
                             </div>
                             <div className="rounded bg-muted p-2">
-                              <p className="font-medium">{s.lastGrade}%</p>
+                              <p className="font-medium">{student.lastGrade}%</p>
                               <p className="text-muted-foreground">Last Grade</p>
                             </div>
                             <div className="rounded bg-muted p-2">
-                              <p className="font-medium text-destructive">{s.predictedNext}%</p>
+                              <p className="font-medium text-destructive">{student.predictedNext}%</p>
                               <p className="text-muted-foreground">Predicted</p>
                             </div>
                           </div>
-                          {s.email && (
-                            <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={(e) => {
-                              e.stopPropagation();
-                              window.location.href = `mailto:${s.email}?subject=Academic Support - Performance Check-in&body=Dear ${s.name},%0A%0AI would like to schedule a meeting to discuss your academic progress and explore support options available to you.%0A%0ABest regards`;
-                            }}>
-                              <Bell className="h-3 w-3 mr-1" /> Contact Student
+                          {student.email && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 text-xs"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                window.location.href = `mailto:${student.email}?subject=Academic Support - Performance Check-in&body=Dear ${student.name},%0A%0AI would like to schedule a meeting to discuss your academic progress and explore support options available to you.%0A%0ABest regards`;
+                              }}
+                            >
+                              <Bell className="mr-1 h-3 w-3" /> Contact Student
                             </Button>
                           )}
                         </div>

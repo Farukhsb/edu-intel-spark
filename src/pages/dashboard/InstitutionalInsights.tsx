@@ -5,6 +5,10 @@ import { AlertTriangle, Award, Building2, Loader2, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
+const ASSIGNMENT_FIELDS = "id, title, module_code";
+const SUBMISSION_FIELDS = "id, assignment_id";
+const GRADE_FIELDS = "submission_id, ai_score, final_score";
+
 type DepartmentStat = {
   dept: string;
   students: number;
@@ -67,13 +71,13 @@ const InstitutionalInsights = () => {
       try {
         const { data: assignmentsData, error: assignmentsError } = await supabase
           .from("assignments")
-          .select("id, title, module_code")
+          .select(ASSIGNMENT_FIELDS)
           .eq("lecturer_id", user.id);
 
         if (assignmentsError) throw assignmentsError;
 
         const assignments = assignmentsData || [];
-        const assignmentIds = assignments.map((a) => a.id);
+        const assignmentIds = assignments.map((assignment) => assignment.id);
 
         if (assignmentIds.length === 0) {
           setHasRealData(false);
@@ -86,19 +90,19 @@ const InstitutionalInsights = () => {
 
         const { data: submissionsData, error: submissionsError } = await supabase
           .from("submissions")
-          .select("id, assignment_id")
+          .select(SUBMISSION_FIELDS)
           .in("assignment_id", assignmentIds);
 
         if (submissionsError) throw submissionsError;
 
         const submissions = submissionsData || [];
-        const submissionIds = submissions.map((s) => s.id);
+        const submissionIds = submissions.map((submission) => submission.id);
 
-        let grades: any[] = [];
+        let grades: Array<{ submission_id: string; ai_score: number | null; final_score: number | null }> = [];
         if (submissionIds.length > 0) {
           const { data: gradesData, error: gradesError } = await supabase
             .from("grades")
-            .select("submission_id, ai_score, final_score")
+            .select(GRADE_FIELDS)
             .in("submission_id", submissionIds);
 
           if (gradesError) throw gradesError;
@@ -144,11 +148,9 @@ const InstitutionalInsights = () => {
             return {
               name: assignment.title,
               avgGrade: Math.round(average),
-              passRate: Math.round(
-                (assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100
-              ),
+              passRate: Math.round((assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100),
               students: assignment.students,
-              issue: average < 50 ? "Low average — review needed" : "Moderate performance",
+              issue: average < 50 ? "Low average - review needed" : "Moderate performance",
             };
           })
           .sort((a, b) => a.avgGrade - b.avgGrade)
@@ -183,14 +185,10 @@ const InstitutionalInsights = () => {
 
         setDepartmentStats(deptStats);
 
-        const passRate =
-          scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
-        const gradedPct =
-          submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
-        const avgScore =
-          scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
-        const completionRate =
-          assignments.length > 0 ? Math.min(Math.round((submissions.length / assignments.length) * 100), 100) : 0;
+        const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
+        const gradedPct = submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
+        const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
+        const completionRate = assignments.length > 0 ? Math.min(Math.round((submissions.length / assignments.length) * 100), 100) : 0;
 
         setAccreditation([
           { metric: "Module Pass Rate (Avg)", value: passRate, target: 75, status: getMetricStatus(passRate, 75) },
@@ -198,8 +196,8 @@ const InstitutionalInsights = () => {
           { metric: "Average Score", value: avgScore, target: 60, status: getMetricStatus(avgScore, 60) },
           { metric: "Assessment Completion Rate", value: completionRate, target: 90, status: getMetricStatus(completionRate, 90) },
         ]);
-      } catch (err) {
-        console.error("Failed to fetch institutional data:", err);
+      } catch (error) {
+        console.error("Failed to fetch institutional data:", error);
       } finally {
         setLoading(false);
       }
@@ -237,7 +235,10 @@ const InstitutionalInsights = () => {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /><CardTitle className="text-base">Department Performance</CardTitle></div>
+          <div className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">Department Performance</CardTitle>
+          </div>
           <CardDescription>Cross-department comparison from your live marking data</CardDescription>
         </CardHeader>
         <CardContent>
@@ -253,10 +254,14 @@ const InstitutionalInsights = () => {
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-sm">{dept.dept}</span>
-                      <Badge variant={dept.passRate >= 80 ? "default" : dept.passRate >= 70 ? "secondary" : "destructive"}>{dept.passRate}% pass rate</Badge>
+                      <Badge variant={dept.passRate >= 80 ? "default" : dept.passRate >= 70 ? "secondary" : "destructive"}>
+                        {dept.passRate}% pass rate
+                      </Badge>
                     </div>
                     <div className="mt-2 flex items-center gap-6 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {dept.students} graded submissions</span>
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3 w-3" /> {dept.students} graded submissions
+                      </span>
                       <span>Avg: {dept.avgGrade}%</span>
                     </div>
                   </div>
@@ -270,7 +275,10 @@ const InstitutionalInsights = () => {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-warning" /><CardTitle className="text-base">Low-Performing Assessments</CardTitle></div>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              <CardTitle className="text-base">Low-Performing Assessments</CardTitle>
+            </div>
             <CardDescription>Assessments currently scoring lowest in live grading data</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -281,13 +289,15 @@ const InstitutionalInsights = () => {
               />
             ) : (
               lowPerforming.map((assessment) => (
-                <div key={assessment.name} className="rounded-lg border border-warning/20 bg-warning/5 p-3 space-y-2">
+                <div key={assessment.name} className="space-y-2 rounded-lg border border-warning/20 bg-warning/5 p-3">
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-sm font-medium">{assessment.name}</span>
                     <span className="text-lg font-bold font-display text-destructive">{assessment.avgGrade}%</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{assessment.students} submissions · {assessment.passRate}% pass rate</p>
-                  <Badge variant="outline" className="text-xs border-warning/30">{assessment.issue}</Badge>
+                  <p className="text-xs text-muted-foreground">
+                    {assessment.students} submissions - {assessment.passRate}% pass rate
+                  </p>
+                  <Badge variant="outline" className="border-warning/30 text-xs">{assessment.issue}</Badge>
                 </div>
               ))
             )}
@@ -296,7 +306,10 @@ const InstitutionalInsights = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2"><Award className="h-5 w-5 text-primary" /><CardTitle className="text-base">Accreditation Readiness</CardTitle></div>
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base">Accreditation Readiness</CardTitle>
+            </div>
             <CardDescription>Live compliance indicators based on uploaded marking activity</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -312,13 +325,19 @@ const InstitutionalInsights = () => {
                     <span className="font-medium">{metric.metric}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-bold">{metric.value}%</span>
-                      <Badge variant={metric.status === "met" ? "default" : metric.status === "at-risk" ? "secondary" : "destructive"} className="text-xs">
+                      <Badge
+                        variant={metric.status === "met" ? "default" : metric.status === "at-risk" ? "secondary" : "destructive"}
+                        className="text-xs"
+                      >
                         {metric.status === "met" ? "Met" : metric.status === "at-risk" ? "At Risk" : "Below"}
                       </Badge>
                     </div>
                   </div>
                   <div className="relative h-2 overflow-hidden rounded-full bg-muted">
-                    <div className={`h-full rounded-full ${metric.status === "met" ? "bg-success" : metric.status === "at-risk" ? "bg-warning" : "bg-destructive"}`} style={{ width: `${metric.value}%` }} />
+                    <div
+                      className={`h-full rounded-full ${metric.status === "met" ? "bg-success" : metric.status === "at-risk" ? "bg-warning" : "bg-destructive"}`}
+                      style={{ width: `${metric.value}%` }}
+                    />
                     <div className="absolute inset-y-0 w-0.5 bg-foreground/40" style={{ left: `${metric.target}%` }} />
                   </div>
                   <p className="text-xs text-muted-foreground">Target: {metric.target}%</p>
