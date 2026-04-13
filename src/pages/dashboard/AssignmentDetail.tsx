@@ -33,7 +33,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { safeFormatDate } from "@/lib/date";
 
 type SubmissionStatus =
   | "submitted"
@@ -454,20 +454,8 @@ const AssignmentDetail = () => {
     try {
       const { data, error } = await supabase.functions.invoke("grade-submission", {
         body: {
-          assignment: {
-            title: assignment.title,
-            description: assignment.description,
-            module_code: assignment.module_code,
-            max_score: assignment.max_score,
-            rubric: assignment.rubric,
-          },
-          submissions: toGrade.map((s) => ({
-            id: s.id,
-            student_name: s.student_name || s.student_email || "Anonymous",
-            file_name: s.file_name,
-            file_type: null,
-            file_url: s.file_url,
-          })),
+          assignmentId: assignment.id,
+          submissions: toGrade.map((s) => ({ id: s.id })),
         },
       });
 
