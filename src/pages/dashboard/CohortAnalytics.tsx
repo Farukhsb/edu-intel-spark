@@ -24,7 +24,7 @@ const DEMO_RECS = [
 ];
 
 const CohortAnalytics = () => {
-  const { isDemo } = useAuth();
+  const { isDemo, user } = useAuth();
   const [moduleFilter, setModuleFilter] = useState("all");
   const [gradeDistChart, setGradeDistChart] = useState([
     { band: "1st (70+)", count: 0, fill: "hsl(152, 56%, 45%)" },
@@ -38,27 +38,62 @@ const CohortAnalytics = () => {
   const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
-    if (isDemo) return;
+    if (isDemo || !user) return;
+
     const fetchData = async () => {
       try {
-        const [assignRes, subRes, gradeRes] = await Promise.all([
-          supabase.from("assignments").select("*"),
-          supabase.from("submissions").select("*"),
-          supabase.from("grades").select("*"),
-        ]);
+        const { data: assignmentsData, error: assignmentsError } = await supabase
+          .from("assignments")
+          .select("*")
+          .eq("lecturer_id", user.id);
 
-        const assignments = assignRes.data || [];
-        const subs = subRes.data || [];
-        const grades = gradeRes.data || [];
+        if (assignmentsError) throw assignmentsError;
+
+        const assignments = assignmentsData || [];
+        const assignmentIds = assignments.map((a) => a.id);
+
+        if (assignmentIds.length === 0) {
+          setModules([]);
+          setGradeDistChart([
+            { band: "1st (70+)", count: 0, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69)", count: 0, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59)", count: 0, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49)", count: 0, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40)", count: 0, fill: "hsl(0, 72%, 55%)" },
+          ]);
+          setLoading(false);
+          return;
+        }
+
+        const { data: subsData, error: subsError } = await supabase
+          .from("submissions")
+          .select("*")
+          .in("assignment_id", assignmentIds);
+
+        if (subsError) throw subsError;
+
+        const subs = subsData || [];
+        const submissionIds = subs.map((s) => s.id);
+
+        let grades: any[] = [];
+        if (submissionIds.length > 0) {
+          const { data: gradesData, error: gradesError } = await supabase
+            .from("grades")
+            .select("*")
+            .in("submission_id", submissionIds);
+
+          if (gradesError) throw gradesError;
+          grades = gradesData || [];
+        }
 
         const gradeBySubmission: Record<string, number> = {};
-        grades.forEach(g => {
+        grades.forEach((g) => {
           const score = g.final_score ?? g.ai_score;
           if (score != null) gradeBySubmission[g.submission_id] = score;
         });
 
         const subsByAssignment: Record<string, string[]> = {};
-        subs.forEach(s => {
+        subs.forEach((s) => {
           if (!subsByAssignment[s.assignment_id]) subsByAssignment[s.assignment_id] = [];
           subsByAssignment[s.assignment_id].push(s.id);
         });
@@ -67,19 +102,27 @@ const CohortAnalytics = () => {
 
         if (allScores.length > 0) {
           setGradeDistChart([
-            { band: "1st (70+)", count: allScores.filter(s => s >= 70).length, fill: "hsl(152, 56%, 45%)" },
-            { band: "2:1 (60-69)", count: allScores.filter(s => s >= 60 && s < 70).length, fill: "hsl(205, 80%, 55%)" },
-            { band: "2:2 (50-59)", count: allScores.filter(s => s >= 50 && s < 60).length, fill: "hsl(38, 92%, 60%)" },
-            { band: "3rd (40-49)", count: allScores.filter(s => s >= 40 && s < 50).length, fill: "hsl(280, 55%, 55%)" },
-            { band: "Fail (<40)", count: allScores.filter(s => s < 40).length, fill: "hsl(0, 72%, 55%)" },
+            { band: "1st (70+)", count: allScores.filter((s) => s >= 70).length, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69)", count: allScores.filter((s) => s >= 60 && s < 70).length, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59)", count: allScores.filter((s) => s >= 50 && s < 60).length, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49)", count: allScores.filter((s) => s >= 40 && s < 50).length, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40)", count: allScores.filter((s) => s < 40).length, fill: "hsl(0, 72%, 55%)" },
+          ]);
+        } else {
+          setGradeDistChart([
+            { band: "1st (70+)", count: 0, fill: "hsl(152, 56%, 45%)" },
+            { band: "2:1 (60-69)", count: 0, fill: "hsl(205, 80%, 55%)" },
+            { band: "2:2 (50-59)", count: 0, fill: "hsl(38, 92%, 60%)" },
+            { band: "3rd (40-49)", count: 0, fill: "hsl(280, 55%, 55%)" },
+            { band: "Fail (<40)", count: 0, fill: "hsl(0, 72%, 55%)" },
           ]);
         }
 
-        const moduleData: ModuleData[] = assignments.map(a => {
+        const moduleData: ModuleData[] = assignments.map((a) => {
           const subIds = subsByAssignment[a.id] || [];
-          const scores = subIds.map(sid => gradeBySubmission[sid]).filter(s => s != null) as number[];
+          const scores = subIds.map((sid) => gradeBySubmission[sid]).filter((s) => s != null) as number[];
           const avg = scores.length > 0 ? Math.round(scores.reduce((x, y) => x + y, 0) / scores.length) : 0;
-          const pass = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 0;
+          const pass = scores.length > 0 ? Math.round((scores.filter((s) => s >= 40).length / scores.length) * 100) : 0;
           return { id: a.id, code: a.module_code || "—", title: a.title, avgGrade: avg, submissions: subIds.length, passRate: pass };
         });
         setModules(moduleData);
@@ -88,12 +131,13 @@ const CohortAnalytics = () => {
       }
       setLoading(false);
     };
-    fetchData();
-  }, []);
+
+    void fetchData();
+  }, [isDemo, user?.id]);
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
-  const filteredModules = moduleFilter === "all" ? modules : modules.filter(m => m.id === moduleFilter);
+  const filteredModules = moduleFilter === "all" ? modules : modules.filter((m) => m.id === moduleFilter);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -103,7 +147,7 @@ const CohortAnalytics = () => {
             <SelectTrigger className="w-[260px]"><SelectValue placeholder="Filter by assignment" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Assignments</SelectItem>
-              {modules.map(m => (
+              {modules.map((m) => (
                 <SelectItem key={m.id} value={m.id}>{m.code !== "—" ? `${m.code} — ` : ""}{m.title}</SelectItem>
               ))}
             </SelectContent>
@@ -125,7 +169,7 @@ const CohortAnalytics = () => {
               <CardDescription>Cohort classification breakdown</CardDescription>
             </CardHeader>
             <CardContent>
-              {gradeDistChart.every(d => d.count === 0) ? (
+              {gradeDistChart.every((d) => d.count === 0) ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No graded submissions yet</p>
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
