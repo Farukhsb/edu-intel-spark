@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,6 +129,7 @@ const formatStatusLabel = (status: string) =>
 
 const LecturerOverview = () => {
   const { profile, user, isDemo } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>(isDemo ? DEMO_STATS : EMPTY_STATS);
   const [recent, setRecent] = useState<RecentSubmission[]>(isDemo ? DEMO_RECENT : []);
   const [gradeDistribution, setGradeDistribution] = useState(isDemo ? DEMO_DIST : EMPTY_DIST);
@@ -334,11 +336,11 @@ const LecturerOverview = () => {
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button size="sm" className="shadow-sm">
+            <Button size="sm" className="shadow-sm" onClick={() => navigate("/dashboard/assignments")}>
               Review submissions
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/performance")}>
               View risk insights
             </Button>
           </div>
@@ -484,7 +486,12 @@ const LecturerOverview = () => {
                             <Clock className="mr-1 h-3 w-3" /> Pending
                           </Badge>
                         )}
-                        <Button size="sm" variant="ghost" className="h-8 px-2 text-xs">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
+                          onClick={() => navigate("/dashboard/assignments")}
+                        >
                           Review
                         </Button>
                       </div>
@@ -574,10 +581,15 @@ const LecturerOverview = () => {
               </div>
 
               <div className="flex gap-2 pt-1">
-                <Button size="sm" className="flex-1">
+                <Button size="sm" className="flex-1" onClick={() => navigate("/dashboard/assignments")}>
                   Review queue
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => navigate("/dashboard/cohort-analytics")}
+                >
                   View analytics
                 </Button>
               </div>
