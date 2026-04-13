@@ -20,4 +20,38 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react-dom") || id.includes("/react/") || id.includes("scheduler")) {
+              return "react-vendor";
+            }
+            if (id.includes("react-router-dom")) {
+              return "router-vendor";
+            }
+            if (id.includes("@supabase/")) {
+              return "supabase-vendor";
+            }
+            if (id.includes("recharts")) {
+              return "charts-vendor";
+            }
+            if (id.includes("jspdf") || id.includes("html2canvas")) {
+              return "export-vendor";
+            }
+            if (id.includes("react-markdown") || id.includes("remark") || id.includes("rehype")) {
+              return "markdown-vendor";
+            }
+            if (id.includes("posthog-js")) {
+              return "analytics-vendor";
+            }
+            if (id.includes("@radix-ui")) {
+              return "ui-vendor";
+            }
+          }
+        },
+      },
+    },
+  },
 }));

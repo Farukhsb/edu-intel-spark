@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,21 +11,53 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { assignment, submissions } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const body = await req.json();
+    const gradingModel = getModel("OPENAI_GRADING_MODEL", "gpt-5.4-mini");
 
-    if (!assignment || !submissions?.length) throw new Error("Missing assignment or submissions data");
+    const { user } = await requireLecturer(req);
+    const requestedAssignmentId = body?.assignmentId ?? body?.assignment?.id ?? null;
+    const requestedSubmissionIds = Array.isArray(body?.submissions)
+      ? body.submissions
+          .map((submission: { id?: string } | string) =>
+            typeof submission === "string" ? submission : submission?.id,
+          )
+          .filter(Boolean)
+      : [];
 
-    // Create admin client to access private storage
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    if (!requestedAssignmentId || requestedSubmissionIds.length === 0) {
+      throw new HttpError(400, "Missing assignment or submissions data");
+    }
+
+    const supabaseAdmin = createAdminClient();
+    const { data: assignment, error: assignmentError } = await supabaseAdmin
+      .from("assignments")
+      .select("id, lecturer_id, title, description, module_code, max_score, rubric")
+      .eq("id", requestedAssignmentId)
+      .maybeSingle();
+
+    if (assignmentError) throw new Error("Failed to load assignment");
+    if (!assignment || assignment.lecturer_id !== user.id) {
+      throw new HttpError(403, "You do not have access to this assignment");
+    }
+
+    const { data: submissions, error: submissionsError } = await supabaseAdmin
+      .from("submissions")
+      .select("id, assignment_id, student_name, student_email, file_name, file_url")
+      .eq("assignment_id", requestedAssignmentId)
+      .in("id", requestedSubmissionIds);
+
+    if (submissionsError) throw new Error("Failed to load submissions");
+    if (!submissions || submissions.length !== requestedSubmissionIds.length) {
+      throw new HttpError(403, "One or more submissions are not accessible");
+    }
 
     const rubric = assignment.rubric || [];
     const rubricText = Array.isArray(rubric) && rubric.length > 0
-      ? rubric.map((r: any) => `- ${r.criterion} (${r.weight} pts): ${r.description || ""}`).join("\n")
+      ? rubric
+          .map((r: { criterion?: string; weight?: number; description?: string }) =>
+            `- ${r.criterion || "Criterion"} (${r.weight || 0} pts): ${r.description || ""}`,
+          )
+          .join("\n")
       : "No specific rubric provided. Grade holistically based on quality, completeness, and correctness.";
 
     const results: any[] = [];
@@ -61,7 +94,7 @@ serve(async (req) => {
           fileContent = await fileData.text();
         }
         console.log(`File fetched for ${sub.id}, size: ${fileContent.length}, isPdf: ${isPdf}`);
-      } catch (fetchErr) {
+      } catch (fetchErr: unknown) {
         console.error(`Error fetching file for ${sub.id}:`, fetchErr);
         results.push({ submissionId: sub.id, error: `Failed to fetch file: ${String(fetchErr)}` });
         continue;
@@ -154,95 +187,74 @@ ${isPdf ? "The student's PDF submission content is attached as an inline documen
 
 Grade this submission carefully.`;
 
-      const messages: any[] = [
-        { role: "system", content: systemPrompt },
-      ];
-
-      if (isPdf) {
-        messages.push({
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${fileContent}`,
-              },
-            },
-          ],
-        });
-      } else {
-        messages.push({ role: "user", content: prompt });
-      }
-
       try {
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
+        const responseInput = [
+          { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
+          {
+            role: "user",
+            content: isPdf
+              ? [
+                  { type: "input_text", text: `${prompt}\n\nReturn valid JSON only.` },
+                  {
+                    type: "input_file",
+                    filename: sub.file_name || "submission.pdf",
+                    file_data: `data:application/pdf;base64,${fileContent}`,
+                  },
+                ]
+              : [
+                  {
+                    type: "input_text",
+                    text: `${prompt}\n\nStudent submission content:\n\n${fileContent.substring(0, 15000)}\n\nReturn valid JSON only.`,
+                  },
+                ],
           },
-          body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
-            messages,
-            tools: [
-              {
-                type: "function",
-                function: {
-                  name: "submit_grade",
-                  description: "Submit the grading result for a student submission",
-                  parameters: {
-                    type: "object",
-                    properties: {
-                      score: { type: "number", description: `Numeric score out of ${assignment.max_score}` },
-                      feedback: { type: "string", description: "Detailed feedback explaining strengths and weaknesses" },
-                      breakdown: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            criterion: { type: "string" },
-                            score: { type: "number" },
-                            max_score: { type: "number" },
-                            comment: { type: "string" },
-                          },
-                          required: ["criterion", "score", "max_score", "comment"],
-                        },
+        ];
+
+        const aiData = await createResponse({
+          model: gradingModel,
+          input: responseInput,
+          text: {
+            format: {
+              type: "json_schema",
+              name: "submit_grade",
+              schema: {
+                type: "object",
+                properties: {
+                  score: { type: "number", description: `Numeric score out of ${assignment.max_score}` },
+                  feedback: { type: "string", description: "Detailed feedback explaining strengths and weaknesses" },
+                  breakdown: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        criterion: { type: "string" },
+                        score: { type: "number" },
+                        max_score: { type: "number" },
+                        comment: { type: "string" },
                       },
+                      required: ["criterion", "score", "max_score", "comment"],
+                      additionalProperties: false,
                     },
-                    required: ["score", "feedback", "breakdown"],
                   },
                 },
+                required: ["score", "feedback", "breakdown"],
+                additionalProperties: false,
               },
-            ],
-            tool_choice: { type: "function", function: { name: "submit_grade" } },
-          }),
+              strict: true,
+            },
+          },
         });
-
-        if (!aiResponse.ok) {
-          const errText = await aiResponse.text();
-          console.error("AI error for submission", sub.id, aiResponse.status, errText);
-          results.push({ submissionId: sub.id, error: `AI error: ${aiResponse.status}` });
-          continue;
-        }
-
-        const aiData = await aiResponse.json();
         console.log(`AI response received for ${sub.id}`);
 
         let gradeResult;
         try {
-          const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-          if (toolCall?.function?.arguments) {
-            gradeResult = JSON.parse(toolCall.function.arguments);
-          } else {
-            const content = aiData.choices?.[0]?.message?.content || "";
-            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-            gradeResult = JSON.parse(jsonMatch[1].trim());
-          }
-        } catch (parseErr) {
-          console.error("Failed to parse AI response for", sub.id);
-          results.push({ submissionId: sub.id, error: "Failed to parse AI response" });
-          continue;
+          gradeResult = parseJsonText(extractOutputText(aiData));
+        } catch {
+          gradeResult = aiData?.output?.[0]?.content?.[0]?.json ?? aiData?.output_parsed;
+        }
+
+        if (!gradeResult) {
+          throw new Error("Failed to parse AI response");
         }
 
         results.push({
@@ -263,9 +275,6 @@ Grade this submission carefully.`;
     });
   } catch (e) {
     console.error("grade-submission error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonError(e, corsHeaders);
   }
 });

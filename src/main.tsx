@@ -3,6 +3,6 @@ import App from "./App.tsx";
 import "./index.css";
 import { initPostHog } from "./lib/posthog";
 
-initPostHog();
+void initPostHog();
 
 createRoot(document.getElementById("root")!).render(<App />);

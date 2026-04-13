@@ -11,6 +11,11 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
+const ASSIGNMENT_FIELDS = "id, title, module_code, due_date, description, rubric";
+const SUBMISSION_FIELDS = "id, assignment_id, submitted_at, status";
+const GRADE_FIELDS = "submission_id, ai_score, final_score, ai_feedback, lecturer_score, reviewed_by, created_at";
+const PROFILE_FIELDS = "id, role";
+
 interface QAAMetric {
   id: string;
   category: string;
@@ -55,10 +60,10 @@ const AccreditationDashboard = () => {
     const fetchData = async () => {
       try {
         const [{ data: gradesRaw }, { data: subsRaw }, { data: assignmentsRaw }, { data: profilesRaw }] = await Promise.all([
-          supabase.from("grades").select("*"),
-          supabase.from("submissions").select("*"),
-          supabase.from("assignments").select("*"),
-          supabase.from("profiles").select("*"),
+          supabase.from("grades").select(GRADE_FIELDS),
+          supabase.from("submissions").select(SUBMISSION_FIELDS),
+          supabase.from("assignments").select(ASSIGNMENT_FIELDS),
+          supabase.from("profiles").select(PROFILE_FIELDS),
         ]);
 
         const grades = gradesRaw || [];
@@ -215,6 +220,12 @@ const AccreditationDashboard = () => {
   const metCount = qaaMetrics.filter(m => m.status === "met").length;
   const atRiskCount = qaaMetrics.filter(m => m.status === "at-risk").length;
   const belowCount = qaaMetrics.filter(m => m.status === "below").length;
+  const nssAverage = nssMetrics.length > 0
+    ? Math.round(nssMetrics.reduce((sum, m) => sum + m.score, 0) / nssMetrics.length)
+    : 0;
+  const nssBenchmarkAverage = nssMetrics.length > 0
+    ? Math.round(nssMetrics.reduce((sum, m) => sum + m.benchmark, 0) / nssMetrics.length)
+    : 0;
 
   const exportQAAReport = () => {
     const lines = ["QAA Compliance Report — GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
@@ -408,10 +419,8 @@ const AccreditationDashboard = () => {
               ))}
               <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">Overall NSS Score</p>
-                <p className="text-2xl font-bold font-display text-foreground">
-                  {Math.round(nssMetrics.reduce((sum, m) => sum + m.score, 0) / nssMetrics.length)}%
-                </p>
-                <p className="text-xs mt-1">Benchmark average: {Math.round(nssMetrics.reduce((sum, m) => sum + m.benchmark, 0) / nssMetrics.length)}%</p>
+                <p className="text-2xl font-bold font-display text-foreground">{nssAverage}%</p>
+                <p className="text-xs mt-1">Benchmark average: {nssBenchmarkAverage}%</p>
               </div>
             </CardContent>
           </Card>
@@ -459,9 +468,9 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
     const fetchData = async () => {
       try {
         const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }] = await Promise.all([
-          supabase.from("assignments").select("*"),
-          supabase.from("submissions").select("*"),
-          supabase.from("grades").select("*"),
+          supabase.from("assignments").select("id, title, module_code"),
+          supabase.from("submissions").select("id, assignment_id"),
+          supabase.from("grades").select("submission_id, ai_score, final_score"),
         ]);
 
         const assignments = assignmentsRaw || [];
