@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,11 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
+import { safeToLocaleDate } from "@/lib/date";
+
+const ASSIGNMENT_FIELDS = "id, title, max_score";
+const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, file_name, status, submitted_at";
+const GRADE_FIELDS = "submission_id, ai_score, final_score";
 
 interface Stats {
   totalSubmissions: number;
@@ -97,10 +103,17 @@ const DEMO_RECENT: RecentSubmission[] = [
 ];
 
 const DEMO_DIST = [
-  { label: "90–100%", count: 4, fill: "hsl(152, 56%, 45%)" },
-  { label: "70–89%", count: 12, fill: "hsl(230, 65%, 52%)" },
-  { label: "50–69%", count: 14, fill: "hsl(38, 92%, 60%)" },
+  { label: "90-100%", count: 4, fill: "hsl(152, 56%, 45%)" },
+  { label: "70-89%", count: 12, fill: "hsl(230, 65%, 52%)" },
+  { label: "50-69%", count: 14, fill: "hsl(38, 92%, 60%)" },
   { label: "< 50%", count: 5, fill: "hsl(0, 72%, 55%)" },
+];
+
+const EMPTY_DIST = [
+  { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
+  { label: "70-89%", count: 0, fill: "hsl(230, 65%, 52%)" },
+  { label: "50-69%", count: 0, fill: "hsl(38, 92%, 60%)" },
+  { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
 ];
 
 const distributionInterpretation = (dist: { label: string; count: number }[]) => {
@@ -116,18 +129,10 @@ const formatStatusLabel = (status: string) =>
 
 const LecturerOverview = () => {
   const { profile, user, isDemo } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>(isDemo ? DEMO_STATS : EMPTY_STATS);
   const [recent, setRecent] = useState<RecentSubmission[]>(isDemo ? DEMO_RECENT : []);
-  const [gradeDistribution, setGradeDistribution] = useState(
-    isDemo
-      ? DEMO_DIST
-      : [
-          { label: "90–100%", count: 0, fill: "hsl(152, 56%, 45%)" },
-          { label: "70–89%", count: 0, fill: "hsl(230, 65%, 52%)" },
-          { label: "50–69%", count: 0, fill: "hsl(38, 92%, 60%)" },
-          { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
-        ]
-  );
+  const [gradeDistribution, setGradeDistribution] = useState(isDemo ? DEMO_DIST : EMPTY_DIST);
   const [loading, setLoading] = useState(!isDemo);
 
   const fetchDashboard = async () => {
@@ -136,19 +141,16 @@ const LecturerOverview = () => {
     try {
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from("assignments")
-        .select("*")
+        .select(ASSIGNMENT_FIELDS)
         .eq("lecturer_id", user.id);
 
       if (assignmentsError) throw assignmentsError;
 
       const assignments = assignmentsData || [];
-      const assignmentIds = assignments.map((a) => a.id);
+      const assignmentIds = assignments.map((assignment) => assignment.id);
 
       if (assignmentIds.length === 0) {
-        setStats({
-          ...EMPTY_STATS,
-          assignmentCount: 0,
-        });
+        setStats({ ...EMPTY_STATS, assignmentCount: 0 });
         setRecent([]);
         setGradeDistribution([
           { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
@@ -162,7 +164,7 @@ const LecturerOverview = () => {
 
       const { data: submissionsData, error: submissionsError } = await supabase
         .from("submissions")
-        .select("*")
+        .select(SUBMISSION_FIELDS)
         .in("assignment_id", assignmentIds);
 
       if (submissionsError) throw submissionsError;
@@ -184,49 +186,58 @@ const LecturerOverview = () => {
       const allGrades = gradesData;
 
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
-      assignments.forEach((a) => {
-        assignmentMap[a.id] = { title: a.title, max_score: a.max_score };
+      assignments.forEach((assignment) => {
+        assignmentMap[assignment.id] = { title: assignment.title, max_score: assignment.max_score };
       });
 
-      const gradeMap: Record<string, any> = {};
-      allGrades.forEach((g) => {
-        gradeMap[g.submission_id] = g;
+      const gradeMap: Record<string, { final_score: number | null; ai_score: number | null }> = {};
+      allGrades.forEach((grade) => {
+        gradeMap[grade.submission_id] = {
+          final_score: grade.final_score,
+          ai_score: grade.ai_score,
+        };
       });
 
-      const gradedSubs = allSubs.filter((s) =>
-        ["ai_graded", "under_review", "approved", "released"].includes(s.status)
+      const gradedSubs = allSubs.filter((submission) =>
+        ["ai_graded", "under_review", "approved", "released"].includes(submission.status)
       );
-      const pendingSubs = allSubs.filter((s) => ["submitted", "ai_grading"].includes(s.status));
+      const pendingSubs = allSubs.filter((submission) =>
+        ["submitted", "ai_grading"].includes(submission.status)
+      );
       const scores = allGrades
-        .filter((g) => g.final_score != null || g.ai_score != null)
-        .map((g) => g.final_score ?? g.ai_score) as number[];
+        .map((grade) => grade.final_score ?? grade.ai_score)
+        .filter((score): score is number => score != null);
       const avgScore =
         scores.length > 0
-          ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+          ? Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10
           : null;
 
       const studentScores: Record<string, number[]> = {};
-      allSubs.forEach((s) => {
-        const key = s.student_id || s.student_name || s.student_email;
+      allSubs.forEach((submission) => {
+        const key = submission.student_id || submission.student_name || submission.student_email;
         if (!key) return;
-        const g = gradeMap[s.id];
-        const score = g?.final_score ?? g?.ai_score;
+
+        const grade = gradeMap[submission.id];
+        const score = grade?.final_score ?? grade?.ai_score;
         if (score != null) {
-          if (!studentScores[key]) studentScores[key] = [];
+          if (!studentScores[key]) {
+            studentScores[key] = [];
+          }
           studentScores[key].push(score);
         }
       });
 
       let onTarget = 0;
       let atRisk = 0;
-      Object.values(studentScores).forEach((ss) => {
-        const avg = ss.reduce((a, b) => a + b, 0) / ss.length;
-        if (avg >= 50) onTarget++;
+      Object.values(studentScores).forEach((studentScoreList) => {
+        const studentAverage =
+          studentScoreList.reduce((total, score) => total + score, 0) / studentScoreList.length;
+        if (studentAverage >= 50) onTarget++;
         else atRisk++;
       });
 
       const uniqueStudents = new Set(
-        allSubs.map((s) => s.student_id || s.student_name || s.student_email).filter(Boolean)
+        allSubs.map((submission) => submission.student_id || submission.student_name || submission.student_email).filter(Boolean)
       );
 
       setStats({
@@ -241,37 +252,39 @@ const LecturerOverview = () => {
       });
 
       const dist = [
-        { label: "90–100%", count: 0, fill: "hsl(152, 56%, 45%)" },
-        { label: "70–89%", count: 0, fill: "hsl(230, 65%, 52%)" },
-        { label: "50–69%", count: 0, fill: "hsl(38, 92%, 60%)" },
+        { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
+        { label: "70-89%", count: 0, fill: "hsl(230, 65%, 52%)" },
+        { label: "50-69%", count: 0, fill: "hsl(38, 92%, 60%)" },
         { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
       ];
-      scores.forEach((s) => {
-        if (s >= 90) dist[0].count++;
-        else if (s >= 70) dist[1].count++;
-        else if (s >= 50) dist[2].count++;
+      scores.forEach((score) => {
+        if (score >= 90) dist[0].count++;
+        else if (score >= 70) dist[1].count++;
+        else if (score >= 50) dist[2].count++;
         else dist[3].count++;
       });
       setGradeDistribution(dist);
 
-      const recentSubs: RecentSubmission[] = allSubs.slice(0, 6).map((s) => {
-        const a = assignmentMap[s.assignment_id];
-        const g = gradeMap[s.id];
+      const recentSubs: RecentSubmission[] = allSubs.slice(0, 6).map((submission) => {
+        const assignment = assignmentMap[submission.assignment_id];
+        const grade = gradeMap[submission.id];
+
         return {
-          id: s.id,
-          student_name: s.student_name || s.student_email || "Student",
-          file_name: s.file_name,
-          status: s.status,
-          submitted_at: s.submitted_at,
-          assignment_title: a?.title || "Unknown",
-          score: g?.final_score ?? g?.ai_score ?? null,
-          max_score: a?.max_score || 100,
+          id: submission.id,
+          student_name: submission.student_name || submission.student_email || "Student",
+          file_name: submission.file_name,
+          status: submission.status,
+          submitted_at: submission.submitted_at,
+          assignment_title: assignment?.title || "Unknown",
+          score: grade?.final_score ?? grade?.ai_score ?? null,
+          max_score: assignment?.max_score || 100,
         };
       });
       setRecent(recentSubs);
-    } catch (err) {
-      console.error("Dashboard fetch error:", err);
+    } catch (error) {
+      console.error("Dashboard fetch error:", error);
     }
+
     setLoading(false);
   };
 
@@ -280,7 +293,7 @@ const LecturerOverview = () => {
     void fetchDashboard();
   }, [isDemo]);
 
-  const totalScored = gradeDistribution.reduce((a, b) => a + b.count, 0);
+  const totalScored = gradeDistribution.reduce((total, band) => total + band.count, 0);
   const heroSummary = useMemo(() => {
     if (stats.pendingCount > 0 && stats.atRisk > 0) {
       return `${stats.pendingCount} submissions are awaiting review and ${stats.atRisk} student${stats.atRisk > 1 ? "s" : ""} may need attention.`;
@@ -327,11 +340,11 @@ const LecturerOverview = () => {
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button size="sm" className="shadow-sm">
+            <Button size="sm" className="shadow-sm" onClick={() => navigate("/dashboard/assignments")}>
               Review submissions
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/performance")}>
               View risk insights
             </Button>
           </div>
@@ -358,7 +371,7 @@ const LecturerOverview = () => {
           },
           {
             icon: BarChart3,
-            value: stats.avgScore != null ? `${stats.avgScore}%` : "—",
+            value: stats.avgScore != null ? `${stats.avgScore}%` : "-",
             label: "Average Grade",
             hint: "Across graded submissions",
             accent: "border-border",
@@ -372,8 +385,8 @@ const LecturerOverview = () => {
             accent: stats.atRisk > 0 ? "border-destructive/30" : "border-border",
             iconWrap: stats.atRisk > 0 ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground",
           },
-        ].map((item, i) => (
-          <Card key={i} className={`border ${item.accent} shadow-sm`}>
+        ].map((item, index) => (
+          <Card key={index} className={`border ${item.accent} shadow-sm`}>
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -410,8 +423,8 @@ const LecturerOverview = () => {
             label: "Students On Target",
             iconColor: "text-success",
           },
-        ].map((item, i) => (
-          <Card key={i} className="shadow-sm">
+        ].map((item, index) => (
+          <Card key={index} className="shadow-sm">
             <CardContent className="flex items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/70">
                 <item.icon className={`h-5 w-5 ${item.iconColor}`} />
@@ -441,43 +454,48 @@ const LecturerOverview = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {recent.map((sub) => {
-                  const needsAttention = sub.score == null || ["submitted", "ai_grading", "ai_graded"].includes(sub.status);
+                {recent.map((submission) => {
+                  const needsAttention =
+                    submission.score == null || ["submitted", "ai_grading", "ai_graded"].includes(submission.status);
+
                   return (
                     <div
-                      key={sub.id}
+                      key={submission.id}
                       className="flex flex-col gap-3 rounded-xl border p-4 transition-colors hover:bg-muted/30 md:flex-row md:items-center md:justify-between"
                     >
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium truncate">{sub.student_name}</p>
+                          <p className="truncate text-sm font-medium">{submission.student_name}</p>
                           {needsAttention && (
-                            <Badge variant="outline" className="border-warning/30 text-warning text-[10px] uppercase tracking-wide">
+                            <Badge variant="outline" className="border-warning/30 text-[10px] uppercase tracking-wide text-warning">
                               Needs attention
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{sub.assignment_title}</p>
-                        <p className="text-xs text-muted-foreground truncate">{sub.file_name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{submission.assignment_title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{submission.file_name}</p>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 md:justify-end">
                         <Badge variant="outline" className="text-xs">
-                          {formatStatusLabel(sub.status)}
+                          {formatStatusLabel(submission.status)}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(sub.submitted_at).toLocaleDateString()}
-                        </span>
-                        {sub.score != null ? (
-                          <Badge variant={sub.score >= 70 ? "default" : sub.score >= 50 ? "secondary" : "destructive"}>
-                            {sub.score}/{sub.max_score}
+                        <span className="text-xs text-muted-foreground">{safeToLocaleDate(submission.submitted_at)}</span>
+                        {submission.score != null ? (
+                          <Badge variant={submission.score >= 70 ? "default" : submission.score >= 50 ? "secondary" : "destructive"}>
+                            {submission.score}/{submission.max_score}
                           </Badge>
                         ) : (
                           <Badge variant="outline">
                             <Clock className="mr-1 h-3 w-3" /> Pending
                           </Badge>
                         )}
-                        <Button size="sm" variant="ghost" className="h-8 px-2 text-xs">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
+                          onClick={() => navigate("/dashboard/assignments")}
+                        >
                           Review
                         </Button>
                       </div>
@@ -518,8 +536,8 @@ const LecturerOverview = () => {
                         }}
                       />
                       <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                        {gradeDistribution.map((entry, idx) => (
-                          <Cell key={idx} fill={entry.fill} />
+                        {gradeDistribution.map((entry, index) => (
+                          <Cell key={index} fill={entry.fill} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -567,10 +585,15 @@ const LecturerOverview = () => {
               </div>
 
               <div className="flex gap-2 pt-1">
-                <Button size="sm" className="flex-1">
+                <Button size="sm" className="flex-1" onClick={() => navigate("/dashboard/assignments")}>
                   Review queue
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => navigate("/dashboard/cohort-analytics")}
+                >
                   View analytics
                 </Button>
               </div>
@@ -593,23 +616,23 @@ const LecturerOverview = () => {
               size="sm"
               onClick={() => {
                 const rows = [["Student", "Assignment", "Score", "Max Score", "Status", "Submitted"]];
-                recent.forEach((s) =>
+                recent.forEach((submission) =>
                   rows.push([
-                    s.student_name || "Unknown",
-                    s.assignment_title,
-                    String(s.score ?? ""),
-                    String(s.max_score),
-                    s.status,
-                    new Date(s.submitted_at).toLocaleDateString(),
+                    submission.student_name || "Unknown",
+                    submission.assignment_title,
+                    String(submission.score ?? ""),
+                    String(submission.max_score),
+                    submission.status,
+                    safeToLocaleDate(submission.submitted_at),
                   ])
                 );
-                const csv = rows.map((r) => r.join(",")).join("\n");
+                const csv = rows.map((row) => row.join(",")).join("\n");
                 const blob = new Blob([csv], { type: "text/csv" });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "grades_export.csv";
-                a.click();
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "grades_export.csv";
+                link.click();
                 URL.revokeObjectURL(url);
               }}
             >
@@ -623,25 +646,25 @@ const LecturerOverview = () => {
                 await import("jspdf-autotable");
                 const doc = new jsPDF();
                 doc.setFontSize(16);
-                doc.text("GradeAI — Grade Report", 14, 20);
+                doc.text("GradeAI - Grade Report", 14, 20);
                 doc.setFontSize(10);
                 doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28);
-                doc.text(`Lecturer: ${profile?.full_name || "—"}`, 14, 34);
+                doc.text(`Lecturer: ${profile?.full_name || "-"}`, 14, 34);
                 doc.text(
-                  `Total Submissions: ${stats.totalSubmissions} | Graded: ${stats.gradedCount} | Avg: ${stats.avgScore ?? "—"}%`,
+                  `Total Submissions: ${stats.totalSubmissions} | Graded: ${stats.gradedCount} | Avg: ${stats.avgScore ?? "-"}%`,
                   14,
                   40
                 );
                 (doc as any).autoTable({
                   startY: 48,
                   head: [["Student", "Assignment", "Score", "Max", "Status", "Date"]],
-                  body: recent.map((s) => [
-                    s.student_name || "Unknown",
-                    s.assignment_title,
-                    s.score != null ? String(s.score) : "—",
-                    String(s.max_score),
-                    formatStatusLabel(s.status),
-                    new Date(s.submitted_at).toLocaleDateString(),
+                  body: recent.map((submission) => [
+                    submission.student_name || "Unknown",
+                    submission.assignment_title,
+                    submission.score != null ? String(submission.score) : "-",
+                    String(submission.max_score),
+                    formatStatusLabel(submission.status),
+                    safeToLocaleDate(submission.submitted_at),
                   ]),
                   styles: { fontSize: 9 },
                   headStyles: { fillColor: [59, 65, 122] },
