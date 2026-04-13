@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
 
-const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Physics", "Biology"];
+const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "Physics", "Biology"];
 const COHORTS = [
   { value: "100", label: "Level 100" },
   { value: "200", label: "Level 200" },
