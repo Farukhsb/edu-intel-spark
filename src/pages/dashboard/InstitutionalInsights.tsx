@@ -48,7 +48,7 @@ const getMetricStatus = (value: number, target: number): AccreditationMetric["st
 };
 
 const InstitutionalInsights = () => {
-  const { isDemo } = useAuth();
+  const { isDemo, user } = useAuth();
   const [departmentStats, setDepartmentStats] = useState<DepartmentStat[]>([]);
   const [lowPerforming, setLowPerforming] = useState<LowPerformingAssessment[]>([]);
   const [accreditation, setAccreditation] = useState<AccreditationMetric[]>(EMPTY_ACCREDITATION);
@@ -61,17 +61,50 @@ const InstitutionalInsights = () => {
       return;
     }
 
+    if (!user) return;
+
     const fetchData = async () => {
       try {
-        const [assignRes, subRes, gradeRes] = await Promise.all([
-          supabase.from("assignments").select("id, title, module_code"),
-          supabase.from("submissions").select("id, assignment_id"),
-          supabase.from("grades").select("submission_id, ai_score, final_score"),
-        ]);
+        const { data: assignmentsData, error: assignmentsError } = await supabase
+          .from("assignments")
+          .select("id, title, module_code")
+          .eq("lecturer_id", user.id);
 
-        const assignments = assignRes.data || [];
-        const submissions = subRes.data || [];
-        const grades = gradeRes.data || [];
+        if (assignmentsError) throw assignmentsError;
+
+        const assignments = assignmentsData || [];
+        const assignmentIds = assignments.map((a) => a.id);
+
+        if (assignmentIds.length === 0) {
+          setHasRealData(false);
+          setDepartmentStats([]);
+          setLowPerforming([]);
+          setAccreditation(EMPTY_ACCREDITATION);
+          setLoading(false);
+          return;
+        }
+
+        const { data: submissionsData, error: submissionsError } = await supabase
+          .from("submissions")
+          .select("id, assignment_id")
+          .in("assignment_id", assignmentIds);
+
+        if (submissionsError) throw submissionsError;
+
+        const submissions = submissionsData || [];
+        const submissionIds = submissions.map((s) => s.id);
+
+        let grades: any[] = [];
+        if (submissionIds.length > 0) {
+          const { data: gradesData, error: gradesError } = await supabase
+            .from("grades")
+            .select("submission_id, ai_score, final_score")
+            .in("submission_id", submissionIds);
+
+          if (gradesError) throw gradesError;
+          grades = gradesData || [];
+        }
+
         const assignmentById = new Map(assignments.map((assignment) => [assignment.id, assignment]));
 
         const scores = grades
@@ -111,7 +144,9 @@ const InstitutionalInsights = () => {
             return {
               name: assignment.title,
               avgGrade: Math.round(average),
-              passRate: Math.round((assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100),
+              passRate: Math.round(
+                (assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100
+              ),
               students: assignment.students,
               issue: average < 50 ? "Low average — review needed" : "Moderate performance",
             };
@@ -148,12 +183,14 @@ const InstitutionalInsights = () => {
 
         setDepartmentStats(deptStats);
 
-        const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
-        const gradedPct = submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
-        const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
-        const completionRate = assignments.length > 0
-          ? Math.min(Math.round((submissions.length / assignments.length) * 100), 100)
-          : 0;
+        const passRate =
+          scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
+        const gradedPct =
+          submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
+        const avgScore =
+          scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
+        const completionRate =
+          assignments.length > 0 ? Math.min(Math.round((submissions.length / assignments.length) * 100), 100) : 0;
 
         setAccreditation([
           { metric: "Module Pass Rate (Avg)", value: passRate, target: 75, status: getMetricStatus(passRate, 75) },
@@ -169,7 +206,7 @@ const InstitutionalInsights = () => {
     };
 
     void fetchData();
-  }, [isDemo]);
+  }, [isDemo, user?.id]);
 
   if (loading) {
     return (

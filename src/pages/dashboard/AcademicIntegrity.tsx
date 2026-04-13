@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, Bot, FileSearch, Shield, ShieldAlert, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface OverviewStat {
   label: string;
@@ -22,26 +23,68 @@ interface FlaggedSubmission {
 }
 
 const AcademicIntegrity = () => {
+  const { user } = useAuth();
   const [overview, setOverview] = useState<OverviewStat[]>([]);
   const [flagged, setFlagged] = useState<FlaggedSubmission[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) return;
+
     const fetchData = async () => {
       try {
-        const [{ data: subsData }, { data: gradesData }, { data: assignmentsData }] = await Promise.all([
-          supabase.from("submissions").select("*"),
-          supabase.from("grades").select("*"),
-          supabase.from("assignments").select("*"),
-        ]);
+        const { data: assignmentsData, error: assignmentsError } = await supabase
+          .from("assignments")
+          .select("*")
+          .eq("lecturer_id", user.id);
 
-        const totalScanned = subsData?.length ?? 0;
+        if (assignmentsError) throw assignmentsError;
+
+        const assignments = assignmentsData || [];
+        const assignmentIds = assignments.map((a) => a.id);
+
+        if (assignmentIds.length === 0) {
+          setOverview([
+            { label: "Submissions Scanned", value: "0", icon: FileSearch },
+            { label: "Flagged for Review", value: "0", icon: AlertTriangle },
+            { label: "AI-Content Suspected", value: "0", icon: Bot },
+            { label: "Cleared", value: "0", icon: Shield },
+          ]);
+          setFlagged([]);
+          setLoading(false);
+          return;
+        }
+
+        const { data: subsData, error: submissionsError } = await supabase
+          .from("submissions")
+          .select("*")
+          .in("assignment_id", assignmentIds);
+
+        if (submissionsError) throw submissionsError;
+
+        const submissions = subsData || [];
+        const submissionIds = submissions.map((s) => s.id);
+
+        let gradesData: any[] = [];
+        if (submissionIds.length > 0) {
+          const { data: grades, error: gradesError } = await supabase
+            .from("grades")
+            .select("*")
+            .in("submission_id", submissionIds);
+
+          if (gradesError) throw gradesError;
+          gradesData = grades || [];
+        }
+
+        const totalScanned = submissions.length;
         const assignmentMap: Record<string, string> = {};
-        assignmentsData?.forEach(a => { assignmentMap[a.id] = a.title; });
+        assignments.forEach((a) => {
+          assignmentMap[a.id] = a.title;
+        });
 
         const subAssignment: Record<string, string> = {};
         const subStudent: Record<string, string> = {};
-        subsData?.forEach(s => {
+        submissions.forEach((s) => {
           subAssignment[s.id] = s.assignment_id;
           subStudent[s.id] = s.student_name || s.student_email || `Student ${s.id.slice(0, 6)}`;
         });
@@ -49,7 +92,7 @@ const AcademicIntegrity = () => {
         let flaggedCount = 0;
         const flaggedItems: FlaggedSubmission[] = [];
 
-        gradesData?.forEach(d => {
+        gradesData.forEach((d) => {
           const breakdown = d.ai_breakdown as any;
           const score = d.final_score ?? d.ai_score;
           const assignmentId = subAssignment[d.submission_id];
@@ -69,9 +112,14 @@ const AcademicIntegrity = () => {
           if (breakdown && Array.isArray(breakdown)) {
             const scores = breakdown.map((b: any) => b.score ?? 0);
             const maxScores = breakdown.map((b: any) => b.max_score ?? b.maxScore ?? 10);
-            const ratios = scores.map((s: number, i: number) => maxScores[i] > 0 ? s / maxScores[i] : 0);
+            const ratios = scores.map((s: number, i: number) =>
+              maxScores[i] > 0 ? s / maxScores[i] : 0
+            );
             const avg = ratios.length > 0 ? ratios.reduce((a: number, b: number) => a + b, 0) / ratios.length : 0;
-            const variance = ratios.length > 1 ? ratios.reduce((sum: number, r: number) => sum + Math.pow(r - avg, 2), 0) / ratios.length : 0;
+            const variance =
+              ratios.length > 1
+                ? ratios.reduce((sum: number, r: number) => sum + Math.pow(r - avg, 2), 0) / ratios.length
+                : 0;
 
             if (variance < 0.01 && ratios.length > 2) {
               aiProb += 40;
@@ -114,12 +162,16 @@ const AcademicIntegrity = () => {
           }
         });
 
-        flaggedItems.sort((a, b) => (b.aiProbability + b.styleMismatch + b.structuralScore) - (a.aiProbability + a.styleMismatch + a.structuralScore));
+        flaggedItems.sort(
+          (a, b) =>
+            b.aiProbability + b.styleMismatch + b.structuralScore -
+            (a.aiProbability + a.styleMismatch + a.structuralScore)
+        );
 
         setOverview([
           { label: "Submissions Scanned", value: totalScanned.toString(), icon: FileSearch },
           { label: "Flagged for Review", value: flaggedCount.toString(), icon: AlertTriangle },
-          { label: "AI-Content Suspected", value: flaggedItems.filter(f => f.aiProbability > 50).length.toString(), icon: Bot },
+          { label: "AI-Content Suspected", value: flaggedItems.filter((f) => f.aiProbability > 50).length.toString(), icon: Bot },
           { label: "Cleared", value: (totalScanned - flaggedCount).toString(), icon: Shield },
         ]);
 
@@ -129,11 +181,15 @@ const AcademicIntegrity = () => {
       }
       setLoading(false);
     };
-    fetchData();
-  }, []);
 
-  const riskColor = (level: string) => level === "high" ? "destructive" : level === "medium" ? "secondary" : "outline";
-  const scoreColor = (score: number) => score >= 70 ? "text-destructive" : score >= 50 ? "text-warning" : "text-success";
+    void fetchData();
+  }, [user?.id]);
+
+  const riskColor = (level: string) =>
+    level === "high" ? "destructive" : level === "medium" ? "secondary" : "outline";
+
+  const scoreColor = (score: number) =>
+    score >= 70 ? "text-destructive" : score >= 50 ? "text-warning" : "text-success";
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 

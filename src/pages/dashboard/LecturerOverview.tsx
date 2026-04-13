@@ -115,7 +115,7 @@ const formatStatusLabel = (status: string) =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
 const LecturerOverview = () => {
-  const { profile, isDemo } = useAuth();
+  const { profile, user, isDemo } = useAuth();
   const [stats, setStats] = useState<Stats>(isDemo ? DEMO_STATS : EMPTY_STATS);
   const [recent, setRecent] = useState<RecentSubmission[]>(isDemo ? DEMO_RECENT : []);
   const [gradeDistribution, setGradeDistribution] = useState(
@@ -126,17 +126,50 @@ const LecturerOverview = () => {
           { label: "70–89%", count: 0, fill: "hsl(230, 65%, 52%)" },
           { label: "50–69%", count: 0, fill: "hsl(38, 92%, 60%)" },
           { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
+          { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
+          { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
+          { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
+          { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
         ]
   );
   const [loading, setLoading] = useState(!isDemo);
 
   const fetchDashboard = async () => {
+    if (!user) return;
+
     try {
-      const [assignRes, subRes, gradeRes] = await Promise.all([
-        supabase.from("assignments").select("*"),
-        supabase.from("submissions").select("*"),
-        supabase.from("grades").select("*"),
-      ]);
+      const { data: assignmentsData, error: assignmentsError } = await supabase
+        .from("assignments")
+        .select("*")
+        .eq("lecturer_id", user.id);
+
+      if (assignmentsError) throw assignmentsError;
+
+      const assignments = assignmentsData || [];
+      const assignmentIds = assignments.map((a) => a.id);
+
+      if (assignmentIds.length === 0) {
+        setStats({
+          ...EMPTY_STATS,
+          assignmentCount: 0,
+        });
+        setRecent([]);
+        setGradeDistribution([
+          { label: "90-100%", count: 0, color: "bg-success", fill: "hsl(152, 56%, 45%)" },
+          { label: "70-89%", count: 0, color: "bg-primary", fill: "hsl(230, 65%, 52%)" },
+          { label: "50-69%", count: 0, color: "bg-warning", fill: "hsl(38, 92%, 60%)" },
+          { label: "< 50%", count: 0, color: "bg-destructive", fill: "hsl(0, 72%, 55%)" },
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: submissionsData, error: submissionsError } = await supabase
+        .from("submissions")
+        .select("*")
+        .in("assignment_id", assignmentIds);
+
+      if (submissionsError) throw submissionsError;
 
       const assignments = assignRes.data || [];
       const allSubs = (subRes.data || []).sort(
