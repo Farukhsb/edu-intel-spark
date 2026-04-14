@@ -16,7 +16,21 @@ Live deployment:
 
 ## Screenshots
 
-![Overview Dashboard](docs/screenshots/overview-dashboard.jpg)
+| Lecturer Dashboard | Overview Dashboard |
+|---|---|
+| ![Lecturer Dashboard](docs/screenshots/lecturer-dashboard-overview.jpg) | ![Overview Dashboard](docs/screenshots/overview-dashboard.jpg) |
+
+| Cohort Analytics | Grade Distribution |
+|---|---|
+| ![Cohort Analytics](docs/screenshots/cohort-analytics-dashboard.jpg) | ![Grade Distribution](docs/screenshots/grade-distribution-analytics.jpg) |
+
+| Predictive Risk Analytics | Student Improvement Plan |
+|---|---|
+| ![Predictive Risk Analytics](docs/screenshots/predictive-risk-analytics.jpg) | ![Student Improvement Plan](docs/screenshots/student-improvement-plan.jpg) |
+
+| AI Grade Explanation |
+|---|
+| ![AI Grade Explanation](docs/screenshots/ai-grade-explanation.jpg) |
 
 ## Product Scope
 
