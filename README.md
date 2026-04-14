@@ -6,7 +6,7 @@ GradeAI is an EdTech platform designed to help lecturers, departments, and insti
 
 Built for universities and schools, GradeAI combines assessment automation with explainable academic analytics to make grading faster, support more consistent feedback, and help educators act earlier when students need support.
 
-> Live deployment: [https://edu-intel-spark.pages.dev](https://edu-intel-spark.pages.dev)
+> Live deployment: [https://edu-spark.pages.dev](https://edu-spark.pages.dev)
 
 ---
 
