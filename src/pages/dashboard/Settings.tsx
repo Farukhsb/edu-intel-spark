@@ -25,17 +25,21 @@ const Settings = () => {
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Name</span>
-            <span className="text-sm font-medium">{profile?.full_name || "—"}</span>
+            <span className="text-sm font-medium">{profile?.full_name || "-"}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Email</span>
-            <span className="text-sm font-medium">{profile?.email || "—"}</span>
+            <span className="text-sm font-medium">{profile?.email || "-"}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Role</span>
             <Badge variant={profile?.role === "lecturer" ? "default" : "secondary"}>
-              {profile?.role || "—"}
+              {profile?.role || "-"}
             </Badge>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Department</span>
+            <span className="text-sm font-medium">{profile?.department_id || "-"}</span>
           </div>
         </CardContent>
       </Card>
