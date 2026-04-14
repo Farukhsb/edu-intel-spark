@@ -22,26 +22,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { safeFormatDate } from "@/lib/date";
 import type { Tables } from "@/integrations/supabase/types";
+import {
+  type IntegrityDecision,
+  type IntegrityEvidenceItem,
+  type IntegrityHistoryEntry,
+  parseStoredReviewPayload,
+  serializeReviewPayload,
+} from "@/lib/integrityReviews";
 
 interface OverviewStat {
   label: string;
   value: string;
   icon: React.ElementType;
-}
-
-type IntegrityDecision = "pending" | "clear" | "investigate" | "misconduct-concern";
-
-interface IntegrityHistoryEntry {
-  id: string;
-  createdAt: string;
-  decision: IntegrityDecision;
-  note: string;
-}
-
-interface EvidenceItem {
-  label: string;
-  value: string;
-  score: number;
 }
 
 interface FlaggedCase {
@@ -56,8 +48,8 @@ interface FlaggedCase {
   aiWritingScore: number;
   similarityScore: number;
   evidence: {
-    aiWriting: EvidenceItem[];
-    similarity: EvidenceItem[];
+    aiWriting: IntegrityEvidenceItem[];
+    similarity: IntegrityEvidenceItem[];
   };
   flags: string[];
   decision: IntegrityDecision;
@@ -70,11 +62,6 @@ type SubmissionRow = Pick<
   "id" | "assignment_id" | "student_name" | "student_email" | "status" | "submitted_at"
 >;
 
-interface StoredReviewPayload {
-  latestNote: string;
-  history: IntegrityHistoryEntry[];
-}
-
 const decisionOptions: IntegrityDecision[] = [
   "pending",
   "clear",
@@ -82,58 +69,11 @@ const decisionOptions: IntegrityDecision[] = [
   "misconduct-concern",
 ];
 
-const parseStoredReviewPayload = (
-  review: Pick<StoredIntegrityReview, "lecturer_note" | "updated_at" | "decision">
-): StoredReviewPayload => {
-  if (!review.lecturer_note) {
-    return { latestNote: "", history: [] };
-  }
-
-  try {
-    const parsed = JSON.parse(review.lecturer_note) as Partial<StoredReviewPayload>;
-    if (Array.isArray(parsed.history)) {
-      return {
-        latestNote: typeof parsed.latestNote === "string" ? parsed.latestNote : parsed.history[0]?.note ?? "",
-        history: parsed.history.filter(
-          (entry): entry is IntegrityHistoryEntry =>
-            !!entry &&
-            typeof entry.id === "string" &&
-            typeof entry.createdAt === "string" &&
-            typeof entry.decision === "string" &&
-            typeof entry.note === "string"
-        ),
-      };
-    }
-  } catch {
-    return {
-      latestNote: review.lecturer_note,
-      history: [
-        {
-          id: `legacy-${review.updated_at}`,
-          createdAt: review.updated_at,
-          decision: review.decision as IntegrityDecision,
-          note: review.lecturer_note,
-        },
-      ],
-    };
-  }
-
-  return { latestNote: "", history: [] };
-};
-
-const serializeReviewPayload = (
-  latestNote: string,
-  history: IntegrityHistoryEntry[]
-) => JSON.stringify({ latestNote, history });
-
 const getReviewType = (item: Pick<FlaggedCase, "aiWritingScore" | "similarityScore">) => {
   if (item.aiWritingScore > 0 && item.similarityScore > 0) return "mixed";
   if (item.aiWritingScore > 0) return "ai-writing-suspicion";
   return "similarity-plagiarism-suspicion";
 };
-
-const clampRiskLevel = (score: number): FlaggedCase["riskLevel"] =>
-  score >= 80 ? "high" : score >= 55 ? "medium" : "low";
 
 const AcademicIntegrity = () => {
   const { user } = useAuth();
@@ -183,15 +123,7 @@ const AcademicIntegrity = () => {
         if (submissionsError) throw submissionsError;
 
         const submissions = (submissionsData || []) as SubmissionRow[];
-        const submissionsByAssignment = new Map<string, SubmissionRow[]>();
-        const submissionMap = new Map<string, SubmissionRow>();
-
-        submissions.forEach((submission) => {
-          submissionMap.set(submission.id, submission);
-          const current = submissionsByAssignment.get(submission.assignment_id) || [];
-          current.push(submission);
-          submissionsByAssignment.set(submission.assignment_id, current);
-        });
+        const submissionMap = new Map(submissions.map((submission) => [submission.id, submission]));
 
         const { data: storedReviews, error: reviewsError } = await supabase
           .from("academic_integrity_reviews")
@@ -201,171 +133,41 @@ const AcademicIntegrity = () => {
 
         if (reviewsError) throw reviewsError;
 
-        const reviewMap = new Map(
-          (storedReviews || []).map((review) => [review.submission_id, review])
-        );
-        const caseMap = new Map<string, FlaggedCase>();
+        const cases: FlaggedCase[] = (storedReviews || [])
+          .map((review) => {
+            const submission = submissionMap.get(review.submission_id);
+            if (!submission) return null;
 
-        const ensureCase = (submission: SubmissionRow) => {
-          const existing = caseMap.get(submission.id);
-          if (existing) return existing;
+            const payload = parseStoredReviewPayload(
+              review as Pick<StoredIntegrityReview, "lecturer_note" | "updated_at" | "decision">
+            );
+            const snapshot = payload.integritySnapshot;
 
-          const review = reviewMap.get(submission.id);
-          const parsedReview = review
-            ? parseStoredReviewPayload(review as Pick<StoredIntegrityReview, "lecturer_note" | "updated_at" | "decision">)
-            : { latestNote: "", history: [] };
+            if (!snapshot && payload.history.length === 0 && review.decision === "pending") {
+              return null;
+            }
 
-          const nextCase: FlaggedCase = {
-            submissionId: submission.id,
-            assignmentId: submission.assignment_id,
-            student: submission.student_name || submission.student_email || "Student",
-            assignment: assignmentMap.get(submission.assignment_id) || "Unknown assignment",
-            status: submission.status,
-            submittedAt: submission.submitted_at,
-            riskLevel: "low",
-            totalScore: 0,
-            aiWritingScore: 0,
-            similarityScore: 0,
-            evidence: {
-              aiWriting: [],
-              similarity: [],
-            },
-            flags: [],
-            decision: (review?.decision as IntegrityDecision | undefined) || "pending",
-            history: parsedReview.history,
-          };
-
-          caseMap.set(submission.id, nextCase);
-          return nextCase;
-        };
-
-        for (const assignment of assignments) {
-          const assignmentSubmissions = submissionsByAssignment.get(assignment.id) || [];
-          if (assignmentSubmissions.length === 0) continue;
-
-          try {
-            const { data, error } = await supabase.functions.invoke("check-plagiarism", {
-              body: {
-                assignmentId: assignment.id,
-                submissions: assignmentSubmissions.map((submission) => ({ id: submission.id })),
-              },
-            });
-
-            if (error) throw error;
-
-            const flags = Array.isArray(data?.flags) ? data.flags : [];
-            flags.forEach((flag: any) => {
-              const submissionA = submissionMap.get(flag.submission_a_id);
-              const submissionB = submissionMap.get(flag.submission_b_id);
-              const aiScore = Number(flag.ai_suspicion_score) || 0;
-              const similarityScore = Number(flag.similarity_score) || 0;
-              const evidenceSummary =
-                flag.evidence_summary || flag.reason || "Potential integrity concern detected.";
-              const matchedExcerpt = flag.matched_excerpt ? String(flag.matched_excerpt) : "";
-              const recommendedAction = flag.recommended_action
-                ? `Recommended action: ${String(flag.recommended_action).replace("-", " ")}`
-                : "Review recommended";
-
-              if (submissionA) {
-                const item = ensureCase(submissionA);
-                item.aiWritingScore = Math.max(item.aiWritingScore, aiScore);
-                item.similarityScore = Math.max(item.similarityScore, similarityScore);
-                item.totalScore = Math.max(item.totalScore, aiScore, similarityScore);
-                item.riskLevel = clampRiskLevel(item.totalScore);
-
-                if (aiScore > 0 && !item.evidence.aiWriting.some((entry) => entry.value === evidenceSummary)) {
-                  item.evidence.aiWriting.push({
-                    label: "AI-writing analysis",
-                    value: evidenceSummary,
-                    score: aiScore,
-                  });
-                }
-
-                if (similarityScore > 0 && submissionB && submissionA.id !== submissionB.id) {
-                  const similarityLabel = `Compared with ${submissionB.student_name || submissionB.student_email || "peer submission"}`;
-                  item.evidence.similarity.push({
-                    label: similarityLabel,
-                    value: evidenceSummary,
-                    score: similarityScore,
-                  });
-                  if (matchedExcerpt) {
-                    item.evidence.similarity.push({
-                      label: `${similarityLabel} excerpt`,
-                      value: matchedExcerpt,
-                      score: similarityScore,
-                    });
-                  }
-                }
-
-                item.flags = Array.from(
-                  new Set([
-                    ...item.flags,
-                    flag.integrity_type === "mixed"
-                      ? "Similarity and AI-writing concern"
-                      : flag.integrity_type === "ai-writing"
-                        ? "AI-writing concern"
-                        : "Similarity concern",
-                    recommendedAction,
-                  ])
-                );
-              }
-
-              if (submissionB && submissionA && submissionA.id !== submissionB.id) {
-                const item = ensureCase(submissionB);
-                item.aiWritingScore = Math.max(item.aiWritingScore, aiScore);
-                item.similarityScore = Math.max(item.similarityScore, similarityScore);
-                item.totalScore = Math.max(item.totalScore, aiScore, similarityScore);
-                item.riskLevel = clampRiskLevel(item.totalScore);
-
-                if (aiScore > 0 && !item.evidence.aiWriting.some((entry) => entry.value === evidenceSummary)) {
-                  item.evidence.aiWriting.push({
-                    label: "AI-writing analysis",
-                    value: evidenceSummary,
-                    score: aiScore,
-                  });
-                }
-
-                if (similarityScore > 0) {
-                  const similarityLabel = `Compared with ${submissionA.student_name || submissionA.student_email || "peer submission"}`;
-                  item.evidence.similarity.push({
-                    label: similarityLabel,
-                    value: evidenceSummary,
-                    score: similarityScore,
-                  });
-                  if (matchedExcerpt) {
-                    item.evidence.similarity.push({
-                      label: `${similarityLabel} excerpt`,
-                      value: matchedExcerpt,
-                      score: similarityScore,
-                    });
-                  }
-                }
-
-                item.flags = Array.from(
-                  new Set([
-                    ...item.flags,
-                    flag.integrity_type === "mixed"
-                      ? "Similarity and AI-writing concern"
-                      : flag.integrity_type === "ai-writing"
-                        ? "AI-writing concern"
-                        : "Similarity concern",
-                    recommendedAction,
-                  ])
-                );
-              }
-            });
-          } catch (error) {
-            console.error(`Failed to run integrity check for assignment ${assignment.id}:`, error);
-          }
-        }
-
-        const cases = Array.from(caseMap.values())
-          .filter((item) => item.totalScore > 0 || item.history.length > 0 || item.decision !== "pending")
+            return {
+              submissionId: submission.id,
+              assignmentId: submission.assignment_id,
+              student: submission.student_name || submission.student_email || "Student",
+              assignment: assignmentMap.get(submission.assignment_id) || "Unknown assignment",
+              status: submission.status,
+              submittedAt: submission.submitted_at,
+              riskLevel: snapshot?.riskLevel || "low",
+              totalScore: snapshot?.totalScore || 0,
+              aiWritingScore: snapshot?.aiWritingScore || 0,
+              similarityScore: snapshot?.similarityScore || 0,
+              evidence: snapshot?.evidence || { aiWriting: [], similarity: [] },
+              flags: snapshot?.flags || [],
+              decision: (review.decision as IntegrityDecision) || "pending",
+              history: payload.history,
+            } satisfies FlaggedCase;
+          })
+          .filter((item): item is FlaggedCase => item !== null)
           .sort((left, right) => right.totalScore - left.totalScore);
 
-        setDecisionDrafts(
-          Object.fromEntries(cases.map((item) => [item.submissionId, item.decision]))
-        );
+        setDecisionDrafts(Object.fromEntries(cases.map((item) => [item.submissionId, item.decision])));
         setNoteDrafts(
           Object.fromEntries(
             cases.map((item) => [
@@ -434,7 +236,14 @@ const AcademicIntegrity = () => {
         review_type: getReviewType(item),
         decision: nextDecision,
         evidence_summary: evidenceSummary || null,
-        lecturer_note: serializeReviewPayload(note, nextHistory),
+        lecturer_note: serializeReviewPayload(note, nextHistory, {
+          totalScore: item.totalScore,
+          aiWritingScore: item.aiWritingScore,
+          similarityScore: item.similarityScore,
+          riskLevel: item.riskLevel,
+          evidence: item.evidence,
+          flags: item.flags,
+        }),
       },
       { onConflict: "submission_id,lecturer_id" }
     );
@@ -523,13 +332,13 @@ const AcademicIntegrity = () => {
             <CardTitle className="text-base">Academic Integrity Review Queue</CardTitle>
           </div>
           <CardDescription>
-            Each case is attached to a real submission, with evidence split between AI-writing signals and similarity/plagiarism signals.
+            Each case is attached to a stored integrity result, with evidence split between AI-writing signals and similarity/plagiarism signals.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {flagged.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              No flagged submissions found in the current lecturer data.
+              No persisted integrity cases found yet. Run a plagiarism check on an assignment to populate the queue.
             </p>
           ) : (
             flagged.map((item) => {

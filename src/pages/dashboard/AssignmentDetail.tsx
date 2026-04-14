@@ -43,6 +43,13 @@ import {
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
+import {
+  clampRiskLevel,
+  parseStoredReviewPayload,
+  serializeReviewPayload,
+  type IntegrityEvidenceItem,
+  type IntegritySnapshot,
+} from "@/lib/integrityReviews";
 
 type SubmissionStatus =
   | "submitted"
@@ -90,6 +97,8 @@ interface Assignment {
 }
 
 interface PlagiarismFlag {
+  submission_a_id?: string;
+  submission_b_id?: string;
   student_a: string;
   student_b: string;
   similarity_score: number;
@@ -100,6 +109,13 @@ interface PlagiarismFlag {
   recommended_action?: "clear" | "review" | "investigate";
   integrity_type?: "similarity" | "ai-writing" | "mixed";
   severity: string;
+}
+
+interface PersistedReviewRow {
+  submission_id: string;
+  decision: string;
+  lecturer_note: string | null;
+  updated_at: string;
 }
 
 const statusConfig: Record<
@@ -154,6 +170,9 @@ const normalizeStudentKey = (value: string | null | undefined) =>
     .replace(/\.[^/.]+$/, "")
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
+
+const buildRecommendedActionLabel = (value?: string) =>
+  value ? `Recommended action: ${String(value).replace("-", " ")}` : "Review recommended";
 
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -600,10 +619,159 @@ const AssignmentDetail = () => {
         },
       });
       if (error) throw error;
-      setPlagiarismFlags(data?.flags || []);
+      const flags = Array.isArray(data?.flags) ? (data.flags as PlagiarismFlag[]) : [];
+      setPlagiarismFlags(flags);
       setPlagiarismSummary(data?.summary || "Analysis complete");
-      if (data?.flags?.length === 0) toast.success("No suspicious similarities found");
-      else toast.warning(`${data.flags.length} potential issue(s) flagged`);
+
+      const { data: existingReviews, error: reviewsError } = await supabase
+        .from("academic_integrity_reviews")
+        .select("submission_id, decision, lecturer_note, updated_at")
+        .in("submission_id", submissions.map((submission) => submission.id))
+        .eq("lecturer_id", user!.id);
+
+      if (reviewsError) throw reviewsError;
+
+      const existingReviewMap = new Map(
+        ((existingReviews || []) as PersistedReviewRow[]).map((review) => [review.submission_id, review])
+      );
+      const snapshots = new Map<string, IntegritySnapshot>();
+
+      const ensureSnapshot = (submission: Submission) => {
+        const existing = snapshots.get(submission.id);
+        if (existing) return existing;
+        const next: IntegritySnapshot = {
+          totalScore: 0,
+          aiWritingScore: 0,
+          similarityScore: 0,
+          riskLevel: "low",
+          evidence: {
+            aiWriting: [],
+            similarity: [],
+          },
+          flags: [],
+        };
+        snapshots.set(submission.id, next);
+        return next;
+      };
+
+      flags.forEach((flag) => {
+        const submissionA = submissions.find((item) => item.id === flag.submission_a_id);
+        const submissionB = submissions.find((item) => item.id === flag.submission_b_id);
+        const aiScore = Number(flag.ai_suspicion_score) || 0;
+        const similarityScore = Number(flag.similarity_score) || 0;
+        const evidenceSummary = flag.evidence_summary || flag.reason || "Potential integrity concern detected.";
+        const matchedExcerpt = flag.matched_excerpt ? String(flag.matched_excerpt) : "";
+        const actionLabel = buildRecommendedActionLabel(flag.recommended_action);
+
+        const applyFlagToSubmission = (
+          submission: Submission | undefined,
+          counterpart: Submission | undefined
+        ) => {
+          if (!submission) return;
+          const snapshot = ensureSnapshot(submission);
+          snapshot.aiWritingScore = Math.max(snapshot.aiWritingScore, aiScore);
+          snapshot.similarityScore = Math.max(snapshot.similarityScore, similarityScore);
+          snapshot.totalScore = Math.max(snapshot.totalScore, aiScore, similarityScore);
+          snapshot.riskLevel = clampRiskLevel(snapshot.totalScore);
+
+          if (
+            aiScore > 0 &&
+            !snapshot.evidence.aiWriting.some((entry) => entry.value === evidenceSummary)
+          ) {
+            snapshot.evidence.aiWriting.push({
+              label: "AI-writing analysis",
+              value: evidenceSummary,
+              score: aiScore,
+            });
+          }
+
+          if (similarityScore > 0 && counterpart && counterpart.id !== submission.id) {
+            const similarityLabel = `Compared with ${counterpart.student_name || counterpart.student_email || "peer submission"}`;
+            snapshot.evidence.similarity.push({
+              label: similarityLabel,
+              value: evidenceSummary,
+              score: similarityScore,
+            });
+            if (matchedExcerpt) {
+              snapshot.evidence.similarity.push({
+                label: `${similarityLabel} excerpt`,
+                value: matchedExcerpt,
+                score: similarityScore,
+              });
+            }
+          }
+
+          snapshot.flags = Array.from(
+            new Set([
+              ...snapshot.flags,
+              flag.integrity_type === "mixed"
+                ? "Similarity and AI-writing concern"
+                : flag.integrity_type === "ai-writing"
+                  ? "AI-writing concern"
+                  : "Similarity concern",
+              actionLabel,
+            ])
+          );
+        };
+
+        applyFlagToSubmission(submissionA, submissionB);
+        if (submissionB && submissionB.id !== submissionA?.id) {
+          applyFlagToSubmission(submissionB, submissionA);
+        }
+      });
+
+      const reviewUpserts = submissions
+        .map((submission) => {
+          const existingReview = existingReviewMap.get(submission.id);
+          const parsedReview = existingReview
+            ? parseStoredReviewPayload(existingReview)
+            : { latestNote: "", history: [], integritySnapshot: null };
+          const snapshot = snapshots.get(submission.id) || null;
+
+          if (!snapshot && !existingReview) {
+            return null;
+          }
+
+          return {
+            submission_id: submission.id,
+            lecturer_id: user!.id,
+            review_type:
+              snapshot && snapshot.aiWritingScore > 0 && snapshot.similarityScore > 0
+                ? "mixed"
+                : snapshot && snapshot.aiWritingScore > 0
+                  ? "ai-writing-suspicion"
+                  : "similarity-plagiarism-suspicion",
+            decision: existingReview?.decision || "pending",
+            evidence_summary:
+              snapshot
+                ? [
+                    ...snapshot.evidence.aiWriting.map((entry: IntegrityEvidenceItem) => `${entry.label}: ${entry.value}`),
+                    ...snapshot.evidence.similarity.map((entry: IntegrityEvidenceItem) => `${entry.label}: ${entry.value}`),
+                  ]
+                    .slice(0, 6)
+                    .join("\n\n") || null
+                : null,
+            lecturer_note: serializeReviewPayload(
+              parsedReview.latestNote,
+              parsedReview.history,
+              snapshot
+            ),
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      if (reviewUpserts.length > 0) {
+        const { error: persistError } = await supabase
+          .from("academic_integrity_reviews")
+          .upsert(reviewUpserts, { onConflict: "submission_id,lecturer_id" });
+
+        if (persistError) {
+          throw persistError;
+        }
+      }
+
+      if (flags.length === 0) toast.success("No suspicious similarities found");
+      else toast.warning(`${flags.length} potential issue(s) flagged`);
     } catch (err: any) {
       toast.error(err?.message || "Plagiarism check failed");
     }
@@ -661,7 +829,7 @@ const AssignmentDetail = () => {
     else setSelected(new Set(filteredSubmissions.map((submission) => submission.id)));
   };
 
-  const queueFeedbackSummary = (sub: Submission) => {
+  const queueFeedbackSummary = async (sub: Submission) => {
     const grade = grades[sub.id];
     if (!grade) {
       toast.error("No grade available to summarise");
@@ -675,7 +843,7 @@ const AssignmentDetail = () => {
       grade.ai_feedback ??
       "Feedback will be added in the grading workflow.";
 
-    queueCommunicationMessage({
+    const result = await queueCommunicationMessage({
       category: "feedback-summary",
       recipientName: sub.student_name || sub.student_email || "Student",
       recipientEmail: sub.student_email,
@@ -695,14 +863,18 @@ Please review the feedback in the platform and let me know if you would like to 
       relatedAssignmentId: assignment?.id,
       relatedStudentId: sub.student_id || sub.student_email || sub.student_name || undefined,
     });
-    toast.success("Feedback summary added to the outbox");
+    if (!result) {
+      toast.error("Could not save feedback summary");
+      return;
+    }
+    toast.success("Feedback summary saved");
   };
 
-  const queueGradeReleaseNotification = (sub: Submission) => {
+  const queueGradeReleaseNotification = async (sub: Submission) => {
     const grade = grades[sub.id];
     const score = grade?.final_score ?? grade?.lecturer_score ?? grade?.ai_score;
 
-    queueCommunicationMessage({
+    const result = await queueCommunicationMessage({
       category: "grade-released",
       recipientName: sub.student_name || sub.student_email || "Student",
       recipientEmail: sub.student_email,
@@ -719,7 +891,11 @@ Please log in to review the released grade and feedback.`,
       relatedAssignmentId: assignment?.id,
       relatedStudentId: sub.student_id || sub.student_email || sub.student_name || undefined,
     });
-    toast.success("Grade release note added to the outbox");
+    if (!result) {
+      toast.error("Could not save release note");
+      return;
+    }
+    toast.success("Grade release note saved");
   };
 
   const summary = useMemo(() => {
@@ -1118,7 +1294,7 @@ Please log in to review the released grade and feedback.`,
                             {isLecturer && (
                               <div className="flex flex-wrap gap-2 lg:justify-end">
                                 {grade?.ai_score != null && (
-                                  <Button size="sm" variant="ghost" onClick={() => queueFeedbackSummary(sub)}>
+                                  <Button size="sm" variant="ghost" onClick={() => void queueFeedbackSummary(sub)}>
                                     <Sparkles className="mr-1 h-3 w-3" /> Feedback summary
                                   </Button>
                                 )}
@@ -1170,7 +1346,7 @@ Please log in to review the released grade and feedback.`,
                                           .from("submissions")
                                           .update({ status: "released" as const })
                                           .eq("id", sub.id);
-                                        queueGradeReleaseNotification(sub);
+                                          await queueGradeReleaseNotification(sub);
                                         toast.success("Grade released to student");
                                         await loadSubmissions();
                                       } catch (e) {
@@ -1185,7 +1361,7 @@ Please log in to review the released grade and feedback.`,
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => queueGradeReleaseNotification(sub)}
+                                    onClick={() => void queueGradeReleaseNotification(sub)}
                                   >
                                     <Send className="mr-1 h-3 w-3" /> Send release note
                                   </Button>

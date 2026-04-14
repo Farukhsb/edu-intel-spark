@@ -65,6 +65,56 @@ export type Database = {
           },
         ]
       }
+      communication_messages: {
+        Row: {
+          body: string
+          category: string
+          created_at: string
+          id: string
+          recipient_email: string | null
+          recipient_id: string | null
+          recipient_name: string
+          related_assignment_id: string | null
+          related_student_id: string | null
+          sender_id: string
+          subject: string
+        }
+        Insert: {
+          body: string
+          category: string
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          recipient_name: string
+          related_assignment_id?: string | null
+          related_student_id?: string | null
+          sender_id: string
+          subject: string
+        }
+        Update: {
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          recipient_name?: string
+          related_assignment_id?: string | null
+          related_student_id?: string | null
+          sender_id?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignments: {
         Row: {
           created_at: string

@@ -447,9 +447,9 @@ const StudentProfile = () => {
     toast.success("Intervention logged");
   };
 
-  const queueAtRiskAlert = () => {
+  const queueAtRiskAlert = async () => {
     if (!student) return;
-    queueCommunicationMessage({
+    const result = await queueCommunicationMessage({
       category: "at-risk-alert",
       recipientName: student.name,
       recipientEmail: student.email,
@@ -468,13 +468,17 @@ ${student.recommendation}
 Please reply to arrange a short meeting so we can agree the most useful support before the next submission.`,
       relatedStudentId: student.studentId,
     });
-    toast.success("At-risk alert added to the outbox");
+    if (!result) {
+      toast.error("Could not save at-risk alert");
+      return;
+    }
+    toast.success("At-risk alert saved");
   };
 
-  const queueFollowUpReminder = () => {
+  const queueFollowUpReminder = async () => {
     if (!student) return;
     const latestIntervention = interventions[0];
-    queueCommunicationMessage({
+    const result = await queueCommunicationMessage({
       category: "intervention-follow-up",
       recipientName: student.name,
       recipientEmail: student.email,
@@ -490,7 +494,11 @@ ${student.recommendation}
 Please share a short update before ${latestIntervention?.followUpDate ? safeFormatDate(latestIntervention.followUpDate, "MMM d, yyyy") : "our next review"} so we can confirm what is working and what still needs attention.`,
       relatedStudentId: student.studentId,
     });
-    toast.success("Follow-up reminder added to the outbox");
+    if (!result) {
+      toast.error("Could not save follow-up reminder");
+      return;
+    }
+    toast.success("Follow-up reminder saved");
   };
 
   if (loading) {
@@ -555,10 +563,10 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
               <p className="text-xs text-muted-foreground">Missed</p>
               <p className="text-2xl font-bold font-display">{student.missedAssignments.length}</p>
             </div>
-            <Button variant="outline" onClick={queueAtRiskAlert}>
+            <Button variant="outline" onClick={() => void queueAtRiskAlert()}>
               Send at-risk alert
             </Button>
-            <Button variant="outline" onClick={queueFollowUpReminder}>
+            <Button variant="outline" onClick={() => void queueFollowUpReminder()}>
               Send follow-up reminder
             </Button>
           </div>

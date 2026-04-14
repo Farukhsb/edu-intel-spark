@@ -13,8 +13,7 @@ import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import {
-  getVisibleCommunicationMessages,
-  loadCommunicationOutbox,
+  loadVisibleCommunicationMessages,
   type CommunicationMessage,
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
@@ -64,27 +63,31 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   }, [darkMode]);
 
   useEffect(() => {
-    const syncNotifications = () => {
-      const visibleMessages = getVisibleCommunicationMessages(loadCommunicationOutbox(), {
+    const syncNotifications = async () => {
+      const visibleMessages = await loadVisibleCommunicationMessages({
         userId: user?.id ?? profile?.id ?? null,
         email: profile?.email ?? user?.email ?? null,
         fullName: profile?.full_name ?? null,
       });
-      setNotifications(visibleMessages.slice(0, 6));
+      setNotifications(visibleMessages);
     };
 
-    syncNotifications();
+    void syncNotifications();
     if (typeof window !== "undefined") {
-      window.addEventListener("storage", syncNotifications);
-      window.addEventListener("gradeai:communications-updated", syncNotifications);
-    }
+      const handleUpdated = () => {
+        void syncNotifications();
+      };
+      const handleFocus = () => {
+        void syncNotifications();
+      };
+      window.addEventListener("gradeai:communications-updated", handleUpdated);
+      window.addEventListener("focus", handleFocus);
 
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("storage", syncNotifications);
-        window.removeEventListener("gradeai:communications-updated", syncNotifications);
-      }
-    };
+      return () => {
+        window.removeEventListener("gradeai:communications-updated", handleUpdated);
+        window.removeEventListener("focus", handleFocus);
+      };
+    }
   }, [profile?.email, profile?.id, user?.email, user?.id]);
 
   const openNotification = (notification: CommunicationMessage) => {

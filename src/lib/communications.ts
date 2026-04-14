@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 export type CommunicationCategory =
   | "feedback-summary"
   | "at-risk-alert"
@@ -17,45 +19,81 @@ export interface CommunicationMessage {
   relatedAssignmentId?: string;
 }
 
-const STORAGE_KEY = "gradeai.communicationOutbox";
+interface CommunicationMessageRow {
+  id: string;
+  created_at: string;
+  category: CommunicationCategory;
+  recipient_name: string;
+  recipient_email: string | null;
+  recipient_id: string | null;
+  subject: string;
+  body: string;
+  related_student_id: string | null;
+  related_assignment_id: string | null;
+}
 
-export const loadCommunicationOutbox = (): CommunicationMessage[] => {
-  if (typeof window === "undefined") return [];
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw) as CommunicationMessage[];
-  } catch {
-    return [];
-  }
-};
+const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessage => ({
+  id: message.id,
+  createdAt: message.created_at,
+  category: message.category,
+  recipientName: message.recipient_name,
+  recipientEmail: message.recipient_email,
+  recipientId: message.recipient_id || undefined,
+  subject: message.subject,
+  body: message.body,
+  relatedStudentId: message.related_student_id || undefined,
+  relatedAssignmentId: message.related_assignment_id || undefined,
+});
 
-export const saveCommunicationOutbox = (messages: CommunicationMessage[]) => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-};
-
-export const queueCommunicationMessage = (
+export const queueCommunicationMessage = async (
   message: Omit<CommunicationMessage, "id" | "createdAt">
 ) => {
-  const nextMessage: CommunicationMessage = {
-    ...message,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    createdAt: new Date().toISOString(),
-  };
-  const current = loadCommunicationOutbox();
-  saveCommunicationOutbox([nextMessage, ...current].slice(0, 50));
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("communication_messages")
+    .insert({
+      sender_id: user.id,
+      category: message.category,
+      recipient_name: message.recipientName,
+      recipient_email: message.recipientEmail,
+      recipient_id: message.recipientId ?? null,
+      subject: message.subject,
+      body: message.body,
+      related_student_id: message.relatedStudentId ?? null,
+      related_assignment_id: message.relatedAssignmentId ?? null,
+    })
+    .select(
+      "id, created_at, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
+    )
+    .single();
+
+  if (error || !data) {
+    console.error("Failed to save communication message:", error);
+    return null;
+  }
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
-  return nextMessage;
+
+  return normalizeMessage(data as CommunicationMessageRow);
 };
 
-export const getVisibleCommunicationMessages = (messages: CommunicationMessage[], options: {
-  userId?: string | null;
-  email?: string | null;
-  fullName?: string | null;
-}) => {
+export const getVisibleCommunicationMessages = (
+  messages: CommunicationMessage[],
+  options: {
+    userId?: string | null;
+    email?: string | null;
+    fullName?: string | null;
+  }
+) => {
   const normalizedEmail = options.email?.trim().toLowerCase() ?? null;
   const normalizedName = options.fullName?.trim().toLowerCase() ?? null;
   const slugify = (value: string) =>
@@ -95,4 +133,28 @@ export const getVisibleCommunicationMessages = (messages: CommunicationMessage[]
 
     return false;
   });
+};
+
+export const loadVisibleCommunicationMessages = async (options: {
+  userId?: string | null;
+  email?: string | null;
+  fullName?: string | null;
+}) => {
+  const { data, error } = await supabase
+    .from("communication_messages")
+    .select(
+      "id, created_at, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
+    )
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error("Failed to load communication messages:", error);
+    return [];
+  }
+
+  return getVisibleCommunicationMessages(
+    ((data || []) as CommunicationMessageRow[]).map(normalizeMessage),
+    options
+  ).slice(0, 6);
 };
