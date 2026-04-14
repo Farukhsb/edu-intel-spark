@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -120,52 +120,39 @@ const DEMO_RESOURCES: Resource[] = [
   },
 ];
 
-const TASK_STORAGE_KEY = "gradeai.studentImprovementTasks";
-
 const ImprovementPlan = () => {
   const { user, isDemo } = useAuth();
   const [plan, setPlan] = useState<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const [resources, setResources] = useState<Resource[]>(isDemo ? DEMO_RESOURCES : []);
   const [loading, setLoading] = useState(!isDemo);
   const [generating, setGenerating] = useState(false);
+  const latestPlanRef = useRef<PlanModule[]>(isDemo ? DEMO_PLAN : []);
 
   useEffect(() => {
     if (isDemo || !user) return;
     void fetchPlan();
   }, [user, isDemo]);
 
-  const loadTaskOverrides = () => {
-    if (typeof window === "undefined") return {};
-    const raw = window.localStorage.getItem(TASK_STORAGE_KEY);
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw) as Record<string, boolean>;
-    } catch {
-      return {};
-    }
-  };
-
-  const persistTaskOverrides = (planModules: PlanModule[]) => {
-    if (typeof window === "undefined") return;
-    const overrides = Object.fromEntries(
-      planModules.flatMap((module) => module.tasks.map((task) => [task.id, task.done]))
-    );
-    window.localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(overrides));
-  };
-
   const fetchPlan = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const { data: submissions } = await supabase
-        .from("submissions")
-        .select("*")
-        .eq("student_id", user.id)
-        .order("submitted_at", { ascending: true });
+      const [{ data: submissions }, { data: progressRows }] = await Promise.all([
+        supabase
+          .from("submissions")
+          .select("*")
+          .eq("student_id", user.id)
+          .order("submitted_at", { ascending: true }),
+        supabase
+          .from("improvement_plan_progress")
+          .select("task_key, completed")
+          .eq("student_id", user.id),
+      ]);
 
       if (!submissions || submissions.length === 0) {
         setPlan([]);
         setResources([]);
+        latestPlanRef.current = [];
         setLoading(false);
         return;
       }
@@ -188,7 +175,9 @@ const ImprovementPlan = () => {
         gradeMap[grade.submission_id] = grade;
       });
 
-      const taskOverrides = loadTaskOverrides();
+      const taskOverrides = Object.fromEntries(
+        (progressRows || []).map((row) => [row.task_key, row.completed])
+      ) as Record<string, boolean>;
       const moduleBuckets: Record<
         string,
         {
@@ -302,6 +291,7 @@ const ImprovementPlan = () => {
 
       nextPlan.sort((left, right) => left.currentGrade - right.currentGrade);
       setPlan(nextPlan);
+      latestPlanRef.current = nextPlan;
 
       const nextResources: Resource[] = nextPlan
         .flatMap((module) =>
@@ -321,25 +311,54 @@ const ImprovementPlan = () => {
       setResources(nextResources);
     } catch (error) {
       console.error("Failed to fetch improvement plan:", error);
+      toast.error("Could not load your improvement plan.");
     }
     setLoading(false);
   };
 
-  const toggleTask = (moduleName: string, taskId: string) => {
-    setPlan((current) => {
-      const next = current.map((module) =>
-        module.module === moduleName
-          ? {
-              ...module,
-              tasks: module.tasks.map((task) =>
-                task.id === taskId ? { ...task, done: !task.done } : task
-              ),
-            }
-          : module
-      );
-      persistTaskOverrides(next);
-      return next;
-    });
+  useEffect(() => {
+    latestPlanRef.current = plan;
+  }, [plan]);
+
+  const toggleTask = async (moduleName: string, taskId: string) => {
+    const previousPlan = latestPlanRef.current;
+    let nextCompleted = false;
+    const nextPlan = previousPlan.map((module) =>
+      module.module === moduleName
+        ? {
+            ...module,
+            tasks: module.tasks.map((task) => {
+              if (task.id !== taskId) return task;
+              nextCompleted = !task.done;
+              return { ...task, done: nextCompleted };
+            }),
+          }
+        : module
+    );
+
+    setPlan(nextPlan);
+    latestPlanRef.current = nextPlan;
+
+    if (isDemo || !user) {
+      return;
+    }
+
+    const { error } = await supabase.from("improvement_plan_progress").upsert(
+      {
+        student_id: user.id,
+        task_key: taskId,
+        completed: nextCompleted,
+        completed_at: nextCompleted ? new Date().toISOString() : null,
+      },
+      { onConflict: "student_id,task_key" }
+    );
+
+    if (error) {
+      console.error("Failed to save improvement task progress:", error);
+      setPlan(previousPlan);
+      latestPlanRef.current = previousPlan;
+      toast.error("Could not save task progress.");
+    }
   };
 
   const generateAIRecommendations = async () => {

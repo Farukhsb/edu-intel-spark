@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      academic_integrity_reviews: {
+        Row: {
+          created_at: string
+          decision: string
+          evidence_summary: string | null
+          id: string
+          lecturer_id: string
+          lecturer_note: string | null
+          review_type: string
+          submission_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decision: string
+          evidence_summary?: string | null
+          id?: string
+          lecturer_id: string
+          lecturer_note?: string | null
+          review_type: string
+          submission_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decision?: string
+          evidence_summary?: string | null
+          id?: string
+          lecturer_id?: string
+          lecturer_note?: string | null
+          review_type?: string
+          submission_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academic_integrity_reviews_lecturer_id_fkey"
+            columns: ["lecturer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academic_integrity_reviews_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignments: {
         Row: {
           created_at: string
@@ -112,6 +163,41 @@ export type Database = {
           },
         ]
       }
+      improvement_plan_progress: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          id: string
+          student_id: string
+          task_key: string
+          updated_at: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          student_id: string
+          task_key: string
+          updated_at?: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          student_id?: string
+          task_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "improvement_plan_progress_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -187,6 +273,57 @@ export type Database = {
           student_name?: string | null
           submitted_at?: string
           uploaded_by?: string
+        }
+        Relationships: []
+      }
+      student_interventions: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          follow_up_date: string | null
+          id: string
+          intervention_type: string
+          lecturer_id: string
+          notes: string | null
+          priority: string | null
+          status: string
+          student_email: string | null
+          student_id: string
+          student_name: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          intervention_type: string
+          lecturer_id: string
+          notes?: string | null
+          priority?: string | null
+          status?: string
+          student_email?: string | null
+          student_id: string
+          student_name: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          intervention_type?: string
+          lecturer_id?: string
+          notes?: string | null
+          priority?: string | null
+          status?: string
+          student_email?: string | null
+          student_id?: string
+          student_name?: string
+          title?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
