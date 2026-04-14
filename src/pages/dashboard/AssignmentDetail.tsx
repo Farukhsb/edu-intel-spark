@@ -142,6 +142,14 @@ const statusConfig: Record<
 const formatStatusLabel = (status: string) =>
   status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
+const normalizeStudentKey = (value: string | null | undefined) =>
+  (value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { role, user, profile } = useAuth();
@@ -345,30 +353,71 @@ const AssignmentDetail = () => {
     if (!files || !assignment || !user?.id) return;
     setUploading(true);
     let success = 0;
+    let linked = 0;
+    let unmatched = 0;
+
+    const { data: studentProfiles, error: studentProfilesError } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, role")
+      .eq("role", "student");
+
+    if (studentProfilesError) {
+      console.error("[BulkUpload] Failed to load student profiles:", studentProfilesError);
+      toast.error("Could not load student profiles for bulk upload");
+      setUploading(false);
+      e.target.value = "";
+      return;
+    }
+
+    const profileMatches = new Map(
+      ((studentProfiles || []) as Array<{ id: string; full_name: string | null; email: string | null; role: string | null }>)
+        .flatMap((profile) => {
+          const keys = new Set<string>();
+          const normalizedEmail = normalizeStudentKey(profile.email);
+          const normalizedName = normalizeStudentKey(profile.full_name);
+          if (normalizedEmail) {
+            keys.add(normalizedEmail);
+            keys.add(normalizedEmail.split("@")[0]);
+          }
+          if (normalizedName) keys.add(normalizedName);
+          return Array.from(keys).map((key) => [key, profile] as const);
+        })
+    );
 
     for (const file of Array.from(files)) {
       try {
         const { fileUrl, fileName, fileType } = await uploadFile(file, user.id);
         const studentName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+        const matchedProfile = profileMatches.get(normalizeStudentKey(file.name)) || profileMatches.get(normalizeStudentKey(studentName));
         const { error } = await supabase.from("submissions").insert({
           assignment_id: assignment.id,
-          student_name: studentName,
+          student_name: matchedProfile?.full_name ?? studentName,
           file_url: fileUrl,
           file_name: fileName,
           file_type: fileType,
           uploaded_by: user.id,
           status: "submitted" as const,
-          student_id: null,
-          student_email: null,
+          student_id: matchedProfile?.id ?? null,
+          student_email: matchedProfile?.email ?? null,
         });
         if (error) throw error;
         success++;
+        if (matchedProfile?.id) {
+          linked++;
+        } else {
+          unmatched++;
+        }
       } catch (err: any) {
         console.error(`[BulkUpload] Failed for ${file.name}:`, err);
         toast.error(`Failed to upload ${file.name}`);
       }
     }
-    toast.success(`${success} file(s) uploaded`);
+    if (success > 0) {
+      toast.success(`${success} file(s) uploaded`);
+      if (linked > 0 || unmatched > 0) {
+        toast.info(`${linked} linked to student accounts, ${unmatched} left unlinked`);
+      }
+    }
     setUploading(false);
     await loadSubmissions();
     e.target.value = "";
