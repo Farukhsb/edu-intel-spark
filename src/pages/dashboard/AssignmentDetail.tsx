@@ -279,6 +279,30 @@ const AssignmentDetail = () => {
     }
   };
 
+  const openSubmissionFile = async (submission: Submission) => {
+    try {
+      const rawUrl = submission.file_url || "";
+      const isDirectUrl = /^https?:\/\//i.test(rawUrl);
+      if (isDirectUrl) {
+        window.open(rawUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      const { data, error } = await supabase.storage
+        .from("submissions")
+        .createSignedUrl(rawUrl, 60);
+
+      if (error || !data?.signedUrl) {
+        throw error ?? new Error("Could not create signed URL");
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("Failed to open submission file:", error);
+      toast.error("Could not open the file");
+    }
+  };
+
   useEffect(() => {
     void loadSubmissions();
   }, [id]);
@@ -1056,7 +1080,7 @@ Please log in to review the released grade and feedback.`,
                                   size="sm"
                                   variant="link"
                                   className="h-auto p-0 text-xs"
-                                  onClick={() => window.open(sub.file_url, "_blank", "noopener,noreferrer")}
+                                  onClick={() => void openSubmissionFile(sub)}
                                 >
                                   Open file
                                 </Button>
@@ -1238,7 +1262,7 @@ Please log in to review the released grade and feedback.`,
       </div>
 
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Review Submission</DialogTitle>
             <DialogDescription>
@@ -1254,18 +1278,24 @@ Please log in to review the released grade and feedback.`,
                     {grades[reviewSubmission.id].ai_score}/{assignment.max_score}
                   </p>
                   <p className="pt-1 text-xs font-medium text-muted-foreground">AI Feedback</p>
-                  <p className="text-sm">{grades[reviewSubmission.id].ai_feedback || "N/A"}</p>
+                  <div className="max-h-56 overflow-y-auto rounded-md bg-background/80 p-3">
+                    <p className="whitespace-pre-wrap text-sm">
+                      {grades[reviewSubmission.id].ai_feedback || "N/A"}
+                    </p>
+                  </div>
                   {grades[reviewSubmission.id].ai_breakdown && Array.isArray(grades[reviewSubmission.id].ai_breakdown) && (
                     <div className="space-y-1 pt-2">
                       <p className="text-xs font-medium text-muted-foreground">Breakdown</p>
-                      {(grades[reviewSubmission.id].ai_breakdown as any[]).map((b, i) => (
-                        <div key={i} className="flex justify-between text-xs">
-                          <span>{b.criterion}</span>
-                          <span className="font-medium">
-                            {b.score}/{b.max_score}
-                          </span>
-                        </div>
-                      ))}
+                      <div className="max-h-48 space-y-1 overflow-y-auto rounded-md bg-background/80 p-3">
+                        {(grades[reviewSubmission.id].ai_breakdown as any[]).map((b, i) => (
+                          <div key={i} className="flex justify-between gap-3 text-xs">
+                            <span>{b.criterion}</span>
+                            <span className="font-medium">
+                              {b.score}/{b.max_score}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </CardContent>

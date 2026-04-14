@@ -40,6 +40,46 @@ function normalizeType(value: unknown): IntegrityFlag["integrity_type"] {
   return value === "similarity" || value === "ai-writing" || value === "mixed" ? value : "mixed";
 }
 
+function enforceScoreBand(score: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, score));
+}
+
+function normalizeScoresByContext(
+  similarityScore: number,
+  aiSuspicionScore: number,
+  severity: IntegrityFlag["severity"],
+  integrityType: IntegrityFlag["integrity_type"],
+  recommendedAction: IntegrityFlag["recommended_action"],
+) {
+  let normalizedSimilarity = similarityScore;
+  let normalizedAi = aiSuspicionScore;
+
+  if (integrityType === "similarity" || integrityType === "mixed") {
+    if (severity === "high" || recommendedAction === "investigate") {
+      normalizedSimilarity = enforceScoreBand(normalizedSimilarity, 75, 100);
+    } else if (severity === "medium" || recommendedAction === "review") {
+      normalizedSimilarity = enforceScoreBand(normalizedSimilarity, 45, 74);
+    } else {
+      normalizedSimilarity = enforceScoreBand(normalizedSimilarity, 0, 44);
+    }
+  }
+
+  if (integrityType === "ai-writing" || integrityType === "mixed") {
+    if (severity === "high" || recommendedAction === "investigate") {
+      normalizedAi = enforceScoreBand(normalizedAi, 75, 100);
+    } else if (severity === "medium" || recommendedAction === "review") {
+      normalizedAi = enforceScoreBand(normalizedAi, 45, 74);
+    } else {
+      normalizedAi = enforceScoreBand(normalizedAi, 0, 44);
+    }
+  }
+
+  return {
+    similarity: normalizedSimilarity,
+    ai: normalizedAi,
+  };
+}
+
 function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student_name: string | null }>): IntegrityFlag[] {
   if (!Array.isArray(flags)) return [];
 
@@ -60,6 +100,17 @@ function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student
           ? candidate.reason.trim()
           : "Potential integrity issue detected.";
 
+      const severity = normalizeSeverity(candidate.severity);
+      const recommendedAction = normalizeAction(candidate.recommended_action);
+      const integrityType = normalizeType(candidate.integrity_type);
+      const normalizedScores = normalizeScoresByContext(
+        clampScore(candidate.similarity_score),
+        clampScore(candidate.ai_suspicion_score),
+        severity,
+        integrityType,
+        recommendedAction,
+      );
+
       return {
         student_a:
           (typeof candidate.student_a === "string" && candidate.student_a.trim()) ||
@@ -71,8 +122,8 @@ function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student
           (submissionAId === submissionBId ? "AI-writing analysis" : "Student B"),
         submission_a_id: submissionAId,
         submission_b_id: submissionBId,
-        similarity_score: clampScore(candidate.similarity_score),
-        ai_suspicion_score: clampScore(candidate.ai_suspicion_score),
+        similarity_score: normalizedScores.similarity,
+        ai_suspicion_score: normalizedScores.ai,
         reason,
         evidence_summary:
           typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()
@@ -80,9 +131,9 @@ function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student
             : reason,
         matched_excerpt:
           typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
-        recommended_action: normalizeAction(candidate.recommended_action),
-        integrity_type: normalizeType(candidate.integrity_type),
-        severity: normalizeSeverity(candidate.severity),
+        recommended_action: recommendedAction,
+        integrity_type: integrityType,
+        severity,
       } satisfies IntegrityFlag;
     })
     .filter((flag): flag is IntegrityFlag => Boolean(flag))
@@ -112,6 +163,10 @@ async function fetchFileContent(
   } catch {
     return "";
   }
+}
+
+function isPdfSubmission(sub: { file_name?: string }, content: string) {
+  return sub.file_name?.toLowerCase().endsWith(".pdf") || content.startsWith("JVBER");
 }
 
 serve(async (req) => {
@@ -180,8 +235,8 @@ serve(async (req) => {
 
     if (isSingleMode) {
       const sub = submissions[0];
-      const isPdf = sub.file_name?.toLowerCase().endsWith(".pdf");
       const content = fileContents[0];
+      const isPdf = isPdfSubmission(sub, content);
 
       userPrompt = `Analyze this student submission for signs of AI-generated content:
 
@@ -211,17 +266,42 @@ Return a single structured flag only if there is a genuine integrity concern. If
         userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
       }
     } else {
+      const submissionSummaries = submissions.map((s: { id: string; student_name: string | null; file_name: string }, i: number) => {
+        const content = fileContents[i] || "";
+        const pdf = isPdfSubmission(s, content);
+        if (pdf) {
+          return `${i + 1}. ${s.student_name} - ${s.file_name} (PDF attached separately, submission id: ${s.id})`;
+        }
+
+        const excerpt = content ? content.substring(0, 8000) : "[content unavailable]";
+        return `${i + 1}. ${s.student_name} - ${s.file_name} (submission id: ${s.id})\nReadable text excerpt:\n${excerpt}`;
+      });
+
       userPrompt = `Analyze these ${submissions.length} student submissions for the same assignment. Check for suspicious similarity between submissions and for AI-generated writing patterns in each one.
 
+Important rules:
+1. Compare student-authored content only.
+2. Ignore PDF metadata, object streams, file boilerplate, export-tool signatures, and template-only overlap.
+3. Only flag similarity when the substantive written answer content overlaps suspiciously.
+4. Only flag AI-writing when the prose itself shows meaningful machine-generated patterns.
+5. If the files are PDFs, use the attached PDF documents as the primary source of truth.
+
 Submissions:
-${submissions.map((s: { student_name: string | null; file_name: string }, i: number) => {
-  const content = fileContents[i] || "";
-  const excerpt = content ? content.substring(0, 5000) : "[content unavailable]";
-  return `${i + 1}. ${s.student_name} - ${s.file_name}\nContent excerpt:\n${excerpt}`;
-}).join("\n\n---\n\n")}
+${submissionSummaries.join("\n\n---\n\n")}
 
 Analyse the content carefully. Only flag real concerns, explain the evidence, and recommend whether the lecturer should clear, review, or investigate.`;
       userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
+
+      submissions.forEach((sub, i) => {
+        const content = fileContents[i] || "";
+        if (isPdfSubmission(sub, content) && content) {
+          userContent.push({
+            type: "input_file",
+            filename: sub.file_name || `submission-${i + 1}.pdf`,
+            file_data: `data:application/pdf;base64,${content}`,
+          });
+        }
+      });
     }
 
     const aiData = await createResponse({
