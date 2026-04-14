@@ -43,6 +43,7 @@ Live deployment:
 ### Risk and Support Workflow
 - Identify at-risk students using explainable academic indicators
 - Record interventions with follow-up dates, notes, and status
+- Send student-facing support notifications and follow-up reminders
 - Support lecturer review of student progress and support actions
 
 ## Core Features
@@ -60,7 +61,7 @@ The integrity flow supports:
 - student-to-student similarity checking within an assignment
 - AI-writing suspicion scoring
 - evidence summaries
-- lecturer review decisions
+- lecturer review decisions saved to the backend
 
 The platform is designed to support academic review, not automated misconduct decisions.
 
@@ -79,6 +80,12 @@ The current risk model is rule-based and explainable. It focuses on:
 - intervention needs
 
 This approach is easier to audit and trust in an academic environment than an early, weak predictive model.
+
+### Notifications and Progress Tracking
+The platform also includes:
+- backend-persisted communication messages for alerts, follow-ups, feedback summaries, and grade-release notes
+- student improvement-plan task tracking stored in Supabase
+- persisted integrity review history for lecturer decisions
 
 ## Technology Stack
 
@@ -170,6 +177,7 @@ The main workflows expect these tables to exist:
 - `student_interventions`
 - `academic_integrity_reviews`
 - `improvement_plan_progress`
+- `communication_messages`
 
 The app also expects:
 - a `submissions` storage bucket
@@ -198,6 +206,8 @@ The platform currently supports the core end-to-end flow:
 - integrity checking among submissions in an assignment
 - lecturer review, approval, and release
 - intervention logging
+- student-facing support notifications
+- persisted improvement-plan progress
 
 Recent improvements include:
 - signed URL handling for submission file access
@@ -205,6 +215,7 @@ Recent improvements include:
 - richer integrity evidence and scoring
 - real integrity results in the review queue
 - improved PDF handling for similarity review
+- backend persistence for integrity reviews, improvement progress, and communication messages
 
 ## Product Philosophy
 
