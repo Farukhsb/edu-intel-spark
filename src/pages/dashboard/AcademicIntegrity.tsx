@@ -213,26 +213,12 @@ const AcademicIntegrity = () => {
         review_type: reviewType,
         decision,
         evidence_summary: evidenceSummary,
-      }, { onConflict: "submission_id,lecturer_id" })
-      .select();
+      }, { onConflict: "submission_id,lecturer_id" });
 
     if (error) {
-      // No unique constraint on (submission_id, lecturer_id) yet, fall back to insert
-      const { error: insertError } = await supabase
-        .from("academic_integrity_reviews")
-        .insert({
-          submission_id: submissionId,
-          lecturer_id: user.id,
-          review_type: reviewType,
-          decision,
-          evidence_summary: evidenceSummary,
-        });
-
-      if (insertError) {
-        setFlagged(prev => prev.map((f, i) => i === index ? { ...f, reviewDecision: null } : f));
-        toast.error("Failed to save review decision");
-        return;
-      }
+      setFlagged(prev => prev.map((f, i) => i === index ? { ...f, reviewDecision: null } : f));
+      toast.error("Failed to save review decision");
+      return;
     }
 
     toast.success(`Marked as "${decision}"`);
