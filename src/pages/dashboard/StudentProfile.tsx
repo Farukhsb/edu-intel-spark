@@ -59,9 +59,11 @@ interface StudentInterventionRow {
   student_email?: string | null;
   intervention_type: InterventionType;
   status: InterventionStatus;
+  priority?: string | null;
+  title?: string | null;
   notes?: string | null;
-  note?: string | null;
   follow_up_date?: string | null;
+  assignment_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -317,7 +319,7 @@ const StudentProfile = () => {
     id: row.id,
     createdAt: row.created_at || row.updated_at || new Date().toISOString(),
     type: row.intervention_type,
-    note: row.notes || row.note || "",
+    note: row.notes || "",
     followUpDate: row.follow_up_date || null,
     status: row.status,
   });
@@ -329,7 +331,7 @@ const StudentProfile = () => {
       const supabaseClient = supabase as any;
       const { data, error } = await supabaseClient
         .from("student_interventions")
-        .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, notes, note, follow_up_date, created_at, updated_at")
+        .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, priority, title, notes, follow_up_date, assignment_id, created_at, updated_at")
         .eq("lecturer_id", user.id)
         .eq("student_id", student.studentId)
         .order("created_at", { ascending: false });
@@ -374,16 +376,19 @@ const StudentProfile = () => {
       student_name: student.name,
       student_email: student.email,
       intervention_type: interventionType,
+      title: `${interventionType.charAt(0).toUpperCase()}${interventionType.slice(1)} intervention`,
       notes: interventionNote.trim(),
+      priority: student.riskLevel === "critical" || student.riskLevel === "high" ? "high" : "medium",
       follow_up_date: followUpDate || null,
       status: interventionStatus,
+      assignment_id: null,
       updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabaseClient
       .from("student_interventions")
       .insert(payload)
-      .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, notes, note, follow_up_date, created_at, updated_at")
+      .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, priority, title, notes, follow_up_date, assignment_id, created_at, updated_at")
       .single();
 
     if (error) {
