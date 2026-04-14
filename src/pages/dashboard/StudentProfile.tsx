@@ -353,7 +353,17 @@ const StudentProfile = () => {
   }, [isDemo, student?.studentRecordId, user?.id]);
 
   const handleAddIntervention = async () => {
-    if (!interventionNote.trim() || !student || !user?.id || !student.studentRecordId) return;
+    if (!interventionNote.trim()) return;
+
+    if (!student || !user?.id) {
+      toast.error("Student context is not ready yet");
+      return;
+    }
+
+    if (!student.studentRecordId) {
+      toast.error("This student record is missing a database ID, so the intervention cannot be saved yet");
+      return;
+    }
 
     if (isDemo) {
       const nextEntry: InterventionEntry = {
@@ -720,7 +730,11 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
               <Input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} />
             </div>
 
-            <Button className="w-full" onClick={handleAddIntervention} disabled={!interventionNote.trim()}>
+            <Button
+              className="w-full"
+              onClick={handleAddIntervention}
+              disabled={!interventionNote.trim() || (!isDemo && !student?.studentRecordId)}
+            >
               Log intervention
             </Button>
           </CardContent>
