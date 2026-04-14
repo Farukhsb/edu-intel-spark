@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -43,17 +43,34 @@ const DEMO_RESOURCES: Resource[] = [
   { title: "Writing Better Test Cases", type: "Article", duration: "15 min", relevance: 76 },
 ];
 
+const makeTaskKey = (module: string, taskText: string) =>
+  `${module}::${taskText}`;
+
 const ImprovementPlan = () => {
   const { user, isDemo } = useAuth();
   const [plan, setPlan] = useState<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const [resources, setResources] = useState<Resource[]>(isDemo ? DEMO_RESOURCES : []);
   const [loading, setLoading] = useState(!isDemo);
   const [generating, setGenerating] = useState(false);
+  const [completedKeys, setCompletedKeys] = useState<Set<string>>(new Set());
+
+  // Fetch saved progress from Supabase
+  const fetchProgress = useCallback(async () => {
+    if (!user || isDemo) return;
+    const { data } = await supabase
+      .from("improvement_plan_progress")
+      .select("task_key, completed")
+      .eq("student_id", user.id);
+    if (data) {
+      setCompletedKeys(new Set(data.filter(r => r.completed).map(r => r.task_key)));
+    }
+  }, [user, isDemo]);
 
   useEffect(() => {
     if (isDemo || !user) return;
     fetchPlan();
-  }, [user, isDemo]);
+    fetchProgress();
+  }, [user, isDemo, fetchProgress]);
 
   const fetchPlan = async () => {
     if (!user) return;
@@ -114,6 +131,43 @@ const ImprovementPlan = () => {
     setLoading(false);
   };
 
+  const toggleTask = async (module: string, taskText: string) => {
+    if (isDemo || !user) return;
+    const key = makeTaskKey(module, taskText);
+    const nowCompleted = !completedKeys.has(key);
+
+    // Optimistic update
+    setCompletedKeys(prev => {
+      const next = new Set(prev);
+      if (nowCompleted) next.add(key); else next.delete(key);
+      return next;
+    });
+
+    const { error } = await supabase
+      .from("improvement_plan_progress")
+      .upsert({
+        student_id: user.id,
+        task_key: key,
+        completed: nowCompleted,
+        completed_at: nowCompleted ? new Date().toISOString() : null,
+      }, { onConflict: "student_id,task_key" });
+
+    if (error) {
+      // Revert on failure
+      setCompletedKeys(prev => {
+        const next = new Set(prev);
+        if (nowCompleted) next.delete(key); else next.add(key);
+        return next;
+      });
+      toast.error("Failed to save progress");
+    }
+  };
+
+  const isTaskDone = (module: string, taskText: string) => {
+    if (isDemo) return plan.find(p => p.module === module)?.tasks.find(t => t.task === taskText)?.done ?? false;
+    return completedKeys.has(makeTaskKey(module, taskText));
+  };
+
   const generateAIRecommendations = async () => {
     setGenerating(true);
     try {
@@ -145,7 +199,7 @@ const ImprovementPlan = () => {
       )}
 
       {plan.map((p, i) => {
-        const completed = p.tasks.filter((t) => t.done).length;
+        const completed = p.tasks.filter((t) => isTaskDone(p.module, t.task)).length;
         const progress = (completed / p.tasks.length) * 100;
         return (
           <Card key={i}>
@@ -164,12 +218,19 @@ const ImprovementPlan = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {p.tasks.map((t, j) => (
-                <div key={j} className="flex items-center gap-3 text-sm">
-                  {t.done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                  <span className={t.done ? "text-muted-foreground line-through" : ""}>{t.task}</span>
-                </div>
-              ))}
+              {p.tasks.map((t, j) => {
+                const done = isTaskDone(p.module, t.task);
+                return (
+                  <div
+                    key={j}
+                    className="flex items-center gap-3 text-sm cursor-pointer"
+                    onClick={() => toggleTask(p.module, t.task)}
+                  >
+                    {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                    <span className={done ? "text-muted-foreground line-through" : ""}>{t.task}</span>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         );
