@@ -42,6 +42,20 @@ const GRADE_FIELDS = "submission_id, ai_score, final_score";
 type InterventionType = "email" | "meeting" | "feedback" | "referral";
 type InterventionStatus = "ongoing" | "resolved";
 
+const normalizeInterventionType = (value: string): InterventionType => {
+  if (value === "email" || value === "meeting" || value === "feedback" || value === "referral") {
+    return value;
+  }
+  return "email";
+};
+
+const normalizeInterventionStatus = (value: string): InterventionStatus => {
+  if (value === "ongoing" || value === "resolved") {
+    return value;
+  }
+  return "ongoing";
+};
+
 interface InterventionEntry {
   id: string;
   createdAt: string;
@@ -411,18 +425,20 @@ const StudentProfile = () => {
       return;
     }
 
+    const safeInterventionType = normalizeInterventionType(interventionType);
+    const safeInterventionStatus = normalizeInterventionStatus(interventionStatus);
     const supabaseClient = supabase as any;
     const payload = {
       lecturer_id: user.id,
       student_id: resolvedStudentRecordId,
       student_name: student.name,
       student_email: student.email,
-      intervention_type: interventionType,
-      title: `${interventionType.charAt(0).toUpperCase()}${interventionType.slice(1)} intervention`,
+      intervention_type: safeInterventionType,
+      title: `${safeInterventionType.charAt(0).toUpperCase()}${safeInterventionType.slice(1)} intervention`,
       notes: interventionNote.trim(),
       priority: student.riskLevel === "critical" || student.riskLevel === "high" ? "high" : "medium",
       follow_up_date: followUpDate || null,
-      status: interventionStatus,
+      status: safeInterventionStatus,
       assignment_id: null,
       updated_at: new Date().toISOString(),
     };
@@ -435,7 +451,10 @@ const StudentProfile = () => {
 
     if (error) {
       console.error("Failed to save intervention:", error);
-      toast.error(getSupabaseErrorText(error) || "Could not save intervention");
+      toast.error(
+        getSupabaseErrorText(error) ||
+          `Could not save intervention (type: ${safeInterventionType}, status: ${safeInterventionStatus})`
+      );
       return;
     }
 
@@ -445,15 +464,45 @@ const StudentProfile = () => {
     setInterventionType("email");
     setInterventionStatus("ongoing");
     toast.success("Intervention logged");
+
+    const notificationResult = await queueCommunicationMessage({
+      category: "intervention-follow-up",
+      recipientName: student.name,
+      recipientEmail: student.email,
+      recipientId: resolvedStudentRecordId,
+      subject: `${safeInterventionType.charAt(0).toUpperCase()}${safeInterventionType.slice(1)} support update`,
+      body: `Dear ${student.name},
+
+An academic support action has been logged for you.
+
+Type:
+${safeInterventionType}
+
+Summary:
+${interventionNote.trim()}
+
+Status:
+${safeInterventionStatus}
+
+${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}` : "Please check your improvement plan and follow any next steps shared by your lecturer."}`,
+      relatedStudentId: resolvedStudentRecordId,
+    });
+
+    if (!notificationResult) {
+      toast.error("Intervention saved, but the student notification could not be created");
+    }
   };
 
   const queueAtRiskAlert = async () => {
-    if (!student) return;
+    if (!student || !resolvedStudentRecordId) {
+      toast.error("Student record is not linked, so the alert cannot be saved correctly yet");
+      return;
+    }
     const result = await queueCommunicationMessage({
       category: "at-risk-alert",
       recipientName: student.name,
       recipientEmail: student.email,
-      recipientId: student.studentId,
+      recipientId: resolvedStudentRecordId,
       subject: `Academic support check-in for ${student.name}`,
       body: `Dear ${student.name},
 
@@ -466,7 +515,7 @@ Recommended next step:
 ${student.recommendation}
 
 Please reply to arrange a short meeting so we can agree the most useful support before the next submission.`,
-      relatedStudentId: student.studentId,
+      relatedStudentId: resolvedStudentRecordId,
     });
     if (!result) {
       toast.error("Could not save at-risk alert");
@@ -476,13 +525,16 @@ Please reply to arrange a short meeting so we can agree the most useful support 
   };
 
   const queueFollowUpReminder = async () => {
-    if (!student) return;
+    if (!student || !resolvedStudentRecordId) {
+      toast.error("Student record is not linked, so the reminder cannot be saved correctly yet");
+      return;
+    }
     const latestIntervention = interventions[0];
     const result = await queueCommunicationMessage({
       category: "intervention-follow-up",
       recipientName: student.name,
       recipientEmail: student.email,
-      recipientId: student.studentId,
+      recipientId: resolvedStudentRecordId,
       subject: `Follow-up on your academic support plan`,
       body: `Dear ${student.name},
 
@@ -492,7 +544,7 @@ Current focus:
 ${student.recommendation}
 
 Please share a short update before ${latestIntervention?.followUpDate ? safeFormatDate(latestIntervention.followUpDate, "MMM d, yyyy") : "our next review"} so we can confirm what is working and what still needs attention.`,
-      relatedStudentId: student.studentId,
+      relatedStudentId: resolvedStudentRecordId,
     });
     if (!result) {
       toast.error("Could not save follow-up reminder");
@@ -725,7 +777,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Intervention type</Label>
-                <Select value={interventionType} onValueChange={(value: InterventionType) => setInterventionType(value)}>
+                <Select value={interventionType} onValueChange={(value) => setInterventionType(normalizeInterventionType(value))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -739,7 +791,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={interventionStatus} onValueChange={(value: InterventionStatus) => setInterventionStatus(value)}>
+                <Select value={interventionStatus} onValueChange={(value) => setInterventionStatus(normalizeInterventionStatus(value))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

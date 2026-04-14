@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BookOpen, CheckCircle2, Circle, Loader2, RefreshCw, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { BookOpen, Bell, CheckCircle2, Circle, Loader2, RefreshCw, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { safeFormatDate } from "@/lib/date";
+import type { CommunicationMessage } from "@/lib/communications";
 import {
   CartesianGrid,
   Line,
@@ -121,12 +124,14 @@ const DEMO_RESOURCES: Resource[] = [
 ];
 
 const ImprovementPlan = () => {
+  const location = useLocation();
   const { user, isDemo } = useAuth();
   const [plan, setPlan] = useState<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const [resources, setResources] = useState<Resource[]>(isDemo ? DEMO_RESOURCES : []);
   const [loading, setLoading] = useState(!isDemo);
   const [generating, setGenerating] = useState(false);
   const latestPlanRef = useRef<PlanModule[]>(isDemo ? DEMO_PLAN : []);
+  const notification = (location.state as { notification?: CommunicationMessage } | null)?.notification;
 
   useEffect(() => {
     if (isDemo || !user) return;
@@ -430,6 +435,21 @@ const ImprovementPlan = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {notification && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex gap-3 p-4">
+            <Bell className="mt-0.5 h-4 w-4 text-primary" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{notification.subject}</p>
+              <p className="text-xs text-muted-foreground">
+                {safeFormatDate(notification.createdAt, "MMM d, yyyy HH:mm")}
+              </p>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{notification.body}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isDemo && (
         <Card className="border-warning bg-warning/5">
           <CardContent className="flex items-center gap-2 p-3">

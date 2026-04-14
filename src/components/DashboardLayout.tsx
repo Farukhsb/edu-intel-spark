@@ -95,7 +95,9 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
     if (profile?.role === "student") {
       if (notification.category === "at-risk-alert" || notification.category === "intervention-follow-up") {
-        navigate("/dashboard/improvements");
+        navigate(`/dashboard/improvements?notice=${encodeURIComponent(notification.id)}`, {
+          state: { notification },
+        });
         return;
       }
 
