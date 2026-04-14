@@ -54,15 +54,42 @@ export const queueCommunicationMessage = (
 export const getVisibleCommunicationMessages = (messages: CommunicationMessage[], options: {
   userId?: string | null;
   email?: string | null;
+  fullName?: string | null;
 }) => {
   const normalizedEmail = options.email?.trim().toLowerCase() ?? null;
+  const normalizedName = options.fullName?.trim().toLowerCase() ?? null;
+  const slugify = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
 
   return messages.filter((message) => {
-    if (options.userId && message.recipientId && message.recipientId === options.userId) {
+    if (
+      options.userId &&
+      [message.recipientId, message.relatedStudentId].some((value) => value && value === options.userId)
+    ) {
       return true;
     }
 
-    if (normalizedEmail && message.recipientEmail?.trim().toLowerCase() === normalizedEmail) {
+    if (
+      normalizedEmail &&
+      [message.recipientEmail, message.recipientId, message.relatedStudentId].some(
+        (value) => value?.trim().toLowerCase() === normalizedEmail
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      normalizedName &&
+      [message.recipientName, message.recipientId, message.relatedStudentId].some((value) => {
+        if (!value) return false;
+        const candidate = value.trim().toLowerCase();
+        return candidate === normalizedName || slugify(candidate) === slugify(normalizedName);
+      })
+    ) {
       return true;
     }
 

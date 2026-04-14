@@ -68,6 +68,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       const visibleMessages = getVisibleCommunicationMessages(loadCommunicationOutbox(), {
         userId: user?.id ?? profile?.id ?? null,
         email: profile?.email ?? user?.email ?? null,
+        fullName: profile?.full_name ?? null,
       });
       setNotifications(visibleMessages.slice(0, 6));
     };
@@ -208,7 +209,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
               <div className="absolute right-4 top-14 z-50 w-72 rounded-lg border bg-card shadow-lg">
                 <div className="p-3 border-b">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">Outbox</p>
+                    <p className="text-sm font-medium">Notifications</p>
                     {notifications.length > 0 && <Badge variant="secondary">{notifications.length}</Badge>}
                   </div>
                 </div>
