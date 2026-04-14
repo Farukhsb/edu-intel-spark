@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Bot, FileSearch, Shield, ShieldAlert, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface OverviewStat {
   label: string;
@@ -13,6 +15,7 @@ interface OverviewStat {
 }
 
 interface FlaggedSubmission {
+  submissionId: string;
   student: string;
   assignment: string;
   aiProbability: number;
@@ -20,6 +23,7 @@ interface FlaggedSubmission {
   structuralScore: number;
   riskLevel: string;
   flags: string[];
+  reviewDecision: string | null;
 }
 
 const AcademicIntegrity = () => {
@@ -66,14 +70,17 @@ const AcademicIntegrity = () => {
         const submissionIds = submissions.map((s) => s.id);
 
         let gradesData: any[] = [];
+        let existingReviews: Record<string, string> = {};
+
         if (submissionIds.length > 0) {
-          const { data: grades, error: gradesError } = await supabase
-            .from("grades")
-            .select("*")
-            .in("submission_id", submissionIds);
+          const [{ data: grades, error: gradesError }, { data: reviews }] = await Promise.all([
+            supabase.from("grades").select("*").in("submission_id", submissionIds),
+            supabase.from("academic_integrity_reviews").select("submission_id, decision").eq("lecturer_id", user.id),
+          ]);
 
           if (gradesError) throw gradesError;
           gradesData = grades || [];
+          (reviews || []).forEach((r) => { existingReviews[r.submission_id] = r.decision; });
         }
 
         const totalScanned = submissions.length;
@@ -151,6 +158,7 @@ const AcademicIntegrity = () => {
             const total = aiProb + styleMismatch + structural;
             const riskLevel = total > 80 ? "high" : total > 40 ? "medium" : "low";
             flaggedItems.push({
+              submissionId: d.submission_id,
               student: studentName,
               assignment: assignmentTitle,
               aiProbability: Math.min(aiProb, 100),
@@ -158,6 +166,7 @@ const AcademicIntegrity = () => {
               structuralScore: Math.min(structural, 100),
               riskLevel,
               flags,
+              reviewDecision: existingReviews[d.submission_id] || null,
             });
           }
         });
@@ -184,6 +193,50 @@ const AcademicIntegrity = () => {
 
     void fetchData();
   }, [user?.id]);
+
+  const saveReviewDecision = async (submissionId: string, decision: string, index: number) => {
+    if (!user) return;
+
+    // Determine review_type from flags
+    const item = flagged[index];
+    const reviewType = item.aiProbability > item.styleMismatch ? "ai-writing-suspicion" : "similarity-plagiarism-suspicion";
+    const evidenceSummary = item.flags.join("; ");
+
+    // Optimistic update
+    setFlagged(prev => prev.map((f, i) => i === index ? { ...f, reviewDecision: decision } : f));
+
+    const { error } = await supabase
+      .from("academic_integrity_reviews")
+      .upsert({
+        submission_id: submissionId,
+        lecturer_id: user.id,
+        review_type: reviewType,
+        decision,
+        evidence_summary: evidenceSummary,
+      }, { onConflict: "submission_id,lecturer_id" })
+      .select();
+
+    if (error) {
+      // No unique constraint on (submission_id, lecturer_id) yet, fall back to insert
+      const { error: insertError } = await supabase
+        .from("academic_integrity_reviews")
+        .insert({
+          submission_id: submissionId,
+          lecturer_id: user.id,
+          review_type: reviewType,
+          decision,
+          evidence_summary: evidenceSummary,
+        });
+
+      if (insertError) {
+        setFlagged(prev => prev.map((f, i) => i === index ? { ...f, reviewDecision: null } : f));
+        toast.error("Failed to save review decision");
+        return;
+      }
+    }
+
+    toast.success(`Marked as "${decision}"`);
+  };
 
   const riskColor = (level: string) =>
     level === "high" ? "destructive" : level === "medium" ? "secondary" : "outline";
@@ -229,7 +282,12 @@ const AcademicIntegrity = () => {
                   <span className="text-sm font-medium">{sub.student}</span>
                   <span className="ml-2 text-xs text-muted-foreground">{sub.assignment}</span>
                 </div>
-                <Badge variant={riskColor(sub.riskLevel) as any}>{sub.riskLevel} risk</Badge>
+                <div className="flex items-center gap-2">
+                  {sub.reviewDecision && (
+                    <Badge variant="outline" className="text-xs">{sub.reviewDecision}</Badge>
+                  )}
+                  <Badge variant={riskColor(sub.riskLevel) as any}>{sub.riskLevel} risk</Badge>
+                </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
@@ -246,10 +304,25 @@ const AcademicIntegrity = () => {
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {sub.flags.map((f, j) => (
-                  <Badge key={j} variant="outline" className="text-xs">{f}</Badge>
-                ))}
+              <div className="flex items-center justify-between">
+                <div className="flex flex-wrap gap-1.5">
+                  {sub.flags.map((f, j) => (
+                    <Badge key={j} variant="outline" className="text-xs">{f}</Badge>
+                  ))}
+                </div>
+                <Select
+                  value={sub.reviewDecision || ""}
+                  onValueChange={(val) => saveReviewDecision(sub.submissionId, val, i)}
+                >
+                  <SelectTrigger className="w-[160px] h-8 text-xs">
+                    <SelectValue placeholder="Review action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="clear">Clear</SelectItem>
+                    <SelectItem value="investigate">Investigate</SelectItem>
+                    <SelectItem value="misconduct-concern">Misconduct Concern</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           ))}
