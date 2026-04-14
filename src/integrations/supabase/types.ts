@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      academic_integrity_reviews: {
+        Row: {
+          created_at: string
+          decision: string
+          evidence_summary: string | null
+          id: string
+          lecturer_id: string
+          lecturer_note: string | null
+          review_type: string
+          submission_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decision: string
+          evidence_summary?: string | null
+          id?: string
+          lecturer_id: string
+          lecturer_note?: string | null
+          review_type: string
+          submission_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decision?: string
+          evidence_summary?: string | null
+          id?: string
+          lecturer_id?: string
+          lecturer_note?: string | null
+          review_type?: string
+          submission_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       assignments: {
         Row: {
           created_at: string
@@ -111,6 +147,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      improvement_plan_progress: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          id: string
+          student_id: string
+          task_key: string
+          updated_at: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          student_id: string
+          task_key: string
+          updated_at?: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          student_id?: string
+          task_key?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
