@@ -229,6 +229,24 @@ const StudentProfile = () => {
         const sortedSubmissions = [...matchingSubmissions].sort(
           (left, right) => new Date(left.submitted_at).getTime() - new Date(right.submitted_at).getTime()
         );
+        const matchedStudentEmail =
+          sortedSubmissions.find((submission) => submission.student_email)?.student_email || null;
+        let resolvedStudentRecordId =
+          sortedSubmissions.find((submission) => submission.student_id)?.student_id || null;
+
+        if (!resolvedStudentRecordId && matchedStudentEmail) {
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("email", matchedStudentEmail)
+            .maybeSingle();
+
+          if (profileError) {
+            console.error("Failed to resolve student profile:", profileError);
+          } else {
+            resolvedStudentRecordId = profileData?.id ?? null;
+          }
+        }
 
         const trajectory: StudentTrajectory = {
           name:
@@ -280,8 +298,7 @@ const StudentProfile = () => {
           name: trajectory.name,
           email: trajectory.email,
           studentId: trajectory.studentId,
-          studentRecordId:
-            sortedSubmissions.find((submission) => submission.student_id)?.student_id || null,
+          studentRecordId: resolvedStudentRecordId,
           modules: Array.from(
             new Set(
               matchingSubmissions
