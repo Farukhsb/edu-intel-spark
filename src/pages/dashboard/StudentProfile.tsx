@@ -110,6 +110,15 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string | null | undefined): value is string =>
+  typeof value === "string" && UUID_PATTERN.test(value);
+
+const getSupabaseErrorText = (error: { message?: string; details?: string; hint?: string } | null) =>
+  [error?.message, error?.details, error?.hint].filter(Boolean).join(" | ");
+
 const StudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
@@ -123,6 +132,8 @@ const StudentProfile = () => {
   const [interventionStatus, setInterventionStatus] = useState<InterventionStatus>("ongoing");
   const [interventionNote, setInterventionNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
+  const resolvedStudentRecordId =
+    student?.studentRecordId || (isUuid(student?.studentId) ? student.studentId : null);
 
   useEffect(() => {
     if (!user || !decodedStudentId) return;
@@ -329,7 +340,7 @@ const StudentProfile = () => {
   });
 
   useEffect(() => {
-    if (!user?.id || !student?.studentRecordId || isDemo) return;
+    if (!user?.id || !resolvedStudentRecordId || isDemo) return;
 
     const loadInterventions = async () => {
       const supabaseClient = supabase as any;
@@ -337,12 +348,12 @@ const StudentProfile = () => {
         .from("student_interventions")
         .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, priority, title, notes, follow_up_date, assignment_id, created_at, updated_at")
         .eq("lecturer_id", user.id)
-        .eq("student_id", student.studentRecordId)
+        .eq("student_id", resolvedStudentRecordId)
         .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Failed to load interventions:", error);
-        toast.error("Could not load intervention history");
+        toast.error(getSupabaseErrorText(error) || "Could not load intervention history");
         return;
       }
 
@@ -350,7 +361,7 @@ const StudentProfile = () => {
     };
 
     void loadInterventions();
-  }, [isDemo, student?.studentRecordId, user?.id]);
+  }, [isDemo, resolvedStudentRecordId, user?.id]);
 
   const handleAddIntervention = async () => {
     if (!interventionNote.trim()) return;
@@ -360,7 +371,7 @@ const StudentProfile = () => {
       return;
     }
 
-    if (!student.studentRecordId) {
+    if (!resolvedStudentRecordId) {
       toast.error("This student record is missing a database ID, so the intervention cannot be saved yet");
       return;
     }
@@ -386,7 +397,7 @@ const StudentProfile = () => {
     const supabaseClient = supabase as any;
     const payload = {
       lecturer_id: user.id,
-      student_id: student.studentRecordId,
+      student_id: resolvedStudentRecordId,
       student_name: student.name,
       student_email: student.email,
       intervention_type: interventionType,
@@ -407,7 +418,7 @@ const StudentProfile = () => {
 
     if (error) {
       console.error("Failed to save intervention:", error);
-      toast.error("Could not save intervention");
+      toast.error(getSupabaseErrorText(error) || "Could not save intervention");
       return;
     }
 
@@ -723,6 +734,11 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
                 onChange={(event) => setInterventionNote(event.target.value)}
                 placeholder="Record what happened, what support was offered, and what to review next."
               />
+              {!isDemo && !resolvedStudentRecordId && (
+                <p className="text-xs text-destructive">
+                  This student is missing a database ID, so interventions cannot be saved yet.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -733,7 +749,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
             <Button
               className="w-full"
               onClick={handleAddIntervention}
-              disabled={!interventionNote.trim() || (!isDemo && !student?.studentRecordId)}
+              disabled={!interventionNote.trim() || (!isDemo && !resolvedStudentRecordId)}
             >
               Log intervention
             </Button>
