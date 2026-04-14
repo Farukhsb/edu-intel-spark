@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+export { format };
 
 const coerceDate = (value: string | Date | null | undefined) => {
   if (!value) return null;
