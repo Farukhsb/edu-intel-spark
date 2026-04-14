@@ -10,6 +10,7 @@ export interface CommunicationMessage {
   category: CommunicationCategory;
   recipientName: string;
   recipientEmail: string | null;
+  recipientId?: string;
   subject: string;
   body: string;
   relatedStudentId?: string;
@@ -48,4 +49,23 @@ export const queueCommunicationMessage = (
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
   return nextMessage;
+};
+
+export const getVisibleCommunicationMessages = (messages: CommunicationMessage[], options: {
+  userId?: string | null;
+  email?: string | null;
+}) => {
+  const normalizedEmail = options.email?.trim().toLowerCase() ?? null;
+
+  return messages.filter((message) => {
+    if (options.userId && message.recipientId && message.recipientId === options.userId) {
+      return true;
+    }
+
+    if (normalizedEmail && message.recipientEmail?.trim().toLowerCase() === normalizedEmail) {
+      return true;
+    }
+
+    return false;
+  });
 };

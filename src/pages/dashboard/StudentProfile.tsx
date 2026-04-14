@@ -348,6 +348,7 @@ const StudentProfile = () => {
       category: "at-risk-alert",
       recipientName: student.name,
       recipientEmail: student.email,
+      recipientId: student.studentId,
       subject: `Academic support check-in for ${student.name}`,
       body: `Dear ${student.name},
 
@@ -372,6 +373,7 @@ Please reply to arrange a short meeting so we can agree the most useful support 
       category: "intervention-follow-up",
       recipientName: student.name,
       recipientEmail: student.email,
+      recipientId: student.studentId,
       subject: `Follow-up on your academic support plan`,
       body: `Dear ${student.name},
 

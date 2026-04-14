@@ -12,7 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
-import { loadCommunicationOutbox, type CommunicationMessage } from "@/lib/communications";
+import {
+  getVisibleCommunicationMessages,
+  loadCommunicationOutbox,
+  type CommunicationMessage,
+} from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
 
 const lecturerLinks = [
@@ -37,7 +41,7 @@ const studentLinks = [
 ];
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
-  const { profile, signOut, isDemo } = useAuth();
+  const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -61,7 +65,11 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   useEffect(() => {
     const syncNotifications = () => {
-      setNotifications(loadCommunicationOutbox().slice(0, 6));
+      const visibleMessages = getVisibleCommunicationMessages(loadCommunicationOutbox(), {
+        userId: user?.id ?? profile?.id ?? null,
+        email: profile?.email ?? user?.email ?? null,
+      });
+      setNotifications(visibleMessages.slice(0, 6));
     };
 
     syncNotifications();
@@ -76,7 +84,35 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         window.removeEventListener("gradeai:communications-updated", syncNotifications);
       }
     };
-  }, []);
+  }, [profile?.email, profile?.id, user?.email, user?.id]);
+
+  const openNotification = (notification: CommunicationMessage) => {
+    setShowNotifications(false);
+
+    if (profile?.role === "student") {
+      if (notification.category === "at-risk-alert" || notification.category === "intervention-follow-up") {
+        navigate("/dashboard/improvements");
+        return;
+      }
+
+      if (notification.relatedAssignmentId) {
+        navigate(`/dashboard/assignments/${notification.relatedAssignmentId}`);
+        return;
+      }
+
+      if (notification.category === "feedback-summary" || notification.category === "grade-released") {
+        navigate("/dashboard/assignments");
+        return;
+      }
+    }
+
+    if (profile?.role === "lecturer" && notification.relatedStudentId) {
+      navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
+      return;
+    }
+
+    navigate("/dashboard");
+  };
 
   const links = profile?.role === "lecturer" ? lecturerLinks : studentLinks;
 
@@ -181,7 +217,12 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                 ) : (
                   <div className="max-h-80 overflow-y-auto p-2">
                     {notifications.map((notification) => (
-                      <div key={notification.id} className="rounded-md p-2 text-xs hover:bg-muted/40">
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => openNotification(notification)}
+                        className="block w-full rounded-md p-2 text-left text-xs hover:bg-muted/40"
+                      >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium">{notification.subject}</span>
                           <span className="text-[10px] text-muted-foreground">
@@ -190,7 +231,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                         </div>
                         <p className="mt-1 text-muted-foreground">{notification.recipientName}</p>
                         <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}

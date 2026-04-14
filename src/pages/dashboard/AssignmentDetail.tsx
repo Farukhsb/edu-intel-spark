@@ -600,6 +600,7 @@ const AssignmentDetail = () => {
       category: "feedback-summary",
       recipientName: sub.student_name || sub.student_email || "Student",
       recipientEmail: sub.student_email,
+      recipientId: sub.student_id || undefined,
       subject: `Feedback summary for ${assignment?.title || "your assignment"}`,
       body: `Hello ${sub.student_name || "student"},
 
@@ -626,6 +627,7 @@ Please review the feedback in the platform and let me know if you would like to 
       category: "grade-released",
       recipientName: sub.student_name || sub.student_email || "Student",
       recipientEmail: sub.student_email,
+      recipientId: sub.student_id || undefined,
       subject: `Grade released for ${assignment?.title || "your assignment"}`,
       body: `Hello ${sub.student_name || "student"},
 
