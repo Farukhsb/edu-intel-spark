@@ -1,189 +1,190 @@
-# GradeAI — Academic Insights Hub
+# GradeAI — Academic Marking & Intelligence Platform
 
-**AI-Powered Academic Marking & Intelligence Platform**
+**AI-powered academic marking, student risk detection, integrity review, and intervention tracking for modern education teams.**
 
+GradeAI is an EdTech platform designed to help lecturers, departments, and institutions manage the full assessment workflow — from assignment creation and submission handling to AI-assisted marking, academic integrity review, at-risk student identification, and targeted intervention tracking.
 
-GradeAI is a full-stack, production-ready EdTech platform that uses AI to automate academic marking, detect academic integrity issues, and help students improve their grades through Socratic AI coaching. Built for universities and secondary schools.
+Built for universities and schools, GradeAI combines assessment automation with explainable academic analytics to make grading faster, support more consistent feedback, and help educators act earlier when students need support.
 
-> Live demo: [https://edu-intel-spark.pages.dev](https://edu-intel-spark.pages.dev)
-
----
-
-## 🌟 Vision
-
-To bridge the gap between education and technology — making assessment fairer, faster, and more personalised. GradeAI gives lecturers AI-assisted marking they can trust, and gives students the feedback they need to genuinely improve.
+> Live deployment: [https://edu-intel-spark.pages.dev](https://edu-intel-spark.pages.dev)
 
 ---
 
-## ✅ What's Built & Working
+## Vision
 
-### 🔐 Authentication & User Management
-- **Firebase Authentication** — Email/password sign-up & sign-in with role selection (lecturer / student)
-- **Role-Based Access Control** — Separate dashboards and permissions for lecturers and students
-- **Bulk Student Upload** — CSV import to create multiple student accounts at once with validation and error reporting
-- **User Profiles** — Role-based profiles with avatar support
-- **PWA Support** — Installable as a Progressive Web App on desktop and mobile
+GradeAI exists to make assessment more intelligent, more scalable, and more human.
 
-### 📝 Assignment Management
-- **Assignment Creation** — Lecturers create and publish assignments with title, description, module code, due date, and max score
-- **Rubric Builder** — Weighted marking criteria builder for structured, consistent grading
-- **Assignment Lifecycle** — Draft → Published → Closed status management
-- **File Attachments** — Attach reference materials to assignments
+The platform is built around a simple idea:
 
-### 📤 Submission Handling
-- **Single File Upload** — Students or lecturers upload submissions (PDF, DOCX, TXT, code files)
-- **Bulk Upload Submissions** — Upload multiple student PDFs/documents at once for batch processing
-- **Student Mapping** — Student name and email tracked per submission
-- **Submission Pipeline** — Visual status tracking: `Submitted → AI Grading → AI Graded → Under Review → Approved → Released`
+- lecturers should spend less time on repetitive marking admin
+- students should receive clearer and more actionable feedback
+- institutions should be able to spot risk earlier and intervene more effectively
 
-### 🤖 AI-Powered Grading
-- **AI Marking Engine** — Grades submissions against rubric criteria with detailed criterion-by-criterion score breakdowns
-- **AI Feedback Generation** — Detailed written feedback per submission
-- **Batch AI Grading** — Select multiple submissions and grade them all at once
-- **Timeout Indicator** — Shows estimated time remaining during AI grading so lecturers know it's still working
-- **Real-time Updates** — Firestore onSnapshot listeners for live data across all pages
-
-### 👨‍🏫 Lecturer Review Workflow
-- **Review Dialog** — Adjust AI-generated score, edit or rewrite feedback before finalising
-- **Approve** — Finalise the grade (keeps AI score if unchanged, or uses lecturer override)
-- **Release** — Send final grades to students with a single click
-- **Score Consistency** — Always displays the most recent grade record across all views
-
-### 🔍 Plagiarism & Academic Integrity
-- **AI-Content Detection** — Checks for AI-generated writing patterns (works on single submissions)
-- **Similarity Checking** — Cross-submission comparison (works with 1+ submissions)
-- **Academic Integrity Dashboard** — Overview of flagged submissions and integrity scores
-
-### 📊 Analytics & Insights
-- **Lecturer Overview Dashboard** — KPI cards, grade distribution charts, recent submissions, at-risk student counts
-- **Student Grades View** — Personal grade cards with UK degree classification (1st, 2:1, 2:2, 3rd) and percentage breakdowns
-- **Cohort Analytics** — Performance trends, grade distributions, learning outcomes, AI recommendations
-- **Performance Trends** — Assessment timeline, engagement heatmap, at-risk student list
-- **Institutional Insights** — Department comparisons, low-performing assessments, accreditation readiness (NSS, employment rates)
-- **Learning Outcomes** — Alignment with educational objectives
-- **Student Profile** — Individual student performance view
-
-### 🧠 Student Support
-- **Explain My Grade (AI Chat)** — Streaming chat assistant that explains grades with actionable improvement tips
-- **Socratic Improvement Coach** — AI guides students to improve using questions, not just answers
-- **Improvement Plan** — Student task checklists with AI-curated recommended resources
-
----
-## 🧠 Engineering Decisions
-
-### Why rule-based at-risk scoring instead of machine learning?
-
-In the early stages of the platform, the available dataset is relatively small and lacks sufficiently labelled outcomes. Under these conditions, a deterministic, rule-based model provides more reliable and stable performance than an undertrained machine learning model.
-
-The current scoring system uses a weighted formula based on:
-- Submission rate  
-- Grade trend  
-- Average performance  
-- Completion consistency  
-
-This approach was deliberately chosen because it is:
-- **Fully interpretable** — educators can clearly understand why a student is flagged  
-- **Auditable** — important for academic accountability and institutional trust  
-- **Deterministic** — ensures consistent outputs without model variance  
-
-### Scalability Path
-
-The system is designed with modularity in mind. As the platform scales and accumulates labelled data (e.g. pass/fail outcomes, intervention effectiveness), the scoring engine can be replaced with a supervised learning model.
-
-This allows a smooth transition from:
-> Rule-based system → Data-driven ML model
-
-without requiring a redesign of the surrounding architecture.
-
-### Design Principle
-
-The platform prioritises **explainability over complexity** in its early stages, ensuring that all outputs can be trusted and validated by non-technical stakeholders before introducing more complex models.
-
+Rather than acting as a black-box grading tool, GradeAI is designed as an **academic workflow platform** — combining AI assistance with explainable scoring, lecturer oversight, and structured student support.
 
 ---
 
+## Core Product Value
 
-## 🛠 Tech Stack
+GradeAI brings together five major workflows in one platform:
+
+### 1. AI-Assisted Marking
+Lecturers can create assignments, define rubrics, receive AI-generated scores and feedback, review results, override where necessary, and release final grades.
+
+### 2. Academic Intelligence
+The platform aggregates grading, submission, and performance data into dashboards that highlight trends, workload, performance bands, and at-risk students.
+
+### 3. Student Risk Detection
+GradeAI identifies students who may require support using explainable, rule-based academic indicators such as submission rate, grade patterns, and completion consistency.
+
+### 4. Academic Integrity Review
+The system surfaces suspicious submissions and gives lecturers a structured way to inspect potential issues, review evidence, and make human decisions.
+
+### 5. Intervention Tracking
+Once a student is identified as at-risk, lecturers can record interventions, set follow-up dates, add notes, and track ongoing support actions.
+
+---
+
+## What the Platform Does
+
+### Lecturer Workflow
+- Create assignments with title, description, module code, due date, and max score
+- Build weighted rubrics for structured assessment
+- Upload or receive student submissions
+- Run AI-assisted grading against assignment rubrics
+- Review AI-generated breakdowns and feedback
+- Approve and release final grades
+- View recent submissions, performance summaries, and grade distributions
+- Identify students who may need intervention
+- Review academic integrity signals
+- Track interventions and follow-up actions
+
+### Student Workflow
+- View released grades and feedback
+- See criterion-level performance
+- Use “Explain My Grade” support features
+- Receive improvement guidance and next-step recommendations
+- Track academic progress over time
+
+### Institutional / Analytics Workflow
+- Monitor submission and grading activity
+- Review cohort-level performance patterns
+- Inspect risk and support indicators
+- Support moderation, reporting, and external review use cases
+- Generate exports for academic and administrative workflows
+
+---
+
+## Current Product Areas
+
+### Assignment Management
+GradeAI supports a full assignment lifecycle:
+- draft
+- published
+- closed
+
+Lecturers can define the assessment structure and use rubrics to create a more consistent and transparent marking process.
+
+### Submission Workflow
+Student work moves through a structured pipeline:
+
+`Submitted → AI Grading → AI Graded → Under Review → Approved → Released`
+
+This makes the assessment process visible and manageable for both staff and students.
+
+### Lecturer Dashboard
+The lecturer overview is designed as an action dashboard, not just a reporting screen. It surfaces:
+- active students
+- submissions awaiting review
+- grade distributions
+- recent submission activity
+- at-risk student signals
+- links into the most important next actions
+
+### At-Risk Detection
+GradeAI uses an explainable rule-based scoring approach to identify students who may require support. Rather than using a black-box model too early, the system emphasises:
+- clarity
+- auditability
+- trust
+- easy interpretation by lecturers and institutions
+
+### Intervention Tracking
+A new intervention workflow is being introduced so lecturers can move from “insight” to “action.” This includes:
+- intervention type
+- notes
+- priority
+- follow-up date
+- status tracking
+- ongoing support history
+
+### Academic Integrity
+The integrity workflow is intended to support human review rather than automated accusation. It is being developed toward:
+- flagged submission evidence
+- review decisions
+- distinction between AI-writing suspicion and similarity concerns
+- lecturer review history
+
+---
+
+## Why the Risk Model Is Rule-Based
+
+GradeAI currently uses a **rule-based academic risk model** rather than a machine learning model.
+
+This is a deliberate product and engineering decision.
+
+In early-stage academic systems, labelled student outcome data is often limited. Under those conditions, a deterministic, explainable model is often more appropriate than an undertrained predictive model.
+
+The current approach focuses on interpretable indicators such as:
+- submission behaviour
+- academic performance
+- performance consistency
+- grade trend patterns
+
+This makes the system:
+- explainable
+- auditable
+- institution-friendly
+- suitable for early-stage deployment and trust-building
+
+As the platform matures and more historical data becomes available, the scoring engine can evolve toward more advanced predictive models.
+
+---
+
+## Technology Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + TypeScript + Vite 5 |
-| Styling | Tailwind CSS v3 + shadcn/ui |
-| firebase | firebase firestore |
-| Authentication | Firebase Auth |
-| File Storage | Supabase Storage + Firebase Storage |
-| AI Engine | Anthropic Claude (via Supabase Edge Functions) |
-| Backend Functions | Supabase Edge Functions |
+|-------|------------|
+| Frontend | React 18 + TypeScript + Vite |
+| UI | Tailwind CSS + shadcn/ui |
+| Routing | React Router |
+| Data / Backend | Supabase |
+| Authentication | Supabase Auth |
+| Storage | Supabase Storage |
+| Server Logic | Supabase Edge Functions |
 | Analytics | PostHog |
-| Hosting | Cloudflare |
+| Charts / Visualisation | Recharts |
+| PDF / Export | jsPDF |
+| Hosting | Cloudflare Pages |
 | Version Control | GitHub |
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
-```
-/src
-  /components       # Reusable UI components (RubricBuilder, BulkStudentUpload, NetworkStatus, etc.)
-  /components/ui    # shadcn/ui design system components
-  /contexts         # React context providers (AuthContext)
-  /hooks            # Custom React hooks
-  /integrations     # Supabase client and types
-  /lib              # Firebase config, PostHog, utilities
-  /pages            # Route pages
-    /dashboard      # All dashboard pages (lecturer + student views)
-/supabase
-  /functions        # Edge functions (grade-submission, check-plagiarism, explain-grade)
-/public             # Static assets
-```
+```text
+src/
+  components/         Reusable application components
+  components/ui/      Shared UI primitives
+  contexts/           App context providers
+  hooks/              Custom hooks
+  integrations/       Supabase client and generated types
+  lib/                Utilities and shared logic
+  pages/
+    dashboard/        Lecturer and student dashboard pages
 
----
+supabase/
+  functions/          Edge functions for grading and analysis
+  migrations/         Database migrations
 
-## 🚀 Roadmap
-
-**Phase 1 — Prototype** ✅ Complete
-- Market analysis and requirement definition
-- Interactive prototype with simulated data
-
-**Phase 2 — Production Build** ✅ Complete
-- Firebase backend integration
-- Real AI marking with Claude
-- Role-based authentication
-- Full grading workflow
-- Lecturer review, approve, and release pipeline
-- Bulk student onboarding via CSV
-
-**Phase 3 — Pilot Ready** 🔄 In Progress
-- Connect all analytics pages to live Firestore data
-- Password reset flow
-- Email notifications for submissions and grade releases
-- Landing page and demo mode for investors
-
-**Phase 4 — Scale**
-- Firebase Cloud Functions
-- Predictive at-risk detection models
-- LMS integrations (Moodle, Canvas, Blackboard)
-- Multi-institution support
-
----
-
-## 🔐 Security
-
-- Firestore Security Rules enforce role-based data access
-- Students can only access their own submissions and grades
-- Lecturers have read access to all submissions within their modules
-- Supabase RLS policies protect database tables with row-level security
-- All AI processing happens server-side via edge functions
-- No student data is stored beyond what is necessary for the platform
-
----
-
-## 👨‍💻 Built By
-
-This project showcases an AI-augmented technical workflow, where I served as the Lead Architect and Product Engineer. I managed the full-stack development, cloud orchestration (Firebase/Supabase), and the design of the proprietary Socratic feedback logic.
-
----
-
-## 📄 Licence
-
-MIT — see [LICENSE](LICENSE) for details.
+public/
+  Static assets
