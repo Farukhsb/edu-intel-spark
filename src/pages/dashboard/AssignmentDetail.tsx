@@ -93,7 +93,12 @@ interface PlagiarismFlag {
   student_a: string;
   student_b: string;
   similarity_score: number;
+  ai_suspicion_score?: number;
   reason: string;
+  evidence_summary?: string;
+  matched_excerpt?: string;
+  recommended_action?: "clear" | "review" | "investigate";
+  integrity_type?: "similarity" | "ai-writing" | "mixed";
   severity: string;
 }
 
@@ -561,6 +566,7 @@ const AssignmentDetail = () => {
     try {
       const { data, error } = await supabase.functions.invoke("check-plagiarism", {
         body: {
+          assignmentId: assignment.id,
           submissions: submissions.map((s) => ({
             id: s.id,
             student_name: s.student_name || s.student_email || "Anonymous",

@@ -7,6 +7,88 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+type IntegrityFlag = {
+  student_a: string;
+  student_b: string;
+  submission_a_id: string;
+  submission_b_id: string;
+  similarity_score: number;
+  ai_suspicion_score: number;
+  reason: string;
+  evidence_summary: string;
+  matched_excerpt: string;
+  recommended_action: "clear" | "review" | "investigate";
+  integrity_type: "similarity" | "ai-writing" | "mixed";
+  severity: "low" | "medium" | "high";
+};
+
+function clampScore(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function normalizeSeverity(value: unknown): IntegrityFlag["severity"] {
+  return value === "high" || value === "medium" || value === "low" ? value : "medium";
+}
+
+function normalizeAction(value: unknown): IntegrityFlag["recommended_action"] {
+  return value === "clear" || value === "review" || value === "investigate" ? value : "review";
+}
+
+function normalizeType(value: unknown): IntegrityFlag["integrity_type"] {
+  return value === "similarity" || value === "ai-writing" || value === "mixed" ? value : "mixed";
+}
+
+function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student_name: string | null }>): IntegrityFlag[] {
+  if (!Array.isArray(flags)) return [];
+
+  return flags
+    .map((flag) => {
+      if (!flag || typeof flag !== "object") return null;
+      const candidate = flag as Record<string, unknown>;
+      const submissionAId = typeof candidate.submission_a_id === "string" ? candidate.submission_a_id : "";
+      const submissionBId =
+        typeof candidate.submission_b_id === "string"
+          ? candidate.submission_b_id
+          : submissionAId;
+      const submissionA = submissions.find((entry) => entry.id === submissionAId);
+      const submissionB = submissions.find((entry) => entry.id === submissionBId);
+
+      const reason =
+        typeof candidate.reason === "string" && candidate.reason.trim()
+          ? candidate.reason.trim()
+          : "Potential integrity issue detected.";
+
+      return {
+        student_a:
+          (typeof candidate.student_a === "string" && candidate.student_a.trim()) ||
+          submissionA?.student_name ||
+          "Student A",
+        student_b:
+          (typeof candidate.student_b === "string" && candidate.student_b.trim()) ||
+          submissionB?.student_name ||
+          (submissionAId === submissionBId ? "AI-writing analysis" : "Student B"),
+        submission_a_id: submissionAId,
+        submission_b_id: submissionBId,
+        similarity_score: clampScore(candidate.similarity_score),
+        ai_suspicion_score: clampScore(candidate.ai_suspicion_score),
+        reason,
+        evidence_summary:
+          typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()
+            ? candidate.evidence_summary.trim()
+            : reason,
+        matched_excerpt:
+          typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
+        recommended_action: normalizeAction(candidate.recommended_action),
+        integrity_type: normalizeType(candidate.integrity_type),
+        severity: normalizeSeverity(candidate.severity),
+      } satisfies IntegrityFlag;
+    })
+    .filter((flag): flag is IntegrityFlag => Boolean(flag))
+    .filter((flag) => flag.similarity_score > 0 || flag.ai_suspicion_score > 0);
+}
+
 async function fetchFileContent(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   sub: { file_url?: string; file_name?: string },
@@ -90,8 +172,8 @@ serve(async (req) => {
     }
 
     const systemPrompt = isSingleMode
-      ? "You are an academic integrity expert specializing in detecting AI-generated content. Analyze student submissions for signs of AI generation, including: overly uniform structure, lack of personal voice, unusually consistent quality, generic examples, formulaic transitions, and perfect grammar without natural variation."
-      : "You are an academic integrity analyst. Compare student submissions for suspicious similarity and also check each for AI-generated content patterns.";
+      ? "You are an academic integrity expert specializing in detecting AI-generated content. Analyse the submission for AI-writing indicators only when the evidence is concrete. Distinguish polished student writing from genuinely suspicious machine-generated patterns. Return one flag only if there is a meaningful concern."
+      : "You are an academic integrity analyst. Compare submissions for suspicious similarity and also evaluate each for AI-generated writing patterns. Only flag concerns with concrete supporting evidence. Avoid vague accusations.";
 
     let userPrompt: string;
     const userContent: Array<Record<string, string>> = [];
@@ -116,7 +198,7 @@ Check for:
 5. Inconsistent depth (some sections very detailed, others shallow)
 6. Perfect grammar without natural student writing patterns
 
-Provide your analysis.`;
+Return a single structured flag only if there is a genuine integrity concern. If the submission looks normal, return no flags.`;
 
       if (isPdf && content) {
         userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
@@ -129,7 +211,7 @@ Provide your analysis.`;
         userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
       }
     } else {
-      userPrompt = `Analyze these ${submissions.length} student submissions for the same assignment. Check for similarity between submissions AND for AI-generated content in each.
+      userPrompt = `Analyze these ${submissions.length} student submissions for the same assignment. Check for suspicious similarity between submissions and for AI-generated writing patterns in each one.
 
 Submissions:
 ${submissions.map((s: { student_name: string | null; file_name: string }, i: number) => {
@@ -138,7 +220,7 @@ ${submissions.map((s: { student_name: string | null; file_name: string }, i: num
   return `${i + 1}. ${s.student_name} - ${s.file_name}\nContent excerpt:\n${excerpt}`;
 }).join("\n\n---\n\n")}
 
-Analyze the content for suspicious similarity and AI-generation patterns.`;
+Analyse the content carefully. Only flag real concerns, explain the evidence, and recommend whether the lecturer should clear, review, or investigate.`;
       userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
     }
 
@@ -165,10 +247,15 @@ Analyze the content for suspicious similarity and AI-generation patterns.`;
                     submission_a_id: { type: "string" },
                     submission_b_id: { type: "string" },
                     similarity_score: { type: "number" },
+                    ai_suspicion_score: { type: "number" },
                     reason: { type: "string" },
+                    evidence_summary: { type: "string" },
+                    matched_excerpt: { type: "string" },
+                    recommended_action: { type: "string", enum: ["clear", "review", "investigate"] },
+                    integrity_type: { type: "string", enum: ["similarity", "ai-writing", "mixed"] },
                     severity: { type: "string", enum: ["low", "medium", "high"] },
                   },
-                  required: ["student_a", "student_b", "submission_a_id", "submission_b_id", "similarity_score", "reason", "severity"],
+                  required: ["student_a", "student_b", "submission_a_id", "submission_b_id", "similarity_score", "ai_suspicion_score", "reason", "evidence_summary", "matched_excerpt", "recommended_action", "integrity_type", "severity"],
                   additionalProperties: false,
                 },
               },
@@ -183,9 +270,16 @@ Analyze the content for suspicious similarity and AI-generation patterns.`;
     });
     console.log("AI integrity response received");
 
-    let result = { flags: [], summary: "Analysis complete" };
+    let result = { flags: [] as IntegrityFlag[], summary: "Analysis complete" };
     try {
-      result = parseJsonText(extractOutputText(aiData));
+      const parsed = parseJsonText(extractOutputText(aiData));
+      result = {
+        flags: normalizeFlags(parsed?.flags, submissions),
+        summary:
+          typeof parsed?.summary === "string" && parsed.summary.trim()
+            ? parsed.summary.trim()
+            : "Analysis complete",
+      };
     } catch (parseErr) {
       console.error("Failed to parse integrity response");
     }

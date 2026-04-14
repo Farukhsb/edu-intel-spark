@@ -7,6 +7,67 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+type RubricCriterion = {
+  criterion: string;
+  weight: number;
+  description?: string;
+};
+
+type GradeBreakdownItem = {
+  criterion: string;
+  score: number;
+  max_score: number;
+  comment: string;
+};
+
+function clampScore(value: unknown, maxScore: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(maxScore, Number(numeric.toFixed(2))));
+}
+
+function normalizeBreakdown(raw: unknown, rubric: RubricCriterion[]) {
+  const provided = Array.isArray(raw) ? raw : [];
+  const byCriterion = new Map(
+    provided
+      .filter((item) => item && typeof item === "object")
+      .map((item) => {
+        const breakdown = item as Record<string, unknown>;
+        const criterion = typeof breakdown.criterion === "string" ? breakdown.criterion.trim() : "";
+        return [criterion.toLowerCase(), breakdown] as const;
+      }),
+  );
+
+  const breakdown: GradeBreakdownItem[] = rubric.map((criterion) => {
+    const matched = byCriterion.get(criterion.criterion.toLowerCase());
+    const maxScore = criterion.weight;
+    const score = clampScore(matched?.score, maxScore);
+    const comment =
+      typeof matched?.comment === "string" && matched.comment.trim()
+        ? matched.comment.trim()
+        : "No criterion-specific comment provided.";
+
+    return {
+      criterion: criterion.criterion,
+      score,
+      max_score: maxScore,
+      comment,
+    };
+  });
+
+  const total = Number(
+    breakdown.reduce((sum, item) => sum + item.score, 0).toFixed(2),
+  );
+
+  return { breakdown, total };
+}
+
+function normalizeOverallScore(value: unknown, maxScore: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return clampScore(numeric, maxScore);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -51,9 +112,24 @@ serve(async (req) => {
       throw new HttpError(403, "One or more submissions are not accessible");
     }
 
-    const rubric = assignment.rubric || [];
-    const rubricText = Array.isArray(rubric) && rubric.length > 0
-      ? rubric
+    const rubric = Array.isArray(assignment.rubric) ? (assignment.rubric as RubricCriterion[]) : [];
+    const normalizedRubric: RubricCriterion[] =
+      rubric.length > 0
+        ? rubric.map((criterion, index) => ({
+            criterion: criterion.criterion || `Criterion ${index + 1}`,
+            weight: Number(criterion.weight) || 0,
+            description: criterion.description || "",
+          }))
+        : [
+            {
+              criterion: "Overall quality",
+              weight: assignment.max_score,
+              description: "Holistic quality, correctness, and completeness.",
+            },
+          ];
+
+    const rubricText = normalizedRubric.length > 0
+      ? normalizedRubric
           .map((r: { criterion?: string; weight?: number; description?: string }) =>
             `- ${r.criterion || "Criterion"} (${r.weight || 0} pts): ${r.description || ""}`,
           )
@@ -169,6 +245,12 @@ Ask yourself:
 
 If any answer is NO, revise your scores upward before responding.
 
+RUBRIC DISCIPLINE:
+- You must return exactly one breakdown row for each rubric criterion supplied.
+- Do not invent, merge, or omit criteria.
+- Each breakdown score must be between 0 and that criterion's max_score.
+- The sum of the criterion scores must equal the final score.
+
 Always respond with valid JSON only.`;
 
       const prompt = `Grade this student submission for the assignment "${assignment.title}".
@@ -185,7 +267,7 @@ File: ${sub.file_name}
 
 ${isPdf ? "The student's PDF submission content is attached as an inline document below." : `Student's submission content:\n\n${fileContent.substring(0, 15000)}`}
 
-Grade this submission carefully.`;
+Grade this submission carefully against the rubric only. Return exactly ${normalizedRubric.length} breakdown entries matching the rubric criteria in order.`;
 
       try {
         const responseInput = [
@@ -224,6 +306,8 @@ Grade this submission carefully.`;
                   feedback: { type: "string", description: "Detailed feedback explaining strengths and weaknesses" },
                   breakdown: {
                     type: "array",
+                    minItems: normalizedRubric.length,
+                    maxItems: normalizedRubric.length,
                     items: {
                       type: "object",
                       properties: {
@@ -257,11 +341,23 @@ Grade this submission carefully.`;
           throw new Error("Failed to parse AI response");
         }
 
+        const normalized = normalizeBreakdown(gradeResult.breakdown, normalizedRubric);
+        const modelScore = normalizeOverallScore(gradeResult.score, assignment.max_score);
+        const scoreAdjusted = modelScore != null && Math.abs(modelScore - normalized.total) > 1;
+        const feedbackBase =
+          typeof gradeResult.feedback === "string" && gradeResult.feedback.trim()
+            ? gradeResult.feedback.trim()
+            : "No detailed feedback was returned.";
+        const feedback = scoreAdjusted
+          ? `${feedbackBase}\n\nNote: the final score was normalised to match the rubric breakdown total.`
+          : feedbackBase;
+
         results.push({
           submissionId: sub.id,
-          score: gradeResult.score,
-          feedback: gradeResult.feedback,
-          breakdown: gradeResult.breakdown || [],
+          score: normalized.total,
+          feedback,
+          breakdown: normalized.breakdown,
+          rubricValidated: true,
           success: true,
         });
       } catch (gradeErr) {
