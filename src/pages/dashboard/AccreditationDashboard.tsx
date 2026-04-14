@@ -7,9 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Award, CheckCircle, AlertTriangle, XCircle, Clock, FileText,
   Download, BarChart3, Shield, Users, Loader2, BookOpen,
+  ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code, due_date, description, rubric";
 const SUBMISSION_FIELDS = "id, assignment_id, submitted_at, status";
@@ -45,6 +47,7 @@ const tefRating = (score: number): "gold" | "silver" | "bronze" | "pending" =>
 
 const AccreditationDashboard = () => {
   const { isDemo } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(!isDemo);
   const [qaaMetrics, setQaaMetrics] = useState<QAAMetric[]>([]);
   const [nssMetrics, setNssMetrics] = useState<NSSMetric[]>([]);
@@ -226,6 +229,8 @@ const AccreditationDashboard = () => {
   const nssBenchmarkAverage = nssMetrics.length > 0
     ? Math.round(nssMetrics.reduce((sum, m) => sum + m.benchmark, 0) / nssMetrics.length)
     : 0;
+  const weakestQaaMetric = [...qaaMetrics].sort((left, right) => left.value - right.value)[0];
+  const weakestTefIndicator = [...tefIndicators].sort((left, right) => left.score - right.score)[0];
 
   const exportQAAReport = () => {
     const lines = ["QAA Compliance Report — GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
@@ -310,6 +315,94 @@ const AccreditationDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Top Findings</CardTitle>
+          <CardDescription>Immediate accreditation and quality signals from current live data</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weakest compliance area</p>
+            <p className="mt-2 text-sm font-semibold">{weakestQaaMetric?.metric || "No compliance data yet"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {weakestQaaMetric
+                ? `${weakestQaaMetric.value}% against a ${weakestQaaMetric.target}% target. This is the first metric you would be asked to explain.`
+                : "Populate assignments, submissions, and grading to generate live compliance findings."}
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">NSS pressure point</p>
+            <p className="mt-2 text-sm font-semibold">
+              {nssMetrics.length > 0
+                ? nssMetrics.reduce((lowest, metric) => (metric.score < lowest.score ? metric : lowest)).question
+                : "No NSS-style signal yet"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {nssMetrics.length > 0
+                ? "Use this to prioritise process changes that students will actually feel."
+                : "NSS-style indicators appear automatically once grading activity exists."}
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">TEF watch area</p>
+            <p className="mt-2 text-sm font-semibold">{weakestTefIndicator?.name || "No TEF indicator yet"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {weakestTefIndicator
+                ? `${weakestTefIndicator.score}% with a ${weakestTefIndicator.rating} rating. This is the weakest evidence line in the current dataset.`
+                : "TEF-style indicators become meaningful after more grading and release activity."}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Recommended Actions</CardTitle>
+          <CardDescription>Jump from quality signals to the workflows that improve them</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <button
+            type="button"
+            className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+            onClick={() => navigate("/dashboard/assignments?view=needs-review")}
+          >
+            <p className="text-sm font-medium">Reduce feedback backlog</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The fastest way to improve turnaround, moderation evidence, and grade release metrics is clearing the pending queue.
+            </p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+              Open pending submissions <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+            onClick={() => navigate("/dashboard/performance?risk=high-plus")}
+          >
+            <p className="text-sm font-medium">Tackle student outcome risk</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Open the filtered at-risk cohort and intervene where pass rates and outcome metrics are weakest.
+            </p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+              Open at-risk cohort <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+            onClick={() => navigate("/dashboard/learning-outcomes")}
+          >
+            <p className="text-sm font-medium">Review weak rubric outcomes</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use learning outcomes to identify which criteria need clearer teaching, feedback, or rubric alignment.
+            </p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+              Open learning outcomes <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </button>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="qaa" className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">

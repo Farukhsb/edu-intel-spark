@@ -24,11 +24,73 @@ interface UploadResult {
   error?: string;
 }
 
+interface CreatedStudentVerification {
+  email: string;
+  full_name: string | null;
+  cohort_id: string | null;
+  department_id: string | null;
+}
+
+const REQUIRED_HEADERS = ["name", "email", "cohort", "department"] as const;
+
+const parseCsv = (text: string) => {
+  const rows: string[][] = [];
+  let currentCell = "";
+  let currentRow: string[] = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      currentCell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        i++;
+      }
+      currentRow.push(currentCell.trim());
+      if (currentRow.some((cell) => cell.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = "";
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  if (currentCell.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentCell.trim());
+    if (currentRow.some((cell) => cell.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  return rows;
+};
+
 export const BulkStudentUpload = () => {
   const [open, setOpen] = useState(false);
   const [fileName, setFileName] = useState("");
   const [parsed, setParsed] = useState<ParsedStudent[]>([]);
   const [results, setResults] = useState<UploadResult[]>([]);
+  const [verifiedProfiles, setVerifiedProfiles] = useState<CreatedStudentVerification[]>([]);
   const [uploading, setUploading] = useState(false);
   const [step, setStep] = useState<"upload" | "preview" | "done">("upload");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -43,20 +105,23 @@ export const BulkStudentUpload = () => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const lines = text.split("\n").filter(l => l.trim());
-      if (lines.length < 2) { toast.error("CSV must have a header row and at least one data row"); return; }
+      const rows = parseCsv(text);
+      if (rows.length < 2) { toast.error("CSV must have a header row and at least one data row"); return; }
 
-      const header = lines[0].toLowerCase().split(",").map(h => h.trim());
-      const nameIdx = header.findIndex(h => h.includes("name"));
-      const emailIdx = header.findIndex(h => h.includes("email"));
-      const cohortIdx = header.findIndex(h => h.includes("cohort") || h.includes("level") || h.includes("year"));
-      const deptIdx = header.findIndex(h => h.includes("department") || h.includes("dept"));
+      const header = rows[0].map((h) => h.toLowerCase().trim());
+      const missingHeaders = REQUIRED_HEADERS.filter((required) => !header.includes(required));
+      if (missingHeaders.length > 0) {
+        toast.error(`CSV must include these columns: ${REQUIRED_HEADERS.join(", ")}`);
+        return;
+      }
 
-      if (emailIdx === -1) { toast.error("CSV must have an 'email' column"); return; }
+      const nameIdx = header.indexOf("name");
+      const emailIdx = header.indexOf("email");
+      const cohortIdx = header.indexOf("cohort");
+      const deptIdx = header.indexOf("department");
 
       const seenEmails = new Set<string>();
-      const students: ParsedStudent[] = lines.slice(1).map((line, index) => {
-        const cols = line.split(",").map(c => c.trim());
+      const students: ParsedStudent[] = rows.slice(1).map((cols, index) => {
         const email = cols[emailIdx] || "";
         const name = nameIdx >= 0 ? cols[nameIdx] : "";
         const cohort = cohortIdx >= 0 ? cols[cohortIdx] : "";
@@ -66,6 +131,8 @@ export const BulkStudentUpload = () => {
         const errors: string[] = [];
         if (!email || !email.includes("@")) errors.push("Invalid email");
         if (!name) errors.push("Missing name");
+        if (!cohort) errors.push("Missing cohort");
+        if (!dept) errors.push("Missing department");
         if (normalizedEmail && seenEmails.has(normalizedEmail)) errors.push("Duplicate email in file");
         if (normalizedEmail) seenEmails.add(normalizedEmail);
 
@@ -91,6 +158,7 @@ export const BulkStudentUpload = () => {
     const valid = parsed.filter(s => s.valid);
     if (valid.length === 0) { toast.error("No valid students to upload"); return; }
     setUploading(true);
+    setVerifiedProfiles([]);
     let uploadResults: UploadResult[] = [];
 
     try {
@@ -112,6 +180,21 @@ export const BulkStudentUpload = () => {
       toast.error(message);
       setUploading(false);
       return;
+    }
+
+    const successfulEmails = uploadResults
+      .filter((result) => result.success)
+      .map((result) => result.email.toLowerCase());
+
+    if (successfulEmails.length > 0) {
+      const { data: profileRows, error: verificationError } = await supabase
+        .from("profiles")
+        .select("email, full_name, cohort_id, department_id")
+        .in("email", successfulEmails);
+
+      if (!verificationError) {
+        setVerifiedProfiles((profileRows || []) as CreatedStudentVerification[]);
+      }
     }
 
     setResults(uploadResults);
@@ -150,6 +233,7 @@ export const BulkStudentUpload = () => {
     setFileName("");
     setParsed([]);
     setResults([]);
+    setVerifiedProfiles([]);
     setStep("upload");
   };
 
@@ -157,6 +241,7 @@ export const BulkStudentUpload = () => {
   const invalidRows = parsed.filter(s => !s.valid);
   const successCount = results.filter(r => r.success).length;
   const failureCount = results.filter(r => !r.success).length;
+  const verifiedCount = verifiedProfiles.length;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
@@ -194,8 +279,7 @@ export const BulkStudentUpload = () => {
               <p className="font-medium">Before you upload</p>
               <ul className="mt-2 space-y-1 text-muted-foreground">
                 <li>Use one row per student.</li>
-                <li>Required columns: name, email.</li>
-                <li>Optional columns: cohort, department.</li>
+                <li>Required columns: name, email, cohort, department.</li>
                 <li>Duplicate emails in the same file will be blocked.</li>
               </ul>
             </div>
@@ -210,7 +294,7 @@ export const BulkStudentUpload = () => {
             </div>
             <div className="border-2 border-dashed rounded-lg p-8 text-center space-y-3">
               <FileText className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">CSV with columns: name, email, cohort, department</p>
+              <p className="text-sm text-muted-foreground">CSV with required columns: name, email, cohort, department</p>
               <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
               <Button onClick={() => fileRef.current?.click()}>Select CSV File</Button>
               <p className="text-xs text-muted-foreground">Max file size: 10MB</p>
@@ -291,6 +375,13 @@ export const BulkStudentUpload = () => {
                 <p className="text-2xl font-semibold text-destructive">{failureCount}</p>
               </div>
             </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Verified in profiles</p>
+              <p className="text-2xl font-semibold">{verifiedCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Confirms newly created students were written to the app profile table.
+              </p>
+            </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
               <strong>Important:</strong> Download the credentials CSV now. Temporary passwords are only shown in this session.
             </div>
@@ -309,6 +400,20 @@ export const BulkStudentUpload = () => {
                 </div>
               ))}
             </div>
+            {verifiedProfiles.length > 0 && (
+              <div className="rounded-lg border p-3">
+                <p className="text-sm font-medium">Verified student profiles</p>
+                <div className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-muted-foreground">
+                  {verifiedProfiles.map((profile) => (
+                    <div key={profile.email} className="flex items-center justify-between gap-3 rounded bg-muted/40 px-2 py-1">
+                      <span>{profile.full_name || profile.email}</span>
+                      <span>{profile.cohort_id || "-"}</span>
+                      <span>{profile.department_id || "-"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button variant="outline" onClick={reset} className="flex-1">Upload Another File</Button>
               <Button variant="outline" onClick={() => setOpen(false)} className="flex-1">Close</Button>

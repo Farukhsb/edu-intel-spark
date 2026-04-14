@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Award, Building2, Loader2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, ArrowRight, Award, Building2, Download, Loader2, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code";
 const SUBMISSION_FIELDS = "id, assignment_id";
@@ -53,6 +55,7 @@ const getMetricStatus = (value: number, target: number): AccreditationMetric["st
 
 const InstitutionalInsights = () => {
   const { isDemo, user } = useAuth();
+  const navigate = useNavigate();
   const [departmentStats, setDepartmentStats] = useState<DepartmentStat[]>([]);
   const [lowPerforming, setLowPerforming] = useState<LowPerformingAssessment[]>([]);
   const [accreditation, setAccreditation] = useState<AccreditationMetric[]>(EMPTY_ACCREDITATION);
@@ -214,6 +217,43 @@ const InstitutionalInsights = () => {
     );
   }
 
+  const weakestDepartment = [...departmentStats].sort((left, right) => left.passRate - right.passRate)[0];
+  const weakestAssessment = lowPerforming[0];
+  const weakestAccreditationMetric = [...accreditation].sort((left, right) => left.value - right.value)[0];
+
+  const exportInsightsSnapshot = () => {
+    const lines = [
+      "Institutional Insights Snapshot",
+      `Generated: ${new Date().toISOString().slice(0, 10)}`,
+      "",
+      "Department,Students,Average Grade,Pass Rate",
+    ];
+
+    departmentStats.forEach((department) => {
+      lines.push(`"${department.dept}",${department.students},${department.avgGrade}%,${department.passRate}%`);
+    });
+
+    lines.push("");
+    lines.push("Assessment,Average Grade,Pass Rate,Students,Issue");
+    lowPerforming.forEach((assessment) => {
+      lines.push(`"${assessment.name}",${assessment.avgGrade}%,${assessment.passRate}%,${assessment.students},"${assessment.issue}"`);
+    });
+
+    lines.push("");
+    lines.push("Metric,Value,Target,Status");
+    accreditation.forEach((metric) => {
+      lines.push(`"${metric.metric}",${metric.value}%,${metric.target}%,${metric.status}`);
+    });
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `institutional_insights_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && (
@@ -232,6 +272,97 @@ const InstitutionalInsights = () => {
           </CardContent>
         </Card>
       )}
+
+      <div className="flex items-center justify-end">
+        <Button variant="outline" size="sm" onClick={exportInsightsSnapshot} disabled={!hasRealData && !isDemo}>
+          <Download className="mr-2 h-3.5 w-3.5" />
+          Export snapshot
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Top Findings</CardTitle>
+          <CardDescription>Institution-level signals that need action rather than observation</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weakest module grouping</p>
+            <p className="mt-2 text-sm font-semibold">{weakestDepartment?.dept || "No department comparison yet"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {weakestDepartment
+                ? `${weakestDepartment.passRate}% pass rate with ${weakestDepartment.avgGrade}% average. This is the clearest module-level concern in your data.`
+                : "Module-level comparisons appear once graded submissions accumulate."}
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assessment needing review</p>
+            <p className="mt-2 text-sm font-semibold">{weakestAssessment?.name || "No assessment issue detected yet"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {weakestAssessment
+                ? `${weakestAssessment.avgGrade}% average and ${weakestAssessment.passRate}% pass rate. This is the best place to investigate assignment design or marking friction.`
+                : "Assessment issue patterns appear after more grading data is available."}
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Compliance pressure point</p>
+            <p className="mt-2 text-sm font-semibold">{weakestAccreditationMetric?.metric || "No readiness signal yet"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {weakestAccreditationMetric
+                ? `${weakestAccreditationMetric.value}% against a ${weakestAccreditationMetric.target}% target. This would be the first metric to tighten for reporting.`
+                : "Readiness metrics appear once there is real assessment activity to assess."}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Recommended Actions</CardTitle>
+          <CardDescription>Use these routes to move from institutional signal to intervention</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <button
+            type="button"
+            className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+            onClick={() => navigate("/dashboard/assignments?view=needs-review")}
+          >
+            <p className="text-sm font-medium">Clear grading bottlenecks</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Pending grading and release work drags down completion, readiness, and feedback quality at the institutional level.
+            </p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+              Open assignment queue <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+            onClick={() => navigate("/dashboard/performance?risk=high-plus")}
+          >
+            <p className="text-sm font-medium">Intervene with low-performing students</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use the risk workflow to act on the students most likely to be pulling down module and pass-rate performance.
+            </p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+              Open risk workflow <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
+            onClick={() => navigate("/dashboard/accreditation")}
+          >
+            <p className="text-sm font-medium">Prepare compliance evidence</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Move into accreditation reporting to review the exact metrics and exported evidence likely to be scrutinised.
+            </p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+              Open accreditation view <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

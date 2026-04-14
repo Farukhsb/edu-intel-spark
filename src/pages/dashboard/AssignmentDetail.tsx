@@ -9,6 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -27,6 +34,7 @@ import {
   Eye,
   FileText,
   Loader2,
+  Search,
   Send,
   Shield,
   Sparkles,
@@ -34,6 +42,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
+import { queueCommunicationMessage } from "@/lib/communications";
 
 type SubmissionStatus =
   | "submitted"
@@ -156,6 +165,8 @@ const AssignmentDetail = () => {
   const [plagiarismFlags, setPlagiarismFlags] = useState<PlagiarismFlag[]>([]);
   const [plagiarismSummary, setPlagiarismSummary] = useState("");
   const [checkingPlagiarism, setCheckingPlagiarism] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | SubmissionStatus>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
@@ -567,19 +578,92 @@ const AssignmentDetail = () => {
   };
 
   const toggleAll = () => {
-    if (selected.size === submissions.length) setSelected(new Set());
-    else setSelected(new Set(submissions.map((s) => s.id)));
+    if (selected.size === filteredSubmissions.length) setSelected(new Set());
+    else setSelected(new Set(filteredSubmissions.map((submission) => submission.id)));
+  };
+
+  const queueFeedbackSummary = (sub: Submission) => {
+    const grade = grades[sub.id];
+    if (!grade) {
+      toast.error("No grade available to summarise");
+      return;
+    }
+
+    const score = grade.final_score ?? grade.lecturer_score ?? grade.ai_score;
+    const feedback =
+      grade.final_feedback ??
+      grade.lecturer_feedback ??
+      grade.ai_feedback ??
+      "Feedback will be added in the grading workflow.";
+
+    queueCommunicationMessage({
+      category: "feedback-summary",
+      recipientName: sub.student_name || sub.student_email || "Student",
+      recipientEmail: sub.student_email,
+      subject: `Feedback summary for ${assignment?.title || "your assignment"}`,
+      body: `Hello ${sub.student_name || "student"},
+
+Your submission for ${assignment?.title || "this assignment"} has been reviewed.
+
+Score:
+${score != null ? `${score}/${assignment?.max_score ?? 100}` : "Pending final score"}
+
+Summary feedback:
+${feedback}
+
+Please review the feedback in the platform and let me know if you would like to discuss specific areas for improvement.`,
+      relatedAssignmentId: assignment?.id,
+      relatedStudentId: sub.student_id || sub.student_email || sub.student_name || undefined,
+    });
+    toast.success("Feedback summary added to the outbox");
+  };
+
+  const queueGradeReleaseNotification = (sub: Submission) => {
+    const grade = grades[sub.id];
+    const score = grade?.final_score ?? grade?.lecturer_score ?? grade?.ai_score;
+
+    queueCommunicationMessage({
+      category: "grade-released",
+      recipientName: sub.student_name || sub.student_email || "Student",
+      recipientEmail: sub.student_email,
+      subject: `Grade released for ${assignment?.title || "your assignment"}`,
+      body: `Hello ${sub.student_name || "student"},
+
+Your final grade for ${assignment?.title || "this assignment"} is now available.
+
+Result:
+${score != null ? `${score}/${assignment?.max_score ?? 100}` : "Available in the platform"}
+
+Please log in to review the released grade and feedback.`,
+      relatedAssignmentId: assignment?.id,
+      relatedStudentId: sub.student_id || sub.student_email || sub.student_name || undefined,
+    });
+    toast.success("Grade release note added to the outbox");
   };
 
   const summary = useMemo(() => {
     const graded = submissions.filter((s) => ["ai_graded", "under_review", "approved", "released"].includes(s.status));
     const released = submissions.filter((s) => s.status === "released");
+    const pending = submissions.filter((s) => ["submitted", "ai_grading", "ai_graded", "under_review"].includes(s.status));
     return {
       submittedCount: submissions.length,
       gradedCount: graded.length,
       releasedCount: released.length,
+      pendingCount: pending.length,
     };
   }, [submissions]);
+
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((submission) => {
+      const matchesSearch =
+        !searchQuery ||
+        [submission.student_name, submission.student_email, submission.file_name]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [searchQuery, statusFilter, submissions]);
 
   if (loading)
     return (
@@ -616,6 +700,50 @@ const AssignmentDetail = () => {
   const hasGraded = selectedStatuses.some((s) => s === "ai_graded" || s === "under_review");
   const hasApproved = selectedStatuses.some((s) => s === "approved");
 
+  const exportReviewedReports = () => {
+    const reviewedSubmissions = submissions.filter((submission) => {
+      const grade = grades[submission.id];
+      return grade && (grade.final_score != null || grade.lecturer_score != null || grade.ai_score != null);
+    });
+
+    if (reviewedSubmissions.length === 0) {
+      toast.error("No reviewed submissions available to export");
+      return;
+    }
+
+    const rows = [
+      ["Student", "Email", "File", "Status", "Score", "Feedback", "Submitted"],
+      ...reviewedSubmissions.map((submission) => {
+        const grade = grades[submission.id];
+        const score = grade?.final_score ?? grade?.lecturer_score ?? grade?.ai_score ?? "";
+        const feedback =
+          grade?.final_feedback ??
+          grade?.lecturer_feedback ??
+          grade?.ai_feedback ??
+          "";
+
+        return [
+          submission.student_name || "Student",
+          submission.student_email || "",
+          submission.file_name,
+          formatStatusLabel(submission.status),
+          String(score),
+          `"${String(feedback).replace(/"/g, '""')}"`,
+          safeFormatDate(submission.submitted_at, "MMM d, yyyy HH:mm"),
+        ];
+      }),
+    ];
+
+    const csv = rows.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${assignment?.title || "assignment"}-reviewed-reports.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
@@ -645,7 +773,7 @@ const AssignmentDetail = () => {
                 </span>
                 {assignment.due_date && (
                   <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5" /> Due {format(new Date(assignment.due_date), "MMM d, yyyy")}
+                    <CalendarDays className="h-3.5 w-3.5" /> Due {safeFormatDate(assignment.due_date, "MMM d, yyyy")}
                   </span>
                 )}
                 <span>Status: {formatStatusLabel(assignment.status)}</span>
@@ -743,6 +871,35 @@ const AssignmentDetail = () => {
                     </Button>
                   </div>
 
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_auto]">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="Search by student, email, or file"
+                        className="pl-9"
+                      />
+                    </div>
+                    <Select value={statusFilter} onValueChange={(value: "all" | SubmissionStatus) => setStatusFilter(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="submitted">Submitted</SelectItem>
+                        <SelectItem value="ai_grading">AI grading</SelectItem>
+                        <SelectItem value="ai_graded">AI graded</SelectItem>
+                        <SelectItem value="under_review">Under review</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="released">Released</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" onClick={exportReviewedReports}>
+                      Export reviewed reports
+                    </Button>
+                  </div>
+
                   {(grading || selected.size > 0) && (
                     <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
                       {grading ? (
@@ -757,9 +914,14 @@ const AssignmentDetail = () => {
                           </span>
                         </div>
                       ) : (
-                        <span>
-                          {selected.size} submission{selected.size === 1 ? "" : "s"} selected. Choose the next workflow action above.
-                        </span>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span>
+                            {selected.size} submission{selected.size === 1 ? "" : "s"} selected. Choose the next workflow action above.
+                          </span>
+                          <Badge variant="outline">{selectedStatuses.filter((status) => status === "submitted").length} submitted</Badge>
+                          <Badge variant="outline">{selectedStatuses.filter((status) => status === "ai_graded" || status === "under_review").length} ready to approve</Badge>
+                          <Badge variant="outline">{selectedStatuses.filter((status) => status === "approved").length} ready to release</Badge>
+                        </div>
                       )}
                     </div>
                   )}
@@ -785,14 +947,21 @@ const AssignmentDetail = () => {
                   {isLecturer && (
                     <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3">
                       <Checkbox
-                        checked={selected.size === submissions.length && submissions.length > 0}
+                        checked={selected.size === filteredSubmissions.length && filteredSubmissions.length > 0}
                         onCheckedChange={toggleAll}
                       />
-                      <span className="text-xs text-muted-foreground">Select all submissions</span>
+                      <span className="text-xs text-muted-foreground">Select all visible submissions</span>
                     </div>
                   )}
 
-                  {submissions.map((sub) => {
+                  {filteredSubmissions.length === 0 ? (
+                    <div className="rounded-xl border border-dashed p-8 text-center">
+                      <p className="text-sm font-medium">No submissions match this view</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Adjust the status filter or search query to see more work.
+                      </p>
+                    </div>
+                  ) : filteredSubmissions.map((sub) => {
                     const grade = grades[sub.id];
                     const sc = statusConfig[sub.status];
                     const StatusIcon = sc.icon;
@@ -823,8 +992,18 @@ const AssignmentDetail = () => {
                               </div>
                               <p className="text-xs text-muted-foreground truncate">{sub.file_name}</p>
                               <p className="text-xs text-muted-foreground">
-                                Submitted {format(new Date(sub.submitted_at), "MMM d, yyyy 'at' HH:mm")}
+                                Submitted {safeFormatDate(sub.submitted_at, "MMM d, yyyy 'at' HH:mm")}
                               </p>
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  variant="link"
+                                  className="h-auto p-0 text-xs"
+                                  onClick={() => window.open(sub.file_url, "_blank", "noopener,noreferrer")}
+                                >
+                                  Open file
+                                </Button>
+                              </div>
 
                               {grade?.ai_breakdown && Array.isArray(grade.ai_breakdown) && grade.ai_breakdown.length > 0 && (
                                 <div className="flex flex-wrap gap-1 pt-1">
@@ -857,6 +1036,11 @@ const AssignmentDetail = () => {
 
                             {isLecturer && (
                               <div className="flex flex-wrap gap-2 lg:justify-end">
+                                {grade?.ai_score != null && (
+                                  <Button size="sm" variant="ghost" onClick={() => queueFeedbackSummary(sub)}>
+                                    <Sparkles className="mr-1 h-3 w-3" /> Feedback summary
+                                  </Button>
+                                )}
                                 {grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
                                   <Button size="sm" variant="ghost" onClick={() => openReview(sub)}>
                                     <Edit className="mr-1 h-3 w-3" /> Review
@@ -905,6 +1089,7 @@ const AssignmentDetail = () => {
                                           .from("submissions")
                                           .update({ status: "released" as const })
                                           .eq("id", sub.id);
+                                        queueGradeReleaseNotification(sub);
                                         toast.success("Grade released to student");
                                         await loadSubmissions();
                                       } catch (e) {
@@ -913,6 +1098,15 @@ const AssignmentDetail = () => {
                                     }}
                                   >
                                     <Send className="mr-1 h-3 w-3" /> Release
+                                  </Button>
+                                )}
+                                {sub.status === "released" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => queueGradeReleaseNotification(sub)}
+                                  >
+                                    <Send className="mr-1 h-3 w-3" /> Send release note
                                   </Button>
                                 )}
                               </div>

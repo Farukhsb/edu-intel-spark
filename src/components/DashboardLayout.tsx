@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
+import { loadCommunicationOutbox, type CommunicationMessage } from "@/lib/communications";
+import { safeFormatDate } from "@/lib/date";
 
 const lecturerLinks = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -45,6 +47,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     return false;
   });
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
 
   useEffect(() => {
     if (darkMode) {
@@ -55,6 +58,25 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       localStorage.setItem("theme", "light");
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    const syncNotifications = () => {
+      setNotifications(loadCommunicationOutbox().slice(0, 6));
+    };
+
+    syncNotifications();
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", syncNotifications);
+      window.addEventListener("gradeai:communications-updated", syncNotifications);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", syncNotifications);
+        window.removeEventListener("gradeai:communications-updated", syncNotifications);
+      }
+    };
+  }, []);
 
   const links = profile?.role === "lecturer" ? lecturerLinks : studentLinks;
 
@@ -149,9 +171,29 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             {showNotifications && (
               <div className="absolute right-4 top-14 z-50 w-72 rounded-lg border bg-card shadow-lg">
                 <div className="p-3 border-b">
-                  <p className="text-sm font-medium">Notifications</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium">Outbox</p>
+                    {notifications.length > 0 && <Badge variant="secondary">{notifications.length}</Badge>}
+                  </div>
                 </div>
-                <p className="p-4 text-xs text-muted-foreground text-center">No new notifications</p>
+                {notifications.length === 0 ? (
+                  <p className="p-4 text-xs text-muted-foreground text-center">No new notifications</p>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto p-2">
+                    {notifications.map((notification) => (
+                      <div key={notification.id} className="rounded-md p-2 text-xs hover:bg-muted/40">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{notification.subject}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {safeFormatDate(notification.createdAt, "MMM d, HH:mm")}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">{notification.recipientName}</p>
+                        <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
