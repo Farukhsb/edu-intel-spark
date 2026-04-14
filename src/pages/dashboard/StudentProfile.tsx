@@ -51,6 +51,21 @@ interface InterventionEntry {
   status: InterventionStatus;
 }
 
+interface StudentInterventionRow {
+  id: string;
+  lecturer_id: string;
+  student_id: string;
+  student_name?: string | null;
+  student_email?: string | null;
+  intervention_type: InterventionType;
+  status: InterventionStatus;
+  notes?: string | null;
+  note?: string | null;
+  follow_up_date?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 interface StudentAssignment {
   id: string;
   title: string;
@@ -92,8 +107,6 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-const storageKey = (studentId: string) => `gradeai.interventions.${studentId}`;
-
 const StudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
@@ -107,22 +120,6 @@ const StudentProfile = () => {
   const [interventionStatus, setInterventionStatus] = useState<InterventionStatus>("ongoing");
   const [interventionNote, setInterventionNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !decodedStudentId) return;
-
-    const raw = window.localStorage.getItem(storageKey(decodedStudentId));
-    if (!raw) {
-      setInterventions([]);
-      return;
-    }
-
-    try {
-      setInterventions(JSON.parse(raw) as InterventionEntry[]);
-    } catch {
-      setInterventions([]);
-    }
-  }, [decodedStudentId]);
 
   useEffect(() => {
     if (!user || !decodedStudentId) return;
@@ -316,30 +313,91 @@ const StudentProfile = () => {
     return "steady";
   }, [student]);
 
-  const saveInterventions = (nextEntries: InterventionEntry[]) => {
-    setInterventions(nextEntries);
-    if (typeof window !== "undefined" && decodedStudentId) {
-      window.localStorage.setItem(storageKey(decodedStudentId), JSON.stringify(nextEntries));
-    }
-  };
+  const mapInterventionRow = (row: StudentInterventionRow): InterventionEntry => ({
+    id: row.id,
+    createdAt: row.created_at || row.updated_at || new Date().toISOString(),
+    type: row.intervention_type,
+    note: row.notes || row.note || "",
+    followUpDate: row.follow_up_date || null,
+    status: row.status,
+  });
 
-  const handleAddIntervention = () => {
-    if (!interventionNote.trim()) return;
+  useEffect(() => {
+    if (!user?.id || !student?.studentId || isDemo) return;
 
-    const nextEntry: InterventionEntry = {
-      id: `${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      type: interventionType,
-      note: interventionNote.trim(),
-      followUpDate: followUpDate || null,
-      status: interventionStatus,
+    const loadInterventions = async () => {
+      const supabaseClient = supabase as any;
+      const { data, error } = await supabaseClient
+        .from("student_interventions")
+        .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, notes, note, follow_up_date, created_at, updated_at")
+        .eq("lecturer_id", user.id)
+        .eq("student_id", student.studentId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to load interventions:", error);
+        toast.error("Could not load intervention history");
+        return;
+      }
+
+      setInterventions(((data || []) as StudentInterventionRow[]).map(mapInterventionRow));
     };
 
-    saveInterventions([nextEntry, ...interventions]);
+    void loadInterventions();
+  }, [isDemo, student?.studentId, user?.id]);
+
+  const handleAddIntervention = async () => {
+    if (!interventionNote.trim() || !student || !user?.id) return;
+
+    if (isDemo) {
+      const nextEntry: InterventionEntry = {
+        id: `${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        type: interventionType,
+        note: interventionNote.trim(),
+        followUpDate: followUpDate || null,
+        status: interventionStatus,
+      };
+
+      setInterventions((current) => [nextEntry, ...current]);
+      setInterventionNote("");
+      setFollowUpDate("");
+      setInterventionType("email");
+      setInterventionStatus("ongoing");
+      return;
+    }
+
+    const supabaseClient = supabase as any;
+    const payload = {
+      lecturer_id: user.id,
+      student_id: student.studentId,
+      student_name: student.name,
+      student_email: student.email,
+      intervention_type: interventionType,
+      notes: interventionNote.trim(),
+      follow_up_date: followUpDate || null,
+      status: interventionStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabaseClient
+      .from("student_interventions")
+      .insert(payload)
+      .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, notes, note, follow_up_date, created_at, updated_at")
+      .single();
+
+    if (error) {
+      console.error("Failed to save intervention:", error);
+      toast.error("Could not save intervention");
+      return;
+    }
+
+    setInterventions((current) => [mapInterventionRow(data as StudentInterventionRow), ...current]);
     setInterventionNote("");
     setFollowUpDate("");
     setInterventionType("email");
     setInterventionStatus("ongoing");
+    toast.success("Intervention logged");
   };
 
   const queueAtRiskAlert = () => {
@@ -663,7 +721,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Intervention History</CardTitle>
-          <CardDescription>Saved locally for this student while you test the workflow on localhost</CardDescription>
+          <CardDescription>Saved to your connected Supabase project for this student</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {interventions.length === 0 ? (
