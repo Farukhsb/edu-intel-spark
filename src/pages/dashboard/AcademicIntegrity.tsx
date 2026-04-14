@@ -141,147 +141,115 @@ const AcademicIntegrity = () => {
         const submissions = submissionsData || [];
         const submissionIds = submissions.map((submission) => submission.id);
 
-        let gradesData: any[] = [];
-        if (submissionIds.length > 0) {
-          const { data: grades, error: gradesError } = await supabase
-            .from("grades")
-            .select("*")
-            .in("submission_id", submissionIds);
-
-          if (gradesError) throw gradesError;
-          gradesData = grades || [];
-        }
-
         const cases: FlaggedCase[] = [];
-
-        gradesData.forEach((grade) => {
-          const submission = submissions.find((item) => item.id === grade.submission_id);
-          if (!submission) return;
-
-          const breakdown = Array.isArray(grade.ai_breakdown) ? grade.ai_breakdown : [];
-          const score = grade.final_score ?? grade.ai_score ?? 0;
-          const studentName =
-            submission.student_name || submission.student_email || `Student ${submission.id.slice(0, 6)}`;
-
-          let aiWritingScore = 0;
-          let similarityScore = 0;
-          const aiWritingEvidence: EvidenceItem[] = [];
-          const similarityEvidence: EvidenceItem[] = [];
-          const flags: string[] = [];
-
-          if (score > 95) {
-            aiWritingScore += 20;
-            aiWritingEvidence.push({
-              label: "Assessment outcome",
-              value: "Extremely high mark compared with normal review threshold",
-              score: 20,
-            });
-            flags.push("Unusually high score");
-          }
-
-          if (breakdown.length > 0) {
-            const ratios = breakdown.map((item: any) => {
-              const maxScore = item.max_score ?? item.maxScore ?? 0;
-              return maxScore > 0 ? (item.score ?? 0) / maxScore : 0;
-            });
-            const average = ratios.reduce((sum: number, ratio: number) => sum + ratio, 0) / ratios.length;
-            const variance =
-              ratios.length > 1
-                ? ratios.reduce((sum: number, ratio: number) => sum + Math.pow(ratio - average, 2), 0) / ratios.length
-                : 0;
-            const perfectCount = ratios.filter((ratio: number) => ratio >= 0.95).length;
-
-            if (variance < 0.01 && ratios.length > 2) {
-              aiWritingScore += 35;
-              aiWritingEvidence.push({
-                label: "Rubric pattern",
-                value: "Very uniform performance across criteria",
-                score: 35,
-              });
-              flags.push("Uniform scores across criteria");
-            }
-
-            if (perfectCount >= Math.ceil(ratios.length * 0.8) && ratios.length > 2) {
-              similarityScore += 25;
-              similarityEvidence.push({
-                label: "Rubric saturation",
-                value: "Near-perfect rubric profile",
-                score: 25,
-              });
-              flags.push("Near-perfect across most rubric criteria");
-            }
-          }
-
-          if (typeof grade.ai_feedback === "string") {
-            const feedback = grade.ai_feedback.toLowerCase();
-
-            if (feedback.includes("ai-generated") || feedback.includes("machine-generated")) {
-              aiWritingScore += 35;
-              aiWritingEvidence.push({
-                label: "AI grader language",
-                value: "Feedback mentions possible AI-generated content",
-                score: 35,
-              });
-              flags.push("AI grader mentioned AI-generated content");
-            }
-
-            if (feedback.includes("inconsistent style") || feedback.includes("style mismatch")) {
-              aiWritingScore += 20;
-              aiWritingEvidence.push({
-                label: "Writing style",
-                value: "Feedback flagged inconsistent writing style",
-                score: 20,
-              });
-              flags.push("Writing style inconsistency detected");
-            }
-
-            if (feedback.includes("similar") || feedback.includes("copied") || feedback.includes("template")) {
-              similarityScore += 20;
-              similarityEvidence.push({
-                label: "Similarity language",
-                value: "Feedback hints at templated or copied structure",
-                score: 20,
-              });
-              flags.push("Similarity/plagiarism style indicator");
-            }
-          }
-
-          if (submission.status === "under_review") {
-            similarityScore += 10;
-            similarityEvidence.push({
-              label: "Workflow state",
-              value: "Submission already held in lecturer review",
-              score: 10,
-            });
-          }
-
-          const totalScore = Math.min(aiWritingScore + similarityScore, 100);
-          if (totalScore < 35) return;
-
-          const review = storedReviews[submission.id];
-          const riskLevel: FlaggedCase["riskLevel"] =
-            totalScore >= 80 ? "high" : totalScore >= 55 ? "medium" : "low";
-
-          cases.push({
-            submissionId: submission.id,
-            assignmentId: submission.assignment_id,
-            student: studentName,
-            assignment: assignmentMap.get(submission.assignment_id) || "Unknown assignment",
-            status: submission.status,
-            submittedAt: submission.submitted_at,
-            riskLevel,
-            totalScore,
-            aiWritingScore: Math.min(aiWritingScore, 100),
-            similarityScore: Math.min(similarityScore, 100),
-            evidence: {
-              aiWriting: aiWritingEvidence,
-              similarity: similarityEvidence,
-            },
-            flags,
-            decision: review?.decision || "pending",
-            history: review?.history || [],
-          });
+        const submissionsByAssignment = new Map<string, typeof submissions>();
+        submissions.forEach((submission) => {
+          const current = submissionsByAssignment.get(submission.assignment_id) || [];
+          current.push(submission);
+          submissionsByAssignment.set(submission.assignment_id, current);
         });
+
+        for (const assignment of assignments) {
+          const assignmentSubmissions = submissionsByAssignment.get(assignment.id) || [];
+          if (assignmentSubmissions.length === 0) continue;
+
+          try {
+            const { data, error } = await supabase.functions.invoke("check-plagiarism", {
+              body: {
+                assignmentId: assignment.id,
+                submissions: assignmentSubmissions.map((submission) => ({ id: submission.id })),
+              },
+            });
+
+            if (error) throw error;
+
+            const flags = Array.isArray(data?.flags) ? data.flags : [];
+            flags.forEach((flag: any) => {
+              const submissionA = assignmentSubmissions.find((item) => item.id === flag.submission_a_id);
+              const submissionB = assignmentSubmissions.find((item) => item.id === flag.submission_b_id);
+              const caseId =
+                flag.submission_a_id === flag.submission_b_id
+                  ? `${assignment.id}:${flag.submission_a_id}`
+                  : `${assignment.id}:${[flag.submission_a_id, flag.submission_b_id].sort().join(":")}`;
+
+              const aiWritingEvidence: EvidenceItem[] =
+                flag.ai_suspicion_score > 0
+                  ? [
+                      {
+                        label: "AI-writing analysis",
+                        value: flag.evidence_summary || flag.reason || "Potential AI-writing concern detected.",
+                        score: flag.ai_suspicion_score,
+                      },
+                    ]
+                  : [];
+
+              const similarityEvidence: EvidenceItem[] =
+                flag.similarity_score > 0
+                  ? [
+                      {
+                        label: "Similarity analysis",
+                        value: flag.evidence_summary || flag.reason || "Potential similarity concern detected.",
+                        score: flag.similarity_score,
+                      },
+                    ]
+                  : [];
+
+              if (flag.matched_excerpt) {
+                similarityEvidence.push({
+                  label: "Matched excerpt",
+                  value: flag.matched_excerpt,
+                  score: flag.similarity_score,
+                });
+              }
+
+              const totalScore = Math.max(
+                Number(flag.similarity_score) || 0,
+                Number(flag.ai_suspicion_score) || 0,
+              );
+              const review = storedReviews[caseId];
+              const riskLevel: FlaggedCase["riskLevel"] =
+                totalScore >= 80 ? "high" : totalScore >= 55 ? "medium" : "low";
+
+              cases.push({
+                submissionId: caseId,
+                assignmentId: assignment.id,
+                student:
+                  submissionA && submissionB && submissionA.id !== submissionB.id
+                    ? `${flag.student_a} ↔ ${flag.student_b}`
+                    : flag.student_a || submissionA?.student_name || "Student",
+                assignment: assignmentMap.get(assignment.id) || "Unknown assignment",
+                status:
+                  submissionA && submissionB && submissionA.id !== submissionB.id
+                    ? `${submissionA.status}/${submissionB.status}`
+                    : submissionA?.status || submissionB?.status || "review",
+                submittedAt:
+                  submissionA?.submitted_at || submissionB?.submitted_at || new Date().toISOString(),
+                riskLevel,
+                totalScore,
+                aiWritingScore: Number(flag.ai_suspicion_score) || 0,
+                similarityScore: Number(flag.similarity_score) || 0,
+                evidence: {
+                  aiWriting: aiWritingEvidence,
+                  similarity: similarityEvidence,
+                },
+                flags: [
+                  flag.integrity_type === "mixed"
+                    ? "Similarity and AI-writing concern"
+                    : flag.integrity_type === "ai-writing"
+                    ? "AI-writing concern"
+                    : "Similarity concern",
+                  flag.recommended_action
+                    ? `Recommended action: ${String(flag.recommended_action).replace("-", " ")}`
+                    : "Review recommended",
+                ],
+                decision: review?.decision || "pending",
+                history: review?.history || [],
+              });
+            });
+          } catch (error) {
+            console.error(`Failed to run integrity check for assignment ${assignment.id}:`, error);
+          }
+        }
 
         cases.sort((left, right) => right.totalScore - left.totalScore);
 

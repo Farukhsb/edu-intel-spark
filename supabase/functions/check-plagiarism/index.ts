@@ -227,8 +227,78 @@ serve(async (req) => {
     }
 
     const systemPrompt = isSingleMode
-      ? "You are an academic integrity expert specializing in detecting AI-generated content. Analyse the submission for AI-writing indicators only when the evidence is concrete. Distinguish polished student writing from genuinely suspicious machine-generated patterns. Return one flag only if there is a meaningful concern."
-      : "You are an academic integrity analyst. Compare submissions for suspicious similarity and also evaluate each for AI-generated writing patterns. Only flag concerns with concrete supporting evidence. Avoid vague accusations.";
+      ? `You are an academic integrity detection assistant integrated into an academic grading platform.
+
+Your role is to analyse submitted student assignments and identify signs that the work may have been generated or heavily assisted by artificial intelligence.
+
+IMPORTANT:
+- Never make absolute accusations.
+- Only provide a suspicion/risk score and reasoning.
+- Flag work for lecturer review if suspicion is moderate/high.
+- Base judgement on multiple indicators, not one factor alone.
+- Do not treat strong grammar, formal academic tone, or high-quality writing alone as evidence of AI use.
+- Do not assign moderate or high risk unless at least two categories show meaningful concern.
+
+Analyse the submission across the following categories:
+
+1. WRITING STYLE CONSISTENCY
+- Unnaturally perfect grammar throughout
+- Uniform sentence lengths/structures
+- Repetitive sentence openings
+- Overly polished or robotic academic tone
+- Lack of natural human imperfection/errors
+- Inconsistent style compared to expected student level
+
+2. CONTENT QUALITY / DEPTH
+- Generic or vague statements
+- Surface-level analysis lacking deep critical thought
+- Textbook-like explanations without originality
+- Over-explanation of simple concepts
+- Lack of nuanced reasoning
+- Lack of unique insight/personal interpretation
+
+3. STRUCTURAL PATTERNS
+- Overly formulaic structure
+- Paragraphs that are unnaturally symmetrical/perfectly balanced
+- Transitions that feel artificially smooth
+- Generic and reusable introduction/conclusion
+
+4. LANGUAGE / VOCABULARY
+- Vocabulary unusually advanced for academic level
+- Forced or unnatural phrasing
+- Overuse of transition words like "Furthermore", "Moreover", or "Additionally"
+- Buzzword-heavy language lacking substance
+
+5. SOURCE / CITATION ISSUES
+- Fabricated references/citations
+- Misquoted or unverifiable sources
+- Generic references without specificity
+- Weak quote analysis despite advanced referencing
+
+6. AUTHENTICITY / HUMANITY
+- Lack of personality or authentic voice
+- No evidence of creative or original thought
+- No drafting imperfections or rough reasoning
+- No personal or individual style visible
+
+SCORING MODEL:
+- Writing Style Consistency: 20%
+- Content Quality / Depth: 20%
+- Structural Patterns: 15%
+- Language / Vocabulary: 15%
+- Citation Issues: 10%
+- Authenticity / Humanity: 20%
+
+Return a structured suspicion score only. Never state that AI was definitively used.`
+      : `You are an academic integrity analyst. Compare submissions for suspicious similarity and also evaluate each submission for AI-generated writing indicators.
+
+Rules:
+- Never make absolute accusations.
+- Only provide risk scores and evidence-based reasoning.
+- Similarity concerns must be based on substantive overlap in student-authored content.
+- AI-writing concerns must be based on multiple indicators, not a single stylistic feature.
+- Do not treat strong grammar, formal academic tone, or high-quality writing alone as evidence of AI use.
+- For AI-writing, do not assign moderate or high risk unless at least two categories show meaningful concern.`;
 
     let userPrompt: string;
     const userContent: Array<Record<string, string>> = [];
@@ -238,20 +308,20 @@ serve(async (req) => {
       const content = fileContents[0];
       const isPdf = isPdfSubmission(sub, content);
 
-      userPrompt = `Analyze this student submission for signs of AI-generated content:
+      userPrompt = `Analyse this student submission for signs of AI-generated or AI-assisted writing.
 
 Student: ${sub.student_name || "Anonymous"}
 File: ${sub.file_name}
 
 ${!isPdf ? `Content:\n${content.substring(0, 15000)}` : "The PDF document is attached."}
 
-Check for:
-1. AI-generated writing patterns (ChatGPT, Claude, etc.)
-2. Unusual structural uniformity
-3. Lack of personal voice or original thinking
-4. Generic or templated examples
-5. Inconsistent depth (some sections very detailed, others shallow)
-6. Perfect grammar without natural student writing patterns
+Apply the scoring model exactly and review:
+- Writing Style Consistency
+- Content Quality / Depth
+- Structural Patterns
+- Language / Vocabulary
+- Citation Issues
+- Authenticity / Humanity
 
 Return a single structured flag only if there is a genuine integrity concern. If the submission looks normal, return no flags.`;
 
@@ -277,7 +347,7 @@ Return a single structured flag only if there is a genuine integrity concern. If
         return `${i + 1}. ${s.student_name} - ${s.file_name} (submission id: ${s.id})\nReadable text excerpt:\n${excerpt}`;
       });
 
-      userPrompt = `Analyze these ${submissions.length} student submissions for the same assignment. Check for suspicious similarity between submissions and for AI-generated writing patterns in each one.
+      userPrompt = `Analyse these ${submissions.length} student submissions for the same assignment. Check for suspicious similarity between submissions and for AI-generated writing patterns in each one.
 
 Important rules:
 1. Compare student-authored content only.
@@ -285,6 +355,14 @@ Important rules:
 3. Only flag similarity when the substantive written answer content overlaps suspiciously.
 4. Only flag AI-writing when the prose itself shows meaningful machine-generated patterns.
 5. If the files are PDFs, use the attached PDF documents as the primary source of truth.
+6. For AI-writing suspicion, use the structured scoring model:
+   - Writing Style Consistency: 20%
+   - Content Quality / Depth: 20%
+   - Structural Patterns: 15%
+   - Language / Vocabulary: 15%
+   - Citation Issues: 10%
+   - Authenticity / Humanity: 20%
+7. Do not assign moderate or high AI-writing risk unless at least two categories show meaningful concern.
 
 Submissions:
 ${submissionSummaries.join("\n\n---\n\n")}
