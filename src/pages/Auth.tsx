@@ -99,7 +99,23 @@ const Auth = () => {
     }
     setLoading(true);
     try {
-      await signUp(signupEmail, signupPassword, signupName, signupRole, signupCohort, signupDepartment);
+      const result = await signUp(
+        signupEmail,
+        signupPassword,
+        signupName,
+        signupRole,
+        signupCohort,
+        signupDepartment
+      );
+
+      if (result.requiresEmailConfirmation) {
+        toast({
+          title: "Account created",
+          description: "Please check your email to confirm your account before signing in.",
+        });
+        return;
+      }
+
       toast({ title: "Account created!", description: "Welcome to GradeAI." });
       navigate("/dashboard");
     } catch (err: any) {

@@ -23,7 +23,14 @@ interface AuthContextType {
   loading: boolean;
   profileError: string | null;
   isDemo: boolean;
-  signUp: (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: AppRole,
+    cohortId?: string,
+    departmentId?: string
+  ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -134,7 +141,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, [isDemo, location.pathname, navigate]);
 
-  const signUp = async (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: AppRole,
+    cohortId?: string,
+    departmentId?: string
+  ) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters");
 
     const { data, error } = await supabase.auth.signUp({
@@ -152,15 +166,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (error) throw error;
     if (!data.user) throw new Error("Signup failed");
 
-    setProfile({
-      id: data.user.id,
-      full_name: fullName,
-      email,
-      role,
-      avatar_url: null,
-      cohort_id: role === "student" ? (cohortId || null) : null,
-      department_id: departmentId || null,
-    });
+    const hasActiveSession = Boolean(data.session);
+
+    if (hasActiveSession) {
+      setProfile({
+        id: data.user.id,
+        full_name: fullName,
+        email,
+        role,
+        avatar_url: null,
+        cohort_id: role === "student" ? (cohortId || null) : null,
+        department_id: departmentId || null,
+      });
+    }
+
+    return {
+      requiresEmailConfirmation: !hasActiveSession,
+    };
   };
 
   const signIn = async (email: string, password: string) => {
