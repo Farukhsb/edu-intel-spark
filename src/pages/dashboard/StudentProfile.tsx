@@ -90,6 +90,7 @@ interface StudentInsightData {
   name: string;
   email: string | null;
   studentId: string;
+  studentRecordId: string | null;
   modules: string[];
   averageGrade: number | null;
   latestGrade: number | null;
@@ -134,6 +135,7 @@ const StudentProfile = () => {
           name: "David Lee",
           email: "david.lee@example.edu",
           studentId: decodedStudentId,
+          studentRecordId: decodedStudentId,
           modules: ["CS301", "CS205"],
           averageGrade: 38,
           latestGrade: 32,
@@ -267,6 +269,8 @@ const StudentProfile = () => {
           name: trajectory.name,
           email: trajectory.email,
           studentId: trajectory.studentId,
+          studentRecordId:
+            sortedSubmissions.find((submission) => submission.student_id)?.student_id || null,
           modules: Array.from(
             new Set(
               matchingSubmissions
@@ -325,7 +329,7 @@ const StudentProfile = () => {
   });
 
   useEffect(() => {
-    if (!user?.id || !student?.studentId || isDemo) return;
+    if (!user?.id || !student?.studentRecordId || isDemo) return;
 
     const loadInterventions = async () => {
       const supabaseClient = supabase as any;
@@ -333,7 +337,7 @@ const StudentProfile = () => {
         .from("student_interventions")
         .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, priority, title, notes, follow_up_date, assignment_id, created_at, updated_at")
         .eq("lecturer_id", user.id)
-        .eq("student_id", student.studentId)
+        .eq("student_id", student.studentRecordId)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -346,10 +350,10 @@ const StudentProfile = () => {
     };
 
     void loadInterventions();
-  }, [isDemo, student?.studentId, user?.id]);
+  }, [isDemo, student?.studentRecordId, user?.id]);
 
   const handleAddIntervention = async () => {
-    if (!interventionNote.trim() || !student || !user?.id) return;
+    if (!interventionNote.trim() || !student || !user?.id || !student.studentRecordId) return;
 
     if (isDemo) {
       const nextEntry: InterventionEntry = {
@@ -372,7 +376,7 @@ const StudentProfile = () => {
     const supabaseClient = supabase as any;
     const payload = {
       lecturer_id: user.id,
-      student_id: student.studentId,
+      student_id: student.studentRecordId,
       student_name: student.name,
       student_email: student.email,
       intervention_type: interventionType,
