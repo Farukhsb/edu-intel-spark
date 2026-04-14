@@ -14,6 +14,10 @@ The product is designed as an academic workflow system rather than a black-box g
 Live deployment:
 - `https://edu-spark.pages.dev`
 
+## Screenshots
+
+![Overview Dashboard](docs/screenshots/overview-dashboard.jpg)
+
 ## Product Scope
 
 ### Lecturer Workflow
