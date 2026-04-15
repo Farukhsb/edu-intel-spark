@@ -33,6 +33,24 @@ interface ExportData {
   classification: string;
 }
 
+interface AssignmentRow {
+  id: string;
+  title: string;
+  module_code: string | null;
+}
+
+interface GradeRow {
+  submission_id: string;
+  ai_score: number | null;
+  lecturer_score: number | null;
+  final_score: number | null;
+  ai_feedback: string | null;
+  lecturer_feedback: string | null;
+  final_feedback: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+}
+
 const getClassification = (score: number | null): string => {
   if (score == null) return "—";
   if (score >= 70) return "1st";
@@ -77,10 +95,10 @@ const ExternalExaminerExport = () => {
         const userMap: Record<string, string> = {};
         (profilesRaw || []).forEach(d => { userMap[d.id] = d.full_name || d.email || "Unknown"; });
 
-        const gradeMap: Record<string, any> = {};
+        const gradeMap: Record<string, GradeRow> = {};
         (gradesRaw || []).forEach(d => { gradeMap[d.submission_id] = d; });
 
-        const assignmentMap: Record<string, any> = {};
+        const assignmentMap: Record<string, AssignmentRow> = {};
         (assignmentsRaw || []).forEach(d => { assignmentMap[d.id] = d; });
 
         const data: ExportData[] = (subsRaw || []).map(d => {
@@ -158,7 +176,7 @@ const ExternalExaminerExport = () => {
           `Moderation Coverage: ${filteredData.length > 0 ? Math.round((moderated / filteredData.length) * 100) : 0}% (${moderated}/${filteredData.length})`,
           "",
           "GRADE DISTRIBUTION",
-          `1st (≥70%): ${filteredData.filter(d => d.classification === "1st").length}`,
+          `1st (>=70%): ${filteredData.filter(d => d.classification === "1st").length}`,
           `2:1 (60-69%): ${filteredData.filter(d => d.classification === "2:1").length}`,
           `2:2 (50-59%): ${filteredData.filter(d => d.classification === "2:2").length}`,
           `3rd (40-49%): ${filteredData.filter(d => d.classification === "3rd").length}`,

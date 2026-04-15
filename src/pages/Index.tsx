@@ -34,8 +34,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
@@ -50,58 +49,56 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
         <div className="relative mx-auto max-w-6xl px-4 py-20 lg:py-32">
-          <div className="mx-auto max-w-3xl text-center space-y-6">
-            <Badge variant="secondary" className="text-sm px-4 py-1.5">
+          <div className="mx-auto max-w-3xl space-y-6 text-center">
+            <Badge variant="secondary" className="px-4 py-1.5 text-sm">
               <Sparkles className="mr-1.5 h-3.5 w-3.5" /> AI-Powered Academic Intelligence
             </Badge>
             <h1 className="font-display text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
               Smarter Marking.{" "}
               <span className="text-primary">Deeper Insights.</span>
             </h1>
-            <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              GradeAI transforms academic assessment with AI-powered grading, real-time analytics, 
-              and personalised student feedback — helping lecturers mark faster and students learn better.
+            <p className="mx-auto max-w-2xl text-lg leading-relaxed text-muted-foreground">
+              GradeAI transforms academic assessment with AI-powered grading, real-time analytics,
+              and personalised student feedback, helping lecturers mark faster and students learn better.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-              <Button size="lg" onClick={() => navigate("/auth")} className="text-base px-8">
+            <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
+              <Button size="lg" onClick={() => navigate("/auth")} className="px-8 text-base">
                 Get Started <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button size="lg" variant="outline" onClick={() => handleDemo("lecturer")} className="text-base px-8">
+              <Button size="lg" variant="outline" onClick={() => handleDemo("lecturer")} className="px-8 text-base">
                 <Zap className="mr-2 h-4 w-4" /> Try Demo
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">No credit card required · Free for educators</p>
+            <p className="text-xs text-muted-foreground">No credit card required - Free for educators</p>
           </div>
         </div>
       </section>
 
-      {/* Demo Mode Cards */}
       <section className="mx-auto max-w-6xl px-4 py-16">
-        <div className="text-center mb-10">
+        <div className="mb-10 text-center">
           <h2 className="font-display text-2xl font-bold">Explore the Platform</h2>
-          <p className="text-muted-foreground mt-2">Try a live demo — no sign-up required</p>
+          <p className="mt-2 text-muted-foreground">Try a live demo - no sign-up required</p>
         </div>
-        <div className="grid gap-6 sm:grid-cols-2 max-w-2xl mx-auto">
-          <Card className="group cursor-pointer hover:shadow-lg transition-all hover:border-primary/40" onClick={() => handleDemo("lecturer")}>
-            <CardContent className="p-6 text-center space-y-3">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
+        <div className="mx-auto grid max-w-2xl gap-6 sm:grid-cols-2">
+          <Card className="group cursor-pointer transition-all hover:border-primary/40 hover:shadow-lg" onClick={() => handleDemo("lecturer")}>
+            <CardContent className="space-y-3 p-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 transition-colors group-hover:bg-primary/20">
                 <GraduationCap className="h-7 w-7 text-primary" />
               </div>
-              <h3 className="font-display font-semibold text-lg">Lecturer Demo</h3>
+              <h3 className="font-display text-lg font-semibold">Lecturer Demo</h3>
               <p className="text-sm text-muted-foreground">View analytics, manage assignments, AI-grade submissions</p>
               <Badge variant="outline">Demo Mode</Badge>
             </CardContent>
           </Card>
-          <Card className="group cursor-pointer hover:shadow-lg transition-all hover:border-primary/40" onClick={() => handleDemo("student")}>
-            <CardContent className="p-6 text-center space-y-3">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/10 group-hover:bg-secondary/20 transition-colors">
+          <Card className="group cursor-pointer transition-all hover:border-primary/40 hover:shadow-lg" onClick={() => handleDemo("student")}>
+            <CardContent className="space-y-3 p-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/10 transition-colors group-hover:bg-secondary/20">
                 <Users className="h-7 w-7 text-secondary" />
               </div>
-              <h3 className="font-display font-semibold text-lg">Student Demo</h3>
+              <h3 className="font-display text-lg font-semibold">Student Demo</h3>
               <p className="text-sm text-muted-foreground">View grades, chat with AI assistant, improvement plans</p>
               <Badge variant="outline">Demo Mode</Badge>
             </CardContent>
@@ -109,24 +106,23 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Features Grid */}
       <section className="bg-muted/30 py-20">
         <div className="mx-auto max-w-6xl px-4">
-          <div className="text-center mb-12">
+          <div className="mb-12 text-center">
             <h2 className="font-display text-3xl font-bold">Everything You Need</h2>
-            <p className="text-muted-foreground mt-2 max-w-xl mx-auto">
+            <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
               A comprehensive platform for AI-powered academic assessment, analytics, and student support.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f, i) => (
-              <Card key={i} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6 space-y-3">
+            {features.map((feature) => (
+              <Card key={feature.title} className="transition-shadow hover:shadow-md">
+                <CardContent className="space-y-3 p-6">
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
-                    <f.icon className="h-5 w-5 text-primary" />
+                    <feature.icon className="h-5 w-5 text-primary" />
                   </div>
-                  <h3 className="font-display font-semibold">{f.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
+                  <h3 className="font-display font-semibold">{feature.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{feature.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -134,21 +130,20 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Benefits */}
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
             <div className="space-y-6">
               <h2 className="font-display text-3xl font-bold">Why Educators Choose GradeAI</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                Built by academics, for academics. GradeAI understands the nuances of university 
+              <p className="leading-relaxed text-muted-foreground">
+                Built by academics, for academics. GradeAI understands the nuances of university
                 marking, rubric alignment, and the importance of consistent, constructive feedback.
               </p>
               <div className="space-y-3">
-                {benefits.map((b, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-success shrink-0" />
-                    <span className="text-sm font-medium">{b}</span>
+                {benefits.map((benefit) => (
+                  <div key={benefit} className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 shrink-0 text-success" />
+                    <span className="text-sm font-medium">{benefit}</span>
                   </div>
                 ))}
               </div>
@@ -159,11 +154,11 @@ const Index = () => {
                 { value: "98%", label: "Feedback Accuracy" },
                 { value: "3x", label: "Faster Turnaround" },
                 { value: "24/7", label: "AI Available" },
-              ].map((s, i) => (
-                <Card key={i}>
+              ].map((stat) => (
+                <Card key={stat.label}>
                   <CardContent className="p-6 text-center">
-                    <p className="text-3xl font-bold font-display text-primary">{s.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+                    <p className="font-display text-3xl font-bold text-primary">{stat.value}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -172,14 +167,13 @@ const Index = () => {
         </div>
       </section>
 
-      {/* CTA */}
       <section className="bg-primary/5 py-20">
-        <div className="mx-auto max-w-2xl px-4 text-center space-y-6">
+        <div className="mx-auto max-w-2xl space-y-6 px-4 text-center">
           <h2 className="font-display text-3xl font-bold">Ready to Transform Your Assessment?</h2>
           <p className="text-muted-foreground">
             Join educators who are already saving hours on marking while providing better feedback.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" onClick={() => navigate("/auth")}>
               Start Free <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -190,14 +184,13 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="border-t py-8">
-        <div className="mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row">
           <div className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
             <span className="font-display font-semibold">GradeAI</span>
           </div>
-          <p className="text-xs text-muted-foreground">© 2025 GradeAI. AI-Powered Academic Intelligence.</p>
+          <p className="text-xs text-muted-foreground">(c) 2025 GradeAI. AI-Powered Academic Intelligence.</p>
         </div>
       </footer>
     </div>

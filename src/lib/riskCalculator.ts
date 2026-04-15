@@ -1,49 +1,49 @@
+interface RiskSubmission {
+  id: string;
+}
+
+interface RiskGrade {
+  final_score: number | null;
+  ai_score: number | null;
+}
+
 export function calculateRiskScore({
   submissions,
   grades,
-  totalAssignments
+  totalAssignments,
 }: {
-  submissions: any[];
-  grades: any[];
+  submissions: RiskSubmission[];
+  grades: RiskGrade[];
   totalAssignments: number;
 }) {
-  // 1. Submission rate
   const submissionRate = submissions.length / totalAssignments;
-  let submissionRisk =
-    submissionRate >= 0.9 ? 10 :
-    submissionRate >= 0.7 ? 40 : 80;
+  const submissionRisk = submissionRate >= 0.9 ? 10 : submissionRate >= 0.7 ? 40 : 80;
 
-  // 2. Average grade
   const scores = grades
-    .map(g => g.final_score ?? g.ai_score)
-    .filter(Boolean);
+    .map((grade) => grade.final_score ?? grade.ai_score)
+    .filter((score): score is number => score != null);
 
   const avg = scores.length
-    ? scores.reduce((a, b) => a + b, 0) / scores.length
+    ? scores.reduce((total, score) => total + score, 0) / scores.length
     : 0;
 
-  let avgRisk =
-    avg >= 70 ? 20 :
-    avg >= 50 ? 50 : 80;
+  const avgRisk = avg >= 70 ? 20 : avg >= 50 ? 50 : 80;
 
-  // 3. Grade trend (simple but valid)
   let trendRisk = 50;
   if (scores.length >= 4) {
     const mid = Math.floor(scores.length / 2);
     const first = scores.slice(0, mid);
     const last = scores.slice(mid);
 
-    const firstAvg = first.reduce((a, b) => a + b, 0) / first.length;
-    const lastAvg = last.reduce((a, b) => a + b, 0) / last.length;
+    const firstAvg = first.reduce((total, score) => total + score, 0) / first.length;
+    const lastAvg = last.reduce((total, score) => total + score, 0) / last.length;
 
     if (lastAvg > firstAvg) trendRisk = 20;
     else if (lastAvg < firstAvg) trendRisk = 80;
   }
 
-  // 4. Completion rate (same as submission for now — acceptable)
-  let completionRisk = submissionRisk;
+  const completionRisk = submissionRisk;
 
-  // Final weighted score
   const riskScore =
     submissionRisk * 0.3 +
     trendRisk * 0.25 +

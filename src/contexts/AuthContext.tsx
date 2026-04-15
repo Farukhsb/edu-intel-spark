@@ -67,6 +67,12 @@ const DEMO_STUDENT_PROFILE: Profile = {
   department_id: "Computer Science",
 };
 
+const createDemoUser = (profile: Profile | null): User =>
+  ({
+    id: profile?.id ?? "demo-user",
+    email: profile?.email ?? undefined,
+  }) as unknown as User;
+
 const getPasswordResetRedirectUrl = () => {
   const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
@@ -225,7 +231,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <AuthContext.Provider
       value={{
-        user: isDemo ? ({ id: profile?.id, email: profile?.email } as any) : user,
+        user: isDemo ? createDemoUser(profile) : user,
         profile,
         role: profile?.role ?? null,
         loading,

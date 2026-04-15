@@ -42,6 +42,19 @@ interface TEFIndicator {
   detail: string;
 }
 
+interface ProgrammeReport {
+  code: string;
+  submissions: number;
+  graded: number;
+  avg: number;
+  passRate: number;
+  firstClass: number;
+  twoOne: number;
+  twoTwo: number;
+  third: number;
+  fail: number;
+}
+
 const tefRating = (score: number): "gold" | "silver" | "bronze" | "pending" =>
   score >= 80 ? "gold" : score >= 65 ? "silver" : score >= 50 ? "bronze" : "pending";
 
@@ -87,7 +100,7 @@ const AccreditationDashboard = () => {
         const gradedPct = Math.min(Math.round((grades.length / Math.max(subs.length, 1)) * 100), 100);
 
         // Feedback turnaround
-        let turnaroundDays: number[] = [];
+        const turnaroundDays: number[] = [];
         const gradeMap: Record<string, any> = {};
         grades.forEach(d => { gradeMap[d.submission_id] = d; });
         subs.forEach(d => {
@@ -122,7 +135,7 @@ const AccreditationDashboard = () => {
           },
           {
             id: "feedback-turnaround", category: "Feedback Quality",
-            metric: "Feedback Turnaround (≤15 days)", value: turnaroundDays.length > 0 ? Math.round((compliantCount / turnaroundDays.length) * 100) : 0, target: 90,
+            metric: "Feedback Turnaround (<=15 days)", value: turnaroundDays.length > 0 ? Math.round((compliantCount / turnaroundDays.length) * 100) : 0, target: 90,
             status: compliantCount >= turnaroundDays.length * 0.9 ? "met" : compliantCount >= turnaroundDays.length * 0.7 ? "at-risk" : "below",
             detail: `${compliantCount}/${turnaroundDays.length} submissions graded within 15 days (avg: ${avgTurnaround} days)`,
           },
@@ -136,7 +149,7 @@ const AccreditationDashboard = () => {
             id: "pass-rate", category: "Student Outcomes",
             metric: "Module Pass Rate", value: passRate, target: 75,
             status: passRate >= 75 ? "met" : passRate >= 65 ? "at-risk" : "below",
-            detail: `${scores.filter(s => s >= 40).length}/${scores.length} students passed (≥40%)`,
+            detail: `${scores.filter(s => s >= 40).length}/${scores.length} students passed (>=40%)`,
           },
           {
             id: "completion", category: "Student Engagement",
@@ -555,7 +568,7 @@ const AccreditationDashboard = () => {
 
 const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
   const [loading, setLoading] = useState(!isDemo);
-  const [programmes, setProgrammes] = useState<any[]>([]);
+  const [programmes, setProgrammes] = useState<ProgrammeReport[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {

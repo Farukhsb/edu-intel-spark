@@ -162,7 +162,7 @@ const Assignments = () => {
         due_date: dueDate || null,
         lecturer_id: user.id,
         status: "draft" as const,
-        rubric: (rubric.length > 0 ? rubric : null) as any,
+        rubric: rubric.length > 0 ? rubric : null,
       }]);
       if (error) throw error;
       toast.success("Assignment created");

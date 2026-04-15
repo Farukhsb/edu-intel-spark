@@ -16,8 +16,24 @@ interface StudentGrade {
   feedback: string | null;
   status: string;
   submittedAt: string;
-  breakdown: any[] | null;
+  breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
   fileUrl: string | null;
+}
+
+interface AssignmentRow {
+  id: string;
+  title: string;
+  module_code: string | null;
+  max_score: number | null;
+}
+
+interface GradeRow {
+  submission_id: string;
+  final_score: number | null;
+  ai_score: number | null;
+  final_feedback: string | null;
+  ai_feedback: string | null;
+  ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
 }
 
 const DEMO_GRADES: StudentGrade[] = [
@@ -59,10 +75,10 @@ const StudentGrades = () => {
 
         const gradeData = gradeRes.data || [];
 
-        const assignmentMap: Record<string, any> = {};
+        const assignmentMap: Record<string, AssignmentRow> = {};
         (assignRes.data || []).forEach(a => { assignmentMap[a.id] = a; });
 
-        const gradeMap: Record<string, any> = {};
+        const gradeMap: Record<string, GradeRow> = {};
         gradeData.forEach(g => { gradeMap[g.submission_id] = g; });
 
         const studentGrades: StudentGrade[] = allSubs.map(s => {
@@ -101,7 +117,7 @@ const StudentGrades = () => {
     };
 
     fetchGrades();
-  }, [user]);
+  }, [user, isDemo]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-12">
@@ -187,7 +203,7 @@ const StudentGrades = () => {
                 )}
                 {g.breakdown && Array.isArray(g.breakdown) && g.breakdown.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {g.breakdown.map((b: any, i: number) => (
+                    {g.breakdown.map((b, i: number) => (
                       <span key={i} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">
                         {b.criterion}: {b.score}/{b.max_score}
                       </span>

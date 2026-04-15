@@ -27,6 +27,9 @@ const getErrorMessage = (message: string): string => {
   return message || "Something went wrong. Please try again.";
 };
 
+const getErrorFromUnknown = (error: unknown) =>
+  error instanceof Error ? error.message : "Something went wrong. Please try again.";
+
 const getPasswordStrength = (password: string): { score: number; label: string; color: string } => {
   let score = 0;
   if (password.length >= 8) score += 25;
@@ -72,8 +75,8 @@ const Auth = () => {
     try {
       await signIn(loginEmail, loginPassword);
       navigate("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Login failed", description: getErrorMessage(err.message), variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Login failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -118,8 +121,8 @@ const Auth = () => {
 
       toast({ title: "Account created!", description: "Welcome to GradeAI." });
       navigate("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Signup failed", description: getErrorMessage(err.message), variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Signup failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -136,8 +139,8 @@ const Auth = () => {
       await resetPassword(resetEmail);
       toast({ title: "Reset email sent", description: "Check your inbox for a password reset link to choose a new password." });
       setShowForgotPassword(false);
-    } catch (err: any) {
-      toast({ title: "Reset failed", description: getErrorMessage(err.message), variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Reset failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
       setLoading(false);
     }
