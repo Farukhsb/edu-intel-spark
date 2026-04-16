@@ -17,10 +17,12 @@ export interface IntegritySnapshot {
   totalScore: number;
   aiWritingScore: number;
   similarityScore: number;
+  baselineDeviationScore?: number;
   riskLevel: "high" | "medium" | "low";
   evidence: {
     aiWriting: IntegrityEvidenceItem[];
     similarity: IntegrityEvidenceItem[];
+    baselineDeviation?: IntegrityEvidenceItem[];
   };
   flags: string[];
 }

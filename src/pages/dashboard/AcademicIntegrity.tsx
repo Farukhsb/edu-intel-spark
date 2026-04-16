@@ -47,9 +47,11 @@ interface FlaggedCase {
   totalScore: number;
   aiWritingScore: number;
   similarityScore: number;
+  baselineDeviationScore: number;
   evidence: {
     aiWriting: IntegrityEvidenceItem[];
     similarity: IntegrityEvidenceItem[];
+    baselineDeviation: IntegrityEvidenceItem[];
   };
   flags: string[];
   decision: IntegrityDecision;
@@ -69,9 +71,10 @@ const decisionOptions: IntegrityDecision[] = [
   "misconduct-concern",
 ];
 
-const getReviewType = (item: Pick<FlaggedCase, "aiWritingScore" | "similarityScore">) => {
+const getReviewType = (item: Pick<FlaggedCase, "aiWritingScore" | "similarityScore" | "baselineDeviationScore">) => {
   if (item.aiWritingScore > 0 && item.similarityScore > 0) return "mixed";
   if (item.aiWritingScore > 0) return "ai-writing-suspicion";
+  if (item.baselineDeviationScore > 0 && item.similarityScore === 0) return "baseline-deviation";
   return "similarity-plagiarism-suspicion";
 };
 
@@ -158,7 +161,12 @@ const AcademicIntegrity = () => {
               totalScore: snapshot?.totalScore || 0,
               aiWritingScore: snapshot?.aiWritingScore || 0,
               similarityScore: snapshot?.similarityScore || 0,
-              evidence: snapshot?.evidence || { aiWriting: [], similarity: [] },
+              baselineDeviationScore: snapshot?.baselineDeviationScore || 0,
+              evidence: {
+                aiWriting: snapshot?.evidence?.aiWriting || [],
+                similarity: snapshot?.evidence?.similarity || [],
+                baselineDeviation: snapshot?.evidence?.baselineDeviation || [],
+              },
               flags: snapshot?.flags || [],
               decision: (review.decision as IntegrityDecision) || "pending",
               history: payload.history,
@@ -224,8 +232,9 @@ const AcademicIntegrity = () => {
     const evidenceSummary = [
       ...item.evidence.aiWriting.map((entry) => `${entry.label}: ${entry.value}`),
       ...item.evidence.similarity.map((entry) => `${entry.label}: ${entry.value}`),
+      ...item.evidence.baselineDeviation.map((entry) => `${entry.label}: ${entry.value}`),
     ]
-      .slice(0, 6)
+      .slice(0, 8)
       .join("\n\n");
 
     setSavingId(item.submissionId);
@@ -240,6 +249,7 @@ const AcademicIntegrity = () => {
           totalScore: item.totalScore,
           aiWritingScore: item.aiWritingScore,
           similarityScore: item.similarityScore,
+          baselineDeviationScore: item.baselineDeviationScore,
           riskLevel: item.riskLevel,
           evidence: item.evidence,
           flags: item.flags,
@@ -274,6 +284,7 @@ const AcademicIntegrity = () => {
     return {
       aiWriting: flagged.filter((item) => item.aiWritingScore >= 40).length,
       similarity: flagged.filter((item) => item.similarityScore >= 40).length,
+      baselineDeviation: flagged.filter((item) => item.baselineDeviationScore >= 40).length,
       pending: flagged.filter((item) => item.decision === "pending").length,
     };
   }, [flagged]);
@@ -304,7 +315,7 @@ const AcademicIntegrity = () => {
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">AI-writing suspicion</p>
@@ -315,6 +326,12 @@ const AcademicIntegrity = () => {
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Similarity/plagiarism suspicion</p>
             <p className="mt-2 text-2xl font-semibold">{totals.similarity}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Writing baseline deviation</p>
+            <p className="mt-2 text-2xl font-semibold">{totals.baselineDeviation}</p>
           </CardContent>
         </Card>
         <Card>
@@ -392,11 +409,12 @@ const AcademicIntegrity = () => {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-4">
                     {[
                       { label: "Overall case score", value: item.totalScore },
                       { label: "AI-writing suspicion", value: item.aiWritingScore },
                       { label: "Similarity suspicion", value: item.similarityScore },
+                      { label: "Baseline deviation", value: item.baselineDeviationScore },
                     ].map((metric) => (
                       <div key={metric.label} className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
@@ -410,7 +428,7 @@ const AcademicIntegrity = () => {
 
                   {expanded && (
                     <div className="mt-4 space-y-4 rounded-xl border bg-muted/20 p-4">
-                      <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="grid gap-4 lg:grid-cols-3">
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
                             <Bot className="h-4 w-4 text-primary" />
@@ -441,6 +459,26 @@ const AcademicIntegrity = () => {
                           ) : (
                             item.evidence.similarity.map((evidence) => (
                               <div key={`${item.submissionId}-${evidence.label}`} className="rounded-lg border bg-background p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-sm font-medium">{evidence.label}</p>
+                                  <Badge variant="outline">{evidence.score}%</Badge>
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">{evidence.value}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-primary" />
+                            <p className="text-sm font-medium">Writing baseline evidence</p>
+                          </div>
+                          {item.evidence.baselineDeviation.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No strong baseline deviation recorded.</p>
+                          ) : (
+                            item.evidence.baselineDeviation.map((evidence) => (
+                              <div key={`${item.submissionId}-${evidence.label}-baseline`} className="rounded-lg border bg-background p-3">
                                 <div className="flex items-center justify-between gap-3">
                                   <p className="text-sm font-medium">{evidence.label}</p>
                                   <Badge variant="outline">{evidence.score}%</Badge>

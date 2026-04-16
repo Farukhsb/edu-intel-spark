@@ -43,13 +43,6 @@ import {
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
-import {
-  clampRiskLevel,
-  parseStoredReviewPayload,
-  serializeReviewPayload,
-  type IntegrityEvidenceItem,
-  type IntegritySnapshot,
-} from "@/lib/integrityReviews";
 
 type SubmissionStatus =
   | "submitted"
@@ -78,6 +71,9 @@ interface Grade {
   ai_score: number | null;
   ai_feedback: string | null;
   ai_breakdown: any[] | null;
+  assignment_type?: string | null;
+  grading_confidence?: number | null;
+  grading_metadata?: Record<string, unknown> | null;
   lecturer_score: number | null;
   lecturer_feedback: string | null;
   final_score: number | null;
@@ -103,19 +99,14 @@ interface PlagiarismFlag {
   student_b: string;
   similarity_score: number;
   ai_suspicion_score?: number;
+  baseline_deviation_score?: number;
+  total_risk_score?: number;
   reason: string;
   evidence_summary?: string;
   matched_excerpt?: string;
   recommended_action?: "clear" | "review" | "investigate";
-  integrity_type?: "similarity" | "ai-writing" | "mixed";
+  integrity_type?: "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
   severity: string;
-}
-
-interface PersistedReviewRow {
-  submission_id: string;
-  decision: string;
-  lecturer_note: string | null;
-  updated_at: string;
 }
 
 const statusConfig: Record<
@@ -263,6 +254,9 @@ const AssignmentDetail = () => {
           ai_score: g.ai_score,
           ai_feedback: g.ai_feedback,
           ai_breakdown: g.ai_breakdown as any[],
+          assignment_type: g.assignment_type,
+          grading_confidence: g.grading_confidence,
+          grading_metadata: (g.grading_metadata as Record<string, unknown> | null) ?? null,
           lecturer_score: g.lecturer_score,
           lecturer_feedback: g.lecturer_feedback,
           final_score: g.final_score,
@@ -510,12 +504,15 @@ const AssignmentDetail = () => {
 
         if (r.success) {
           try {
-            await supabase.from("grades").insert({
+            await supabase.from("grades").upsert({
               submission_id: sub.id,
               ai_score: r.score,
               ai_feedback: r.feedback,
               ai_breakdown: r.breakdown || [],
-            });
+              assignment_type: r.assignmentType ?? null,
+              grading_confidence: r.gradingConfidence ?? null,
+              grading_metadata: r.gradingMetadata ?? {},
+            }, { onConflict: "submission_id" });
           } catch (gradeErr) {
             console.error("Failed to write grade:", gradeErr);
           }
@@ -622,153 +619,6 @@ const AssignmentDetail = () => {
       const flags = Array.isArray(data?.flags) ? (data.flags as PlagiarismFlag[]) : [];
       setPlagiarismFlags(flags);
       setPlagiarismSummary(data?.summary || "Analysis complete");
-
-      const { data: existingReviews, error: reviewsError } = await supabase
-        .from("academic_integrity_reviews")
-        .select("submission_id, decision, lecturer_note, updated_at")
-        .in("submission_id", submissions.map((submission) => submission.id))
-        .eq("lecturer_id", user!.id);
-
-      if (reviewsError) throw reviewsError;
-
-      const existingReviewMap = new Map(
-        ((existingReviews || []) as PersistedReviewRow[]).map((review) => [review.submission_id, review])
-      );
-      const snapshots = new Map<string, IntegritySnapshot>();
-
-      const ensureSnapshot = (submission: Submission) => {
-        const existing = snapshots.get(submission.id);
-        if (existing) return existing;
-        const next: IntegritySnapshot = {
-          totalScore: 0,
-          aiWritingScore: 0,
-          similarityScore: 0,
-          riskLevel: "low",
-          evidence: {
-            aiWriting: [],
-            similarity: [],
-          },
-          flags: [],
-        };
-        snapshots.set(submission.id, next);
-        return next;
-      };
-
-      flags.forEach((flag) => {
-        const submissionA = submissions.find((item) => item.id === flag.submission_a_id);
-        const submissionB = submissions.find((item) => item.id === flag.submission_b_id);
-        const aiScore = Number(flag.ai_suspicion_score) || 0;
-        const similarityScore = Number(flag.similarity_score) || 0;
-        const evidenceSummary = flag.evidence_summary || flag.reason || "Potential integrity concern detected.";
-        const matchedExcerpt = flag.matched_excerpt ? String(flag.matched_excerpt) : "";
-        const actionLabel = buildRecommendedActionLabel(flag.recommended_action);
-
-        const applyFlagToSubmission = (
-          submission: Submission | undefined,
-          counterpart: Submission | undefined
-        ) => {
-          if (!submission) return;
-          const snapshot = ensureSnapshot(submission);
-          snapshot.aiWritingScore = Math.max(snapshot.aiWritingScore, aiScore);
-          snapshot.similarityScore = Math.max(snapshot.similarityScore, similarityScore);
-          snapshot.totalScore = Math.max(snapshot.totalScore, aiScore, similarityScore);
-          snapshot.riskLevel = clampRiskLevel(snapshot.totalScore);
-
-          if (
-            aiScore > 0 &&
-            !snapshot.evidence.aiWriting.some((entry) => entry.value === evidenceSummary)
-          ) {
-            snapshot.evidence.aiWriting.push({
-              label: "AI-writing analysis",
-              value: evidenceSummary,
-              score: aiScore,
-            });
-          }
-
-          if (similarityScore > 0 && counterpart && counterpart.id !== submission.id) {
-            const similarityLabel = `Compared with ${counterpart.student_name || counterpart.student_email || "peer submission"}`;
-            snapshot.evidence.similarity.push({
-              label: similarityLabel,
-              value: evidenceSummary,
-              score: similarityScore,
-            });
-            if (matchedExcerpt) {
-              snapshot.evidence.similarity.push({
-                label: `${similarityLabel} excerpt`,
-                value: matchedExcerpt,
-                score: similarityScore,
-              });
-            }
-          }
-
-          snapshot.flags = Array.from(
-            new Set([
-              ...snapshot.flags,
-              flag.integrity_type === "mixed"
-                ? "Similarity and AI-writing concern"
-                : flag.integrity_type === "ai-writing"
-                  ? "AI-writing concern"
-                  : "Similarity concern",
-              actionLabel,
-            ])
-          );
-        };
-
-        applyFlagToSubmission(submissionA, submissionB);
-        if (submissionB && submissionB.id !== submissionA?.id) {
-          applyFlagToSubmission(submissionB, submissionA);
-        }
-      });
-
-      const reviewUpserts = submissions
-        .map((submission) => {
-          const existingReview = existingReviewMap.get(submission.id);
-          const parsedReview = existingReview
-            ? parseStoredReviewPayload(existingReview)
-            : { latestNote: "", history: [], integritySnapshot: null };
-          const snapshot = snapshots.get(submission.id) || null;
-
-          if (!snapshot && !existingReview) {
-            return null;
-          }
-
-          return {
-            submission_id: submission.id,
-            lecturer_id: user!.id,
-            review_type:
-              snapshot && snapshot.aiWritingScore > 0 && snapshot.similarityScore > 0
-                ? "mixed"
-                : snapshot && snapshot.aiWritingScore > 0
-                  ? "ai-writing-suspicion"
-                  : "similarity-plagiarism-suspicion",
-            decision: existingReview?.decision || "pending",
-            evidence_summary:
-              snapshot
-                ? [
-                    ...snapshot.evidence.aiWriting.map((entry: IntegrityEvidenceItem) => `${entry.label}: ${entry.value}`),
-                    ...snapshot.evidence.similarity.map((entry: IntegrityEvidenceItem) => `${entry.label}: ${entry.value}`),
-                  ]
-                    .slice(0, 6)
-                    .join("\n\n") || null
-                : null,
-            lecturer_note: serializeReviewPayload(
-              parsedReview.latestNote,
-              parsedReview.history,
-              snapshot
-            ),
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => row !== null);
-
-      if (reviewUpserts.length > 0) {
-        const { error: persistError } = await supabase
-          .from("academic_integrity_reviews")
-          .upsert(reviewUpserts, { onConflict: "submission_id,lecturer_id" });
-
-        if (persistError) {
-          throw persistError;
-        }
-      }
 
       if (flags.length === 0) toast.success("No suspicious similarities found");
       else toast.warning(`${flags.length} potential issue(s) flagged`);
@@ -1264,9 +1114,10 @@ Please log in to review the released grade and feedback.`,
 
                               {grade?.ai_breakdown && Array.isArray(grade.ai_breakdown) && grade.ai_breakdown.length > 0 && (
                                 <div className="flex flex-wrap gap-1 pt-1">
-                                  {grade.ai_breakdown.map((b: any, i: number) => (
-                                    <span key={i} className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
+                          {grade.ai_breakdown.map((b: any, i: number) => (
+                            <span key={i} className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
                                       {b.criterion}: {b.score}/{b.max_score}
+                                      {typeof b.confidence_score === "number" ? ` • c${Math.round(b.confidence_score * 100)}%` : ""}
                                     </span>
                                   ))}
                                 </div>
@@ -1284,6 +1135,11 @@ Please log in to review the released grade and feedback.`,
                                 <span className="text-sm font-bold font-display">
                                   {grade.final_score ?? grade.lecturer_score ?? grade.ai_score}/{assignment.max_score}
                                 </span>
+                              )}
+                              {grade?.assignment_type && (
+                                <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                  {grade.assignment_type}
+                                </Badge>
                               )}
                               <Badge variant={sc.variant as any} className={`text-xs ${sc.tone}`}>
                                 <StatusIcon className="mr-1 h-3 w-3" />
@@ -1416,6 +1272,9 @@ Please log in to review the released grade and feedback.`,
                           {flag.student_a} ↔ {flag.student_b}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">{flag.reason}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Similarity {flag.similarity_score}% • AI {flag.ai_suspicion_score || 0}% • Baseline {flag.baseline_deviation_score || 0}% • Total risk {flag.total_risk_score || 0}%
+                        </p>
                       </div>
                       <Badge
                         variant={
@@ -1426,7 +1285,7 @@ Please log in to review the released grade and feedback.`,
                             : "outline"
                         }
                       >
-                        {flag.similarity_score}% similar
+                        {flag.total_risk_score || flag.similarity_score}% risk
                       </Badge>
                     </div>
                   </div>
@@ -1453,6 +1312,19 @@ Please log in to review the released grade and feedback.`,
                   <p className="text-lg font-bold font-display">
                     {grades[reviewSubmission.id].ai_score}/{assignment.max_score}
                   </p>
+                  <div className="flex flex-wrap gap-2">
+                    {grades[reviewSubmission.id].assignment_type && (
+                      <Badge variant="outline">{grades[reviewSubmission.id].assignment_type}</Badge>
+                    )}
+                    {typeof grades[reviewSubmission.id].grading_confidence === "number" && (
+                      <Badge variant={grades[reviewSubmission.id].grading_confidence < 0.7 ? "secondary" : "outline"}>
+                        Confidence {Math.round(grades[reviewSubmission.id].grading_confidence * 100)}%
+                      </Badge>
+                    )}
+                    {Boolean((grades[reviewSubmission.id].grading_metadata as any)?.math_analysis?.solver_signals?.length) && (
+                      <Badge variant="secondary">Solver review flagged</Badge>
+                    )}
+                  </div>
                   <p className="pt-1 text-xs font-medium text-muted-foreground">AI Feedback</p>
                   <div className="max-h-56 overflow-y-auto rounded-md bg-background/80 p-3">
                     <p className="whitespace-pre-wrap text-sm">
@@ -1464,11 +1336,25 @@ Please log in to review the released grade and feedback.`,
                       <p className="text-xs font-medium text-muted-foreground">Breakdown</p>
                       <div className="max-h-48 space-y-1 overflow-y-auto rounded-md bg-background/80 p-3">
                         {(grades[reviewSubmission.id].ai_breakdown as any[]).map((b, i) => (
-                          <div key={i} className="flex justify-between gap-3 text-xs">
-                            <span>{b.criterion}</span>
-                            <span className="font-medium">
-                              {b.score}/{b.max_score}
-                            </span>
+                          <div key={i} className="space-y-1 rounded-md border bg-background p-2 text-xs">
+                            <div className="flex justify-between gap-3">
+                              <span>{b.criterion}</span>
+                              <span className="font-medium">
+                                {b.score}/{b.max_score}
+                              </span>
+                            </div>
+                            {typeof b.confidence_score === "number" && (
+                              <p className="text-muted-foreground">
+                                Confidence {Math.round(b.confidence_score * 100)}%
+                                {b.review_required ? " • lecturer review" : ""}
+                              </p>
+                            )}
+                            {b.evidence_snippet && (
+                              <p className="text-muted-foreground">Evidence: {b.evidence_snippet}</p>
+                            )}
+                            {b.error_type && b.error_type !== "none" && (
+                              <p className="text-muted-foreground">Error type: {String(b.error_type).replace("_", " ")}</p>
+                            )}
                           </div>
                         ))}
                       </div>

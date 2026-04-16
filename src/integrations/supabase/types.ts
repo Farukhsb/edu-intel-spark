@@ -165,9 +165,12 @@ export type Database = {
           ai_breakdown: Json | null
           ai_feedback: string | null
           ai_score: number | null
+          assignment_type: string | null
           created_at: string
           final_feedback: string | null
           final_score: number | null
+          grading_confidence: number | null
+          grading_metadata: Json
           id: string
           lecturer_feedback: string | null
           lecturer_score: number | null
@@ -179,9 +182,12 @@ export type Database = {
           ai_breakdown?: Json | null
           ai_feedback?: string | null
           ai_score?: number | null
+          assignment_type?: string | null
           created_at?: string
           final_feedback?: string | null
           final_score?: number | null
+          grading_confidence?: number | null
+          grading_metadata?: Json
           id?: string
           lecturer_feedback?: string | null
           lecturer_score?: number | null
@@ -193,9 +199,12 @@ export type Database = {
           ai_breakdown?: Json | null
           ai_feedback?: string | null
           ai_score?: number | null
+          assignment_type?: string | null
           created_at?: string
           final_feedback?: string | null
           final_score?: number | null
+          grading_confidence?: number | null
+          grading_metadata?: Json
           id?: string
           lecturer_feedback?: string | null
           lecturer_score?: number | null
@@ -209,6 +218,53 @@ export type Database = {
             columns: ["submission_id"]
             isOneToOne: false
             referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_writing_profiles: {
+        Row: {
+          average_sentence_complexity: number
+          baseline_vector: Json
+          created_at: string
+          error_fingerprint: Json
+          id: string
+          lexile_level: number
+          sample_count: number
+          student_id: string
+          updated_at: string
+          vocabulary_breadth: number
+        }
+        Insert: {
+          average_sentence_complexity?: number
+          baseline_vector?: Json
+          created_at?: string
+          error_fingerprint?: Json
+          id?: string
+          lexile_level?: number
+          sample_count?: number
+          student_id: string
+          updated_at?: string
+          vocabulary_breadth?: number
+        }
+        Update: {
+          average_sentence_complexity?: number
+          baseline_vector?: Json
+          created_at?: string
+          error_fingerprint?: Json
+          id?: string
+          lexile_level?: number
+          sample_count?: number
+          student_id?: string
+          updated_at?: string
+          vocabulary_breadth?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_writing_profiles_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

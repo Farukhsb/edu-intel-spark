@@ -1,11 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
+import {
+  computeBaselineDeviation,
+  computeWritingProfileMetrics,
+  mergeWritingProfile,
+  normalizeReadableText,
+  type StoredWritingProfile,
+  type WritingProfileMetrics,
+} from "../_shared/text-analysis.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+type IntegrityType = "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
 
 type IntegrityFlag = {
   student_a: string;
@@ -14,12 +25,24 @@ type IntegrityFlag = {
   submission_b_id: string;
   similarity_score: number;
   ai_suspicion_score: number;
+  baseline_deviation_score: number;
+  total_risk_score: number;
   reason: string;
   evidence_summary: string;
   matched_excerpt: string;
   recommended_action: "clear" | "review" | "investigate";
-  integrity_type: "similarity" | "ai-writing" | "mixed";
+  integrity_type: IntegrityType;
   severity: "low" | "medium" | "high";
+};
+
+type SubmissionRow = {
+  id: string;
+  assignment_id: string;
+  student_id: string | null;
+  student_name: string | null;
+  student_email: string | null;
+  file_name: string | null;
+  file_url?: string;
 };
 
 function clampScore(value: unknown) {
@@ -36,8 +59,10 @@ function normalizeAction(value: unknown): IntegrityFlag["recommended_action"] {
   return value === "clear" || value === "review" || value === "investigate" ? value : "review";
 }
 
-function normalizeType(value: unknown): IntegrityFlag["integrity_type"] {
-  return value === "similarity" || value === "ai-writing" || value === "mixed" ? value : "mixed";
+function normalizeType(value: unknown): IntegrityType {
+  return value === "similarity" || value === "ai-writing" || value === "baseline-deviation" || value === "mixed"
+    ? value
+    : "mixed";
 }
 
 function enforceScoreBand(score: number, min: number, max: number) {
@@ -48,7 +73,7 @@ function normalizeScoresByContext(
   similarityScore: number,
   aiSuspicionScore: number,
   severity: IntegrityFlag["severity"],
-  integrityType: IntegrityFlag["integrity_type"],
+  integrityType: IntegrityType,
   recommendedAction: IntegrityFlag["recommended_action"],
 ) {
   let normalizedSimilarity = similarityScore;
@@ -80,7 +105,59 @@ function normalizeScoresByContext(
   };
 }
 
-function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student_name: string | null }>): IntegrityFlag[] {
+function computeRisk(similarity: number, aiSuspicion: number, baselineDeviation: number) {
+  return Math.round(similarity * 0.4 + aiSuspicion * 0.3 + baselineDeviation * 0.3);
+}
+
+function severityFromRisk(score: number): IntegrityFlag["severity"] {
+  if (score >= 80) return "high";
+  if (score >= 55) return "medium";
+  return "low";
+}
+
+function actionFromRisk(score: number): IntegrityFlag["recommended_action"] {
+  if (score >= 80) return "investigate";
+  if (score >= 45) return "review";
+  return "clear";
+}
+
+function decodePdfText(base64: string) {
+  try {
+    const binary = atob(base64);
+    const printable = binary.match(/[\x20-\x7E]{4,}/g) || [];
+    return normalizeReadableText(printable.join(" ").replace(/\s+/g, " "));
+  } catch {
+    return "";
+  }
+}
+
+async function fetchFileContent(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  sub: { file_url?: string; file_name?: string | null },
+): Promise<{ llmContent: string; plainText: string; isPdf: boolean }> {
+  if (!sub.file_url) return { llmContent: "", plainText: "", isPdf: false };
+  try {
+    const { data, error } = await supabaseAdmin.storage.from("submissions").download(sub.file_url);
+    if (error || !data) return { llmContent: "", plainText: "", isPdf: false };
+
+    const isPdf = data.type?.includes("pdf") || sub.file_name?.toLowerCase().endsWith(".pdf");
+    if (isPdf) {
+      const buf = await data.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const llmContent = btoa(binary);
+      return { llmContent, plainText: decodePdfText(llmContent), isPdf: true };
+    }
+
+    const text = await data.text();
+    return { llmContent: text, plainText: normalizeReadableText(text), isPdf: false };
+  } catch {
+    return { llmContent: "", plainText: "", isPdf: false };
+  }
+}
+
+function normalizeFlags(flags: unknown, submissions: SubmissionRow[]): IntegrityFlag[] {
   if (!Array.isArray(flags)) return [];
 
   return flags
@@ -89,17 +166,11 @@ function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student
       const candidate = flag as Record<string, unknown>;
       const submissionAId = typeof candidate.submission_a_id === "string" ? candidate.submission_a_id : "";
       const submissionBId =
-        typeof candidate.submission_b_id === "string"
+        typeof candidate.submission_b_id === "string" && candidate.submission_b_id
           ? candidate.submission_b_id
           : submissionAId;
       const submissionA = submissions.find((entry) => entry.id === submissionAId);
       const submissionB = submissions.find((entry) => entry.id === submissionBId);
-
-      const reason =
-        typeof candidate.reason === "string" && candidate.reason.trim()
-          ? candidate.reason.trim()
-          : "Potential integrity issue detected.";
-
       const severity = normalizeSeverity(candidate.severity);
       const recommendedAction = normalizeAction(candidate.recommended_action);
       const integrityType = normalizeType(candidate.integrity_type);
@@ -110,63 +181,45 @@ function normalizeFlags(flags: unknown, submissions: Array<{ id: string; student
         integrityType,
         recommendedAction,
       );
+      const baselineDeviationScore = clampScore(candidate.baseline_deviation_score);
+      const totalRisk = computeRisk(normalizedScores.similarity, normalizedScores.ai, baselineDeviationScore);
 
       return {
         student_a:
           (typeof candidate.student_a === "string" && candidate.student_a.trim()) ||
           submissionA?.student_name ||
+          submissionA?.student_email ||
           "Student A",
         student_b:
           (typeof candidate.student_b === "string" && candidate.student_b.trim()) ||
           submissionB?.student_name ||
-          (submissionAId === submissionBId ? "AI-writing analysis" : "Student B"),
+          submissionB?.student_email ||
+          (submissionAId === submissionBId ? "Writing profile" : "Student B"),
         submission_a_id: submissionAId,
         submission_b_id: submissionBId,
         similarity_score: normalizedScores.similarity,
         ai_suspicion_score: normalizedScores.ai,
-        reason,
+        baseline_deviation_score: baselineDeviationScore,
+        total_risk_score: totalRisk,
+        reason:
+          typeof candidate.reason === "string" && candidate.reason.trim()
+            ? candidate.reason.trim()
+            : "Potential integrity issue detected.",
         evidence_summary:
           typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()
             ? candidate.evidence_summary.trim()
-            : reason,
-        matched_excerpt:
-          typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
+            : "Potential integrity issue detected.",
+        matched_excerpt: typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
         recommended_action: recommendedAction,
         integrity_type: integrityType,
-        severity,
+        severity: severityFromRisk(totalRisk),
       } satisfies IntegrityFlag;
     })
     .filter((flag): flag is IntegrityFlag => Boolean(flag))
-    .filter((flag) => flag.similarity_score > 0 || flag.ai_suspicion_score > 0);
-}
-
-async function fetchFileContent(
-  supabaseAdmin: ReturnType<typeof createAdminClient>,
-  sub: { file_url?: string; file_name?: string },
-): Promise<string> {
-  if (!sub.file_url) return "";
-  try {
-    const { data, error } = await supabaseAdmin.storage
-      .from("submissions")
-      .download(sub.file_url);
-    if (error || !data) return "";
-    
-    const isPdf = data.type?.includes("pdf") || sub.file_name?.toLowerCase().endsWith(".pdf");
-    if (isPdf) {
-      const buf = await data.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      return btoa(binary);
-    }
-    return await data.text();
-  } catch {
-    return "";
-  }
-}
-
-function isPdfSubmission(sub: { file_name?: string }, content: string) {
-  return sub.file_name?.toLowerCase().endsWith(".pdf") || content.startsWith("JVBER");
+    .filter(
+      (flag) =>
+        flag.similarity_score > 0 || flag.ai_suspicion_score > 0 || flag.baseline_deviation_score > 0 || flag.total_risk_score > 0,
+    );
 }
 
 serve(async (req) => {
@@ -181,9 +234,7 @@ serve(async (req) => {
       ? body.submissionIds
       : Array.isArray(body?.submissions)
         ? body.submissions
-            .map((submission: { id?: string } | string) =>
-              typeof submission === "string" ? submission : submission?.id,
-            )
+            .map((submission: { id?: string } | string) => (typeof submission === "string" ? submission : submission?.id))
             .filter(Boolean)
         : [];
 
@@ -196,7 +247,7 @@ serve(async (req) => {
     const supabaseAdmin = createAdminClient();
     const { data: assignment, error: assignmentError } = await supabaseAdmin
       .from("assignments")
-      .select("id, lecturer_id")
+      .select("id, lecturer_id, title, description")
       .eq("id", requestedAssignmentId)
       .maybeSingle();
 
@@ -207,7 +258,7 @@ serve(async (req) => {
 
     const { data: submissions, error: submissionsError } = await supabaseAdmin
       .from("submissions")
-      .select("id, assignment_id, student_name, file_name, file_url")
+      .select("id, assignment_id, student_id, student_name, student_email, file_name, file_url")
       .eq("assignment_id", requestedAssignmentId)
       .in("id", requestedSubmissionIds);
 
@@ -217,166 +268,139 @@ serve(async (req) => {
     }
 
     const isSingleMode = submissions.length === 1;
-
-    // Fetch file content for AI analysis
-    const fileContents: string[] = [];
+    const contentMap = new Map<string, { llmContent: string; plainText: string; isPdf: boolean }>();
     for (const sub of submissions) {
-      const content = await fetchFileContent(supabaseAdmin, sub);
-      fileContents.push(content);
-      console.log(`Fetched file for ${sub.student_name}: ${content.length} chars`);
+      contentMap.set(sub.id, await fetchFileContent(supabaseAdmin, sub));
+    }
+
+    const studentIds = submissions.map((submission) => submission.student_id).filter((value): value is string => Boolean(value));
+    const { data: profileRows } = studentIds.length > 0
+      ? await supabaseAdmin
+          .from("student_writing_profiles")
+          .select("*")
+          .in("student_id", studentIds)
+      : { data: [] };
+
+    const profileMap = new Map<string, StoredWritingProfile>(
+      ((profileRows || []) as Array<Record<string, unknown>>).map((row) => [
+        String(row.student_id),
+        {
+          average_sentence_complexity: Number(row.average_sentence_complexity || 0),
+          lexile_level: Number(row.lexile_level || 0),
+          error_fingerprint: Array.isArray(row.error_fingerprint)
+            ? row.error_fingerprint.filter((item): item is string => typeof item === "string")
+            : [],
+          vocabulary_breadth: Number(row.vocabulary_breadth || 0),
+          word_count: Number((row.baseline_vector as Record<string, unknown> | null)?.word_count || 0),
+          sentence_count: Number((row.baseline_vector as Record<string, unknown> | null)?.sentence_count || 0),
+          average_words_per_sentence: Number(
+            (row.baseline_vector as Record<string, unknown> | null)?.average_words_per_sentence || 0,
+          ),
+          sample_count: Number(row.sample_count || 0),
+        },
+      ]),
+    );
+
+    const { data: studentSubmissions } = studentIds.length > 0
+      ? await supabaseAdmin.from("submissions").select("id, student_id").in("student_id", studentIds)
+      : { data: [] };
+    const allStudentSubmissionIds = (studentSubmissions || []).map((submission) => submission.id);
+    const { data: gradeRows } = allStudentSubmissionIds.length > 0
+      ? await supabaseAdmin.from("grades").select("submission_id, ai_score, final_score").in("submission_id", allStudentSubmissionIds)
+      : { data: [] };
+    const gradeMap = new Map<string, number>(
+      (gradeRows || [])
+        .filter((row) => row.final_score != null || row.ai_score != null)
+        .map((row) => [row.submission_id, Number(row.final_score ?? row.ai_score)]),
+    );
+
+    const submissionIdsByStudent = new Map<string, string[]>();
+    for (const row of studentSubmissions || []) {
+      if (!row.student_id) continue;
+      const list = submissionIdsByStudent.get(row.student_id) || [];
+      list.push(row.id);
+      submissionIdsByStudent.set(row.student_id, list);
     }
 
     const systemPrompt = isSingleMode
-      ? `You are an academic integrity detection assistant integrated into an academic grading platform.
+      ? `You are an academic integrity detection assistant.
 
-Your role is to analyse submitted student assignments and identify signs that the work may have been generated or heavily assisted by artificial intelligence.
+Your output is a risk indicator, never a verdict.
 
-IMPORTANT:
-- Never make absolute accusations.
-- Only provide a suspicion/risk score and reasoning.
-- Flag work for lecturer review if suspicion is moderate/high.
-- Base judgement on multiple indicators, not one factor alone.
-- Do not treat strong grammar, formal academic tone, or high-quality writing alone as evidence of AI use.
-- Do not assign moderate or high risk unless at least two categories show meaningful concern.
+Assess AI-writing suspicion using multiple indicators:
+- unnatural consistency
+- generic phrasing
+- shallow but polished analysis
+- limited revision traces
+- overly formulaic structure
 
-Analyse the submission across the following categories:
+Do not flag strong writing alone. Moderate or high risk requires multiple concerns.`
+      : `You are an academic integrity analyst.
 
-1. WRITING STYLE CONSISTENCY
-- Unnaturally perfect grammar throughout
-- Uniform sentence lengths/structures
-- Repetitive sentence openings
-- Overly polished or robotic academic tone
-- Lack of natural human imperfection/errors
-- Inconsistent style compared to expected student level
-
-2. CONTENT QUALITY / DEPTH
-- Generic or vague statements
-- Surface-level analysis lacking deep critical thought
-- Textbook-like explanations without originality
-- Over-explanation of simple concepts
-- Lack of nuanced reasoning
-- Lack of unique insight/personal interpretation
-
-3. STRUCTURAL PATTERNS
-- Overly formulaic structure
-- Paragraphs that are unnaturally symmetrical/perfectly balanced
-- Transitions that feel artificially smooth
-- Generic and reusable introduction/conclusion
-
-4. LANGUAGE / VOCABULARY
-- Vocabulary unusually advanced for academic level
-- Forced or unnatural phrasing
-- Overuse of transition words like "Furthermore", "Moreover", or "Additionally"
-- Buzzword-heavy language lacking substance
-
-5. SOURCE / CITATION ISSUES
-- Fabricated references/citations
-- Misquoted or unverifiable sources
-- Generic references without specificity
-- Weak quote analysis despite advanced referencing
-
-6. AUTHENTICITY / HUMANITY
-- Lack of personality or authentic voice
-- No evidence of creative or original thought
-- No drafting imperfections or rough reasoning
-- No personal or individual style visible
-
-SCORING MODEL:
-- Writing Style Consistency: 20%
-- Content Quality / Depth: 20%
-- Structural Patterns: 15%
-- Language / Vocabulary: 15%
-- Citation Issues: 10%
-- Authenticity / Humanity: 20%
-
-Return a structured suspicion score only. Never state that AI was definitively used.`
-      : `You are an academic integrity analyst. Compare submissions for suspicious similarity and also evaluate each submission for AI-generated writing indicators.
+Compare submissions for suspicious similarity and independently assess AI-writing suspicion.
 
 Rules:
-- Never make absolute accusations.
-- Only provide risk scores and evidence-based reasoning.
 - Similarity concerns must be based on substantive overlap in student-authored content.
-- AI-writing concerns must be based on multiple indicators, not a single stylistic feature.
-- Do not treat strong grammar, formal academic tone, or high-quality writing alone as evidence of AI use.
-- For AI-writing, do not assign moderate or high risk unless at least two categories show meaningful concern.`;
+- Ignore prompt text, boilerplate templates, file metadata, and PDF artefacts.
+- AI-writing concerns must rely on multiple indicators rather than one stylistic feature.
+- Never output a verdict, only a risk indicator with evidence.`;
 
-    let userPrompt: string;
     const userContent: Array<Record<string, string>> = [];
 
     if (isSingleMode) {
       const sub = submissions[0];
-      const content = fileContents[0];
-      const isPdf = isPdfSubmission(sub, content);
+      const content = contentMap.get(sub.id) || { llmContent: "", plainText: "", isPdf: false };
+      const preview = content.plainText.substring(0, 15000);
 
-      userPrompt = `Analyse this student submission for signs of AI-generated or AI-assisted writing.
+      userContent.push({
+        type: "input_text",
+        text: `Analyse this submission for AI-writing suspicion only.
 
-Student: ${sub.student_name || "Anonymous"}
-File: ${sub.file_name}
+Assignment: ${assignment.title}
+Student: ${sub.student_name || sub.student_email || "Anonymous"}
+File: ${sub.file_name || "submission"}
 
-${!isPdf ? `Content:\n${content.substring(0, 15000)}` : "The PDF document is attached."}
+${content.isPdf ? "PDF is attached. Use it as the primary source." : `Content:\n${preview}`}
 
-Apply the scoring model exactly and review:
-- Writing Style Consistency
-- Content Quality / Depth
-- Structural Patterns
-- Language / Vocabulary
-- Citation Issues
-- Authenticity / Humanity
+Return a structured flag only if there is a genuine concern. Otherwise return no flags.`,
+      });
 
-Return a single structured flag only if there is a genuine integrity concern. If the submission looks normal, return no flags.`;
-
-      if (isPdf && content) {
-        userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
+      if (content.isPdf && content.llmContent) {
         userContent.push({
           type: "input_file",
           filename: sub.file_name || "submission.pdf",
-          file_data: `data:application/pdf;base64,${content}`,
+          file_data: `data:application/pdf;base64,${content.llmContent}`,
         });
-      } else {
-        userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
       }
     } else {
-      const submissionSummaries = submissions.map((s: { id: string; student_name: string | null; file_name: string }, i: number) => {
-        const content = fileContents[i] || "";
-        const pdf = isPdfSubmission(s, content);
-        if (pdf) {
-          return `${i + 1}. ${s.student_name} - ${s.file_name} (PDF attached separately, submission id: ${s.id})`;
+      const summaries = submissions.map((submission) => {
+        const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
+        if (content.isPdf) {
+          return `${submission.student_name || submission.student_email || "Anonymous"} (submission id: ${submission.id}, PDF attached)`;
         }
 
-        const excerpt = content ? content.substring(0, 8000) : "[content unavailable]";
-        return `${i + 1}. ${s.student_name} - ${s.file_name} (submission id: ${s.id})\nReadable text excerpt:\n${excerpt}`;
+        return `${submission.student_name || submission.student_email || "Anonymous"} (submission id: ${submission.id})\n${content.plainText.substring(0, 8000)}`;
       });
 
-      userPrompt = `Analyse these ${submissions.length} student submissions for the same assignment. Check for suspicious similarity between submissions and for AI-generated writing patterns in each one.
+      userContent.push({
+        type: "input_text",
+        text: `Analyse these submissions for suspicious similarity and AI-writing indicators.
 
-Important rules:
-1. Compare student-authored content only.
-2. Ignore PDF metadata, object streams, file boilerplate, export-tool signatures, and template-only overlap.
-3. Only flag similarity when the substantive written answer content overlaps suspiciously.
-4. Only flag AI-writing when the prose itself shows meaningful machine-generated patterns.
-5. If the files are PDFs, use the attached PDF documents as the primary source of truth.
-6. For AI-writing suspicion, use the structured scoring model:
-   - Writing Style Consistency: 20%
-   - Content Quality / Depth: 20%
-   - Structural Patterns: 15%
-   - Language / Vocabulary: 15%
-   - Citation Issues: 10%
-   - Authenticity / Humanity: 20%
-7. Do not assign moderate or high AI-writing risk unless at least two categories show meaningful concern.
+Assignment: ${assignment.title}
 
 Submissions:
-${submissionSummaries.join("\n\n---\n\n")}
+${summaries.join("\n\n---\n\n")}
 
-Analyse the content carefully. Only flag real concerns, explain the evidence, and recommend whether the lecturer should clear, review, or investigate.`;
-      userContent.push({ type: "input_text", text: `${userPrompt}\n\nReturn valid JSON only.` });
+Only flag real concerns. Return valid JSON only.`,
+      });
 
-      submissions.forEach((sub, i) => {
-        const content = fileContents[i] || "";
-        if (isPdfSubmission(sub, content) && content) {
+      submissions.forEach((submission) => {
+        const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
+        if (content.isPdf && content.llmContent) {
           userContent.push({
             type: "input_file",
-            filename: sub.file_name || `submission-${i + 1}.pdf`,
-            file_data: `data:application/pdf;base64,${content}`,
+            filename: submission.file_name || `${submission.id}.pdf`,
+            file_data: `data:application/pdf;base64,${content.llmContent}`,
           });
         }
       });
@@ -406,14 +430,34 @@ Analyse the content carefully. Only flag real concerns, explain the evidence, an
                     submission_b_id: { type: "string" },
                     similarity_score: { type: "number" },
                     ai_suspicion_score: { type: "number" },
+                    baseline_deviation_score: { type: "number" },
+                    total_risk_score: { type: "number" },
                     reason: { type: "string" },
                     evidence_summary: { type: "string" },
                     matched_excerpt: { type: "string" },
                     recommended_action: { type: "string", enum: ["clear", "review", "investigate"] },
-                    integrity_type: { type: "string", enum: ["similarity", "ai-writing", "mixed"] },
+                    integrity_type: {
+                      type: "string",
+                      enum: ["similarity", "ai-writing", "baseline-deviation", "mixed"],
+                    },
                     severity: { type: "string", enum: ["low", "medium", "high"] },
                   },
-                  required: ["student_a", "student_b", "submission_a_id", "submission_b_id", "similarity_score", "ai_suspicion_score", "reason", "evidence_summary", "matched_excerpt", "recommended_action", "integrity_type", "severity"],
+                  required: [
+                    "student_a",
+                    "student_b",
+                    "submission_a_id",
+                    "submission_b_id",
+                    "similarity_score",
+                    "ai_suspicion_score",
+                    "baseline_deviation_score",
+                    "total_risk_score",
+                    "reason",
+                    "evidence_summary",
+                    "matched_excerpt",
+                    "recommended_action",
+                    "integrity_type",
+                    "severity",
+                  ],
                   additionalProperties: false,
                 },
               },
@@ -426,23 +470,286 @@ Analyse the content carefully. Only flag real concerns, explain the evidence, an
         },
       },
     });
-    console.log("AI integrity response received");
 
-    let result = { flags: [] as IntegrityFlag[], summary: "Analysis complete" };
+    let parsedFlags: IntegrityFlag[] = [];
+    let summary = "Analysis complete";
     try {
       const parsed = parseJsonText(extractOutputText(aiData));
-      result = {
-        flags: normalizeFlags(parsed?.flags, submissions),
-        summary:
-          typeof parsed?.summary === "string" && parsed.summary.trim()
-            ? parsed.summary.trim()
-            : "Analysis complete",
-      };
-    } catch (parseErr) {
-      console.error("Failed to parse integrity response");
+      parsedFlags = normalizeFlags(parsed?.flags, submissions);
+      summary = typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : summary;
+    } catch {
+      parsedFlags = normalizeFlags(aiData?.output?.[0]?.content?.[0]?.json?.flags, submissions);
     }
 
-    return new Response(JSON.stringify(result), {
+    const similarityBySubmission = new Map<string, number>();
+    const aiBySubmission = new Map<string, number>();
+    for (const flag of parsedFlags) {
+      similarityBySubmission.set(
+        flag.submission_a_id,
+        Math.max(flag.similarity_score, similarityBySubmission.get(flag.submission_a_id) || 0),
+      );
+      aiBySubmission.set(
+        flag.submission_a_id,
+        Math.max(flag.ai_suspicion_score, aiBySubmission.get(flag.submission_a_id) || 0),
+      );
+      if (flag.submission_b_id && flag.submission_b_id !== flag.submission_a_id) {
+        similarityBySubmission.set(
+          flag.submission_b_id,
+          Math.max(flag.similarity_score, similarityBySubmission.get(flag.submission_b_id) || 0),
+        );
+      }
+    }
+
+    const syntheticFlags: IntegrityFlag[] = [];
+    const profileUpserts: Array<Record<string, unknown>> = [];
+    const snapshots = new Map<
+      string,
+      {
+        totalScore: number;
+        aiWritingScore: number;
+        similarityScore: number;
+        baselineDeviationScore: number;
+        riskLevel: "high" | "medium" | "low";
+        evidence: {
+          aiWriting: Array<{ label: string; value: string; score: number }>;
+          similarity: Array<{ label: string; value: string; score: number }>;
+          baselineDeviation: Array<{ label: string; value: string; score: number }>;
+        };
+        flags: string[];
+      }
+    >();
+
+    const ensureSnapshot = (submission: SubmissionRow) => {
+      const existing = snapshots.get(submission.id);
+      if (existing) return existing;
+      const next = {
+        totalScore: 0,
+        aiWritingScore: 0,
+        similarityScore: 0,
+        baselineDeviationScore: 0,
+        riskLevel: "low" as const,
+        evidence: {
+          aiWriting: [] as Array<{ label: string; value: string; score: number }>,
+          similarity: [] as Array<{ label: string; value: string; score: number }>,
+          baselineDeviation: [] as Array<{ label: string; value: string; score: number }>,
+        },
+        flags: [] as string[],
+      };
+      snapshots.set(submission.id, next);
+      return next;
+    };
+
+    for (const submission of submissions) {
+      const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
+      const metrics: WritingProfileMetrics = computeWritingProfileMetrics(content.plainText);
+      const baseline = submission.student_id ? profileMap.get(submission.student_id) : null;
+      const currentGrade = gradeMap.get(submission.id) ?? null;
+      const previousAverage =
+        submission.student_id && submissionIdsByStudent.has(submission.student_id)
+          ? (() => {
+              const previousScores = (submissionIdsByStudent.get(submission.student_id) || [])
+                .filter((id) => id !== submission.id)
+                .map((id) => gradeMap.get(id))
+                .filter((score): score is number => typeof score === "number");
+              return previousScores.length > 0
+                ? previousScores.reduce((sum, score) => sum + score, 0) / previousScores.length
+                : null;
+            })()
+          : null;
+
+      const baselineDeviation = computeBaselineDeviation(baseline, metrics, {
+        previousAverage,
+        currentGrade,
+      });
+      const similarityScore = similarityBySubmission.get(submission.id) || 0;
+      const aiScore = aiBySubmission.get(submission.id) || 0;
+      const totalRiskScore = computeRisk(similarityScore, aiScore, baselineDeviation.score);
+      const snapshot = ensureSnapshot(submission);
+      snapshot.totalScore = Math.max(snapshot.totalScore, totalRiskScore);
+      snapshot.aiWritingScore = Math.max(snapshot.aiWritingScore, aiScore);
+      snapshot.similarityScore = Math.max(snapshot.similarityScore, similarityScore);
+      snapshot.baselineDeviationScore = Math.max(snapshot.baselineDeviationScore, baselineDeviation.score);
+      snapshot.riskLevel = severityFromRisk(snapshot.totalScore) === "high"
+        ? "high"
+        : severityFromRisk(snapshot.totalScore) === "medium"
+          ? "medium"
+          : "low";
+
+      if (baselineDeviation.reasons.length > 0) {
+        snapshot.evidence.baselineDeviation.push({
+          label: "Writing profile deviation",
+          value: baselineDeviation.reasons.join(" "),
+          score: baselineDeviation.score,
+        });
+        snapshot.flags.push("baseline deviation");
+      }
+
+      if (submission.student_id && metrics.word_count >= 80 && totalRiskScore < 45) {
+        const merged = mergeWritingProfile(baseline, metrics);
+        profileUpserts.push({
+          student_id: submission.student_id,
+          average_sentence_complexity: merged.average_sentence_complexity,
+          lexile_level: merged.lexile_level,
+          error_fingerprint: merged.error_fingerprint,
+          vocabulary_breadth: merged.vocabulary_breadth,
+          sample_count: merged.sample_count,
+          baseline_vector: {
+            word_count: merged.word_count,
+            sentence_count: merged.sentence_count,
+            average_words_per_sentence: merged.average_words_per_sentence,
+          },
+        });
+      }
+
+      if (baselineDeviation.score >= 45) {
+        syntheticFlags.push({
+          student_a: submission.student_name || submission.student_email || "Student",
+          student_b: "Writing baseline",
+          submission_a_id: submission.id,
+          submission_b_id: submission.id,
+          similarity_score: similarityScore,
+          ai_suspicion_score: aiScore,
+          baseline_deviation_score: baselineDeviation.score,
+          total_risk_score: totalRiskScore,
+          reason: baselineDeviation.reasons[0] || "The submission deviates materially from the student's stored writing profile.",
+          evidence_summary: baselineDeviation.reasons.join(" "),
+          matched_excerpt: content.plainText.substring(0, 240),
+          recommended_action: actionFromRisk(totalRiskScore),
+          integrity_type: baselineDeviation.score > 0 && (similarityScore > 0 || aiScore > 0) ? "mixed" : "baseline-deviation",
+          severity: severityFromRisk(totalRiskScore),
+        });
+      }
+    }
+
+    for (const flag of parsedFlags) {
+      const submission = submissions.find((item) => item.id === flag.submission_a_id);
+      if (!submission) continue;
+      const snapshot = ensureSnapshot(submission);
+      snapshot.totalScore = Math.max(snapshot.totalScore, flag.total_risk_score);
+      snapshot.aiWritingScore = Math.max(snapshot.aiWritingScore, flag.ai_suspicion_score);
+      snapshot.similarityScore = Math.max(snapshot.similarityScore, flag.similarity_score);
+      snapshot.baselineDeviationScore = Math.max(snapshot.baselineDeviationScore, flag.baseline_deviation_score);
+      snapshot.riskLevel = severityFromRisk(snapshot.totalScore) === "high"
+        ? "high"
+        : severityFromRisk(snapshot.totalScore) === "medium"
+          ? "medium"
+          : "low";
+
+      if (flag.ai_suspicion_score > 0) {
+        snapshot.evidence.aiWriting.push({
+          label: "AI-writing risk",
+          value: flag.evidence_summary || flag.reason,
+          score: flag.ai_suspicion_score,
+        });
+        snapshot.flags.push("ai writing suspicion");
+      }
+
+      if (flag.similarity_score > 0) {
+        snapshot.evidence.similarity.push({
+          label: "Similarity overlap",
+          value: flag.reason,
+          score: flag.similarity_score,
+        });
+        snapshot.flags.push("similarity overlap");
+      }
+    }
+
+    const allFlags = [...parsedFlags, ...syntheticFlags].filter((flag, index, array) => {
+      return (
+        array.findIndex(
+          (item) =>
+            item.submission_a_id === flag.submission_a_id &&
+            item.submission_b_id === flag.submission_b_id &&
+            item.reason === flag.reason,
+        ) === index
+      );
+    });
+
+    const { data: existingReviews, error: reviewsError } = await supabaseAdmin
+      .from("academic_integrity_reviews")
+      .select("submission_id, decision, lecturer_note, updated_at")
+      .in("submission_id", submissions.map((submission) => submission.id))
+      .eq("lecturer_id", user.id);
+
+    if (reviewsError) throw reviewsError;
+
+    const existingReviewMap = new Map(
+      ((existingReviews || []) as Array<Record<string, unknown>>).map((review) => [String(review.submission_id), review]),
+    );
+
+    const reviewUpserts = submissions
+      .map((submission) => {
+        const snapshot = snapshots.get(submission.id) || null;
+        const existingReview = existingReviewMap.get(submission.id);
+        if (!snapshot && !existingReview) return null;
+
+        const notePayload = (() => {
+          if (existingReview?.lecturer_note && typeof existingReview.lecturer_note === "string") {
+            try {
+              const parsed = JSON.parse(existingReview.lecturer_note);
+              return {
+                latestNote: typeof parsed.latestNote === "string" ? parsed.latestNote : "",
+                history: Array.isArray(parsed.history) ? parsed.history : [],
+              };
+            } catch {
+              return { latestNote: "", history: [] };
+            }
+          }
+          return { latestNote: "", history: [] };
+        })();
+
+        return {
+          submission_id: submission.id,
+          lecturer_id: user.id,
+          review_type:
+            snapshot && snapshot.baselineDeviationScore > 0 && snapshot.aiWritingScore === 0 && snapshot.similarityScore === 0
+              ? "baseline-deviation"
+              : snapshot && snapshot.aiWritingScore > 0 && snapshot.similarityScore > 0
+                ? "mixed"
+                : snapshot && snapshot.aiWritingScore > 0
+                  ? "ai-writing-suspicion"
+                  : "similarity-plagiarism-suspicion",
+          decision: String(existingReview?.decision || "pending"),
+          evidence_summary: snapshot
+            ? [
+                ...snapshot.evidence.aiWriting.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.similarity.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.baselineDeviation.map((entry) => `${entry.label}: ${entry.value}`),
+              ]
+                .slice(0, 8)
+                .join("\n\n") || null
+            : null,
+          lecturer_note: JSON.stringify({
+            latestNote: notePayload.latestNote,
+            history: notePayload.history,
+            integritySnapshot: snapshot,
+          }),
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+
+    if (reviewUpserts.length > 0) {
+      const { error: persistError } = await supabaseAdmin
+        .from("academic_integrity_reviews")
+        .upsert(reviewUpserts, { onConflict: "submission_id,lecturer_id" });
+      if (persistError) throw persistError;
+    }
+
+    if (profileUpserts.length > 0) {
+      const { error: profileError } = await supabaseAdmin
+        .from("student_writing_profiles")
+        .upsert(profileUpserts, { onConflict: "student_id" });
+      if (profileError) {
+        console.error("Failed to update writing profiles:", profileError);
+      }
+    }
+
+    const finalSummary =
+      allFlags.length > 0
+        ? `${summary} ${allFlags.length} submission(s) crossed one or more integrity risk thresholds.`
+        : `${summary} No submissions crossed the current integrity thresholds.`;
+
+    return new Response(JSON.stringify({ flags: allFlags, summary: finalSummary }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
