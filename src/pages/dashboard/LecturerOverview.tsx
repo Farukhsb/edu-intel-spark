@@ -38,6 +38,7 @@ interface Stats {
 
 interface RecentSubmission {
   id: string;
+  assignment_id: string;
   student_name: string | null;
   file_name: string;
   status: string;
@@ -72,6 +73,7 @@ const DEMO_STATS: Stats = {
 const DEMO_RECENT: RecentSubmission[] = [
   {
     id: "d1",
+    assignment_id: "demo-assignment-1",
     student_name: "Alice Johnson",
     file_name: "trees.py",
     status: "released",
@@ -82,6 +84,7 @@ const DEMO_RECENT: RecentSubmission[] = [
   },
   {
     id: "d2",
+    assignment_id: "demo-assignment-2",
     student_name: "Bob Smith",
     file_name: "essay.pdf",
     status: "ai_graded",
@@ -92,6 +95,7 @@ const DEMO_RECENT: RecentSubmission[] = [
   },
   {
     id: "d3",
+    assignment_id: "demo-assignment-3",
     student_name: "Carol White",
     file_name: "report.docx",
     status: "submitted",
@@ -127,6 +131,11 @@ const formatStatusLabel = (status: string) =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
+const csvCell = (value: string | number | null | undefined) => {
+  const stringValue = String(value ?? "");
+  return `"${stringValue.replace(/"/g, '""')}"`;
+};
+
 const LecturerOverview = () => {
   const { profile, user, isDemo } = useAuth();
   const navigate = useNavigate();
@@ -152,12 +161,7 @@ const LecturerOverview = () => {
       if (assignmentIds.length === 0) {
         setStats({ ...EMPTY_STATS, assignmentCount: 0 });
         setRecent([]);
-        setGradeDistribution([
-          { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
-          { label: "70-89%", count: 0, fill: "hsl(230, 65%, 52%)" },
-          { label: "50-69%", count: 0, fill: "hsl(38, 92%, 60%)" },
-          { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
-        ]);
+        setGradeDistribution(EMPTY_DIST);
         setLoading(false);
         return;
       }
@@ -169,21 +173,22 @@ const LecturerOverview = () => {
 
       if (submissionsError) throw submissionsError;
 
-      const submissionIds = (submissionsData || []).map((s) => s.id);
-      let gradesData: any[] = [];
-      if (submissionIds.length > 0) {
-        const { data: gData, error: gradesError } = await supabase
-          .from("grades")
-          .select("*")
-          .in("submission_id", submissionIds);
-        if (gradesError) throw gradesError;
-        gradesData = gData || [];
-      }
-
       const allSubs = (submissionsData || []).sort(
-        (a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
+        (a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
       );
-      const allGrades = gradesData;
+
+      const submissionIds = allSubs.map((submission) => submission.id);
+      let allGrades: Array<{ submission_id: string; final_score: number | null; ai_score: number | null }> = [];
+
+      if (submissionIds.length > 0) {
+        const { data: gradesData, error: gradesError } = await supabase
+          .from("grades")
+          .select(GRADE_FIELDS)
+          .in("submission_id", submissionIds);
+
+        if (gradesError) throw gradesError;
+        allGrades = gradesData || [];
+      }
 
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
       assignments.forEach((assignment) => {
@@ -271,6 +276,7 @@ const LecturerOverview = () => {
 
         return {
           id: submission.id,
+          assignment_id: submission.assignment_id,
           student_name: submission.student_name || submission.student_email || "Student",
           file_name: submission.file_name,
           status: submission.status,
@@ -340,11 +346,11 @@ const LecturerOverview = () => {
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button size="sm" className="shadow-sm" onClick={() => navigate("/dashboard/assignments")}>
+            <Button size="sm" className="shadow-sm" onClick={() => navigate("/dashboard/assignments?view=needs-review")}>
               Review submissions
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/performance")}>
+            <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/performance?risk=high-plus")}>
               View risk insights
             </Button>
           </div>
@@ -385,22 +391,38 @@ const LecturerOverview = () => {
             accent: stats.atRisk > 0 ? "border-destructive/30" : "border-border",
             iconWrap: stats.atRisk > 0 ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground",
           },
-        ].map((item, index) => (
-          <Card key={index} className={`border ${item.accent} shadow-sm`}>
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
-                  <p className="mt-2 text-3xl font-bold font-display">{item.value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.hint}</p>
+        ].map((item, index) => {
+          const isReviewCard = item.label === "Awaiting Review";
+          const isRiskCard = item.label === "At-Risk Students";
+          const clickable = isReviewCard || isRiskCard;
+
+          return (
+            <Card
+              key={index}
+              className={`border ${item.accent} shadow-sm ${clickable ? "cursor-pointer transition-colors hover:bg-muted/30" : ""}`}
+              onClick={
+                isReviewCard
+                  ? () => navigate("/dashboard/assignments?view=needs-review")
+                  : isRiskCard
+                    ? () => navigate("/dashboard/performance?risk=high-plus&scoreBand=lt40")
+                    : undefined
+              }
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                    <p className="mt-2 text-3xl font-bold font-display">{item.value}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.hint}</p>
+                  </div>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.iconWrap}`}>
+                    <item.icon className="h-5 w-5" />
+                  </div>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.iconWrap}`}>
-                  <item.icon className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -477,10 +499,10 @@ const LecturerOverview = () => {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                        <Badge variant="outline" className="text-xs">
-                          {formatStatusLabel(submission.status)}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">{safeToLocaleDate(submission.submitted_at)}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {formatStatusLabel(submission.status)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{safeToLocaleDate(submission.submitted_at)}</span>
                         {submission.score != null ? (
                           <Badge variant={submission.score >= 70 ? "default" : submission.score >= 50 ? "secondary" : "destructive"}>
                             {submission.score}/{submission.max_score}
@@ -494,7 +516,7 @@ const LecturerOverview = () => {
                           size="sm"
                           variant="ghost"
                           className="h-8 px-2 text-xs"
-                          onClick={() => navigate("/dashboard/assignments")}
+                          onClick={() => navigate(`/dashboard/assignments/${submission.assignment_id}`)}
                         >
                           Review
                         </Button>
@@ -585,16 +607,16 @@ const LecturerOverview = () => {
               </div>
 
               <div className="flex gap-2 pt-1">
-                <Button size="sm" className="flex-1" onClick={() => navigate("/dashboard/assignments")}>
+                <Button size="sm" className="flex-1" onClick={() => navigate("/dashboard/assignments?view=needs-review")}>
                   Review queue
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   className="flex-1"
-                  onClick={() => navigate("/dashboard/cohort-analytics")}
+                  onClick={() => navigate("/dashboard/performance?risk=high-plus&scoreBand=lt40")}
                 >
-                  View analytics
+                  Needs attention
                 </Button>
               </div>
             </CardContent>
@@ -626,7 +648,9 @@ const LecturerOverview = () => {
                     safeToLocaleDate(submission.submitted_at),
                   ])
                 );
-                const csv = rows.map((row) => row.join(",")).join("\n");
+                const csv = rows
+                  .map((row) => row.map((cell) => csvCell(cell)).join(","))
+                  .join("\n");
                 const blob = new Blob([csv], { type: "text/csv" });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
@@ -643,7 +667,7 @@ const LecturerOverview = () => {
               size="sm"
               onClick={async () => {
                 const { default: jsPDF } = await import("jspdf");
-                await import("jspdf-autotable");
+                const { default: autoTable } = await import("jspdf-autotable");
                 const doc = new jsPDF();
                 doc.setFontSize(16);
                 doc.text("GradeAI - Grade Report", 14, 20);
@@ -655,7 +679,7 @@ const LecturerOverview = () => {
                   14,
                   40
                 );
-                (doc as any).autoTable({
+                autoTable(doc, {
                   startY: 48,
                   head: [["Student", "Assignment", "Score", "Max", "Status", "Date"]],
                   body: recent.map((submission) => [

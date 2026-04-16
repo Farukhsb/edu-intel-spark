@@ -38,13 +38,15 @@ serve(async (req) => {
     for (const student of students as StudentInput[]) {
       const name = student?.name?.trim();
       const email = student?.email?.trim().toLowerCase();
+      const cohortId = student?.cohort_id?.trim();
+      const departmentId = student?.department_id?.trim();
 
-      if (!name || !email || !email.includes("@")) {
+      if (!name || !email || !email.includes("@") || !cohortId || !departmentId) {
         results.push({
           name: student?.name ?? "",
           email: student?.email ?? "",
           success: false,
-          error: "Invalid student record",
+          error: "Missing or invalid required fields (name, email, cohort, department)",
         });
         continue;
       }
@@ -57,8 +59,8 @@ serve(async (req) => {
         user_metadata: {
           full_name: name,
           role: "student",
-          cohort_id: student.cohort_id?.trim() || null,
-          department_id: student.department_id?.trim() || null,
+          cohort_id: cohortId,
+          department_id: departmentId,
         },
       });
 

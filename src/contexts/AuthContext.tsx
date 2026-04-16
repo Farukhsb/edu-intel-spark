@@ -23,7 +23,14 @@ interface AuthContextType {
   loading: boolean;
   profileError: string | null;
   isDemo: boolean;
-  signUp: (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: AppRole,
+    cohortId?: string,
+    departmentId?: string
+  ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -60,6 +67,12 @@ const DEMO_STUDENT_PROFILE: Profile = {
   department_id: "Computer Science",
 };
 
+const createDemoUser = (profile: Profile | null): User =>
+  ({
+    id: profile?.id ?? "demo-user",
+    email: profile?.email ?? undefined,
+  }) as unknown as User;
+
 const getPasswordResetRedirectUrl = () => {
   const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
@@ -93,8 +106,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: data.email ?? email ?? null,
         role: data.role === "lecturer" ? "lecturer" : "student",
         avatar_url: data.avatar_url,
-        cohort_id: null,
-        department_id: null,
+        cohort_id: data.cohort_id ?? null,
+        department_id: data.department_id ?? null,
       });
       posthog.identify(userId, { email });
     } else {
@@ -134,7 +147,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, [isDemo, location.pathname, navigate]);
 
-  const signUp = async (email: string, password: string, fullName: string, role: AppRole, cohortId?: string, departmentId?: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: AppRole,
+    cohortId?: string,
+    departmentId?: string
+  ) => {
     if (password.length < 8) throw new Error("Password must be at least 8 characters");
 
     const { data, error } = await supabase.auth.signUp({
@@ -152,15 +172,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (error) throw error;
     if (!data.user) throw new Error("Signup failed");
 
-    setProfile({
-      id: data.user.id,
-      full_name: fullName,
-      email,
-      role,
-      avatar_url: null,
-      cohort_id: role === "student" ? (cohortId || null) : null,
-      department_id: departmentId || null,
-    });
+    const hasActiveSession = Boolean(data.session);
+
+    if (hasActiveSession) {
+      setProfile({
+        id: data.user.id,
+        full_name: fullName,
+        email,
+        role,
+        avatar_url: null,
+        cohort_id: role === "student" ? (cohortId || null) : null,
+        department_id: departmentId || null,
+      });
+    }
+
+    return {
+      requiresEmailConfirmation: !hasActiveSession,
+    };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -203,7 +231,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <AuthContext.Provider
       value={{
-        user: isDemo ? ({ id: profile?.id, email: profile?.email } as any) : user,
+        user: isDemo ? createDemoUser(profile) : user,
         profile,
         role: profile?.role ?? null,
         loading,

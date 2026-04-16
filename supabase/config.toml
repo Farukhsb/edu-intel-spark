@@ -1,1 +1,16 @@
-project_id = "ndpsnlczquyjkgiofxie"
+project_id = "nyhisxovomznzldafgtz"
+
+[functions.check-plagiarism]
+verify_jwt = false
+
+[functions.grade-submission]
+verify_jwt = false
+
+[functions.explain-grade]
+verify_jwt = false
+
+[functions.student-ai-tutor]
+verify_jwt = false
+
+[functions.bulk-create-students]
+verify_jwt = false

@@ -12,6 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
+import {
+  loadVisibleCommunicationMessages,
+  type CommunicationMessage,
+} from "@/lib/communications";
+import { safeFormatDate } from "@/lib/date";
 
 const lecturerLinks = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -35,7 +40,7 @@ const studentLinks = [
 ];
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
-  const { profile, signOut, isDemo } = useAuth();
+  const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -45,6 +50,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     return false;
   });
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
 
   useEffect(() => {
     if (darkMode) {
@@ -55,6 +61,64 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       localStorage.setItem("theme", "light");
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    const syncNotifications = async () => {
+      const visibleMessages = await loadVisibleCommunicationMessages({
+        userId: user?.id ?? profile?.id ?? null,
+        email: profile?.email ?? user?.email ?? null,
+        fullName: profile?.full_name ?? null,
+      });
+      setNotifications(visibleMessages);
+    };
+
+    void syncNotifications();
+    if (typeof window !== "undefined") {
+      const handleUpdated = () => {
+        void syncNotifications();
+      };
+      const handleFocus = () => {
+        void syncNotifications();
+      };
+      window.addEventListener("gradeai:communications-updated", handleUpdated);
+      window.addEventListener("focus", handleFocus);
+
+      return () => {
+        window.removeEventListener("gradeai:communications-updated", handleUpdated);
+        window.removeEventListener("focus", handleFocus);
+      };
+    }
+  }, [profile?.email, profile?.id, user?.email, user?.id]);
+
+  const openNotification = (notification: CommunicationMessage) => {
+    setShowNotifications(false);
+
+    if (profile?.role === "student") {
+      if (notification.category === "at-risk-alert" || notification.category === "intervention-follow-up") {
+        navigate(`/dashboard/improvements?notice=${encodeURIComponent(notification.id)}`, {
+          state: { notification },
+        });
+        return;
+      }
+
+      if (notification.relatedAssignmentId) {
+        navigate(`/dashboard/assignments/${notification.relatedAssignmentId}`);
+        return;
+      }
+
+      if (notification.category === "feedback-summary" || notification.category === "grade-released") {
+        navigate("/dashboard/assignments");
+        return;
+      }
+    }
+
+    if (profile?.role === "lecturer" && notification.relatedStudentId) {
+      navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
+      return;
+    }
+
+    navigate("/dashboard");
+  };
 
   const links = profile?.role === "lecturer" ? lecturerLinks : studentLinks;
 
@@ -149,9 +213,34 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             {showNotifications && (
               <div className="absolute right-4 top-14 z-50 w-72 rounded-lg border bg-card shadow-lg">
                 <div className="p-3 border-b">
-                  <p className="text-sm font-medium">Notifications</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium">Notifications</p>
+                    {notifications.length > 0 && <Badge variant="secondary">{notifications.length}</Badge>}
+                  </div>
                 </div>
-                <p className="p-4 text-xs text-muted-foreground text-center">No new notifications</p>
+                {notifications.length === 0 ? (
+                  <p className="p-4 text-xs text-muted-foreground text-center">No new notifications</p>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto p-2">
+                    {notifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => openNotification(notification)}
+                        className="block w-full rounded-md p-2 text-left text-xs hover:bg-muted/40"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{notification.subject}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {safeFormatDate(notification.createdAt, "MMM d, HH:mm")}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">{notification.recipientName}</p>
+                        <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

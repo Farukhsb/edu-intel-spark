@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export class HttpError extends Error {
   status: number;
+
   constructor(status: number, message: string) {
     super(message);
     this.status = status;
@@ -55,18 +56,17 @@ export async function requireUser(req: Request) {
 export async function requireLecturer(req: Request) {
   const { supabase, user } = await requireUser(req);
 
-  const { data: role, error } = await supabase
-    .from("user_roles")
+  const { data: profile, error } = await supabase
+    .from("profiles")
     .select("role")
-    .eq("user_id", user.id)
-    .eq("role", "lecturer")
+    .eq("id", user.id)
     .maybeSingle();
 
   if (error) {
-    throw new HttpError(500, "Failed to verify lecturer role");
+    throw new HttpError(500, "Failed to verify profile");
   }
 
-  if (!role) {
+  if (!profile || profile.role !== "lecturer") {
     throw new HttpError(403, "Lecturer access required");
   }
 
