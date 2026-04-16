@@ -28,7 +28,7 @@ export const RubricBuilder = ({ rubric, onChange, maxScore }: RubricBuilderProps
     ]);
   };
 
-  const updateCriterion = (index: number, field: keyof RubricCriterion, value: any) => {
+  const updateCriterion = (index: number, field: keyof RubricCriterion, value: string | number) => {
     const updated = rubric.map((r, i) =>
       i === index ? { ...r, [field]: field === "weight" ? Number(value) || 0 : value } : r
     );

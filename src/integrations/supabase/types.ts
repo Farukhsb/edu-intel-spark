@@ -48,7 +48,72 @@ export type Database = {
           submission_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "academic_integrity_reviews_lecturer_id_fkey"
+            columns: ["lecturer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academic_integrity_reviews_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      communication_messages: {
+        Row: {
+          body: string
+          category: string
+          created_at: string
+          id: string
+          recipient_email: string | null
+          recipient_id: string | null
+          recipient_name: string
+          related_assignment_id: string | null
+          related_student_id: string | null
+          sender_id: string
+          subject: string
+        }
+        Insert: {
+          body: string
+          category: string
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          recipient_name: string
+          related_assignment_id?: string | null
+          related_student_id?: string | null
+          sender_id: string
+          subject: string
+        }
+        Update: {
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          recipient_name?: string
+          related_assignment_id?: string | null
+          related_student_id?: string | null
+          sender_id?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       assignments: {
         Row: {
@@ -100,9 +165,12 @@ export type Database = {
           ai_breakdown: Json | null
           ai_feedback: string | null
           ai_score: number | null
+          assignment_type: string | null
           created_at: string
           final_feedback: string | null
           final_score: number | null
+          grading_confidence: number | null
+          grading_metadata: Json
           id: string
           lecturer_feedback: string | null
           lecturer_score: number | null
@@ -114,9 +182,12 @@ export type Database = {
           ai_breakdown?: Json | null
           ai_feedback?: string | null
           ai_score?: number | null
+          assignment_type?: string | null
           created_at?: string
           final_feedback?: string | null
           final_score?: number | null
+          grading_confidence?: number | null
+          grading_metadata?: Json
           id?: string
           lecturer_feedback?: string | null
           lecturer_score?: number | null
@@ -128,9 +199,12 @@ export type Database = {
           ai_breakdown?: Json | null
           ai_feedback?: string | null
           ai_score?: number | null
+          assignment_type?: string | null
           created_at?: string
           final_feedback?: string | null
           final_score?: number | null
+          grading_confidence?: number | null
+          grading_metadata?: Json
           id?: string
           lecturer_feedback?: string | null
           lecturer_score?: number | null
@@ -144,6 +218,53 @@ export type Database = {
             columns: ["submission_id"]
             isOneToOne: false
             referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_writing_profiles: {
+        Row: {
+          average_sentence_complexity: number
+          baseline_vector: Json
+          created_at: string
+          error_fingerprint: Json
+          id: string
+          lexile_level: number
+          sample_count: number
+          student_id: string
+          updated_at: string
+          vocabulary_breadth: number
+        }
+        Insert: {
+          average_sentence_complexity?: number
+          baseline_vector?: Json
+          created_at?: string
+          error_fingerprint?: Json
+          id?: string
+          lexile_level?: number
+          sample_count?: number
+          student_id: string
+          updated_at?: string
+          vocabulary_breadth?: number
+        }
+        Update: {
+          average_sentence_complexity?: number
+          baseline_vector?: Json
+          created_at?: string
+          error_fingerprint?: Json
+          id?: string
+          lexile_level?: number
+          sample_count?: number
+          student_id?: string
+          updated_at?: string
+          vocabulary_breadth?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_writing_profiles_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -173,12 +294,22 @@ export type Database = {
           task_key?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "improvement_plan_progress_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
           avatar_url: string | null
+          cohort_id: string | null
           created_at: string
+          department_id: string | null
           email: string | null
           full_name: string | null
           id: string
@@ -187,7 +318,9 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          cohort_id?: string | null
           created_at?: string
+          department_id?: string | null
           email?: string | null
           full_name?: string | null
           id: string
@@ -196,62 +329,13 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          cohort_id?: string | null
           created_at?: string
+          department_id?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      student_interventions: {
-        Row: {
-          assignment_id: string | null
-          created_at: string
-          follow_up_date: string | null
-          id: string
-          intervention_type: string
-          lecturer_id: string
-          notes: string | null
-          priority: string
-          status: string
-          student_email: string | null
-          student_id: string | null
-          student_name: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          assignment_id?: string | null
-          created_at?: string
-          follow_up_date?: string | null
-          id?: string
-          intervention_type: string
-          lecturer_id: string
-          notes?: string | null
-          priority?: string
-          status?: string
-          student_email?: string | null
-          student_id?: string | null
-          student_name: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          assignment_id?: string | null
-          created_at?: string
-          follow_up_date?: string | null
-          id?: string
-          intervention_type?: string
-          lecturer_id?: string
-          notes?: string | null
-          priority?: string
-          status?: string
-          student_email?: string | null
-          student_id?: string | null
-          student_name?: string
-          title?: string
           updated_at?: string
         }
         Relationships: []
@@ -295,6 +379,57 @@ export type Database = {
           student_name?: string | null
           submitted_at?: string
           uploaded_by?: string
+        }
+        Relationships: []
+      }
+      student_interventions: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          follow_up_date: string | null
+          id: string
+          intervention_type: string
+          lecturer_id: string
+          notes: string | null
+          priority: string | null
+          status: string
+          student_email: string | null
+          student_id: string
+          student_name: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          intervention_type: string
+          lecturer_id: string
+          notes?: string | null
+          priority?: string | null
+          status?: string
+          student_email?: string | null
+          student_id: string
+          student_name: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          intervention_type?: string
+          lecturer_id?: string
+          notes?: string | null
+          priority?: string | null
+          status?: string
+          student_email?: string | null
+          student_id?: string
+          student_name?: string
+          title?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

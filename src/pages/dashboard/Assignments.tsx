@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
 
-const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "Physics", "Biology"];
+const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
   { value: "100", label: "Level 100" },
   { value: "200", label: "Level 200" },
@@ -55,12 +55,13 @@ const statusIcon = (status: Assignment["status"]) => {
 const Assignments = () => {
   const { role, user, isDemo } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [submissionStats, setSubmissionStats] = useState<Record<string, { total: number; graded: number; approved: number; released: number }>>({});
+  const [submissionStats, setSubmissionStats] = useState<Record<string, { total: number; graded: number; approved: number; released: number; needsReview: number }>>({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Assignment["status"]>("all");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -116,7 +117,7 @@ const Assignments = () => {
     if (role === "lecturer" && mapped.length > 0) {
       const { data: subs } = await supabase.from("submissions").select("id, assignment_id, status");
       if (subs) {
-        const statsMap: Record<string, { total: number; graded: number; approved: number; released: number }> = {};
+        const statsMap: Record<string, { total: number; graded: number; approved: number; released: number; needsReview: number }> = {};
         for (const assignment of mapped) {
           const relatedSubs = subs.filter(s => s.assignment_id === assignment.id);
           statsMap[assignment.id] = {
@@ -124,6 +125,7 @@ const Assignments = () => {
             graded: relatedSubs.filter(s => ["ai_graded", "under_review", "approved", "released"].includes(s.status)).length,
             approved: relatedSubs.filter(s => ["approved", "released"].includes(s.status)).length,
             released: relatedSubs.filter(s => s.status === "released").length,
+            needsReview: relatedSubs.filter(s => ["submitted", "ai_grading", "ai_graded", "under_review"].includes(s.status)).length,
           };
         }
         setSubmissionStats(statsMap);
@@ -135,6 +137,15 @@ const Assignments = () => {
   useEffect(() => {
     fetchAssignments();
   }, [role, user, isDemo]);
+
+  useEffect(() => {
+    const nextStatus = searchParams.get("status");
+    if (nextStatus === "draft" || nextStatus === "published" || nextStatus === "closed") {
+      setStatusFilter(nextStatus);
+      return;
+    }
+    setStatusFilter("all");
+  }, [searchParams]);
 
   const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const toggleDepartment = (val: string) => setSelectedDepartments(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
@@ -151,7 +162,7 @@ const Assignments = () => {
         due_date: dueDate || null,
         lecturer_id: user.id,
         status: "draft" as const,
-        rubric: (rubric.length > 0 ? rubric : null) as any,
+        rubric: rubric.length > 0 ? rubric : null,
       }]);
       if (error) throw error;
       toast.success("Assignment created");
@@ -185,13 +196,23 @@ const Assignments = () => {
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
+  const view = searchParams.get("view");
+  const isPendingReviewView = view === "needs-review";
+
   const filteredAssignments = assignments.filter((assignment) => {
     const matchesSearch = !searchQuery || [assignment.title, assignment.module_code, assignment.description]
       .filter(Boolean)
       .some((value) => value!.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesStatus = statusFilter === "all" || assignment.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const reviewCount = submissionStats[assignment.id]?.needsReview ?? 0;
+    const matchesQueue = !isPendingReviewView || reviewCount > 0;
+    return matchesSearch && matchesStatus && matchesQueue;
+  });
+
+  const sortedAssignments = [...filteredAssignments].sort((left, right) => {
+    if (!isPendingReviewView) return 0;
+    return (submissionStats[right.id]?.needsReview ?? 0) - (submissionStats[left.id]?.needsReview ?? 0);
   });
 
   const drafts = assignments.filter(a => a.status === "draft").length;
@@ -317,6 +338,30 @@ const Assignments = () => {
         </CardContent></Card>
       </div>
 
+      {isPendingReviewView && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium">Pending review queue</p>
+              <p className="text-xs text-muted-foreground">
+                Showing assignments with submissions that still need grading, review, approval, or release.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("view");
+                setSearchParams(next);
+              }}
+            >
+              Show all assignments
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
           <div className="relative flex-1">
@@ -328,7 +373,16 @@ const Assignments = () => {
               className="pl-9"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(value: "all" | Assignment["status"]) => setStatusFilter(value)}>
+          <Select
+            value={statusFilter}
+            onValueChange={(value: "all" | Assignment["status"]) => {
+              setStatusFilter(value);
+              const next = new URLSearchParams(searchParams);
+              if (value === "all") next.delete("status");
+              else next.set("status", value);
+              setSearchParams(next);
+            }}
+          >
             <SelectTrigger className="w-full lg:w-[180px]">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
@@ -352,20 +406,32 @@ const Assignments = () => {
             </p>
           </CardContent>
         </Card>
-      ) : filteredAssignments.length === 0 ? (
+      ) : sortedAssignments.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Search className="h-10 w-10 text-muted-foreground/40 mb-3" />
             <p className="font-medium">No assignments match this view</p>
-            <p className="text-sm text-muted-foreground">Clear the search or status filter to see more assignments.</p>
-            <Button variant="outline" className="mt-4" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+            <p className="text-sm text-muted-foreground">
+              {isPendingReviewView
+                ? "There are no assignments with pending lecturer work in this filtered view."
+                : "Clear the search or status filter to see more assignments."}
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => {
+                setSearchQuery("");
+                setStatusFilter("all");
+                setSearchParams(new URLSearchParams());
+              }}
+            >
               Reset Filters
             </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredAssignments.map((assignment) => {
+          {sortedAssignments.map((assignment) => {
             const stats = submissionStats[assignment.id];
             const StatusIcon = statusIcon(assignment.status);
 
@@ -406,6 +472,9 @@ const Assignments = () => {
                             <span>{stats?.graded ?? 0} graded</span>
                             <span>{stats?.approved ?? 0} approved</span>
                             <span>{stats?.released ?? 0} released</span>
+                            <span className={(stats?.needsReview ?? 0) > 0 ? "font-medium text-warning" : ""}>
+                              {stats?.needsReview ?? 0} need review
+                            </span>
                           </div>
                           <div className="mt-2 flex gap-0.5 h-1.5 rounded-full overflow-hidden bg-muted">
                             {(stats?.released ?? 0) > 0 && <div className="bg-success h-full" style={{ width: `${(((stats?.released ?? 0) / (stats?.total || 1)) * 100)}%` }} />}

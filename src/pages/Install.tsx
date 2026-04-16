@@ -12,13 +12,19 @@ const Install = () => {
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
-    const handler = (e: Event) => {
+    const handlePrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
-    window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", () => setInstalled(true));
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    const handleInstalled = () => setInstalled(true);
+
+    window.addEventListener("beforeinstallprompt", handlePrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handlePrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
   }, []);
 
   const handleInstall = async () => {
@@ -54,8 +60,8 @@ const Install = () => {
           <div className="space-y-4 rounded-lg border bg-card p-4 text-left text-sm text-muted-foreground">
             <p className="font-medium text-foreground">To install on your device:</p>
             <div className="space-y-2">
-              <p><strong>iPhone/iPad:</strong> Tap the Share button → "Add to Home Screen"</p>
-              <p><strong>Android:</strong> Tap the browser menu (⋮) → "Add to Home Screen" or "Install app"</p>
+              <p><strong>iPhone/iPad:</strong> Tap the Share button, then choose "Add to Home Screen"</p>
+              <p><strong>Android:</strong> Tap the browser menu, then choose "Add to Home Screen" or "Install app"</p>
               <p><strong>Desktop:</strong> Click the install icon in the address bar</p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,138 +8,12 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { type AtRiskStudent, computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code";
 const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, submitted_at";
 const GRADE_FIELDS = "submission_id, ai_score, final_score";
-
-interface StudentTrajectory {
-  name: string;
-  email: string | null;
-  studentId: string;
-  scores: { score: number; date: string; assignmentTitle: string }[];
-}
-
-interface AtRiskStudent {
-  name: string;
-  email: string | null;
-  studentId: string;
-  riskScore: number;
-  riskLevel: "critical" | "high" | "moderate";
-  avgGrade: number;
-  lastGrade: number;
-  trend: "declining" | "stable-low" | "volatile";
-  flags: string[];
-  sparkline: number[];
-  recommendation: string;
-  predictedNext: number;
-}
-
-function linearRegression(values: number[]): { slope: number; intercept: number } {
-  const n = values.length;
-  if (n < 2) return { slope: 0, intercept: values[0] ?? 0 };
-
-  let sumX = 0;
-  let sumY = 0;
-  let sumXY = 0;
-  let sumXX = 0;
-  for (let i = 0; i < n; i++) {
-    sumX += i;
-    sumY += values[i];
-    sumXY += i * values[i];
-    sumXX += i * i;
-  }
-
-  const denom = n * sumXX - sumX * sumX;
-  const slope = denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
-  const intercept = (sumY - slope * sumX) / n;
-  return { slope, intercept };
-}
-
-function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null {
-  const scores = trajectory.scores.map((entry) => entry.score);
-  if (scores.length === 0) return null;
-
-  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-  const last = scores[scores.length - 1];
-  const { slope, intercept } = linearRegression(scores);
-  const predictedNext = Math.max(0, Math.min(100, slope * scores.length + intercept));
-
-  let riskScore = 0;
-  const flags: string[] = [];
-
-  if (avg < 40) {
-    riskScore += 30;
-    flags.push("Average below 40%");
-  } else if (avg < 50) {
-    riskScore += 20;
-    flags.push("Average below 50%");
-  }
-
-  if (slope < -3) {
-    riskScore += 25;
-    flags.push("Steep grade decline");
-  } else if (slope < -1) {
-    riskScore += 15;
-    flags.push("Gradual grade decline");
-  }
-
-  if (scores.length >= 2 && last < avg - 15) {
-    riskScore += 15;
-    flags.push("Sudden drop in last grade");
-  }
-
-  if (predictedNext < 40) {
-    riskScore += 15;
-    flags.push(`Predicted next: ${Math.round(predictedNext)}%`);
-  }
-
-  if (scores.length >= 3) {
-    const mean = avg;
-    const variance = scores.reduce((sum, value) => sum + (value - mean) ** 2, 0) / scores.length;
-    const stdDev = Math.sqrt(variance);
-    if (stdDev > 15) {
-      riskScore += 10;
-      flags.push("Highly inconsistent grades");
-    }
-  }
-
-  if (scores.length === 1 && last < 50) {
-    riskScore += 10;
-    flags.push("Only 1 submission graded");
-  }
-
-  riskScore = Math.min(100, riskScore);
-  if (riskScore < 25) return null;
-
-  const trend: AtRiskStudent["trend"] = slope < -1 ? "declining" : avg < 50 ? "stable-low" : "volatile";
-  const riskLevel: AtRiskStudent["riskLevel"] = riskScore >= 70 ? "critical" : riskScore >= 45 ? "high" : "moderate";
-
-  const recommendations: string[] = [];
-  if (slope < -3) recommendations.push("Urgent: schedule 1-on-1 meeting to discuss grade trajectory.");
-  if (avg < 40) recommendations.push("Refer to student support services and consider tutoring.");
-  if (last < avg - 15) recommendations.push("Recent performance dip - check for personal or academic issues.");
-  if (predictedNext < 40) recommendations.push("Predicted to fail next assessment - consider intervention before deadline.");
-  if (scores.length === 1) recommendations.push("Limited data - monitor closely after next submission.");
-  if (recommendations.length === 0) {
-    recommendations.push("Schedule check-in to discuss study strategies and provide additional resources.");
-  }
-
-  return {
-    name: trajectory.name,
-    email: trajectory.email,
-    studentId: trajectory.studentId,
-    riskScore,
-    riskLevel,
-    avgGrade: Math.round(avg),
-    lastGrade: Math.round(last),
-    trend,
-    flags,
-    sparkline: scores.slice(-6),
-    recommendation: recommendations.join(" "),
-    predictedNext: Math.round(predictedNext),
-  };
-}
 
 const EMPTY_GRADE_DIST = [
   { band: "1st (70-100%)", count: 0, percentage: 0, fill: "hsl(152, 56%, 45%)" },
@@ -152,6 +26,8 @@ const EMPTY_GRADE_DIST = [
 const PerformanceTrends = () => {
   const { user, isDemo } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [moduleFilter, setModuleFilter] = useState("all");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,6 +36,9 @@ const PerformanceTrends = () => {
   const [assessmentTrends, setAssessmentTrends] = useState<{ name: string; avgGrade: number; participation: number }[]>([]);
   const [gradeDist, setGradeDist] = useState(EMPTY_GRADE_DIST);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
+
+  const riskFilter = searchParams.get("risk") || "all";
+  const scoreBandFilter = searchParams.get("scoreBand") || "all";
 
   useEffect(() => {
     if (isDemo) {
@@ -348,6 +227,36 @@ const PerformanceTrends = () => {
         ? "border-destructive/20 bg-destructive/5"
         : "border-warning/30 bg-warning/5";
 
+  const filteredAtRiskStudents = useMemo(() => {
+    return atRiskStudents.filter((student) => {
+      const matchesRisk =
+        riskFilter === "all" ||
+        (riskFilter === "high-plus"
+          ? student.riskLevel === "critical" || student.riskLevel === "high"
+          : student.riskLevel === riskFilter);
+
+      const matchesScoreBand =
+        scoreBandFilter === "all" ||
+        (scoreBandFilter === "lt40" && student.avgGrade < 40) ||
+        (scoreBandFilter === "40-49" && student.avgGrade >= 40 && student.avgGrade < 50) ||
+        (scoreBandFilter === "50-59" && student.avgGrade >= 50 && student.avgGrade < 60) ||
+        (scoreBandFilter === "60plus" && student.avgGrade >= 60);
+
+      return matchesRisk && matchesScoreBand;
+    });
+  }, [atRiskStudents, riskFilter, scoreBandFilter]);
+
+  const updateFilters = (nextRisk: string, nextScoreBand: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextRisk === "all") next.delete("risk");
+    else next.set("risk", nextRisk);
+
+    if (nextScoreBand === "all") next.delete("scoreBand");
+    else next.set("scoreBand", nextScoreBand);
+
+    setSearchParams(next);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -361,17 +270,45 @@ const PerformanceTrends = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <Select value={moduleFilter} onValueChange={setModuleFilter}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filter by module" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Modules</SelectItem>
-            {modules.map((module) => (
-              <SelectItem key={module} value={module}>{module}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={moduleFilter} onValueChange={setModuleFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filter by module" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Modules</SelectItem>
+              {modules.map((module) => (
+                <SelectItem key={module} value={module}>{module}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={riskFilter} onValueChange={(value) => updateFilters(value, scoreBandFilter)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by risk" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All risk levels</SelectItem>
+              <SelectItem value="high-plus">High + critical</SelectItem>
+              <SelectItem value="critical">Critical only</SelectItem>
+              <SelectItem value="high">High only</SelectItem>
+              <SelectItem value="moderate">Moderate only</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={scoreBandFilter} onValueChange={(value) => updateFilters(riskFilter, value)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by score band" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All score bands</SelectItem>
+              <SelectItem value="lt40">Below 40%</SelectItem>
+              <SelectItem value="40-49">40-49%</SelectItem>
+              <SelectItem value="50-59">50-59%</SelectItem>
+              <SelectItem value="60plus">60% and above</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {atRiskStudents.length > 0 && (
           <Badge variant="destructive" className="gap-1">
             <BellRing className="h-3 w-3" />
@@ -379,6 +316,22 @@ const PerformanceTrends = () => {
           </Badge>
         )}
       </div>
+
+      {(riskFilter !== "all" || scoreBandFilter !== "all") && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="text-sm font-medium">Filtered intervention view</p>
+              <p className="text-xs text-muted-foreground">
+                Showing {filteredAtRiskStudents.length} student{filteredAtRiskStudents.length === 1 ? "" : "s"} matching the current risk and score criteria.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => updateFilters("all", "all")}>
+              Clear filters
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {noData ? (
         <Card>
@@ -439,14 +392,18 @@ const PerformanceTrends = () => {
                 <CardDescription>Predictive model output - higher score = greater risk</CardDescription>
               </CardHeader>
               <CardContent>
-                {atRiskStudents.length === 0 ? (
+                {filteredAtRiskStudents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
                     <TrendingUp className="mb-2 h-8 w-8 text-success" />
-                    <p className="text-sm">No at-risk students detected. All students are performing above threshold.</p>
+                    <p className="text-sm">
+                      {atRiskStudents.length === 0
+                        ? "No at-risk students detected. All students are performing above threshold."
+                        : "No students match the current filter combination."}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {atRiskStudents.slice(0, 5).map((student) => (
+                    {filteredAtRiskStudents.slice(0, 5).map((student) => (
                       <div key={student.studentId} className="flex items-center justify-between gap-2">
                         <span className="flex-1 truncate text-sm">{student.name}</span>
                         <div className="flex items-center gap-2">
@@ -480,12 +437,14 @@ const PerformanceTrends = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {atRiskStudents.length === 0 ? (
+              {filteredAtRiskStudents.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  No at-risk students detected based on current grading data.
+                  {atRiskStudents.length === 0
+                    ? "No at-risk students detected based on current grading data."
+                    : "No at-risk students match the current filter view."}
                 </p>
               ) : (
-                atRiskStudents.map((student) => {
+                filteredAtRiskStudents.map((student) => {
                   const sparkData = student.sparkline.map((value, index) => ({ x: index, y: value }));
                   const isExpanded = expandedStudent === student.studentId;
 
@@ -554,19 +513,32 @@ const PerformanceTrends = () => {
                               <p className="text-muted-foreground">Predicted</p>
                             </div>
                           </div>
-                          {student.email && (
+                          <div className="flex flex-wrap gap-2">
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="mt-2 text-xs"
+                              variant="default"
+                              className="text-xs"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                window.location.href = `mailto:${student.email}?subject=Academic Support - Performance Check-in&body=Dear ${student.name},%0A%0AI would like to schedule a meeting to discuss your academic progress and explore support options available to you.%0A%0ABest regards`;
+                                navigate(`/dashboard/student/${encodeURIComponent(student.studentId)}`);
                               }}
                             >
-                              <Bell className="mr-1 h-3 w-3" /> Contact Student
+                              Open student plan
                             </Button>
-                          )}
+                            {student.email && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  window.location.href = `mailto:${student.email}?subject=Academic Support - Performance Check-in&body=Dear ${student.name},%0A%0AI would like to schedule a meeting to discuss your academic progress and explore support options available to you.%0A%0ABest regards`;
+                                }}
+                              >
+                                <Bell className="mr-1 h-3 w-3" /> Contact Student
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

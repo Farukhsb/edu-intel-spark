@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
-const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "Physics", "Biology"];
+const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
   { value: "100", label: "Level 100 (Year 1)" },
   { value: "200", label: "Level 200 (Year 2)" },
@@ -26,6 +26,9 @@ const getErrorMessage = (message: string): string => {
   if (message.includes("rate limit") || message.includes("too many")) return "Too many attempts. Please wait a moment and try again.";
   return message || "Something went wrong. Please try again.";
 };
+
+const getErrorFromUnknown = (error: unknown) =>
+  error instanceof Error ? error.message : "Something went wrong. Please try again.";
 
 const getPasswordStrength = (password: string): { score: number; label: string; color: string } => {
   let score = 0;
@@ -72,8 +75,8 @@ const Auth = () => {
     try {
       await signIn(loginEmail, loginPassword);
       navigate("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Login failed", description: getErrorMessage(err.message), variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Login failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -99,11 +102,27 @@ const Auth = () => {
     }
     setLoading(true);
     try {
-      await signUp(signupEmail, signupPassword, signupName, signupRole, signupCohort, signupDepartment);
+      const result = await signUp(
+        signupEmail,
+        signupPassword,
+        signupName,
+        signupRole,
+        signupCohort,
+        signupDepartment
+      );
+
+      if (result.requiresEmailConfirmation) {
+        toast({
+          title: "Account created",
+          description: "Please check your email to confirm your account before signing in.",
+        });
+        return;
+      }
+
       toast({ title: "Account created!", description: "Welcome to GradeAI." });
       navigate("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Signup failed", description: getErrorMessage(err.message), variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Signup failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -120,8 +139,8 @@ const Auth = () => {
       await resetPassword(resetEmail);
       toast({ title: "Reset email sent", description: "Check your inbox for a password reset link to choose a new password." });
       setShowForgotPassword(false);
-    } catch (err: any) {
-      toast({ title: "Reset failed", description: getErrorMessage(err.message), variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Reset failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
       setLoading(false);
     }
