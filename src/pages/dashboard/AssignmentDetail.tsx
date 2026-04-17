@@ -617,11 +617,17 @@ const AssignmentDetail = () => {
       });
       if (error) throw error;
       const flags = Array.isArray(data?.flags) ? (data.flags as PlagiarismFlag[]) : [];
+      const warnings = Array.isArray(data?.warnings)
+        ? data.warnings.filter((warning: unknown): warning is string => typeof warning === "string" && warning.trim().length > 0)
+        : [];
       setPlagiarismFlags(flags);
-      setPlagiarismSummary(data?.summary || "Analysis complete");
+      setPlagiarismSummary(
+        [data?.summary || "Analysis complete", ...warnings].filter(Boolean).join(" "),
+      );
 
       if (flags.length === 0) toast.success("No suspicious similarities found");
       else toast.warning(`${flags.length} potential issue(s) flagged`);
+      if (warnings.length > 0) toast.warning(warnings[0]);
     } catch (err: any) {
       toast.error(err?.message || "Plagiarism check failed");
     }

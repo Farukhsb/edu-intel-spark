@@ -16,6 +16,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const MAX_SINGLE_TEXT_CHARS = 12000;
+const MAX_MULTI_TEXT_CHARS = 3500;
+const MAX_INLINE_PDF_BYTES = 600_000;
+const OPENAI_RETRY_ATTEMPTS = 2;
+
 type IntegrityType = "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
 
 type IntegrityFlag = {
@@ -131,6 +136,15 @@ function decodePdfText(base64: string) {
   }
 }
 
+function truncateText(text: string, maxChars: number) {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}\n\n[truncated]`;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function isRecoverablePersistenceError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { code?: string; message?: string; details?: string };
@@ -159,14 +173,38 @@ async function fetchFileContent(
       let binary = "";
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       const llmContent = btoa(binary);
-      return { llmContent, plainText: decodePdfText(llmContent), isPdf: true };
+      return {
+        llmContent: bytes.byteLength <= MAX_INLINE_PDF_BYTES ? llmContent : "",
+        plainText: truncateText(decodePdfText(llmContent), MAX_SINGLE_TEXT_CHARS),
+        isPdf: true,
+      };
     }
 
     const text = await data.text();
-    return { llmContent: text, plainText: normalizeReadableText(text), isPdf: false };
+    return {
+      llmContent: "",
+      plainText: truncateText(normalizeReadableText(text), MAX_SINGLE_TEXT_CHARS),
+      isPdf: false,
+    };
   } catch {
     return { llmContent: "", plainText: "", isPdf: false };
   }
+}
+
+async function createIntegrityResponseWithRetry(body: Record<string, unknown>) {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= OPENAI_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await createResponse(body);
+    } catch (error) {
+      lastError = error;
+      console.warn(`check-plagiarism OpenAI attempt ${attempt} failed:`, error);
+      if (attempt < OPENAI_RETRY_ATTEMPTS) {
+        await sleep(250 * attempt);
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Integrity analysis request failed");
 }
 
 function normalizeFlags(flags: unknown, submissions: SubmissionRow[]): IntegrityFlag[] {
@@ -238,6 +276,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const startedAt = Date.now();
     const body = await req.json();
     const integrityModel = getModel("OPENAI_INTEGRITY_MODEL", "gpt-5.4-mini");
     const { user } = await requireLecturer(req);
@@ -366,11 +405,13 @@ Rules:
 - Never output a verdict, only a risk indicator with evidence.`;
 
     const userContent: Array<Record<string, string>> = [];
+    const warnings: string[] = [];
 
     if (isSingleMode) {
       const sub = submissions[0];
       const content = contentMap.get(sub.id) || { llmContent: "", plainText: "", isPdf: false };
-      const preview = content.plainText.substring(0, 15000);
+      const preview = truncateText(content.plainText, MAX_SINGLE_TEXT_CHARS);
+      const includeInlinePdf = content.isPdf && Boolean(content.llmContent);
 
       userContent.push({
         type: "input_text",
@@ -380,26 +421,34 @@ Assignment: ${assignment.title}
 Student: ${sub.student_name || sub.student_email || "Anonymous"}
 File: ${sub.file_name || "submission"}
 
-${content.isPdf ? "PDF is attached. Use it as the primary source." : `Content:\n${preview}`}
+${includeInlinePdf ? "PDF is attached. Use it as the primary source." : `Content:\n${preview || "No readable text could be extracted."}`}
 
 Return a structured flag only if there is a genuine concern. Otherwise return no flags.`,
       });
 
-      if (content.isPdf && content.llmContent) {
+      if (includeInlinePdf) {
         userContent.push({
           type: "input_file",
           filename: sub.file_name || "submission.pdf",
           file_data: `data:application/pdf;base64,${content.llmContent}`,
         });
+      } else if (content.isPdf) {
+        warnings.push(`Skipped inline PDF attachment for ${sub.file_name || "submission"} due to size; using extracted text only.`);
       }
     } else {
       const summaries = submissions.map((submission) => {
         const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
-        if (content.isPdf) {
-          return `${submission.student_name || submission.student_email || "Anonymous"} (submission id: ${submission.id}, PDF attached)`;
+        const preview = truncateText(content.plainText, MAX_MULTI_TEXT_CHARS);
+        const studentLabel = `${submission.student_name || submission.student_email || "Anonymous"} (submission id: ${submission.id})`;
+        if (!preview) {
+          warnings.push(`No readable text extracted for ${submission.file_name || submission.id}; similarity analysis may be less reliable.`);
+          return `${studentLabel}\n[no readable text extracted]`;
+        }
+        if (content.isPdf && !content.llmContent) {
+          warnings.push(`Processed ${submission.file_name || submission.id} as extracted text only because the PDF was too large to inline.`);
         }
 
-        return `${submission.student_name || submission.student_email || "Anonymous"} (submission id: ${submission.id})\n${content.plainText.substring(0, 8000)}`;
+        return `${studentLabel}\n${preview}`;
       });
 
       userContent.push({
@@ -413,92 +462,86 @@ ${summaries.join("\n\n---\n\n")}
 
 Only flag real concerns. Return valid JSON only.`,
       });
-
-      submissions.forEach((submission) => {
-        const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
-        if (content.isPdf && content.llmContent) {
-          userContent.push({
-            type: "input_file",
-            filename: submission.file_name || `${submission.id}.pdf`,
-            file_data: `data:application/pdf;base64,${content.llmContent}`,
-          });
-        }
-      });
     }
-
-    const aiData = await createResponse({
-      model: integrityModel,
-      input: [
-        { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
-        { role: "user", content: userContent },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "report_integrity_results",
-          schema: {
-            type: "object",
-            properties: {
-              flags: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    student_a: { type: "string" },
-                    student_b: { type: "string" },
-                    submission_a_id: { type: "string" },
-                    submission_b_id: { type: "string" },
-                    similarity_score: { type: "number" },
-                    ai_suspicion_score: { type: "number" },
-                    baseline_deviation_score: { type: "number" },
-                    total_risk_score: { type: "number" },
-                    reason: { type: "string" },
-                    evidence_summary: { type: "string" },
-                    matched_excerpt: { type: "string" },
-                    recommended_action: { type: "string", enum: ["clear", "review", "investigate"] },
-                    integrity_type: {
-                      type: "string",
-                      enum: ["similarity", "ai-writing", "baseline-deviation", "mixed"],
-                    },
-                    severity: { type: "string", enum: ["low", "medium", "high"] },
-                  },
-                  required: [
-                    "student_a",
-                    "student_b",
-                    "submission_a_id",
-                    "submission_b_id",
-                    "similarity_score",
-                    "ai_suspicion_score",
-                    "baseline_deviation_score",
-                    "total_risk_score",
-                    "reason",
-                    "evidence_summary",
-                    "matched_excerpt",
-                    "recommended_action",
-                    "integrity_type",
-                    "severity",
-                  ],
-                  additionalProperties: false,
-                },
-              },
-              summary: { type: "string" },
-            },
-            required: ["flags", "summary"],
-            additionalProperties: false,
-          },
-          strict: true,
-        },
-      },
-    });
 
     let parsedFlags: IntegrityFlag[] = [];
     let summary = "Analysis complete";
     try {
-      const parsed = parseJsonText(extractOutputText(aiData));
-      parsedFlags = normalizeFlags(parsed?.flags, submissions);
-      summary = typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : summary;
-    } catch {
-      parsedFlags = normalizeFlags(aiData?.output?.[0]?.content?.[0]?.json?.flags, submissions);
+      const aiData = await createIntegrityResponseWithRetry({
+        model: integrityModel,
+        input: [
+          { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
+          { role: "user", content: userContent },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "report_integrity_results",
+            schema: {
+              type: "object",
+              properties: {
+                flags: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      student_a: { type: "string" },
+                      student_b: { type: "string" },
+                      submission_a_id: { type: "string" },
+                      submission_b_id: { type: "string" },
+                      similarity_score: { type: "number" },
+                      ai_suspicion_score: { type: "number" },
+                      baseline_deviation_score: { type: "number" },
+                      total_risk_score: { type: "number" },
+                      reason: { type: "string" },
+                      evidence_summary: { type: "string" },
+                      matched_excerpt: { type: "string" },
+                      recommended_action: { type: "string", enum: ["clear", "review", "investigate"] },
+                      integrity_type: {
+                        type: "string",
+                        enum: ["similarity", "ai-writing", "baseline-deviation", "mixed"],
+                      },
+                      severity: { type: "string", enum: ["low", "medium", "high"] },
+                    },
+                    required: [
+                      "student_a",
+                      "student_b",
+                      "submission_a_id",
+                      "submission_b_id",
+                      "similarity_score",
+                      "ai_suspicion_score",
+                      "baseline_deviation_score",
+                      "total_risk_score",
+                      "reason",
+                      "evidence_summary",
+                      "matched_excerpt",
+                      "recommended_action",
+                      "integrity_type",
+                      "severity",
+                    ],
+                    additionalProperties: false,
+                  },
+                },
+                summary: { type: "string" },
+              },
+              required: ["flags", "summary"],
+              additionalProperties: false,
+            },
+            strict: true,
+          },
+        },
+      });
+
+      try {
+        const parsed = parseJsonText(extractOutputText(aiData));
+        parsedFlags = normalizeFlags(parsed?.flags, submissions);
+        summary = typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : summary;
+      } catch {
+        parsedFlags = normalizeFlags(aiData?.output?.[0]?.content?.[0]?.json?.flags, submissions);
+      }
+    } catch (aiError) {
+      warnings.push("AI similarity analysis was temporarily unavailable; returning baseline and persistence-safe results only.");
+      console.error("check-plagiarism AI analysis failed after retries:", aiError);
     }
 
     const similarityBySubmission = new Map<string, number>();
@@ -778,7 +821,15 @@ Only flag real concerns. Return valid JSON only.`,
         ? `${summary} ${allFlags.length} submission(s) crossed one or more integrity risk thresholds.`
         : `${summary} No submissions crossed the current integrity thresholds.`;
 
-    return new Response(JSON.stringify({ flags: allFlags, summary: finalSummary }), {
+    console.log("check-plagiarism completed", {
+      assignmentId: requestedAssignmentId,
+      submissionCount: submissions.length,
+      flags: allFlags.length,
+      warnings: warnings.length,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return new Response(JSON.stringify({ flags: allFlags, summary: finalSummary, warnings }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
