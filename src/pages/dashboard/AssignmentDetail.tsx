@@ -604,30 +604,78 @@ const AssignmentDetail = () => {
     if (!assignment) return;
     setCheckingPlagiarism(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-plagiarism", {
-        body: {
-          assignmentId: assignment.id,
-          submissions: submissions.map((s) => ({
-            id: s.id,
-            student_name: s.student_name || s.student_email || "Anonymous",
-            file_name: s.file_name,
-            file_url: s.file_url,
-          })),
-        },
-      });
-      if (error) throw error;
-      const flags = Array.isArray(data?.flags) ? (data.flags as PlagiarismFlag[]) : [];
-      const warnings = Array.isArray(data?.warnings)
-        ? data.warnings.filter((warning: unknown): warning is string => typeof warning === "string" && warning.trim().length > 0)
-        : [];
-      setPlagiarismFlags(flags);
-      setPlagiarismSummary(
-        [data?.summary || "Analysis complete", ...warnings].filter(Boolean).join(" "),
-      );
+      const batchSize = 3;
+      const collectedFlags: PlagiarismFlag[] = [];
+      const collectedSummaries: string[] = [];
+      const collectedWarnings: string[] = [];
+      let failedBatches = 0;
 
-      if (flags.length === 0) toast.success("No suspicious similarities found");
-      else toast.warning(`${flags.length} potential issue(s) flagged`);
-      if (warnings.length > 0) toast.warning(warnings[0]);
+      for (let index = 0; index < submissions.length; index += batchSize) {
+        const batch = submissions.slice(index, index + batchSize);
+        const { data, error } = await supabase.functions.invoke("check-plagiarism", {
+          body: {
+            assignmentId: assignment.id,
+            submissions: batch.map((s) => ({
+              id: s.id,
+              student_name: s.student_name || s.student_email || "Anonymous",
+              file_name: s.file_name,
+              file_url: s.file_url,
+            })),
+          },
+        });
+
+        if (error) {
+          failedBatches += 1;
+          console.error("Plagiarism batch failed:", { batchStart: index, batchSize: batch.length, error });
+          collectedWarnings.push(`A plagiarism analysis batch of ${batch.length} submission(s) failed and was skipped.`);
+          continue;
+        }
+
+        if (Array.isArray(data?.flags)) {
+          collectedFlags.push(...(data.flags as PlagiarismFlag[]));
+        }
+
+        if (typeof data?.summary === "string" && data.summary.trim()) {
+          collectedSummaries.push(data.summary.trim());
+        }
+
+        if (Array.isArray(data?.warnings)) {
+          collectedWarnings.push(
+            ...data.warnings.filter((warning: unknown): warning is string => typeof warning === "string" && warning.trim().length > 0),
+          );
+        }
+      }
+
+      const uniqueFlags = collectedFlags.filter((flag, index, array) => {
+        return (
+          array.findIndex(
+            (candidate) =>
+              candidate.submission_a_id === flag.submission_a_id &&
+              candidate.submission_b_id === flag.submission_b_id &&
+              candidate.reason === flag.reason,
+          ) === index
+        );
+      });
+
+      const summaryParts = [
+        collectedSummaries[0] || "Analysis complete",
+        ...Array.from(new Set(collectedWarnings)),
+      ];
+
+      if (failedBatches > 0) {
+        summaryParts.push(`${failedBatches} batch(es) could not be analysed and were skipped.`);
+      }
+
+      setPlagiarismFlags(uniqueFlags);
+      setPlagiarismSummary(summaryParts.filter(Boolean).join(" "));
+
+      if (uniqueFlags.length === 0) toast.success("No suspicious similarities found");
+      else toast.warning(`${uniqueFlags.length} potential issue(s) flagged`);
+      if (failedBatches > 0) {
+        toast.warning(`${failedBatches} plagiarism batch(es) failed and were skipped`);
+      } else if (collectedWarnings.length > 0) {
+        toast.warning(collectedWarnings[0]);
+      }
     } catch (err: any) {
       toast.error(err?.message || "Plagiarism check failed");
     }
