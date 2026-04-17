@@ -131,6 +131,18 @@ function decodePdfText(base64: string) {
   }
 }
 
+function isRecoverablePersistenceError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: string; message?: string; details?: string };
+  return (
+    candidate.code === "42P01" ||
+    candidate.code === "42703" ||
+    candidate.code === "23514" ||
+    candidate.message?.toLowerCase().includes("does not exist") === true ||
+    candidate.message?.toLowerCase().includes("check constraint") === true
+  );
+}
+
 async function fetchFileContent(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   sub: { file_url?: string; file_name?: string | null },
@@ -274,12 +286,20 @@ serve(async (req) => {
     }
 
     const studentIds = submissions.map((submission) => submission.student_id).filter((value): value is string => Boolean(value));
-    const { data: profileRows } = studentIds.length > 0
+    const { data: profileRows, error: profileRowsError } = studentIds.length > 0
       ? await supabaseAdmin
           .from("student_writing_profiles")
           .select("*")
           .in("student_id", studentIds)
-      : { data: [] };
+      : { data: [], error: null };
+
+    if (profileRowsError) {
+      if (isRecoverablePersistenceError(profileRowsError)) {
+        console.warn("student_writing_profiles unavailable, continuing without baseline persistence:", profileRowsError);
+      } else {
+        throw profileRowsError;
+      }
+    }
 
     const profileMap = new Map<string, StoredWritingProfile>(
       ((profileRows || []) as Array<Record<string, unknown>>).map((row) => [
@@ -671,7 +691,10 @@ Only flag real concerns. Return valid JSON only.`,
       .in("submission_id", submissions.map((submission) => submission.id))
       .eq("lecturer_id", user.id);
 
-    if (reviewsError) throw reviewsError;
+    if (reviewsError && !isRecoverablePersistenceError(reviewsError)) throw reviewsError;
+    if (reviewsError) {
+      console.warn("academic_integrity_reviews unavailable, continuing without persisted reviews:", reviewsError);
+    }
 
     const existingReviewMap = new Map(
       ((existingReviews || []) as Array<Record<string, unknown>>).map((review) => [String(review.submission_id), review]),
@@ -732,13 +755,19 @@ Only flag real concerns. Return valid JSON only.`,
       const { error: persistError } = await supabaseAdmin
         .from("academic_integrity_reviews")
         .upsert(reviewUpserts, { onConflict: "submission_id,lecturer_id" });
-      if (persistError) throw persistError;
+      if (persistError && !isRecoverablePersistenceError(persistError)) throw persistError;
+      if (persistError) {
+        console.warn("Failed to persist academic integrity reviews, returning analysis without persistence:", persistError);
+      }
     }
 
     if (profileUpserts.length > 0) {
       const { error: profileError } = await supabaseAdmin
         .from("student_writing_profiles")
         .upsert(profileUpserts, { onConflict: "student_id" });
+      if (profileError && !isRecoverablePersistenceError(profileError)) {
+        throw profileError;
+      }
       if (profileError) {
         console.error("Failed to update writing profiles:", profileError);
       }
