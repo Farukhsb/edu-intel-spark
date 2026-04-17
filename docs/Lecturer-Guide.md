@@ -1,0 +1,178 @@
+# GradeAI Lecturer Guide
+
+## Purpose
+
+GradeAI is an academic workflow platform designed to help lecturers manage the full marking cycle in one place. It supports:
+
+- assignment creation and rubric setup
+- student submission handling
+- AI-assisted grading with lecturer review
+- academic integrity checking
+- release of reviewed grades
+- at-risk student monitoring and intervention tracking
+
+The goal is not to replace lecturer judgement. The goal is to reduce repetitive marking effort, surface useful evidence faster, and keep the final decision with the lecturer.
+
+## What Lecturers Can Do
+
+As a lecturer, you can use the platform to:
+
+- create and publish assignments
+- define rubric criteria for structured marking
+- receive student submissions
+- run AI grading against the rubric
+- review, edit, approve, and release grades
+- run similarity and AI-writing integrity checks
+- review flagged integrity cases
+- monitor at-risk students
+- log interventions and send follow-up notifications
+
+## How To Navigate The Website
+
+The lecturer dashboard is organised around the main assessment workflow.
+
+- `Overview`
+  Use this to get a quick summary of submission activity, grading progress, and students who may need attention.
+- `Assignments`
+  Use this to create assignments, open a specific assignment, and manage submission workflows.
+- `Learning Outcomes`
+  Use this to review assessment alignment and outcome visibility.
+- `Cohort Analytics`
+  Use this to see trends and distributions across groups of students.
+- `Performance Trends`
+  Use this to track movement in grades over time.
+- `Academic Integrity`
+  Use this to review persisted integrity cases after running checks from an assignment.
+- `Institutional Insights`
+  Use this for broader reporting and compliance-style views.
+- `Accreditation`
+  Use this for evidence-oriented assessment reporting.
+- `Settings`
+  Use this for account and system-level preferences.
+
+## Recommended Lecturer Workflow
+
+### 1. Create and Publish an Assignment
+
+From `Assignments`:
+
+- create a new assignment
+- add title, description, module code, due date, and max score
+- build the rubric with weighted criteria
+- publish the assignment so students can submit
+
+### 2. Wait for Student Submissions
+
+Once students submit, their work appears inside the assignment detail view. Lecturers can:
+
+- open submitted files
+- select one or more submissions
+- review current workflow status
+
+### 3. Run Integrity Checks
+
+From the assignment page:
+
+- run `Check plagiarism`
+
+This checks:
+
+- similarity between student submissions in the same assignment
+- AI-writing suspicion indicators within a submission
+
+The result is stored and later appears in the `Academic Integrity` queue for lecturer review.
+
+### 4. Run AI Grading
+
+From the same assignment page:
+
+- select submitted work
+- run `AI grade`
+
+The system grades against the rubric and returns:
+
+- a score
+- written feedback
+- per-criterion breakdown
+
+### 5. Review and Approve
+
+After AI grading:
+
+- open the submission review
+- adjust score or feedback if needed
+- approve the result when satisfied
+
+### 6. Release Grades
+
+When review is complete:
+
+- release grades to students
+
+Students can then view:
+
+- their released score
+- feedback
+- rubric breakdown
+
+### 7. Monitor Risk and Support Students
+
+Use the student profile and improvement workflow to:
+
+- identify students needing attention
+- log interventions
+- send support notifications and follow-up reminders
+- review improvement-plan progress
+
+## Key Screens
+
+### Lecturer Dashboard Overview
+
+This is the main starting point for lecturers.
+
+![Lecturer Dashboard Overview](screenshots/lecturer-dashboard-overview.jpg)
+
+### Main Dashboard View
+
+This shows the broader working environment used across lecturer workflows.
+
+![Overview Dashboard](screenshots/overview-dashboard.jpg)
+
+### Cohort Analytics
+
+Use this to review overall patterns across groups of students.
+
+![Cohort Analytics Dashboard](screenshots/cohort-analytics-dashboard.jpg)
+
+### Grade Distribution Analytics
+
+Use this to understand how marks are distributed across the cohort.
+
+![Grade Distribution Analytics](screenshots/grade-distribution-analytics.jpg)
+
+### Predictive Risk Analytics
+
+Use this to identify which students may need additional support or intervention.
+
+![Predictive Risk Analytics](screenshots/predictive-risk-analytics.jpg)
+
+## Important Notes For Lecturers
+
+- AI grading is decision support, not final academic judgement.
+- Integrity analysis is evidence support, not proof of misconduct.
+- Final review and release decisions should remain with the lecturer.
+- The integrity review queue shows persisted results. To refresh integrity evidence, run the integrity check again from the assignment page.
+
+## Best Practice
+
+For the best results:
+
+- create clear rubrics before grading
+- run integrity checks before final release
+- review AI feedback before approving grades
+- use intervention tracking for students with repeated issues
+- keep follow-up actions documented in the platform
+
+## Short Summary
+
+GradeAI helps lecturers move from assignment setup to grading, integrity review, release, and student support in one connected workflow. It is designed to save time, improve consistency, and keep lecturers in control of final academic decisions.
