@@ -16,8 +16,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const MAX_SUBMISSIONS_PER_REQUEST = 4;
-
 type IntegrityType = "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
 
 type IntegrityFlag = {
@@ -244,13 +242,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ flags: [], summary: "No submissions provided" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    }
-
-    if (requestedSubmissionIds.length > MAX_SUBMISSIONS_PER_REQUEST) {
-      throw new HttpError(
-        400,
-        `Plagiarism checks are limited to ${MAX_SUBMISSIONS_PER_REQUEST} submissions per request.`,
-      );
     }
 
     const supabaseAdmin = createAdminClient();
