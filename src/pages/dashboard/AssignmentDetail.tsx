@@ -604,24 +604,51 @@ const AssignmentDetail = () => {
     if (!assignment) return;
     setCheckingPlagiarism(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-plagiarism", {
-        body: {
-          assignmentId: assignment.id,
-          submissions: submissions.map((s) => ({
-            id: s.id,
-            student_name: s.student_name || s.student_email || "Anonymous",
-            file_name: s.file_name,
-            file_url: s.file_url,
-          })),
-        },
-      });
-      if (error) throw error;
-      const flags = Array.isArray(data?.flags) ? (data.flags as PlagiarismFlag[]) : [];
-      setPlagiarismFlags(flags);
-      setPlagiarismSummary(data?.summary || "Analysis complete");
+      const batchSize = 4;
+      const allFlags: PlagiarismFlag[] = [];
+      const summaries: string[] = [];
 
-      if (flags.length === 0) toast.success("No suspicious similarities found");
-      else toast.warning(`${flags.length} potential issue(s) flagged`);
+      for (let index = 0; index < submissions.length; index += batchSize) {
+        const batch = submissions.slice(index, index + batchSize);
+        const { data, error } = await supabase.functions.invoke("check-plagiarism", {
+          body: {
+            assignmentId: assignment.id,
+            submissions: batch.map((s) => ({
+              id: s.id,
+              student_name: s.student_name || s.student_email || "Anonymous",
+              file_name: s.file_name,
+              file_url: s.file_url,
+            })),
+          },
+        });
+
+        if (error) throw error;
+
+        if (Array.isArray(data?.flags)) {
+          allFlags.push(...(data.flags as PlagiarismFlag[]));
+        }
+
+        if (typeof data?.summary === "string" && data.summary.trim()) {
+          summaries.push(data.summary.trim());
+        }
+      }
+
+      const uniqueFlags = allFlags.filter((flag, index, array) => {
+        return (
+          array.findIndex(
+            (candidate) =>
+              candidate.submission_a_id === flag.submission_a_id &&
+              candidate.submission_b_id === flag.submission_b_id &&
+              candidate.reason === flag.reason,
+          ) === index
+        );
+      });
+
+      setPlagiarismFlags(uniqueFlags);
+      setPlagiarismSummary(summaries.join(" ").trim() || "Analysis complete");
+
+      if (uniqueFlags.length === 0) toast.success("No suspicious similarities found");
+      else toast.warning(`${uniqueFlags.length} potential issue(s) flagged`);
     } catch (err: any) {
       toast.error(err?.message || "Plagiarism check failed");
     }
