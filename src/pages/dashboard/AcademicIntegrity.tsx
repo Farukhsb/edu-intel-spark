@@ -44,13 +44,26 @@ interface FlaggedCase {
   status: string;
   submittedAt: string;
   riskLevel: "high" | "medium" | "low";
+  analysisLimited: boolean;
+  limitations: string[];
   totalScore: number;
   aiWritingScore: number;
   similarityScore: number;
+  overlapBreakdown: {
+    totalOverlap: number;
+    citedOverlap: number;
+    uncitedOverlap: number;
+    internalPeerOverlap: number;
+    externalSourceOverlap: number;
+  };
   baselineDeviationScore: number;
   evidence: {
     aiWriting: IntegrityEvidenceItem[];
     similarity: IntegrityEvidenceItem[];
+    uncitedMatches: IntegrityEvidenceItem[];
+    citedMatches: IntegrityEvidenceItem[];
+    peerMatches: IntegrityEvidenceItem[];
+    externalMatches: IntegrityEvidenceItem[];
     baselineDeviation: IntegrityEvidenceItem[];
   };
   flags: string[];
@@ -155,16 +168,29 @@ const AcademicIntegrity = () => {
               assignmentId: submission.assignment_id,
               student: submission.student_name || submission.student_email || "Student",
               assignment: assignmentMap.get(submission.assignment_id) || "Unknown assignment",
-              status: submission.status,
-              submittedAt: submission.submitted_at,
-              riskLevel: snapshot?.riskLevel || "low",
-              totalScore: snapshot?.totalScore || 0,
+                status: submission.status,
+                submittedAt: submission.submitted_at,
+                riskLevel: snapshot?.riskLevel || "low",
+                analysisLimited: snapshot?.analysisLimited || false,
+                limitations: snapshot?.limitations || [],
+                totalScore: snapshot?.totalScore || 0,
               aiWritingScore: snapshot?.aiWritingScore || 0,
               similarityScore: snapshot?.similarityScore || 0,
+              overlapBreakdown: snapshot?.overlapBreakdown || {
+                totalOverlap: snapshot?.similarityScore || 0,
+                citedOverlap: 0,
+                uncitedOverlap: snapshot?.similarityScore || 0,
+                internalPeerOverlap: snapshot?.similarityScore || 0,
+                externalSourceOverlap: 0,
+              },
               baselineDeviationScore: snapshot?.baselineDeviationScore || 0,
               evidence: {
                 aiWriting: snapshot?.evidence?.aiWriting || [],
                 similarity: snapshot?.evidence?.similarity || [],
+                uncitedMatches: snapshot?.evidence?.uncitedMatches || [],
+                citedMatches: snapshot?.evidence?.citedMatches || [],
+                peerMatches: snapshot?.evidence?.peerMatches || [],
+                externalMatches: snapshot?.evidence?.externalMatches || [],
                 baselineDeviation: snapshot?.evidence?.baselineDeviation || [],
               },
               flags: snapshot?.flags || [],
@@ -217,6 +243,9 @@ const AcademicIntegrity = () => {
   const riskVariant = (level: FlaggedCase["riskLevel"]) =>
     level === "high" ? "destructive" : level === "medium" ? "secondary" : "outline";
 
+  const riskLabel = (item: FlaggedCase) =>
+    item.analysisLimited && item.riskLevel === "low" ? "analysis limited" : `${item.riskLevel} risk`;
+
   const saveDecision = async (item: FlaggedCase) => {
     if (!user) return;
 
@@ -232,6 +261,10 @@ const AcademicIntegrity = () => {
     const evidenceSummary = [
       ...item.evidence.aiWriting.map((entry) => `${entry.label}: ${entry.value}`),
       ...item.evidence.similarity.map((entry) => `${entry.label}: ${entry.value}`),
+      ...item.evidence.uncitedMatches.map((entry) => `${entry.label}: ${entry.value}`),
+      ...item.evidence.citedMatches.map((entry) => `${entry.label}: ${entry.value}`),
+      ...item.evidence.peerMatches.map((entry) => `${entry.label}: ${entry.value}`),
+      ...item.evidence.externalMatches.map((entry) => `${entry.label}: ${entry.value}`),
       ...item.evidence.baselineDeviation.map((entry) => `${entry.label}: ${entry.value}`),
     ]
       .slice(0, 8)
@@ -249,10 +282,13 @@ const AcademicIntegrity = () => {
           totalScore: item.totalScore,
           aiWritingScore: item.aiWritingScore,
           similarityScore: item.similarityScore,
-          baselineDeviationScore: item.baselineDeviationScore,
-          riskLevel: item.riskLevel,
-          evidence: item.evidence,
-          flags: item.flags,
+          overlapBreakdown: item.overlapBreakdown,
+            baselineDeviationScore: item.baselineDeviationScore,
+            riskLevel: item.riskLevel,
+            analysisLimited: item.analysisLimited,
+            limitations: item.limitations,
+            evidence: item.evidence,
+            flags: item.flags,
         }),
       },
       { onConflict: "submission_id,lecturer_id" }
@@ -365,26 +401,31 @@ const AcademicIntegrity = () => {
                 <div key={item.submissionId} className="rounded-xl border p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium">{item.student}</p>
-                        <Badge variant={riskVariant(item.riskLevel) as "outline" | "secondary" | "destructive"}>
-                          {item.riskLevel} risk
-                        </Badge>
-                        <Badge variant={decisionVariant(item.decision) as "outline" | "secondary" | "destructive" | "default"}>
-                          {item.decision.replace("-", " ")}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">{item.student}</p>
+                          <Badge variant={riskVariant(item.riskLevel) as "outline" | "secondary" | "destructive"}>
+                            {riskLabel(item)}
+                          </Badge>
+                          <Badge variant={decisionVariant(item.decision) as "outline" | "secondary" | "destructive" | "default"}>
+                            {item.decision.replace("-", " ")}
+                          </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {item.assignment} • Submitted {safeFormatDate(item.submittedAt, "MMM d, yyyy HH:mm")} • Workflow {item.status.replace(/_/g, " ")}
                       </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {item.flags.map((flag) => (
-                          <Badge key={flag} variant="outline" className="text-xs">
-                            {flag}
-                          </Badge>
-                        ))}
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.flags.map((flag) => (
+                            <Badge key={flag} variant="outline" className="text-xs">
+                              {flag}
+                            </Badge>
+                          ))}
+                        </div>
+                        {item.analysisLimited && item.limitations.length > 0 && (
+                          <p className="text-xs text-amber-700">
+                            Analysis limited: {item.limitations.join(" ")}
+                          </p>
+                        )}
                       </div>
-                    </div>
 
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -428,7 +469,7 @@ const AcademicIntegrity = () => {
 
                   {expanded && (
                     <div className="mt-4 space-y-4 rounded-xl border bg-muted/20 p-4">
-                      <div className="grid gap-4 lg:grid-cols-3">
+                      <div className="grid gap-4 lg:grid-cols-4">
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
                             <Bot className="h-4 w-4 text-primary" />
@@ -467,6 +508,45 @@ const AcademicIntegrity = () => {
                               </div>
                             ))
                           )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Scale className="h-4 w-4 text-primary" />
+                            <p className="text-sm font-medium">Citation-aware overlap</p>
+                          </div>
+                          <div className="rounded-lg border bg-background p-3 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">Total {item.overlapBreakdown.totalOverlap}%</Badge>
+                              <Badge variant="outline">Uncited {item.overlapBreakdown.uncitedOverlap}%</Badge>
+                              <Badge variant="outline">Cited {item.overlapBreakdown.citedOverlap}%</Badge>
+                              <Badge variant="outline">Peer {item.overlapBreakdown.internalPeerOverlap}%</Badge>
+                              <Badge variant="outline">External {item.overlapBreakdown.externalSourceOverlap}%</Badge>
+                            </div>
+                          </div>
+                          {[
+                            { title: "Uncited matches", items: item.evidence.uncitedMatches },
+                            { title: "Cited material", items: item.evidence.citedMatches },
+                            { title: "Peer matches", items: item.evidence.peerMatches },
+                            { title: "External matches", items: item.evidence.externalMatches },
+                          ].map((group) => (
+                            <div key={group.title} className="space-y-2">
+                              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{group.title}</p>
+                              {group.items.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">None recorded.</p>
+                              ) : (
+                                group.items.map((evidence) => (
+                                  <div key={`${item.submissionId}-${group.title}-${evidence.label}`} className="rounded-lg border bg-background p-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="text-sm font-medium">{evidence.label}</p>
+                                      <Badge variant="outline">{evidence.score}%</Badge>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">{evidence.value}</p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          ))}
                         </div>
 
                         <div className="space-y-3">

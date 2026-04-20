@@ -114,6 +114,13 @@ interface PlagiarismFlag {
   reason: string;
   evidence_summary?: string;
   matched_excerpt?: string;
+  overlap_analysis?: {
+    total_overlap: number;
+    cited_overlap: number;
+    uncited_overlap: number;
+    internal_peer_overlap: number;
+    external_source_overlap: number;
+  };
   recommended_action?: "clear" | "review" | "investigate";
   integrity_type?: "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
   severity: string;
@@ -744,8 +751,15 @@ const AssignmentDetail = () => {
       setPlagiarismFlags(uniqueFlags);
       setPlagiarismSummary(summaryParts.filter(Boolean).join(" "));
 
-      if (uniqueFlags.length === 0) toast.success("No suspicious similarities found");
-      else toast.warning(`${uniqueFlags.length} potential issue(s) flagged`);
+      if (uniqueFlags.length === 0) {
+        if (collectedWarnings.length > 0 || failedBatches > 0) {
+          toast.warning("Integrity analysis completed with limitations");
+        } else {
+          toast.success("No suspicious similarities found");
+        }
+      } else {
+        toast.warning(`${uniqueFlags.length} potential issue(s) flagged`);
+      }
       if (failedBatches > 0) {
         toast.warning(`${failedBatches} plagiarism batch(es) failed and were skipped`);
       } else if (collectedWarnings.length > 0) {
@@ -1705,7 +1719,7 @@ Please log in to review the released grade and feedback.`,
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">{flag.reason}</p>
                         <p className="mt-1 text-[11px] text-muted-foreground">
-                          Similarity {flag.similarity_score}% • AI {flag.ai_suspicion_score || 0}% • Baseline {flag.baseline_deviation_score || 0}% • Total risk {flag.total_risk_score || 0}%
+                          Similarity {flag.similarity_score}% • Uncited {flag.overlap_analysis?.uncited_overlap || 0}% • Cited {flag.overlap_analysis?.cited_overlap || 0}% • AI {flag.ai_suspicion_score || 0}% • Baseline {flag.baseline_deviation_score || 0}% • Total risk {flag.total_risk_score || 0}%
                         </p>
                       </div>
                       <Badge

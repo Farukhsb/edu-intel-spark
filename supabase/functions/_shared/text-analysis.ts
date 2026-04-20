@@ -25,6 +25,14 @@ export interface BaselineDeviationResult {
   reasons: string[];
 }
 
+export interface ExtractionQualityResult {
+  isUsable: boolean;
+  wordCount: number;
+  artifactRatio: number;
+  qualityScore: number;
+  reasons: string[];
+}
+
 const STOPWORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "has", "have", "if", "in",
   "into", "is", "it", "of", "on", "or", "that", "the", "their", "then", "there", "these", "they",
@@ -43,6 +51,130 @@ export function normalizeReadableText(input: string) {
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+const PDF_ARTIFACT_PATTERN =
+  /\b(?:obj|endobj|xref|endxref|stream|endstream|trailer|startxref|\/Type|\/Length|\/Filter|\/Root|\/Info|\/Page|\/Pages|\/Catalog)\b/g;
+
+function decodePdfLiteralString(value: string) {
+  let decoded = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char !== "\\") {
+      decoded += char;
+      continue;
+    }
+
+    const next = value[index + 1];
+    if (!next) break;
+
+    if (/[0-7]/.test(next)) {
+      const octal = value.slice(index + 1, index + 4).match(/^[0-7]{1,3}/)?.[0] || next;
+      decoded += String.fromCharCode(parseInt(octal, 8));
+      index += octal.length;
+      continue;
+    }
+
+    const escapeMap: Record<string, string> = {
+      n: "\n",
+      r: "\r",
+      t: "\t",
+      b: "\b",
+      f: "\f",
+      "(": "(",
+      ")": ")",
+      "\\": "\\",
+    };
+
+    decoded += escapeMap[next] ?? next;
+    index += 1;
+  }
+
+  return decoded;
+}
+
+function extractPdfTextFromOperators(binary: string) {
+  const segments: string[] = [];
+  const textBlocks = binary.match(/BT[\s\S]*?ET/g) || [];
+
+  for (const block of textBlocks) {
+    const literalMatches = block.match(/\((?:\\.|[^\\)])*\)\s*(?:Tj|'|")/g) || [];
+    for (const match of literalMatches) {
+      const literal = match.match(/\(([\s\S]*)\)\s*(?:Tj|'|")$/)?.[1];
+      if (literal) segments.push(decodePdfLiteralString(literal));
+    }
+
+    const arrayMatches = block.match(/\[(?:[\s\S]*?)\]\s*TJ/g) || [];
+    for (const match of arrayMatches) {
+      const stringParts = match.match(/\((?:\\.|[^\\)])*\)/g) || [];
+      for (const part of stringParts) {
+        segments.push(decodePdfLiteralString(part.slice(1, -1)));
+      }
+    }
+  }
+
+  return segments.join(" ");
+}
+
+export function cleanExtractedDocumentText(input: string) {
+  return normalizeReadableText(
+    input
+      .replace(PDF_ARTIFACT_PATTERN, " ")
+      .replace(/\/[A-Za-z0-9#_.-]+/g, " ")
+      .replace(/\b\d+\s+\d+\s+R\b/g, " ")
+      .replace(/[<>[\]{}]/g, " ")
+      .replace(/[_]{2,}/g, " ")
+      .replace(/([a-z])-\n([a-z])/gi, "$1$2")
+      .replace(/\s*\n\s*/g, "\n"),
+  );
+}
+
+export function extractReadablePdfTextFromBase64(base64: string) {
+  const binary = atob(base64);
+  const operatorText = extractPdfTextFromOperators(binary);
+  const printableFallback = (binary.match(/[\x20-\x7E]{4,}/g) || []).join(" ");
+  const combined = [operatorText, printableFallback].filter(Boolean).join("\n");
+  return cleanExtractedDocumentText(combined);
+}
+
+export function assessExtractionQuality(text: string): ExtractionQualityResult {
+  const normalized = cleanExtractedDocumentText(text);
+  const words = normalized.match(/\b[\p{L}\p{N}']+\b/gu) || [];
+  const artifactMatches = normalized.match(PDF_ARTIFACT_PATTERN) || [];
+  const artifactRatio = words.length > 0 ? artifactMatches.length / words.length : 1;
+  const averageWordLength =
+    words.length > 0 ? words.reduce((sum, word) => sum + word.length, 0) / words.length : 0;
+
+  const reasons: string[] = [];
+  let qualityScore = 100;
+
+  if (words.length < 120) {
+    qualityScore -= 35;
+    reasons.push("Very little readable body text was extracted.");
+  }
+
+  if (artifactRatio > 0.08) {
+    qualityScore -= 35;
+    reasons.push("Extracted text still contains a high proportion of PDF artefacts.");
+  }
+
+  if (averageWordLength < 3.5) {
+    qualityScore -= 15;
+    reasons.push("Extracted text appears fragmented or tokenised poorly.");
+  }
+
+  if (!/[.?!]/.test(normalized)) {
+    qualityScore -= 10;
+    reasons.push("Extracted text contains few recognisable sentence boundaries.");
+  }
+
+  return {
+    isUsable: qualityScore >= 45 && words.length >= 80,
+    wordCount: words.length,
+    artifactRatio: round(artifactRatio, 3),
+    qualityScore: Math.max(0, qualityScore),
+    reasons,
+  };
 }
 
 export function classifyAssignmentType(params: {
