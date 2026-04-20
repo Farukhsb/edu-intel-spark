@@ -43,11 +43,18 @@ import {
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
+import type { Tables } from "@/integrations/supabase/types";
+import { evaluateModerationSignals, formatSubmissionStatus } from "@/lib/moderation";
 
 type SubmissionStatus =
   | "submitted"
   | "ai_grading"
   | "ai_graded"
+  | "first_review"
+  | "moderation_pending"
+  | "moderation_in_progress"
+  | "moderated"
+  | "escalated"
   | "under_review"
   | "approved"
   | "released";
@@ -79,6 +86,9 @@ interface Grade {
   final_score: number | null;
   final_feedback: string | null;
 }
+
+type IntegrityReview = Tables<"academic_integrity_reviews">;
+type ModerationCase = Tables<"moderation_cases">;
 
 interface Assignment {
   id: string;
@@ -131,6 +141,36 @@ const statusConfig: Record<
     icon: CheckCircle,
     tone: "border-primary/20 text-primary",
   },
+  first_review: {
+    label: "First Review",
+    variant: "secondary",
+    icon: Edit,
+    tone: "border-warning/30 text-warning",
+  },
+  moderation_pending: {
+    label: "Moderation Pending",
+    variant: "secondary",
+    icon: Shield,
+    tone: "border-warning/30 text-warning",
+  },
+  moderation_in_progress: {
+    label: "Moderation In Progress",
+    variant: "secondary",
+    icon: Eye,
+    tone: "border-warning/30 text-warning",
+  },
+  moderated: {
+    label: "Moderated",
+    variant: "default",
+    icon: Shield,
+    tone: "border-primary/20 text-primary",
+  },
+  escalated: {
+    label: "Escalated",
+    variant: "destructive",
+    icon: AlertTriangle,
+    tone: "border-destructive/30 text-destructive",
+  },
   under_review: {
     label: "Under Review",
     variant: "secondary",
@@ -151,8 +191,7 @@ const statusConfig: Record<
   },
 };
 
-const formatStatusLabel = (status: string) =>
-  status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+const formatStatusLabel = (status: string) => formatSubmissionStatus(status);
 
 const normalizeStudentKey = (value: string | null | undefined) =>
   (value || "")
@@ -173,6 +212,8 @@ const AssignmentDetail = () => {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [grades, setGrades] = useState<Record<string, Grade>>({});
+  const [integrityReviews, setIntegrityReviews] = useState<Record<string, IntegrityReview>>({});
+  const [moderationCases, setModerationCases] = useState<Record<string, ModerationCase>>({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -267,6 +308,49 @@ const AssignmentDetail = () => {
     }
   };
 
+  const loadIntegrityReviews = async (subs: Submission[]) => {
+    if (subs.length === 0 || !user) {
+      setIntegrityReviews({});
+      return;
+    }
+
+    const { data } = await supabase
+      .from("academic_integrity_reviews")
+      .select("*")
+      .eq("lecturer_id", user.id)
+      .in(
+        "submission_id",
+        subs.map((submission) => submission.id)
+      );
+
+    const reviewMap: Record<string, IntegrityReview> = {};
+    for (const review of data || []) {
+      reviewMap[review.submission_id] = review;
+    }
+    setIntegrityReviews(reviewMap);
+  };
+
+  const loadModerationCases = async (subs: Submission[]) => {
+    if (subs.length === 0) {
+      setModerationCases({});
+      return;
+    }
+
+    const { data } = await supabase
+      .from("moderation_cases")
+      .select("*")
+      .in(
+        "submission_id",
+        subs.map((submission) => submission.id)
+      );
+
+    const caseMap: Record<string, ModerationCase> = {};
+    for (const moderationCase of data || []) {
+      caseMap[moderationCase.submission_id] = moderationCase;
+    }
+    setModerationCases(caseMap);
+  };
+
   const loadSubmissions = async () => {
     if (!id) return;
     const { data } = await supabase
@@ -288,7 +372,7 @@ const AssignmentDetail = () => {
         student_id: d.student_id,
       }));
       setSubmissions(subs);
-      await loadGrades(subs);
+      await Promise.all([loadGrades(subs), loadIntegrityReviews(subs), loadModerationCases(subs)]);
     }
   };
 
@@ -517,7 +601,8 @@ const AssignmentDetail = () => {
             console.error("Failed to write grade:", gradeErr);
           }
           try {
-            await supabase.from("submissions").update({ status: "ai_graded" as const }).eq("id", sub.id);
+            const nextStatus = r.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
+            await supabase.from("submissions").update({ status: nextStatus }).eq("id", sub.id);
           } catch {}
           successCount++;
         } else {
@@ -550,35 +635,25 @@ const AssignmentDetail = () => {
 
   const handleBulkApprove = async () => {
     const toApprove = submissions.filter(
-      (s) => selected.has(s.id) && (s.status === "ai_graded" || s.status === "under_review")
+      (s) =>
+        selected.has(s.id) &&
+        ["ai_graded", "first_review", "moderated", "under_review"].includes(s.status)
     );
     if (toApprove.length === 0) {
-      toast.error("Select AI-graded submissions to approve");
+      toast.error("Select reviewed submissions to approve");
       return;
     }
 
+    let approvedCount = 0;
     for (const sub of toApprove) {
-      const grade = grades[sub.id];
-      if (grade) {
-        try {
-          await supabase
-            .from("grades")
-            .update({
-              final_score: grade.lecturer_score ?? grade.ai_score,
-              final_feedback: grade.lecturer_feedback ?? grade.ai_feedback,
-              reviewed_by: user!.id,
-              reviewed_at: new Date().toISOString(),
-            })
-            .eq("id", grade.id);
-        } catch (e) {
-          console.warn("Grade update failed:", e);
-        }
-      }
       try {
-        await supabase.from("submissions").update({ status: "approved" as const }).eq("id", sub.id);
-      } catch {}
+        const approved = await approveSubmission(sub);
+        if (approved) approvedCount++;
+      } catch (e) {
+        console.warn("Approve failed:", e);
+      }
     }
-    toast.success(`${toApprove.length} submission(s) approved`);
+    if (approvedCount > 0) toast.success(`${approvedCount} submission(s) approved`);
     setSelected(new Set());
     await loadSubmissions();
   };
@@ -682,6 +757,187 @@ const AssignmentDetail = () => {
     setCheckingPlagiarism(false);
   };
 
+  const logModerationAuditEvent = async ({
+    submissionId,
+    gradeId,
+    moderationCaseId,
+    eventType,
+    actorRole,
+    previousValues,
+    newValues,
+    reason,
+  }: {
+    submissionId: string;
+    gradeId?: string | null;
+    moderationCaseId?: string | null;
+    eventType: string;
+    actorRole: string;
+    previousValues?: Record<string, unknown>;
+    newValues?: Record<string, unknown>;
+    reason?: string;
+  }) => {
+    if (!user) return;
+
+    const { error } = await supabase.from("grade_audit_log").insert({
+      submission_id: submissionId,
+      grade_id: gradeId ?? null,
+      moderation_case_id: moderationCaseId ?? null,
+      changed_by: user.id,
+      event_type: eventType,
+      actor_role: actorRole,
+      previous_values: previousValues ?? {},
+      new_values: newValues ?? {},
+      reason: reason ?? null,
+    });
+
+    if (error) {
+      console.warn("Failed to write grade audit log:", error);
+    }
+  };
+
+  const ensureModerationCase = async ({
+    submission,
+    grade,
+    status,
+  }: {
+    submission: Submission;
+    grade: Grade;
+    status: ModerationCase["status"];
+  }) => {
+    if (!assignment || !user) return null;
+
+    const moderationResult = evaluateModerationSignals({
+      grade,
+      integrityReview: integrityReviews[submission.id] ?? null,
+      maxScore: assignment.max_score,
+    });
+
+    const existingCase = moderationCases[submission.id];
+    const payload = {
+      submission_id: submission.id,
+      assignment_id: assignment.id,
+      grade_id: grade.id,
+      lecturer_id: assignment.lecturer_id,
+      first_marker_id: user.id,
+      moderator_id: existingCase?.moderator_id ?? null,
+      status,
+      trigger_flags: moderationResult.triggerFlags,
+      trigger_summary: moderationResult.triggerSummary || null,
+      confidence_score: moderationResult.confidenceScore,
+      integrity_risk_score: moderationResult.integrityRiskScore,
+      ai_score_snapshot: grade.ai_score,
+      first_marker_score: grade.lecturer_score,
+      moderator_score: existingCase?.moderator_score ?? null,
+      final_agreed_score: existingCase?.final_agreed_score ?? null,
+      final_agreed_feedback: existingCase?.final_agreed_feedback ?? null,
+      moderated_at: status === "moderated" ? new Date().toISOString() : existingCase?.moderated_at ?? null,
+      approved_at: existingCase?.approved_at ?? null,
+    };
+
+    const { data, error } = await supabase
+      .from("moderation_cases")
+      .upsert(payload, { onConflict: "submission_id" })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    setModerationCases((current) => ({ ...current, [submission.id]: data }));
+    return data;
+  };
+
+  const shouldRequireModeration = (submissionId: string, grade: Grade) =>
+    !!assignment &&
+    evaluateModerationSignals({
+      grade,
+      integrityReview: integrityReviews[submissionId] ?? null,
+      maxScore: assignment.max_score,
+    }).needsModeration;
+
+  const approveSubmission = async (submission: Submission) => {
+    if (!assignment || !user) return false;
+
+    const grade = grades[submission.id];
+    if (!grade) {
+      toast.error("No grade found to approve");
+      return false;
+    }
+
+    const moderationCase = moderationCases[submission.id];
+    const needsModeration = shouldRequireModeration(submission.id, grade);
+
+    if (["moderation_pending", "moderation_in_progress", "escalated"].includes(submission.status)) {
+      toast.error("This submission is in the moderation workflow and cannot be approved yet.");
+      return false;
+    }
+
+    if (needsModeration && submission.status !== "moderated") {
+      const createdCase = await ensureModerationCase({
+        submission,
+        grade,
+        status: "moderation_pending",
+      });
+      await supabase.from("submissions").update({ status: "moderation_pending" as const }).eq("id", submission.id);
+      await logModerationAuditEvent({
+        submissionId: submission.id,
+        gradeId: grade.id,
+        moderationCaseId: createdCase?.id ?? null,
+        eventType: "moderation_required",
+        actorRole: "lecturer",
+        previousValues: { status: submission.status },
+        newValues: { status: "moderation_pending", trigger_flags: createdCase?.trigger_flags ?? [] },
+        reason: "Approval blocked until moderation is completed.",
+      });
+      toast.warning("Moderation is required before approval.");
+      await loadSubmissions();
+      return false;
+    }
+
+    const finalScore =
+      moderationCase?.final_agreed_score ??
+      grade.final_score ??
+      grade.lecturer_score ??
+      grade.ai_score;
+    const finalFeedback =
+      moderationCase?.final_agreed_feedback ??
+      grade.final_feedback ??
+      grade.lecturer_feedback ??
+      grade.ai_feedback;
+
+    await supabase
+      .from("grades")
+      .update({
+        final_score: finalScore,
+        final_feedback: finalFeedback,
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", grade.id);
+
+    await supabase.from("submissions").update({ status: "approved" as const }).eq("id", submission.id);
+
+    if (moderationCase) {
+      await supabase
+        .from("moderation_cases")
+        .update({ approved_at: new Date().toISOString() })
+        .eq("id", moderationCase.id);
+    }
+
+    await logModerationAuditEvent({
+      submissionId: submission.id,
+      gradeId: grade.id,
+      moderationCaseId: moderationCase?.id ?? null,
+      eventType: "grade_approved",
+      actorRole: "lecturer",
+      previousValues: { status: submission.status, final_score: grade.final_score },
+      newValues: { status: "approved", final_score: finalScore },
+      reason: moderationCase ? "Approved after moderation." : "Approved after first review.",
+    });
+    return true;
+  };
+
   const openReview = (sub: Submission) => {
     setReviewSubmission(sub);
     const grade = grades[sub.id];
@@ -692,7 +948,19 @@ const AssignmentDetail = () => {
 
   const saveReview = async () => {
     if (!reviewSubmission) return;
-    const grade = grades[reviewSubmission.id];
+    const existingGrade = grades[reviewSubmission.id];
+    const previousSubmission = submissions.find((submission) => submission.id === reviewSubmission.id);
+    const nextScore = editScore === "" ? null : Number(editScore);
+    const nextFeedback = editFeedback || null;
+
+    const grade = existingGrade
+      ? {
+          ...existingGrade,
+          lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
+          lecturer_feedback: nextFeedback,
+        }
+      : null;
+
     if (!grade) {
       toast.error("No AI grade found");
       return;
@@ -702,15 +970,79 @@ const AssignmentDetail = () => {
       await supabase
         .from("grades")
         .update({
-          lecturer_score: Number(editScore) || null,
-          lecturer_feedback: editFeedback || null,
+          lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
+          lecturer_feedback: nextFeedback,
         })
-        .eq("id", grade.id);
-      await supabase
-        .from("submissions")
-        .update({ status: "under_review" as const })
-        .eq("id", reviewSubmission.id);
-      toast.success("Review saved");
+        .eq("id", existingGrade.id);
+
+      const moderationCheck = evaluateModerationSignals({
+        grade,
+        integrityReview: integrityReviews[reviewSubmission.id] ?? null,
+        maxScore: assignment?.max_score ?? 100,
+      });
+
+      let nextStatus: SubmissionStatus = "first_review";
+      let moderationCaseId: string | null = null;
+      if (moderationCheck.needsModeration) {
+        const moderationCase = await ensureModerationCase({
+          submission: reviewSubmission,
+          grade,
+          status: "moderation_pending",
+        });
+        moderationCaseId = moderationCase?.id ?? null;
+
+        await supabase.from("moderation_reviews").insert({
+          moderation_case_id: moderationCase?.id,
+          submission_id: reviewSubmission.id,
+          reviewer_id: user!.id,
+          reviewer_role: "first_marker",
+          action:
+            existingGrade.ai_score != null &&
+            Number.isFinite(nextScore) &&
+            existingGrade.ai_score === nextScore
+              ? "agree"
+              : "adjust",
+          proposed_score: Number.isFinite(nextScore) ? nextScore : null,
+          proposed_feedback: nextFeedback,
+          notes: nextFeedback,
+          snapshot: {
+            ai_score: existingGrade.ai_score,
+            lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
+            confidence_score: grade.grading_confidence ?? null,
+            trigger_flags: moderationCheck.triggerFlags,
+          },
+        });
+        nextStatus = "moderation_pending";
+      }
+
+      await supabase.from("submissions").update({ status: nextStatus }).eq("id", reviewSubmission.id);
+      await logModerationAuditEvent({
+        submissionId: reviewSubmission.id,
+        gradeId: existingGrade.id,
+        moderationCaseId,
+        eventType: "first_review_saved",
+        actorRole: "first_marker",
+        previousValues: {
+          lecturer_score: existingGrade.lecturer_score,
+          lecturer_feedback: existingGrade.lecturer_feedback,
+          status: previousSubmission?.status ?? null,
+        },
+        newValues: {
+          lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
+          lecturer_feedback: nextFeedback,
+          status: nextStatus,
+          trigger_flags: moderationCheck.triggerFlags,
+        },
+        reason: moderationCheck.needsModeration
+          ? "First marker review routed into moderation."
+          : "First marker review saved.",
+      });
+
+      toast.success(
+        moderationCheck.needsModeration
+          ? "First marker review saved and sent to moderation."
+          : "First marker review saved."
+      );
       await loadSubmissions();
     } catch (e) {
       console.error("Save review failed:", e);
@@ -803,9 +1135,32 @@ Please log in to review the released grade and feedback.`,
   };
 
   const summary = useMemo(() => {
-    const graded = submissions.filter((s) => ["ai_graded", "under_review", "approved", "released"].includes(s.status));
+    const graded = submissions.filter((s) =>
+      [
+        "ai_graded",
+        "first_review",
+        "moderation_pending",
+        "moderation_in_progress",
+        "moderated",
+        "escalated",
+        "under_review",
+        "approved",
+        "released",
+      ].includes(s.status)
+    );
     const released = submissions.filter((s) => s.status === "released");
-    const pending = submissions.filter((s) => ["submitted", "ai_grading", "ai_graded", "under_review"].includes(s.status));
+    const pending = submissions.filter((s) =>
+      [
+        "submitted",
+        "ai_grading",
+        "ai_graded",
+        "first_review",
+        "moderation_pending",
+        "moderation_in_progress",
+        "escalated",
+        "under_review",
+      ].includes(s.status)
+    );
     return {
       submittedCount: submissions.length,
       gradedCount: graded.length,
@@ -858,7 +1213,9 @@ Please log in to review the released grade and feedback.`,
     );
   const selectedStatuses = submissions.filter((s) => selected.has(s.id)).map((s) => s.status);
   const hasSubmitted = selectedStatuses.some((s) => s === "submitted");
-  const hasGraded = selectedStatuses.some((s) => s === "ai_graded" || s === "under_review");
+  const hasGraded = selectedStatuses.some((s) =>
+    ["ai_graded", "first_review", "moderated", "under_review"].includes(s)
+  );
   const hasApproved = selectedStatuses.some((s) => s === "approved");
 
   const exportReviewedReports = () => {
@@ -1051,6 +1408,11 @@ Please log in to review the released grade and feedback.`,
                         <SelectItem value="submitted">Submitted</SelectItem>
                         <SelectItem value="ai_grading">AI grading</SelectItem>
                         <SelectItem value="ai_graded">AI graded</SelectItem>
+                        <SelectItem value="first_review">First review</SelectItem>
+                        <SelectItem value="moderation_pending">Moderation pending</SelectItem>
+                        <SelectItem value="moderation_in_progress">Moderation in progress</SelectItem>
+                        <SelectItem value="moderated">Moderated</SelectItem>
+                        <SelectItem value="escalated">Escalated</SelectItem>
                         <SelectItem value="under_review">Under review</SelectItem>
                         <SelectItem value="approved">Approved</SelectItem>
                         <SelectItem value="released">Released</SelectItem>
@@ -1080,7 +1442,13 @@ Please log in to review the released grade and feedback.`,
                             {selected.size} submission{selected.size === 1 ? "" : "s"} selected. Choose the next workflow action above.
                           </span>
                           <Badge variant="outline">{selectedStatuses.filter((status) => status === "submitted").length} submitted</Badge>
-                          <Badge variant="outline">{selectedStatuses.filter((status) => status === "ai_graded" || status === "under_review").length} ready to approve</Badge>
+                          <Badge variant="outline">
+                            {
+                              selectedStatuses.filter((status) =>
+                                ["ai_graded", "first_review", "moderated", "under_review"].includes(status)
+                              ).length
+                            } ready to approve
+                          </Badge>
                           <Badge variant="outline">{selectedStatuses.filter((status) => status === "approved").length} ready to release</Badge>
                         </div>
                       )}
@@ -1124,9 +1492,19 @@ Please log in to review the released grade and feedback.`,
                     </div>
                   ) : filteredSubmissions.map((sub) => {
                     const grade = grades[sub.id];
+                    const moderationCase = moderationCases[sub.id];
                     const sc = statusConfig[sub.status];
                     const StatusIcon = sc.icon;
-                    const needsAttention = ["submitted", "ai_grading", "ai_graded", "under_review"].includes(sub.status);
+                    const needsAttention = [
+                      "submitted",
+                      "ai_grading",
+                      "ai_graded",
+                      "first_review",
+                      "moderation_pending",
+                      "moderation_in_progress",
+                      "escalated",
+                      "under_review",
+                    ].includes(sub.status);
                     return (
                       <div
                         key={sub.id}
@@ -1150,6 +1528,11 @@ Please log in to review the released grade and feedback.`,
                                     Needs attention
                                   </Badge>
                                 )}
+                                {moderationCase && (
+                                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                    Moderation case
+                                  </Badge>
+                                )}
                               </div>
                               <p className="text-xs text-muted-foreground truncate">{sub.file_name}</p>
                               <p className="text-xs text-muted-foreground">
@@ -1164,6 +1547,16 @@ Please log in to review the released grade and feedback.`,
                                 >
                                   Open file
                                 </Button>
+                                {moderationCase && (
+                                  <Button
+                                    size="sm"
+                                    variant="link"
+                                    className="h-auto p-0 text-xs"
+                                    onClick={() => navigate("/dashboard/moderation")}
+                                  >
+                                    Open moderation
+                                  </Button>
+                                )}
                               </div>
 
                               {grade?.ai_breakdown && Array.isArray(grade.ai_breakdown) && grade.ai_breakdown.length > 0 && (
@@ -1210,7 +1603,7 @@ Please log in to review the released grade and feedback.`,
                                 )}
                                 {grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
                                   <Button size="sm" variant="ghost" onClick={() => openReview(sub)}>
-                                    <Edit className="mr-1 h-3 w-3" /> Review
+                                    <Edit className="mr-1 h-3 w-3" /> First review
                                   </Button>
                                 )}
                                 {grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
@@ -1218,28 +1611,13 @@ Please log in to review the released grade and feedback.`,
                                     size="sm"
                                     variant="outline"
                                     onClick={async () => {
-                                      const g = grades[sub.id];
-                                      if (g) {
-                                        try {
-                                          await supabase
-                                            .from("grades")
-                                            .update({
-                                              final_score: g.lecturer_score ?? g.ai_score,
-                                              final_feedback: g.lecturer_feedback ?? g.ai_feedback,
-                                              reviewed_by: user!.id,
-                                              reviewed_at: new Date().toISOString(),
-                                            })
-                                            .eq("id", g.id);
-                                          await supabase
-                                            .from("submissions")
-                                            .update({ status: "approved" as const })
-                                            .eq("id", sub.id);
-                                          toast.success("Submission approved");
-                                          await loadSubmissions();
-                                        } catch (e) {
-                                          console.warn("Approve failed:", e);
-                                          toast.error("Could not approve");
-                                        }
+                                      try {
+                                        const approved = await approveSubmission(sub);
+                                        if (approved) toast.success("Submission approved");
+                                        await loadSubmissions();
+                                      } catch (e) {
+                                        console.warn("Approve failed:", e);
+                                        toast.error("Could not approve");
                                       }
                                     }}
                                   >

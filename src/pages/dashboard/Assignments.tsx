@@ -122,10 +122,33 @@ const Assignments = () => {
           const relatedSubs = subs.filter(s => s.assignment_id === assignment.id);
           statsMap[assignment.id] = {
             total: relatedSubs.length,
-            graded: relatedSubs.filter(s => ["ai_graded", "under_review", "approved", "released"].includes(s.status)).length,
+            graded: relatedSubs.filter(s =>
+              [
+                "ai_graded",
+                "first_review",
+                "moderation_pending",
+                "moderation_in_progress",
+                "moderated",
+                "escalated",
+                "under_review",
+                "approved",
+                "released",
+              ].includes(s.status)
+            ).length,
             approved: relatedSubs.filter(s => ["approved", "released"].includes(s.status)).length,
             released: relatedSubs.filter(s => s.status === "released").length,
-            needsReview: relatedSubs.filter(s => ["submitted", "ai_grading", "ai_graded", "under_review"].includes(s.status)).length,
+            needsReview: relatedSubs.filter(s =>
+              [
+                "submitted",
+                "ai_grading",
+                "ai_graded",
+                "first_review",
+                "moderation_pending",
+                "moderation_in_progress",
+                "escalated",
+                "under_review",
+              ].includes(s.status)
+            ).length,
           };
         }
         setSubmissionStats(statsMap);
