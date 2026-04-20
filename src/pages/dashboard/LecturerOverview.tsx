@@ -204,10 +204,29 @@ const LecturerOverview = () => {
       });
 
       const gradedSubs = allSubs.filter((submission) =>
-        ["ai_graded", "under_review", "approved", "released"].includes(submission.status)
+        [
+          "ai_graded",
+          "first_review",
+          "moderation_pending",
+          "moderation_in_progress",
+          "moderated",
+          "escalated",
+          "under_review",
+          "approved",
+          "released",
+        ].includes(submission.status)
       );
       const pendingSubs = allSubs.filter((submission) =>
-        ["submitted", "ai_grading"].includes(submission.status)
+        [
+          "submitted",
+          "ai_grading",
+          "ai_graded",
+          "first_review",
+          "moderation_pending",
+          "moderation_in_progress",
+          "escalated",
+          "under_review",
+        ].includes(submission.status)
       );
       const scores = allGrades
         .map((grade) => grade.final_score ?? grade.ai_score)
@@ -478,7 +497,16 @@ const LecturerOverview = () => {
               <div className="space-y-3">
                 {recent.map((submission) => {
                   const needsAttention =
-                    submission.score == null || ["submitted", "ai_grading", "ai_graded"].includes(submission.status);
+                    submission.score == null ||
+                    [
+                      "submitted",
+                      "ai_grading",
+                      "ai_graded",
+                      "first_review",
+                      "moderation_pending",
+                      "moderation_in_progress",
+                      "escalated",
+                    ].includes(submission.status);
 
                   return (
                     <div

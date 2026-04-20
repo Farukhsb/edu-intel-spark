@@ -65,6 +65,75 @@ export type Database = {
           },
         ]
       }
+      analytics_recommendations: {
+        Row: {
+          assignment_id: string | null
+          confidence: number
+          created_at: string
+          evidence: Json
+          explanation: string
+          id: string
+          lecturer_id: string
+          recommended_actions: Json
+          rule_code: string
+          severity: string
+          status: string
+          summary: string
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          confidence?: number
+          created_at?: string
+          evidence?: Json
+          explanation: string
+          id: string
+          lecturer_id: string
+          recommended_actions?: Json
+          rule_code: string
+          severity: string
+          status?: string
+          summary: string
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          assignment_id?: string | null
+          confidence?: number
+          created_at?: string
+          evidence?: Json
+          explanation?: string
+          id?: string
+          lecturer_id?: string
+          recommended_actions?: Json
+          rule_code?: string
+          severity?: string
+          status?: string
+          summary?: string
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_recommendations_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_recommendations_lecturer_id_fkey"
+            columns: ["lecturer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communication_messages: {
         Row: {
           body: string
@@ -115,6 +184,48 @@ export type Database = {
           },
         ]
       }
+      recommendation_actions: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: string
+          lecturer_id: string
+          payload: Json
+          recommendation_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: string
+          lecturer_id: string
+          payload?: Json
+          recommendation_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          lecturer_id?: string
+          payload?: Json
+          recommendation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendation_actions_lecturer_id_fkey"
+            columns: ["lecturer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recommendation_actions_recommendation_id_fkey"
+            columns: ["recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "analytics_recommendations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignments: {
         Row: {
           created_at: string
@@ -159,6 +270,77 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      grade_audit_log: {
+        Row: {
+          actor_role: string | null
+          changed_by: string | null
+          created_at: string
+          event_type: string
+          grade_id: string | null
+          id: string
+          moderation_case_id: string | null
+          new_values: Json
+          previous_values: Json
+          reason: string | null
+          submission_id: string
+        }
+        Insert: {
+          actor_role?: string | null
+          changed_by?: string | null
+          created_at?: string
+          event_type: string
+          grade_id?: string | null
+          id?: string
+          moderation_case_id?: string | null
+          new_values?: Json
+          previous_values?: Json
+          reason?: string | null
+          submission_id: string
+        }
+        Update: {
+          actor_role?: string | null
+          changed_by?: string | null
+          created_at?: string
+          event_type?: string
+          grade_id?: string | null
+          id?: string
+          moderation_case_id?: string | null
+          new_values?: Json
+          previous_values?: Json
+          reason?: string | null
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grade_audit_log_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_audit_log_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_audit_log_moderation_case_id_fkey"
+            columns: ["moderation_case_id"]
+            isOneToOne: false
+            referencedRelation: "moderation_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_audit_log_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       grades: {
         Row: {
@@ -215,6 +397,185 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "grades_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_cases: {
+        Row: {
+          ai_score_snapshot: number | null
+          approved_at: string | null
+          assignment_id: string
+          confidence_score: number | null
+          created_at: string
+          final_agreed_feedback: string | null
+          final_agreed_score: number | null
+          first_marker_id: string | null
+          first_marker_score: number | null
+          grade_id: string | null
+          id: string
+          integrity_risk_score: number | null
+          lecturer_id: string
+          moderated_at: string | null
+          moderator_id: string | null
+          moderator_score: number | null
+          status: string
+          submission_id: string
+          trigger_flags: Json
+          trigger_summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_score_snapshot?: number | null
+          approved_at?: string | null
+          assignment_id: string
+          confidence_score?: number | null
+          created_at?: string
+          final_agreed_feedback?: string | null
+          final_agreed_score?: number | null
+          first_marker_id?: string | null
+          first_marker_score?: number | null
+          grade_id?: string | null
+          id?: string
+          integrity_risk_score?: number | null
+          lecturer_id: string
+          moderated_at?: string | null
+          moderator_id?: string | null
+          moderator_score?: number | null
+          status?: string
+          submission_id: string
+          trigger_flags?: Json
+          trigger_summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_score_snapshot?: number | null
+          approved_at?: string | null
+          assignment_id?: string
+          confidence_score?: number | null
+          created_at?: string
+          final_agreed_feedback?: string | null
+          final_agreed_score?: number | null
+          first_marker_id?: string | null
+          first_marker_score?: number | null
+          grade_id?: string | null
+          id?: string
+          integrity_risk_score?: number | null
+          lecturer_id?: string
+          moderated_at?: string | null
+          moderator_id?: string | null
+          moderator_score?: number | null
+          status?: string
+          submission_id?: string
+          trigger_flags?: Json
+          trigger_summary?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_cases_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_cases_first_marker_id_fkey"
+            columns: ["first_marker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_cases_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_cases_lecturer_id_fkey"
+            columns: ["lecturer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_cases_moderator_id_fkey"
+            columns: ["moderator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_cases_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_reviews: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          moderation_case_id: string
+          notes: string | null
+          proposed_feedback: string | null
+          proposed_score: number | null
+          reviewer_id: string
+          reviewer_role: string
+          snapshot: Json
+          submission_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          moderation_case_id: string
+          notes?: string | null
+          proposed_feedback?: string | null
+          proposed_score?: number | null
+          reviewer_id: string
+          reviewer_role: string
+          snapshot?: Json
+          submission_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          moderation_case_id?: string
+          notes?: string | null
+          proposed_feedback?: string | null
+          proposed_score?: number | null
+          reviewer_id?: string
+          reviewer_role?: string
+          snapshot?: Json
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_reviews_moderation_case_id_fkey"
+            columns: ["moderation_case_id"]
+            isOneToOne: false
+            referencedRelation: "moderation_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_reviews_submission_id_fkey"
             columns: ["submission_id"]
             isOneToOne: false
             referencedRelation: "submissions"
@@ -473,6 +834,11 @@ export type Database = {
         | "submitted"
         | "ai_grading"
         | "ai_graded"
+        | "first_review"
+        | "moderation_pending"
+        | "moderation_in_progress"
+        | "moderated"
+        | "escalated"
         | "under_review"
         | "approved"
         | "released"
@@ -609,6 +975,11 @@ export const Constants = {
         "submitted",
         "ai_grading",
         "ai_graded",
+        "first_review",
+        "moderation_pending",
+        "moderation_in_progress",
+        "moderated",
+        "escalated",
         "under_review",
         "approved",
         "released",

@@ -5,6 +5,7 @@ import { Upload, FileText, CheckCircle, AlertTriangle, Loader2, Download } from 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 
 interface ParsedStudent {
   rowNumber: number;
@@ -32,6 +33,8 @@ interface CreatedStudentVerification {
 }
 
 const REQUIRED_HEADERS = ["name", "email", "cohort", "department"] as const;
+const BULK_CREATE_FUNCTION = "bulk-create-students";
+const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
 
 const parseCsv = (text: string) => {
   const rows: string[][] = [];
@@ -83,6 +86,55 @@ const parseCsv = (text: string) => {
   }
 
   return rows;
+};
+
+const readFunctionErrorBody = async (response?: Response) => {
+  if (!response) return null;
+
+  try {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const body = await response.json();
+      if (body && typeof body === "object" && "error" in body && typeof body.error === "string") {
+        return body.error;
+      }
+      return JSON.stringify(body);
+    }
+
+    const text = await response.text();
+    return text.trim() || null;
+  } catch {
+    return null;
+  }
+};
+
+const formatBulkCreateError = async (error: unknown, response?: Response) => {
+  if (error instanceof FunctionsHttpError) {
+    const details = await readFunctionErrorBody(response);
+    const status = response?.status;
+
+    if (status === 404) {
+      return `Student account creation is unavailable because Edge Function "${BULK_CREATE_FUNCTION}" is not deployed to Supabase project ${SUPABASE_PROJECT_ID}. Deploy it with: supabase functions deploy ${BULK_CREATE_FUNCTION}`;
+    }
+
+    if (status === 401 || status === 403) {
+      return details || "You do not have permission to create student accounts. Sign in as a lecturer and try again.";
+    }
+
+    return details
+      ? `Student account creation failed (${status ?? "unknown"}): ${details}`
+      : `Student account creation failed because Edge Function "${BULK_CREATE_FUNCTION}" returned HTTP ${status ?? "unknown"}.`;
+  }
+
+  if (error instanceof FunctionsRelayError) {
+    return `Supabase could not route the request to Edge Function "${BULK_CREATE_FUNCTION}". Check the function deployment and project status for ${SUPABASE_PROJECT_ID}.`;
+  }
+
+  if (error instanceof FunctionsFetchError) {
+    return `Could not reach Edge Function "${BULK_CREATE_FUNCTION}" for Supabase project ${SUPABASE_PROJECT_ID}. Check that the function is deployed and that your network can reach Supabase Edge Functions.`;
+  }
+
+  return error instanceof Error ? error.message : "Bulk upload failed";
 };
 
 export const BulkStudentUpload = () => {
@@ -160,9 +212,10 @@ export const BulkStudentUpload = () => {
     setUploading(true);
     setVerifiedProfiles([]);
     let uploadResults: UploadResult[] = [];
+    let functionResponse: Response | undefined;
 
     try {
-      const { data, error } = await supabase.functions.invoke("bulk-create-students", {
+      const { data, error, response } = await supabase.functions.invoke(BULK_CREATE_FUNCTION, {
         body: {
           students: valid.map((student) => ({
             name: student.name,
@@ -172,11 +225,16 @@ export const BulkStudentUpload = () => {
           })),
         },
       });
+      functionResponse = response;
 
       if (error) throw error;
+      if (!data || !Array.isArray(data.results)) {
+        throw new Error(`Edge Function "${BULK_CREATE_FUNCTION}" returned an unexpected response.`);
+      }
       uploadResults = data?.results || [];
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Bulk upload failed";
+      const message = await formatBulkCreateError(err, functionResponse);
+      console.error("Bulk student upload failed:", err);
       toast.error(message);
       setUploading(false);
       return;

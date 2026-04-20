@@ -20,6 +20,7 @@ const LecturerOverview = lazy(() => import("./pages/dashboard/LecturerOverview")
 const CohortAnalytics = lazy(() => import("./pages/dashboard/CohortAnalytics"));
 const PerformanceTrends = lazy(() => import("./pages/dashboard/PerformanceTrends"));
 const AcademicIntegrity = lazy(() => import("./pages/dashboard/AcademicIntegrity"));
+const ModerationDashboard = lazy(() => import("./pages/dashboard/ModerationDashboard"));
 const InstitutionalInsights = lazy(() => import("./pages/dashboard/InstitutionalInsights"));
 const LearningOutcomes = lazy(() => import("./pages/dashboard/LearningOutcomes"));
 const StudentGrades = lazy(() => import("./pages/dashboard/StudentGrades"));
@@ -147,6 +148,7 @@ const App = () => (
             <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
             <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
             <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
+            <Route path="/dashboard/moderation" element={<DashboardRoute allowedRole="lecturer"><ModerationDashboard /></DashboardRoute>} />
             <Route path="/dashboard/institutional" element={<DashboardRoute allowedRole="lecturer"><InstitutionalInsights /></DashboardRoute>} />
             <Route path="/dashboard/accreditation" element={<DashboardRoute allowedRole="lecturer"><AccreditationDashboard /></DashboardRoute>} />
             <Route path="/dashboard/external-examiner" element={<DashboardRoute allowedRole="lecturer"><ExternalExaminerExport /></DashboardRoute>} />

@@ -21,6 +21,7 @@ import { safeFormatDate } from "@/lib/date";
 const lecturerLinks = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
+  { to: "/dashboard/moderation", label: "Moderation", icon: Shield },
   { to: "/dashboard/learning-outcomes", label: "Learning Outcomes", icon: Target },
   { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
   { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
