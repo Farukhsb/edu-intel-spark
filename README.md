@@ -220,6 +220,12 @@ Current browser-level coverage includes:
 - student visibility boundaries for approved vs released grades
 - academic integrity smoke flow for reviewing and saving a decision
 
+## Operational Checklists
+
+For final verification and presentation readiness, use:
+- [Release Readiness Checklist](C:/Users/a3dullahi/edu-intel-spark/docs/RELEASE_READINESS_CHECKLIST.md)
+- [Live Role-Boundary Smoke Checklist](C:/Users/a3dullahi/edu-intel-spark/docs/LIVE_ROLE_BOUNDARY_SMOKE.md)
+
 ## Supabase And Migrations
 
 This repo expects schema, policy, and RPC changes to be tracked in `supabase/migrations/`.
