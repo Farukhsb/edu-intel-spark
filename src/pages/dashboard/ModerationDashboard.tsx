@@ -29,29 +29,20 @@ import {
   getLatestModeratorReview,
   type ModerationAction,
 } from "@/lib/moderation";
+import {
+  buildModerationActionPlan,
+  buildModerationAuditPayload,
+  fetchModerationCaseViews,
+  getModerationQueueStats,
+  insertModerationAuditEntry,
+  type ModerationCaseView,
+} from "@/lib/moderationWorkflow";
 import { Loader2, Shield, Scale, CheckCheck, AlertTriangle, Clock } from "lucide-react";
 import { toast } from "sonner";
 
-type ModerationCase = Tables<"moderation_cases">;
 type Submission = Tables<"submissions">;
 type Grade = Tables<"grades">;
-type Assignment = Tables<"assignments">;
-type ModerationReview = Tables<"moderation_reviews">;
-type GradeAudit = Tables<"grade_audit_log">;
 type Profile = Tables<"profiles">;
-type IntegrityReview = Tables<"academic_integrity_reviews">;
-
-interface ModerationCaseView {
-  moderationCase: ModerationCase;
-  submission: Submission;
-  grade: Grade | null;
-  assignment: Assignment | null;
-  firstMarker: Profile | null;
-  moderator: Profile | null;
-  integrityReview: IntegrityReview | null;
-  reviews: ModerationReview[];
-  auditLog: GradeAudit[];
-}
 
 const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
 
@@ -77,89 +68,8 @@ const ModerationDashboard = () => {
 
     setLoading(true);
     try {
-      const [{ data: moderationCaseRows, error: caseError }, { data: lecturerRows, error: lecturerError }] =
-        await Promise.all([
-          supabase.from("moderation_cases").select("*").order("updated_at", { ascending: false }),
-          supabase.from("profiles").select("*").eq("role", "lecturer"),
-        ]);
-
-      if (caseError) throw caseError;
-      if (lecturerError) throw lecturerError;
-
-      const moderationCases = moderationCaseRows || [];
-      setLecturers((lecturerRows || []) as Profile[]);
-
-      if (moderationCases.length === 0) {
-        setCases([]);
-        setLoading(false);
-        return;
-      }
-
-      const submissionIds = moderationCases.map((item) => item.submission_id);
-      const assignmentIds = Array.from(new Set(moderationCases.map((item) => item.assignment_id)));
-      const gradeIds = moderationCases.map((item) => item.grade_id).filter(Boolean) as string[];
-      const profileIds = Array.from(
-        new Set(
-          moderationCases.flatMap((item) => [item.first_marker_id, item.moderator_id].filter(Boolean) as string[])
-        )
-      );
-      const caseIds = moderationCases.map((item) => item.id);
-
-      const [
-        { data: submissionRows },
-        { data: assignmentRows },
-        { data: gradeRows },
-        { data: profileRows },
-        { data: integrityRows },
-        { data: reviewRows },
-        { data: auditRows },
-      ] = await Promise.all([
-        supabase.from("submissions").select("*").in("id", submissionIds),
-        supabase.from("assignments").select("*").in("id", assignmentIds),
-        gradeIds.length > 0 ? supabase.from("grades").select("*").in("id", gradeIds) : Promise.resolve({ data: [] }),
-        profileIds.length > 0 ? supabase.from("profiles").select("*").in("id", profileIds) : Promise.resolve({ data: [] }),
-        supabase.from("academic_integrity_reviews").select("*").in("submission_id", submissionIds),
-        supabase.from("moderation_reviews").select("*").in("moderation_case_id", caseIds).order("created_at", { ascending: false }),
-        supabase.from("grade_audit_log").select("*").in("submission_id", submissionIds).order("created_at", { ascending: false }),
-      ]);
-
-      const submissionsById = new Map((submissionRows || []).map((row) => [row.id, row]));
-      const assignmentsById = new Map((assignmentRows || []).map((row) => [row.id, row]));
-      const gradesById = new Map((gradeRows || []).map((row) => [row.id, row]));
-      const profilesById = new Map((profileRows || []).map((row) => [row.id, row]));
-      const integrityBySubmission = new Map((integrityRows || []).map((row) => [row.submission_id, row]));
-      const reviewsByCase = new Map<string, ModerationReview[]>();
-      for (const review of reviewRows || []) {
-        const current = reviewsByCase.get(review.moderation_case_id) || [];
-        current.push(review);
-        reviewsByCase.set(review.moderation_case_id, current);
-      }
-      const auditBySubmission = new Map<string, GradeAudit[]>();
-      for (const entry of auditRows || []) {
-        const current = auditBySubmission.get(entry.submission_id) || [];
-        current.push(entry);
-        auditBySubmission.set(entry.submission_id, current);
-      }
-
-      const caseViews: ModerationCaseView[] = moderationCases
-        .map((moderationCase) => {
-          const submission = submissionsById.get(moderationCase.submission_id);
-          if (!submission) return null;
-
-          return {
-            moderationCase,
-            submission,
-            grade: moderationCase.grade_id ? gradesById.get(moderationCase.grade_id) || null : null,
-            assignment: assignmentsById.get(moderationCase.assignment_id) || null,
-            firstMarker: moderationCase.first_marker_id ? profilesById.get(moderationCase.first_marker_id) || null : null,
-            moderator: moderationCase.moderator_id ? profilesById.get(moderationCase.moderator_id) || null : null,
-            integrityReview: integrityBySubmission.get(moderationCase.submission_id) || null,
-            reviews: reviewsByCase.get(moderationCase.id) || [],
-            auditLog: auditBySubmission.get(moderationCase.submission_id) || [],
-          } satisfies ModerationCaseView;
-        })
-        .filter((item): item is ModerationCaseView => item !== null);
-
+      const { cases: caseViews, lecturers: lecturerRows } = await fetchModerationCaseViews(supabase);
+      setLecturers(lecturerRows as Profile[]);
       setCases(caseViews);
       setModeratorDrafts(
         Object.fromEntries(
@@ -196,29 +106,33 @@ const ModerationDashboard = () => {
   }, [selectedCase]);
 
   const queueStats = useMemo(
-    () => ({
-      pending: cases.filter((item) => item.moderationCase.status === "moderation_pending").length,
-      inProgress: cases.filter((item) => item.moderationCase.status === "moderation_in_progress").length,
-      moderated: cases.filter((item) => item.moderationCase.status === "moderated").length,
-      escalated: cases.filter((item) => item.moderationCase.status === "escalated").length,
-    }),
+    () => getModerationQueueStats(cases),
     [cases]
   );
 
-  const insertAuditEntry = async (item: ModerationCaseView, eventType: string, previousValues: Record<string, unknown>, newValues: Record<string, unknown>, reason: string) => {
+  const insertAuditEntry = async (
+    item: ModerationCaseView,
+    eventType: string,
+    previousValues: Record<string, unknown>,
+    newValues: Record<string, unknown>,
+    reason: string
+  ) => {
     if (!user) return;
 
-    const { error } = await supabase.from("grade_audit_log").insert({
-      submission_id: item.submission.id,
-      grade_id: item.grade?.id ?? item.moderationCase.grade_id,
-      moderation_case_id: item.moderationCase.id,
-      changed_by: user.id,
-      event_type: eventType,
-      actor_role: profile?.role ?? "lecturer",
-      previous_values: previousValues,
-      new_values: newValues,
-      reason,
-    });
+    const { error } = await insertModerationAuditEntry(
+      supabase,
+      buildModerationAuditPayload({
+        submissionId: item.submission.id,
+        gradeId: item.grade?.id ?? item.moderationCase.grade_id,
+        moderationCaseId: item.moderationCase.id,
+        changedBy: user.id,
+        eventType,
+        actorRole: profile?.role ?? "lecturer",
+        previousValues,
+        newValues,
+        reason,
+      })
+    );
 
     if (error) {
       console.warn("Failed to write moderation audit entry:", error);
@@ -285,33 +199,17 @@ const ModerationDashboard = () => {
 
     setSaving(true);
     try {
-      const nextCasePatch: Partial<Tables<"moderation_cases">["Update"]> = {};
-      let nextSubmissionStatus: Submission["status"] = submission.status;
-
-      if (action === "agree" || action === "adjust") {
-        nextCasePatch.status = "moderated";
-        nextCasePatch.moderator_id = moderationCase.moderator_id ?? user.id;
-        nextCasePatch.moderator_score = resolvedScore;
-        nextCasePatch.final_agreed_score = resolvedScore;
-        nextCasePatch.final_agreed_feedback = resolvedFeedback;
-        nextCasePatch.moderated_at = new Date().toISOString();
-        nextSubmissionStatus = "moderated";
-      }
-
-      if (action === "return") {
-        nextCasePatch.status = "first_review";
-        nextSubmissionStatus = "first_review";
-      }
-
-      if (action === "escalate") {
-        nextCasePatch.status = "escalated";
-        nextSubmissionStatus = "escalated";
-      }
-
-      if (action === "approve") {
-        nextCasePatch.approved_at = new Date().toISOString();
-        nextSubmissionStatus = "approved";
-      }
+      const { resolvedScore, resolvedFeedback, nextCasePatch, nextSubmissionStatus, reviewPayload } =
+        buildModerationActionPlan({
+          action,
+          moderationCase,
+          submissionStatus: submission.status,
+          grade,
+          userId: user.id,
+          noteDraft,
+          scoreDraft,
+          feedbackDraft,
+        });
 
       if (Object.keys(nextCasePatch).length > 0) {
         const { error: caseError } = await supabase.from("moderation_cases").update(nextCasePatch).eq("id", moderationCase.id);
@@ -337,26 +235,8 @@ const ModerationDashboard = () => {
         if (gradeError) throw gradeError;
       }
 
-      if (action !== "approve") {
-        const reviewerRole =
-          moderationCase.first_marker_id === user.id ? "first_marker" : moderationCase.lecturer_id === user.id ? "lecturer" : "moderator";
-        const { error: reviewError } = await supabase.from("moderation_reviews").insert({
-          moderation_case_id: moderationCase.id,
-          submission_id: submission.id,
-          reviewer_id: user.id,
-          reviewer_role: reviewerRole,
-          action,
-          proposed_score: resolvedScore,
-          proposed_feedback: resolvedFeedback,
-          notes: noteDraft || null,
-          snapshot: {
-            ai_score: grade?.ai_score ?? null,
-            first_marker_score: moderationCase.first_marker_score ?? grade?.lecturer_score ?? null,
-            moderator_score: resolvedScore,
-            status_before: moderationCase.status,
-            status_after: nextSubmissionStatus,
-          },
-        });
+      if (reviewPayload) {
+        const { error: reviewError } = await supabase.from("moderation_reviews").insert(reviewPayload);
         if (reviewError) throw reviewError;
       }
 

@@ -32,6 +32,7 @@ import {
   persistRecommendationAction,
   upsertGeneratedRecommendations,
 } from "@/lib/recommendationPersistence";
+import { buildRecommendationInterventionRows, insertRecommendationInterventions } from "@/lib/interventions";
 import { parseStoredReviewPayload } from "@/lib/integrityReviews";
 import { toast } from "sonner";
 
@@ -552,28 +553,28 @@ const CohortAnalytics = () => {
     }
 
     if (targetIds.length > 0 && !isDemo) {
-      const interventionRows = targetIds
+      const interventionTargets = targetIds
         .slice(0, 5)
         .map((studentId) => studentDirectory[studentId])
         .filter((entry): entry is StudentDirectoryEntry => Boolean(entry))
         .map((entry) => ({
-          lecturer_id: user.id,
-          student_id: entry.studentId,
-          student_name: entry.name,
-          student_email: entry.email,
-          intervention_type: "check_in",
-          title: recommendation.title,
-          notes: `${recommendation.summary}\n\nRecommended actions:\n- ${recommendation.recommendedActions.join("\n- ")}`,
-          priority:
-            recommendation.severity === "critical" || recommendation.severity === "high" ? "high" : "medium",
-          follow_up_date: new Date(Date.now() + 7 * 86400000).toISOString(),
-          status: "ongoing",
-          assignment_id: recommendation.assignmentId ?? null,
-          updated_at: new Date().toISOString(),
+          studentId: entry.studentId,
+          name: entry.name,
+          email: entry.email,
         }));
 
+      const interventionRows = buildRecommendationInterventionRows({
+        lecturerId: user.id,
+        title: recommendation.title,
+        summary: recommendation.summary,
+        recommendedActions: recommendation.recommendedActions,
+        severity: recommendation.severity,
+        assignmentId: recommendation.assignmentId ?? null,
+        targets: interventionTargets,
+      });
+
       if (interventionRows.length > 0) {
-        const { error } = await supabase.from("student_interventions").insert(interventionRows);
+        const { error } = await insertRecommendationInterventions(supabase, interventionRows);
         if (error) {
           console.error("Failed to create intervention rows:", error);
           toast.error("Could not create interventions.");
