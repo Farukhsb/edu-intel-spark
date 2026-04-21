@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BookOpen, Bell, CheckCircle2, Circle, Loader2, RefreshCw, Target, TrendingDown, TrendingUp } from "lucide-react";
@@ -122,6 +121,25 @@ const DEMO_RESOURCES: Resource[] = [
     reason: "Helps strengthen low-scoring test coverage work.",
   },
 ];
+
+const InlineProgressBar = ({
+  value,
+  className = "",
+}: {
+  value: number;
+  className?: string;
+}) => {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+
+  return (
+    <div className={`overflow-hidden rounded-full bg-secondary ${className}`}>
+      <div
+        className="h-full rounded-full bg-primary transition-[width]"
+        style={{ width: `${clamped}%` }}
+      />
+    </div>
+  );
+};
 
 const ImprovementPlan = () => {
   const location = useLocation();
@@ -474,7 +492,7 @@ const ImprovementPlan = () => {
               <p className="text-2xl font-bold font-display">{overallTasks.progress}%</p>
               <p className="text-xs text-muted-foreground">task completion</p>
             </div>
-            <Progress value={overallTasks.progress} className="h-2 w-32" />
+            <InlineProgressBar value={overallTasks.progress} className="h-2 w-32" />
           </div>
         </CardContent>
       </Card>
@@ -529,7 +547,7 @@ const ImprovementPlan = () => {
                     </span>
                   </div>
                   <div className="w-32">
-                    <Progress value={progress} className="h-2" />
+                    <InlineProgressBar value={progress} className="h-2" />
                   </div>
                   <span className="text-xs text-muted-foreground">
                     {completed}/{module.tasks.length}
