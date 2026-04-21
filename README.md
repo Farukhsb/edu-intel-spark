@@ -282,7 +282,7 @@ npx supabase functions deploy check-plagiarism
 
 ## Current State
 
-This project is best described as a strong, fast-moving integrated prototype with hardened core workflows. It is no longer just a UI demo, but it is also not pretending to be a fully finished institutional platform.
+This project is best described as a fast-moving integrated prototype with hardened core workflows. It is no longer just a UI demo, but it is also not pretending to be a fully finished institutional platform.
 
 The strongest areas are:
 - coherent assessment workflow design
@@ -295,7 +295,3 @@ The main work still worth doing is operational hardening:
 - more live-environment verification
 - broader permissions and RLS validation after migration apply
 - continued extraction of heavy page logic into smaller domain services
-
-## In One Line
-
-GradeAI uses AI to reduce the repetitive work of academic assessment while keeping academic judgement with lecturers.
