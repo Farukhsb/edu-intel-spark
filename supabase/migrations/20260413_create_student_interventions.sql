@@ -40,22 +40,26 @@ execute function public.update_student_interventions_updated_at();
 
 alter table public.student_interventions enable row level security;
 
+drop policy if exists "Lecturers can view their own interventions" on public.student_interventions;
 create policy "Lecturers can view their own interventions"
 on public.student_interventions
 for select
 using (auth.uid() = lecturer_id);
 
+drop policy if exists "Lecturers can create their own interventions" on public.student_interventions;
 create policy "Lecturers can create their own interventions"
 on public.student_interventions
 for insert
 with check (auth.uid() = lecturer_id);
 
+drop policy if exists "Lecturers can update their own interventions" on public.student_interventions;
 create policy "Lecturers can update their own interventions"
 on public.student_interventions
 for update
 using (auth.uid() = lecturer_id)
 with check (auth.uid() = lecturer_id);
 
+drop policy if exists "Lecturers can delete their own interventions" on public.student_interventions;
 create policy "Lecturers can delete their own interventions"
 on public.student_interventions
 for delete

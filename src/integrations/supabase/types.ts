@@ -817,6 +817,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_recommendation_action: {
+        Args: {
+          p_action_type: string
+          p_payload?: Json
+          p_recommendation_id: string
+        }
+        Returns: Database["public"]["Tables"]["analytics_recommendations"]["Row"]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -1,302 +1,170 @@
 # GradeAI
 
-**An academic intelligence platform for higher education assessment workflows.**
+GradeAI is an academic intelligence platform for higher education assessment workflows. It brings assignment setup, AI-assisted grading, academic integrity review, moderation, release, analytics, and student support into one connected system.
 
-GradeAI helps universities manage the full assessment cycle in one connected system: assignment design, student submission, AI-assisted grading, integrity review, moderation, release, analytics, and student support. The platform is built around a simple principle: AI does the analytical heavy lifting, but lecturers keep control of every academic decision.
+The product philosophy is simple: AI should do the repetitive analytical work, while lecturers remain responsible for the academic decisions.
 
 Live deployment:
 - `https://gradeai.pages.dev`
 
-## What GradeAI Does
+## What The Platform Covers
 
-GradeAI is designed for real academic workflows rather than isolated AI demos. It brings together:
-- assignment setup and rubric design
-- structured AI-assisted grading
+- rubric-based assignment authoring
+- student submission and secure file access
+- AI-assisted grading with criterion-level scoring and confidence signals
 - lecturer review, approval, and release controls
 - citation-aware academic integrity analysis
-- moderation and audit trails
-- cohort analytics and AI recommendations
-- student risk tracking and interventions
-- student-facing feedback, improvement planning, and AI tutoring
+- moderation workflows with audit history
+- cohort analytics and explainable recommendations
+- student risk tracking and intervention logging
+- student-facing feedback, improvement plans, and AI tutoring
 
-The result is a platform that saves time without turning marking into a black box.
+## Workflow Snapshot
 
-## Who Uses It
+Main grading lifecycle:
 
-### Lecturers
-Lecturers create assignments, build rubrics, run AI grading, review results, investigate integrity concerns, manage moderation, release grades, and support students who need intervention.
+```text
+submitted
+  -> ai_grading
+  -> ai_graded
+  -> first_review / under_review
+  -> approved
+  -> released
+```
 
-### Students
-Students submit work, view released grades and rubric-linked feedback, follow improvement plans, and use the Socratic AI tutor to better understand their performance.
+Moderated work can move through:
 
-### Programme leads, quality teams, and external examiners
-Institutional users can review cohort trends, accreditation evidence, moderation records, audit history, and exportable assessment data.
-
-## Lecturer Experience
-
-### Overview Dashboard
-The lecturer dashboard is organised around the assessment lifecycle and shows live data from the connected backend.
-
-It includes:
-- active assignment counts
-- submissions awaiting review
-- released grade counts
-- recent activity snapshots
-- quick access to assignments, moderation, analytics, and integrity review
-
-### Assignments
-Lecturers can create and manage assignments with:
-- title, description, module code, due date, and maximum score
-- weighted rubric criteria with names, descriptions, and percentages
-- draft or published assignment state
-
-Within an assignment, lecturers can:
-- see all submissions with timestamps and workflow status
-- open uploaded files using secure signed URLs
-- batch-run AI grading
-- batch-run integrity checks
-- review, approve, and release results
-
-### AI-Assisted Grading
-AI grading is rubric-based and explainable. For each submission, the platform returns:
-- an overall score
-- detailed student-facing feedback
-- criterion-by-criterion scoring
-- evidence-backed grading metadata
-- confidence indicators that help decide when human review is needed
-
-The grading workflow is designed to support lecturer judgement, not replace it.
-
-### Review, Approve, Release
-Grades move through a controlled pipeline before students see them:
-
-`submitted -> ai_grading -> ai_graded -> under_review / first_review -> approved -> released`
-
-Moderated work can also move through:
-
-`moderation_pending -> moderation_in_progress -> moderated / escalated`
+```text
+first_review
+  -> moderation_pending
+  -> moderation_in_progress
+  -> moderated / escalated
+  -> approved
+  -> released
+```
 
 This means:
-- students do not see provisional AI output
-- lecturers can edit marks and feedback before approval
-- moderated grades remain under lecturer control
-- nothing is auto-released
+- students never see provisional AI output
+- lecturer review remains the decision point before approval
+- moderated work is gated before release
+- release is still an explicit action
 
-### Academic Integrity
-Integrity analysis runs alongside grading and is designed as decision support rather than automated accusation.
+## Key Product Areas
 
-The system currently supports:
-- student-to-student similarity review within an assignment
-- external-source style overlap analysis
-- AI-writing suspicion scoring
-- writing-baseline deviation checks
-- persisted lecturer review history
+### Lecturer workspace
 
-Recent integrity improvements make the system more academically fair and easier to interpret:
-- reference sections such as `References`, `Bibliography`, and `Works Cited` are excluded from overlap scoring
-- quoted and cited material is identified and downweighted instead of being treated like uncited copying
-- overlap is split into:
-  - `total_overlap`
-  - `cited_overlap`
-  - `uncited_overlap`
-  - `internal_peer_overlap`
-  - `external_source_overlap`
-- evidence is grouped for lecturers into uncited matches, cited material, peer matches, and external matches
+Lecturers can:
+- create assignments with weighted rubrics
+- upload or review submissions
+- run AI grading and integrity checks
+- edit marks and feedback before approval
+- manage moderation cases
+- review cohort analytics and recommendations
+- log student interventions and follow-up actions
 
-PDF handling has also been improved:
-- the extraction pipeline now pulls readable body text from PDF text operators rather than relying on raw printable binary fragments
-- PDF artefacts such as object streams and metadata are stripped before scoring
-- low-quality extraction is explicitly detected
-- if a PDF is dominated by unreadable artefacts, the case is marked as **analysis limited** rather than being shown as a misleading normal low-risk result
+### Student workspace
+
+Students can:
+- submit work for open assignments
+- view only released grades
+- read lecturer-approved feedback
+- use the Socratic AI tutor to understand their performance
+- track improvement-plan progress
+
+### Institutional workflows
+
+GradeAI also supports:
+- accreditation reporting views
+- external examiner export workflows
+- moderation and audit trails
+- cohort-level quality and performance insight
+
+## Integrity And Moderation
+
+### Citation-aware integrity review
+
+The integrity layer no longer treats all matched text equally.
+
+It now distinguishes between:
+- cited overlap
+- uncited overlap
+- reference sections
+
+Reference sections such as `References`, `Bibliography`, and `Works Cited` are excluded from scoring. Quoted or cited material is still shown to lecturers, but labeled as lower-risk cited material rather than treated the same way as uncited copying.
+
+Overlap is split into:
+- `total_overlap`
+- `cited_overlap`
+- `uncited_overlap`
+- `internal_peer_overlap`
+- `external_source_overlap`
+
+### PDF extraction quality
+
+The integrity pipeline now checks extraction quality before similarity analysis. If a PDF is dominated by object streams, metadata, or unreadable artefacts, the result is marked as **analysis limited** instead of being shown as a normal low-risk result.
 
 ### Moderation
-Moderation extends the grading workflow without replacing it.
 
-When current grading and integrity signals suggest a second review is needed, the platform can open a moderation case. Typical triggers include:
-- low grading confidence
-- integrity concerns
-- borderline marks
-- large gaps between AI and lecturer scores
-- maths derivation or solver-signature concerns
+Moderation is additive to grading, not a replacement for it. The platform supports:
+- moderation case creation
+- moderator assignment
+- agree, adjust, return, escalate, and approve actions
+- final agreed score recording
+- audit history for grade changes and moderation decisions
 
-The moderation workflow provides:
-- a moderation queue/dashboard
-- case status tracking
-- first marker and moderator actions
-- agreed score recording
-- audit history for changes and decisions
+## Cohort Analytics
 
-Moderator actions include:
-- agree
-- adjust
-- return
-- escalate
-- approve
-
-### Cohort Analytics and AI Recommendations
-GradeAI includes analytics views for lecturers and programme teams:
+The analytics layer includes:
 - grade distribution
 - assignment comparison
 - performance trends
 - student risk clustering
 - integrity signal monitoring
 
-On top of those analytics, the platform now generates explainable, rule-based AI recommendations for lecturers. These are not black-box predictions. They are deterministic recommendations derived from real cohort data.
+It also includes deterministic AI Recommendations for lecturers. These recommendations are explainable rule-based cards derived from real analytics data, not black-box predictions.
 
-Recommendation categories include:
-- performance
-- trends
-- rubric weakness
-- student risk
-- integrity alerts
-- positive signals
-
-Examples of recommendations:
+Examples include:
 - low cohort average
 - high failure rate
 - significant score drop between assignments
-- weak rubric criterion
-- high-risk student cluster
-- integrity spike
-
-Recommendations can be reviewed, dismissed, or turned into interventions, and their state is persisted across reloads.
-
-### Student Risk and Interventions
-The platform tracks student risk using explainable academic indicators rather than opaque machine learning scores.
-
-Lecturers can:
-- open student profiles
-- record interventions
-- set priorities and follow-up dates
-- store notes and support actions
-- create interventions directly from cohort recommendations
-
-This gives departments a clear record of support activity, not just a risk number.
-
-### Bulk Onboarding
-Lecturers can upload a CSV to create a cohort of student accounts in one flow. The system:
-- parses the CSV
-- reviews the incoming records
-- creates student accounts through a backend function
-- provides a downloadable credentials file for distribution
-
-This avoids manual account creation one student at a time.
-
-## Student Experience
-
-The student side of GradeAI is intentionally simpler.
-
-### Submitting Work
-Students can:
-- see assignments that are currently open
-- upload their work directly to secure storage
-- submit once per assignment
-
-### Viewing Grades
-Once a lecturer releases a result, the student can view:
-- the final score
-- rubric-linked breakdowns
-- lecturer-approved feedback
-
-Students do not see provisional grades still under review.
-
-### Explain My Grade
-This feature gives students a guided explanation of their result through a Socratic AI tutor.
-
-The tutor:
-- is grounded in the student’s own submission and rubric
-- asks guiding questions rather than giving direct answers
-- does not generate model answers or rewrite work for the student
-
-### Improvement Plan
-Each student has a persisted improvement-plan view with trackable actions and progress across sessions.
-
-## Institutional and Quality Features
-
-GradeAI is designed to work within formal academic processes.
-
-### Audit and Defensibility
-The platform keeps an audit trail for meaningful actions such as:
-- grading changes
-- approval and release changes
-- integrity review decisions
-- moderation actions
-- intervention records
-
-This helps answer questions like:
-- who changed the grade?
-- what evidence was reviewed?
-- why was a case escalated or cleared?
-
-### Accreditation and External Examiner Workflows
-Institutional views support:
-- accreditation evidence review
-- programme-level insight
-- external examiner exports
-- cross-module assessment reporting
-
-## Screenshots
-
-| Lecturer Dashboard | Overview Dashboard |
-|---|---|
-| ![Lecturer Dashboard](docs/screenshots/lecturer-dashboard-overview.jpg) | ![Overview Dashboard](docs/screenshots/overview-dashboard.jpg) |
-
-| Cohort Analytics | Grade Distribution |
-|---|---|
-| ![Cohort Analytics](docs/screenshots/cohort-analytics-dashboard.jpg) | ![Grade Distribution](docs/screenshots/grade-distribution-analytics.jpg) |
-
-| Predictive Risk Analytics | Student Improvement Plan |
-|---|---|
-| ![Predictive Risk Analytics](docs/screenshots/predictive-risk-analytics.jpg) | ![Student Improvement Plan](docs/screenshots/student-improvement-plan.jpg) |
-
-| AI Grade Explanation |
-|---|
-| ![AI Grade Explanation](docs/screenshots/ai-grade-explanation.jpg) |
+- weak rubric criteria
+- high-risk student clusters
+- integrity spikes
 
 ## Technology Stack
 
 | Layer | Technology |
-|-------|------------|
-| Frontend | React 18 + TypeScript + Vite |
-| UI | Tailwind CSS + shadcn/ui |
-| Routing | React Router |
+|---|---|
+| Frontend | React 18, TypeScript, Vite |
+| UI | Tailwind CSS, shadcn/ui, lucide-react |
 | Backend | Supabase |
 | Auth | Supabase Auth |
 | Storage | Supabase Storage |
-| Server Logic | Supabase Edge Functions |
-| Analytics | Recharts + PostHog |
-| Export | jsPDF |
+| Server logic | Supabase Edge Functions |
+| Charts | Recharts |
+| Product analytics | PostHog |
 | Hosting | Cloudflare Pages |
-| Version Control | GitHub |
-
-## Important Edge Functions
-
-Current backend workflows rely on Supabase Edge Functions such as:
-- `grade-submission`
-- `check-plagiarism`
-- `explain-grade`
-- `student-ai-tutor`
-- `bulk-create-students`
+| Testing | Vitest, Testing Library, Playwright |
 
 ## Project Structure
 
 ```text
 src/
-  components/         Reusable application components
-  components/ui/      Shared UI primitives
-  contexts/           App context providers
-  hooks/              Custom hooks
+  components/         Shared application components
+  components/ui/      UI primitives
+  contexts/           App-level state and auth
   integrations/       Supabase client and generated types
-  lib/                Shared logic and utilities
+  lib/                Shared workflow, analytics, and persistence logic
   pages/
     dashboard/        Lecturer and student dashboard pages
+  test/               Unit and integration tests
+
+tests/
+  e2e/                Playwright browser coverage
 
 supabase/
-  functions/          Edge functions for grading, integrity, and tutoring
-  migrations/         Database migrations
-
-public/
-  Static assets
+  functions/          Edge Functions for grading, integrity, and tutoring
+  migrations/         Database schema and policy history
 ```
 
 ## Local Development
@@ -309,7 +177,7 @@ npm install
 
 ### 2. Configure environment variables
 
-Create or update `.env` with your Supabase project values:
+Create a local `.env` file with your Supabase project values:
 
 ```env
 VITE_SUPABASE_PROJECT_ID="your_project_ref"
@@ -317,7 +185,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY="your_publishable_key"
 VITE_SUPABASE_URL="https://your_project_ref.supabase.co"
 ```
 
-Do not commit `.env`.
+Do not commit local environment files.
 
 ### 3. Start the app
 
@@ -325,65 +193,109 @@ Do not commit `.env`.
 npm run dev
 ```
 
-### 4. Build for production
+## Testing
+
+Run unit and integration tests:
+
+```bash
+npm run test
+```
+
+Run a production build check:
 
 ```bash
 npm run build
 ```
 
-## Supabase Requirements
+Run Playwright browser tests:
 
-The main workflows expect the backend to provide, at minimum:
-- `assignments`
-- `submissions`
-- `grades`
-- `profiles`
-- `user_roles`
-- `student_interventions`
-- `academic_integrity_reviews`
-- `improvement_plan_progress`
-- `communication_messages`
-- `moderation_cases`
-- `moderation_reviews`
-- `grade_audit_log`
-- `analytics_recommendations`
-- `recommendation_actions`
-
-The project also expects:
-- a `submissions` storage bucket
-- the required edge functions deployed to the same Supabase project
-
-## Required Function Secrets
-
-Set these in Supabase Edge Function secrets:
-- `OPENAI_API_KEY`
-- `OPENAI_GRADING_MODEL`
-- `OPENAI_INTEGRITY_MODEL`
-- `OPENAI_CHAT_MODEL`
-
-Typical model values:
-
-```text
-gpt-5.4-mini
+```bash
+npx playwright install
+npm run test:e2e
 ```
 
-## Product Philosophy
+Current browser-level coverage includes:
+- lecturer review -> approve -> release
+- moderation gating before approval
+- student visibility boundaries for approved vs released grades
+- academic integrity smoke flow for reviewing and saving a decision
 
-Three principles shape the platform:
-- lecturer oversight first
-- explainability over magic
-- institution-friendly workflows
+## Operational Checklists
 
-GradeAI is built to accelerate repetitive academic work while keeping academic judgement, accountability, and final authority with educators.
+For final verification and presentation readiness, use:
+- [Release Readiness Checklist](C:/Users/a3dullahi/edu-intel-spark/docs/RELEASE_READINESS_CHECKLIST.md)
+- [Live Role-Boundary Smoke Checklist](C:/Users/a3dullahi/edu-intel-spark/docs/LIVE_ROLE_BOUNDARY_SMOKE.md)
 
-## Notes
+## Supabase And Migrations
 
-- Integrity analysis is decision support, not proof of misconduct.
-- Strong writing alone is not treated as evidence of AI use.
-- Properly cited material remains visible to lecturers but is treated differently from uncited overlap.
-- Poor PDF extraction is surfaced as a limited analysis state rather than a false clean result.
-- Moderation is additive to grading; it does not replace lecturer authority.
+This repo expects schema, policy, and RPC changes to be tracked in `supabase/migrations/`.
 
-## License
+If you pull new schema changes, apply them manually against the linked project:
 
-Private project unless otherwise specified by the repository owner.
+```bash
+npx supabase db push --linked --include-all
+```
+
+Or run the relevant SQL migrations in Supabase SQL Editor.
+
+High-trust workflows in this repo depend on the database layer, not just the UI. That includes:
+- RLS policies
+- recommendation action RPCs
+- moderation tables
+- audit logging triggers
+- integrity review constraints
+
+If the app behavior and the database drift apart, trust boundaries become unreliable.
+
+### Migration history note
+
+This project still carries two legacy short-form migration versions in historical Supabase metadata:
+- `20260412`
+- `20260413`
+
+They correspond to:
+- [20260412_fix_multi_tenant_rls.sql](C:/Users/a3dullahi/edu-intel-spark/supabase/migrations/20260412_fix_multi_tenant_rls.sql)
+- [20260413_create_student_interventions.sql](C:/Users/a3dullahi/edu-intel-spark/supabase/migrations/20260413_create_student_interventions.sql)
+
+The live project is functioning with these migrations applied, but Supabase CLI history output may still show them as legacy unmatched entries. Treat that as a migration-ledger hygiene issue, not a live permissions failure. Do not rename historical migration IDs on a live project without a deliberate migration-history cleanup plan.
+
+## Important Edge Functions
+
+The current backend uses these Supabase Edge Functions:
+- `grade-submission`
+- `check-plagiarism`
+- `explain-grade`
+- `student-ai-tutor`
+- `bulk-create-students`
+
+## Deployment Notes
+
+- Frontend deploys to Cloudflare Pages
+- Backend services run through Supabase
+- Environment variables and Supabase secrets must match the target environment
+- Edge Functions should be deployed when function code changes:
+
+```bash
+npx supabase functions deploy grade-submission
+npx supabase functions deploy check-plagiarism
+```
+
+## Current State
+
+This project is best described as a strong, fast-moving integrated prototype with hardened core workflows. It is no longer just a UI demo, but it is also not pretending to be a fully finished institutional platform.
+
+The strongest areas are:
+- coherent assessment workflow design
+- lecturer oversight and explainability
+- moderation and audit direction
+- integrity pipeline improvements
+- growing automated coverage around critical flows
+
+The main work still worth doing is operational hardening:
+- more live-environment verification
+- broader permissions and RLS validation after migration apply
+- continued extraction of heavy page logic into smaller domain services
+
+## In One Line
+
+GradeAI uses AI to reduce the repetitive work of academic assessment while keeping academic judgement with lecturers.
