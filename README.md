@@ -5,7 +5,7 @@ GradeAI is an academic intelligence platform for higher education assessment wor
 The idea behind the product is simple: AI should handle the repetitive analytical work, while lecturers remain responsible for the academic decisions.
 
 Live deployment:
-- `https://edu-spark.pages.dev`
+- `https://gradeai.pages.dev`
 
 GradeAI is designed around the full assessment lifecycle rather than a single AI grading feature. The aim is to make marking, moderation, integrity review, release, and follow-up support feel like parts of one coherent workflow instead of a collection of disconnected tools.
 
@@ -290,7 +290,7 @@ npx supabase functions deploy check-plagiarism
 
 ## Current State
 
-GradeAI is best described as a strong, fast-moving integrated prototype with hardened core workflows. It is well beyond a UI demo, and it now has real workflow depth, meaningful trust-boundary hardening, and working browser-level verification across the most important paths.
+This project is best described as a fast-moving integrated prototype with hardened core workflows. It is no longer just a UI demo, but it is also not pretending to be a fully finished institutional platform.
 
 The strongest areas are:
 - coherent assessment workflow design
@@ -300,12 +300,7 @@ The strongest areas are:
 - growing automated coverage around critical flows
 - successful live verification of the core deployed workflows
 
-The main work still worth doing is polish and continued hardening:
-- broader ongoing permissions and RLS regression checking as the schema evolves
-- continued extraction of the heaviest dashboard pages into smaller domain services
-- more live operational proof over time, especially as usage grows
-- continued cleanup of legacy migration-history quirks
-
-## In One Line
-
-GradeAI uses AI to reduce the repetitive work of academic assessment while keeping academic judgement with lecturers.
+The main work still worth doing is operational hardening:
+- more live-environment verification
+- broader permissions and RLS validation after migration apply
+- continued extraction of heavy page logic into smaller domain services
