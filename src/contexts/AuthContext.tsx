@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { posthog } from "@/lib/posthog";
 import { clearE2EAuthState, createE2EUser, readE2EAuthState } from "@/lib/e2eAuth";
+import { getPasswordResetRedirectUrl } from "@/lib/authUrls";
 import type { User } from "@supabase/supabase-js";
 
 type AppRole = "lecturer" | "student";
@@ -73,16 +74,6 @@ const createDemoUser = (profile: Profile | null): User =>
     id: profile?.id ?? "demo-user",
     email: profile?.email ?? undefined,
   }) as unknown as User;
-
-const getPasswordResetRedirectUrl = () => {
-  const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-
-  if (isLocalhost) {
-    return `${window.location.origin}/reset-password`;
-  }
-
-  return "https://edu-intel-spark.pages.dev/reset-password";
-};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
@@ -229,7 +220,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getPasswordResetRedirectUrl(),
+      redirectTo: getPasswordResetRedirectUrl({
+        origin: window.location.origin,
+        configuredAppUrl: import.meta.env.VITE_APP_URL,
+      }),
     });
     if (error) throw error;
   };
