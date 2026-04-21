@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { posthog } from "@/lib/posthog";
+import { clearE2EAuthState, createE2EUser, readE2EAuthState } from "@/lib/e2eAuth";
 import type { User } from "@supabase/supabase-js";
 
 type AppRole = "lecturer" | "student";
@@ -116,6 +117,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    const e2eAuthState = readE2EAuthState();
+    if (e2eAuthState) {
+      setIsDemo(false);
+      setUser(createE2EUser(e2eAuthState));
+      setProfile(e2eAuthState.profile);
+      setProfileError(null);
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
@@ -197,6 +208,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const handleSignOut = async () => {
+    if (readE2EAuthState()) {
+      clearE2EAuthState();
+      setUser(null);
+      setProfile(null);
+      setProfileError(null);
+      setLoading(false);
+      return;
+    }
+
     if (isDemo) {
       setIsDemo(false);
       setProfile(null);

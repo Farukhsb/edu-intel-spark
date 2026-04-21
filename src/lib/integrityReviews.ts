@@ -17,11 +17,24 @@ export interface IntegritySnapshot {
   totalScore: number;
   aiWritingScore: number;
   similarityScore: number;
+  analysisLimited?: boolean;
+  limitations?: string[];
+  overlapBreakdown?: {
+    totalOverlap: number;
+    citedOverlap: number;
+    uncitedOverlap: number;
+    internalPeerOverlap: number;
+    externalSourceOverlap: number;
+  };
   baselineDeviationScore?: number;
   riskLevel: "high" | "medium" | "low";
   evidence: {
     aiWriting: IntegrityEvidenceItem[];
     similarity: IntegrityEvidenceItem[];
+    uncitedMatches?: IntegrityEvidenceItem[];
+    citedMatches?: IntegrityEvidenceItem[];
+    peerMatches?: IntegrityEvidenceItem[];
+    externalMatches?: IntegrityEvidenceItem[];
     baselineDeviation?: IntegrityEvidenceItem[];
   };
   flags: string[];

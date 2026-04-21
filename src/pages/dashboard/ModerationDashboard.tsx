@@ -445,7 +445,11 @@ const ModerationDashboard = () => {
               });
 
               return (
-                <div key={item.moderationCase.id} className="rounded-xl border p-4">
+                <div
+                  key={item.moderationCase.id}
+                  data-testid={`moderation-case-${item.moderationCase.id}`}
+                  className="rounded-xl border p-4"
+                >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -484,7 +488,12 @@ const ModerationDashboard = () => {
                         <p>Moderator {latestModeratorReview?.proposed_score ?? item.moderationCase.moderator_score ?? "-"}</p>
                         <p>Agreed {item.moderationCase.final_agreed_score ?? "-"}</p>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => setSelectedCaseId(item.moderationCase.id)}>
+                      <Button
+                        data-testid={`moderation-review-open-${item.moderationCase.id}`}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedCaseId(item.moderationCase.id)}
+                      >
                         Review case
                       </Button>
                     </div>
@@ -497,7 +506,7 @@ const ModerationDashboard = () => {
       </Card>
 
       <Dialog open={Boolean(selectedCase)} onOpenChange={(open) => !open && setSelectedCaseId(null)}>
-        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent data-testid="moderation-review-dialog" className="max-h-[88vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Moderation Review</DialogTitle>
             <DialogDescription>
@@ -551,6 +560,7 @@ const ModerationDashboard = () => {
                       </Select>
                     </div>
                     <Button
+                      data-testid={`moderation-assign-${selectedCase.moderationCase.id}`}
                       variant="outline"
                       className="w-full"
                       disabled={saving || selectedCase.moderationCase.lecturer_id !== user?.id}
@@ -600,19 +610,19 @@ const ModerationDashboard = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" disabled={saving} onClick={() => void saveAction("agree")}>
+                      <Button data-testid="moderation-action-agree" variant="outline" disabled={saving} onClick={() => void saveAction("agree")}>
                         Agree
                       </Button>
-                      <Button variant="outline" disabled={saving} onClick={() => void saveAction("adjust")}>
+                      <Button data-testid="moderation-action-adjust" variant="outline" disabled={saving} onClick={() => void saveAction("adjust")}>
                         Adjust
                       </Button>
-                      <Button variant="outline" disabled={saving} onClick={() => void saveAction("return")}>
+                      <Button data-testid="moderation-action-return" variant="outline" disabled={saving} onClick={() => void saveAction("return")}>
                         Return
                       </Button>
-                      <Button variant="outline" disabled={saving} onClick={() => void saveAction("escalate")}>
+                      <Button data-testid="moderation-action-escalate" variant="outline" disabled={saving} onClick={() => void saveAction("escalate")}>
                         Escalate
                       </Button>
-                      <Button disabled={saving} onClick={() => void saveAction("approve")}>
+                      <Button data-testid="moderation-action-approve" disabled={saving} onClick={() => void saveAction("approve")}>
                         Approve
                       </Button>
                     </div>

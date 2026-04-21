@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,39 +23,26 @@ import { safeFormatDate } from "@/lib/date";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   type IntegrityDecision,
-  type IntegrityEvidenceItem,
-  type IntegrityHistoryEntry,
-  parseStoredReviewPayload,
-  serializeReviewPayload,
 } from "@/lib/integrityReviews";
+import {
+  type AcademicIntegrityOverviewStat,
+  buildIntegrityCases,
+  buildIntegrityDrafts,
+  buildIntegrityOverview,
+  buildIntegrityTotals,
+  type FlaggedIntegrityCase,
+  getIntegrityReviewType,
+} from "@/lib/integrityQueue";
+import { persistIntegrityDecision } from "@/lib/integrityDecisionPersistence";
 
-interface OverviewStat {
-  label: string;
-  value: string;
-  icon: React.ElementType;
-}
-
-interface FlaggedCase {
-  submissionId: string;
-  assignmentId: string;
-  student: string;
-  assignment: string;
-  status: string;
-  submittedAt: string;
-  riskLevel: "high" | "medium" | "low";
-  totalScore: number;
-  aiWritingScore: number;
-  similarityScore: number;
-  baselineDeviationScore: number;
-  evidence: {
-    aiWriting: IntegrityEvidenceItem[];
-    similarity: IntegrityEvidenceItem[];
-    baselineDeviation: IntegrityEvidenceItem[];
-  };
-  flags: string[];
-  decision: IntegrityDecision;
-  history: IntegrityHistoryEntry[];
-}
+const MetricBar = ({ value }: { value: number }) => (
+  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+    <div
+      className="h-full rounded-full bg-primary transition-all"
+      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+    />
+  </div>
+);
 
 type StoredIntegrityReview = Tables<"academic_integrity_reviews">;
 type SubmissionRow = Pick<
@@ -71,18 +57,11 @@ const decisionOptions: IntegrityDecision[] = [
   "misconduct-concern",
 ];
 
-const getReviewType = (item: Pick<FlaggedCase, "aiWritingScore" | "similarityScore" | "baselineDeviationScore">) => {
-  if (item.aiWritingScore > 0 && item.similarityScore > 0) return "mixed";
-  if (item.aiWritingScore > 0) return "ai-writing-suspicion";
-  if (item.baselineDeviationScore > 0 && item.similarityScore === 0) return "baseline-deviation";
-  return "similarity-plagiarism-suspicion";
-};
-
 const AcademicIntegrity = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [overview, setOverview] = useState<OverviewStat[]>([]);
-  const [flagged, setFlagged] = useState<FlaggedCase[]>([]);
+  const [overview, setOverview] = useState<Array<AcademicIntegrityOverviewStat & { icon: React.ElementType }>>([]);
+  const [flagged, setFlagged] = useState<FlaggedIntegrityCase[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -104,8 +83,6 @@ const AcademicIntegrity = () => {
 
         const assignments = assignmentsData || [];
         const assignmentIds = assignments.map((assignment) => assignment.id);
-        const assignmentMap = new Map(assignments.map((assignment) => [assignment.id, assignment.title]));
-
         if (assignmentIds.length === 0) {
           setOverview([
             { label: "Submissions Scanned", value: "0", icon: FileSearch },
@@ -126,7 +103,6 @@ const AcademicIntegrity = () => {
         if (submissionsError) throw submissionsError;
 
         const submissions = (submissionsData || []) as SubmissionRow[];
-        const submissionMap = new Map(submissions.map((submission) => [submission.id, submission]));
 
         const { data: storedReviews, error: reviewsError } = await supabase
           .from("academic_integrity_reviews")
@@ -136,67 +112,29 @@ const AcademicIntegrity = () => {
 
         if (reviewsError) throw reviewsError;
 
-        const cases: FlaggedCase[] = (storedReviews || [])
-          .map((review) => {
-            const submission = submissionMap.get(review.submission_id);
-            if (!submission) return null;
-
-            const payload = parseStoredReviewPayload(
-              review as Pick<StoredIntegrityReview, "lecturer_note" | "updated_at" | "decision">
-            );
-            const snapshot = payload.integritySnapshot;
-
-            if (!snapshot && payload.history.length === 0 && review.decision === "pending") {
-              return null;
-            }
-
-            return {
-              submissionId: submission.id,
-              assignmentId: submission.assignment_id,
-              student: submission.student_name || submission.student_email || "Student",
-              assignment: assignmentMap.get(submission.assignment_id) || "Unknown assignment",
-              status: submission.status,
-              submittedAt: submission.submitted_at,
-              riskLevel: snapshot?.riskLevel || "low",
-              totalScore: snapshot?.totalScore || 0,
-              aiWritingScore: snapshot?.aiWritingScore || 0,
-              similarityScore: snapshot?.similarityScore || 0,
-              baselineDeviationScore: snapshot?.baselineDeviationScore || 0,
-              evidence: {
-                aiWriting: snapshot?.evidence?.aiWriting || [],
-                similarity: snapshot?.evidence?.similarity || [],
-                baselineDeviation: snapshot?.evidence?.baselineDeviation || [],
-              },
-              flags: snapshot?.flags || [],
-              decision: (review.decision as IntegrityDecision) || "pending",
-              history: payload.history,
-            } satisfies FlaggedCase;
-          })
-          .filter((item): item is FlaggedCase => item !== null)
-          .sort((left, right) => right.totalScore - left.totalScore);
-
-        setDecisionDrafts(Object.fromEntries(cases.map((item) => [item.submissionId, item.decision])));
-        setNoteDrafts(
-          Object.fromEntries(
-            cases.map((item) => [
-              item.submissionId,
-              item.history[0]?.note === "No note recorded." ? "" : item.history[0]?.note || "",
-            ])
-          )
-        );
-
-        const openInvestigations = cases.filter(
-          (item) => item.decision === "investigate" || item.decision === "misconduct-concern"
-        ).length;
-        const cleared = cases.filter((item) => item.decision === "clear").length;
+        const cases = buildIntegrityCases({
+          reviews: (storedReviews || []) as Array<Pick<StoredIntegrityReview, "submission_id" | "decision" | "lecturer_note" | "updated_at">>,
+          submissions,
+          assignments: assignments.map((assignment) => ({ id: assignment.id, title: assignment.title })),
+        });
+        const drafts = buildIntegrityDrafts(cases);
 
         setOverview([
-          { label: "Submissions Scanned", value: submissions.length.toString(), icon: FileSearch },
-          { label: "Flagged for Review", value: cases.length.toString(), icon: AlertTriangle },
-          { label: "Open Investigations", value: openInvestigations.toString(), icon: Scale },
-          { label: "Cleared", value: cleared.toString(), icon: Shield },
+          ...buildIntegrityOverview({ submissionsScanned: submissions.length, cases }).map((stat) => ({
+            ...stat,
+            icon:
+              stat.label === "Submissions Scanned"
+                ? FileSearch
+                : stat.label === "Flagged for Review"
+                  ? AlertTriangle
+                  : stat.label === "Open Investigations"
+                    ? Scale
+                    : Shield,
+          })),
         ]);
         setFlagged(cases);
+        setDecisionDrafts(drafts.decisionDrafts);
+        setNoteDrafts(drafts.noteDrafts);
       } catch (error) {
         console.error("Failed to fetch integrity data:", error);
         toast.error("Could not load academic integrity cases.");
@@ -214,49 +152,27 @@ const AcademicIntegrity = () => {
     return "outline";
   };
 
-  const riskVariant = (level: FlaggedCase["riskLevel"]) =>
+  const riskVariant = (level: FlaggedIntegrityCase["riskLevel"]) =>
     level === "high" ? "destructive" : level === "medium" ? "secondary" : "outline";
 
-  const saveDecision = async (item: FlaggedCase) => {
+  const riskLabel = (item: FlaggedIntegrityCase) =>
+    item.analysisLimited && item.riskLevel === "low" ? "analysis limited" : `${item.riskLevel} risk`;
+
+  const saveDecision = async (item: FlaggedIntegrityCase) => {
     if (!user) return;
 
     const nextDecision = decisionDrafts[item.submissionId] || "pending";
     const note = noteDrafts[item.submissionId]?.trim() || "";
-    const nextEntry: IntegrityHistoryEntry = {
-      id: `${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      decision: nextDecision,
-      note: note || "No note recorded.",
-    };
-    const nextHistory = [nextEntry, ...item.history];
-    const evidenceSummary = [
-      ...item.evidence.aiWriting.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.similarity.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.baselineDeviation.map((entry) => `${entry.label}: ${entry.value}`),
-    ]
-      .slice(0, 8)
-      .join("\n\n");
 
     setSavingId(item.submissionId);
-    const { error } = await supabase.from("academic_integrity_reviews").upsert(
-      {
-        submission_id: item.submissionId,
-        lecturer_id: user.id,
-        review_type: getReviewType(item),
-        decision: nextDecision,
-        evidence_summary: evidenceSummary || null,
-        lecturer_note: serializeReviewPayload(note, nextHistory, {
-          totalScore: item.totalScore,
-          aiWritingScore: item.aiWritingScore,
-          similarityScore: item.similarityScore,
-          baselineDeviationScore: item.baselineDeviationScore,
-          riskLevel: item.riskLevel,
-          evidence: item.evidence,
-          flags: item.flags,
-        }),
-      },
-      { onConflict: "submission_id,lecturer_id" }
-    );
+    const { error, nextHistory } = await persistIntegrityDecision({
+      supabase,
+      lecturerId: user.id,
+      item,
+      decision: nextDecision,
+      note,
+      reviewType: getIntegrityReviewType(item),
+    });
     setSavingId(null);
 
     if (error) {
@@ -280,14 +196,7 @@ const AcademicIntegrity = () => {
     toast.success("Integrity review saved.");
   };
 
-  const totals = useMemo(() => {
-    return {
-      aiWriting: flagged.filter((item) => item.aiWritingScore >= 40).length,
-      similarity: flagged.filter((item) => item.similarityScore >= 40).length,
-      baselineDeviation: flagged.filter((item) => item.baselineDeviationScore >= 40).length,
-      pending: flagged.filter((item) => item.decision === "pending").length,
-    };
-  }, [flagged]);
+  const totals = useMemo(() => buildIntegrityTotals(flagged), [flagged]);
 
   if (loading) {
     return (
@@ -297,7 +206,8 @@ const AcademicIntegrity = () => {
     );
   }
 
-  return (
+  try {
+    return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {overview.map((stat) => (
@@ -365,26 +275,31 @@ const AcademicIntegrity = () => {
                 <div key={item.submissionId} className="rounded-xl border p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium">{item.student}</p>
-                        <Badge variant={riskVariant(item.riskLevel) as "outline" | "secondary" | "destructive"}>
-                          {item.riskLevel} risk
-                        </Badge>
-                        <Badge variant={decisionVariant(item.decision) as "outline" | "secondary" | "destructive" | "default"}>
-                          {item.decision.replace("-", " ")}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">{item.student}</p>
+                          <Badge variant={riskVariant(item.riskLevel) as "outline" | "secondary" | "destructive"}>
+                            {riskLabel(item)}
+                          </Badge>
+                          <Badge variant={decisionVariant(item.decision) as "outline" | "secondary" | "destructive" | "default"}>
+                            {item.decision.replace("-", " ")}
+                          </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {item.assignment} • Submitted {safeFormatDate(item.submittedAt, "MMM d, yyyy HH:mm")} • Workflow {item.status.replace(/_/g, " ")}
                       </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {item.flags.map((flag) => (
-                          <Badge key={flag} variant="outline" className="text-xs">
-                            {flag}
-                          </Badge>
-                        ))}
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.flags.map((flag) => (
+                            <Badge key={flag} variant="outline" className="text-xs">
+                              {flag}
+                            </Badge>
+                          ))}
+                        </div>
+                        {item.analysisLimited && item.limitations.length > 0 && (
+                          <p className="text-xs text-amber-700">
+                            Analysis limited: {item.limitations.join(" ")}
+                          </p>
+                        )}
                       </div>
-                    </div>
 
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -421,14 +336,14 @@ const AcademicIntegrity = () => {
                           <span className="text-muted-foreground">{metric.label}</span>
                           <span className="font-bold">{metric.value}%</span>
                         </div>
-                        <Progress value={metric.value} className="h-1.5" />
+                        <MetricBar value={metric.value} />
                       </div>
                     ))}
                   </div>
 
                   {expanded && (
                     <div className="mt-4 space-y-4 rounded-xl border bg-muted/20 p-4">
-                      <div className="grid gap-4 lg:grid-cols-3">
+                      <div className="grid gap-4 lg:grid-cols-4">
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
                             <Bot className="h-4 w-4 text-primary" />
@@ -467,6 +382,45 @@ const AcademicIntegrity = () => {
                               </div>
                             ))
                           )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Scale className="h-4 w-4 text-primary" />
+                            <p className="text-sm font-medium">Citation-aware overlap</p>
+                          </div>
+                          <div className="rounded-lg border bg-background p-3 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">Total {item.overlapBreakdown.totalOverlap}%</Badge>
+                              <Badge variant="outline">Uncited {item.overlapBreakdown.uncitedOverlap}%</Badge>
+                              <Badge variant="outline">Cited {item.overlapBreakdown.citedOverlap}%</Badge>
+                              <Badge variant="outline">Peer {item.overlapBreakdown.internalPeerOverlap}%</Badge>
+                              <Badge variant="outline">External {item.overlapBreakdown.externalSourceOverlap}%</Badge>
+                            </div>
+                          </div>
+                          {[
+                            { title: "Uncited matches", items: item.evidence.uncitedMatches },
+                            { title: "Cited material", items: item.evidence.citedMatches },
+                            { title: "Peer matches", items: item.evidence.peerMatches },
+                            { title: "External matches", items: item.evidence.externalMatches },
+                          ].map((group) => (
+                            <div key={group.title} className="space-y-2">
+                              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{group.title}</p>
+                              {group.items.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">None recorded.</p>
+                              ) : (
+                                group.items.map((evidence) => (
+                                  <div key={`${item.submissionId}-${group.title}-${evidence.label}`} className="rounded-lg border bg-background p-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="text-sm font-medium">{evidence.label}</p>
+                                      <Badge variant="outline">{evidence.score}%</Badge>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">{evidence.value}</p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          ))}
                         </div>
 
                         <div className="space-y-3">
@@ -569,7 +523,17 @@ const AcademicIntegrity = () => {
         </CardContent>
       </Card>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error("Academic integrity page render failed:", error);
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-muted-foreground">
+          Academic integrity data could not be rendered cleanly. Reload the page or re-run the integrity check for the affected assignment.
+        </CardContent>
+      </Card>
+    );
+  }
 };
 
 export default AcademicIntegrity;

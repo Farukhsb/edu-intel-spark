@@ -2,8 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 import {
+  assessExtractionQuality,
+  cleanExtractedDocumentText,
   computeBaselineDeviation,
   computeWritingProfileMetrics,
+  extractReadablePdfTextFromBase64,
   mergeWritingProfile,
   normalizeReadableText,
   type StoredWritingProfile,
@@ -38,6 +41,21 @@ type IntegrityFlag = {
   recommended_action: "clear" | "review" | "investigate";
   integrity_type: IntegrityType;
   severity: "low" | "medium" | "high";
+  overlap_analysis?: {
+    total_overlap: number;
+    cited_overlap: number;
+    uncited_overlap: number;
+    internal_peer_overlap: number;
+    external_source_overlap: number;
+    reference_section_overlap?: number;
+    heavy_source_reliance?: boolean;
+  };
+  evidence_groups?: {
+    uncited_matches: Array<{ label: string; value: string; score: number }>;
+    cited_matches: Array<{ label: string; value: string; score: number }>;
+    peer_matches: Array<{ label: string; value: string; score: number }>;
+    external_matches: Array<{ label: string; value: string; score: number }>;
+  };
 };
 
 type SubmissionRow = {
@@ -48,6 +66,25 @@ type SubmissionRow = {
   student_email: string | null;
   file_name: string | null;
   file_url?: string;
+};
+
+type EvidenceItem = { label: string; value: string; score: number };
+
+type ProcessedSubmissionText = {
+  originalText: string;
+  mainBody: string;
+  referenceSection: string;
+  hasReferenceSection: boolean;
+  quotedChars: number;
+  citationPatternCount: number;
+  quoteShare: number;
+  extractionQuality?: {
+    isUsable: boolean;
+    wordCount: number;
+    artifactRatio: number;
+    qualityScore: number;
+    reasons: string[];
+  };
 };
 
 function clampScore(value: unknown) {
@@ -62,6 +99,241 @@ function normalizeSeverity(value: unknown): IntegrityFlag["severity"] {
 
 function normalizeAction(value: unknown): IntegrityFlag["recommended_action"] {
   return value === "clear" || value === "review" || value === "investigate" ? value : "review";
+}
+
+const REFERENCE_SECTION_HEADING = /^\s*(references|bibliography|works cited)\s*:?\s*$/i;
+const NUMERIC_CITATION_PATTERN = /\[(?:\d+(?:\s*,\s*\d+|\s*-\s*\d+)*)\]/g;
+const PARENTHETICAL_CITATION_PATTERN =
+  /\(([A-Z][A-Za-z'`-]+(?:\s+(?:and|&)\s+[A-Z][A-Za-z'`-]+)?(?:\s+et al\.)?,\s*(?:19|20)\d{2}[a-z]?(?:,\s*p{1,2}\.?\s*\d+(?:-\d+)?)?)\)/g;
+const NARRATIVE_CITATION_PATTERN =
+  /\b[A-Z][A-Za-z'`-]+(?:\s+(?:and|&)\s+[A-Z][A-Za-z'`-]+)?(?:\s+et al\.)?\s*\((?:19|20)\d{2}[a-z]?\)/g;
+const URL_OR_DOI_PATTERN = /\b(?:https?:\/\/\S+|www\.\S+|doi:\s*\S+|10\.\d{4,9}\/[-._;()/:A-Z0-9]+)\b/gi;
+const QUOTED_BLOCK_PATTERN = /["“][^"”]{20,}["”]/g;
+const COMMON_ACADEMIC_PHRASES = [
+  "in conclusion",
+  "this essay will",
+  "the results of this study",
+  "it is important to note",
+  "on the other hand",
+  "the purpose of this study",
+  "as shown in figure",
+  "the findings suggest that",
+];
+const ASCII_QUOTED_BLOCK_PATTERN = /"[^"]{20,}"/g;
+
+function collapseWhitespace(value: string) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function countCitationPatterns(text: string) {
+  return [
+    ...(text.match(NUMERIC_CITATION_PATTERN) || []),
+    ...(text.match(PARENTHETICAL_CITATION_PATTERN) || []),
+    ...(text.match(NARRATIVE_CITATION_PATTERN) || []),
+    ...(text.match(URL_OR_DOI_PATTERN) || []),
+  ].length;
+}
+
+function hasCitationPattern(text: string) {
+  return Boolean(
+    text.match(NUMERIC_CITATION_PATTERN) ||
+    text.match(PARENTHETICAL_CITATION_PATTERN) ||
+    text.match(NARRATIVE_CITATION_PATTERN) ||
+    text.match(URL_OR_DOI_PATTERN),
+  );
+}
+
+function splitReferenceSection(text: string) {
+  const lines = text.split("\n");
+  const headingIndex = lines.findIndex((line, index) => index > 0 && REFERENCE_SECTION_HEADING.test(line.trim()));
+  if (headingIndex === -1) {
+    return {
+      mainBody: text,
+      referenceSection: "",
+      hasReferenceSection: false,
+    };
+  }
+
+  return {
+    mainBody: normalizeReadableText(lines.slice(0, headingIndex).join("\n")),
+    referenceSection: normalizeReadableText(lines.slice(headingIndex).join("\n")),
+    hasReferenceSection: true,
+  };
+}
+
+function preprocessSubmissionText(text: string): ProcessedSubmissionText {
+  const normalized = normalizeReadableText(text);
+  const { mainBody, referenceSection, hasReferenceSection } = splitReferenceSection(normalized);
+  const quotedBlocks = mainBody.match(ASCII_QUOTED_BLOCK_PATTERN) || mainBody.match(QUOTED_BLOCK_PATTERN) || [];
+  const quotedChars = quotedBlocks.reduce((sum, block) => sum + block.length, 0);
+  const citationPatternCount = countCitationPatterns(mainBody);
+
+  return {
+    originalText: normalized,
+    mainBody,
+    referenceSection,
+    hasReferenceSection,
+    quotedChars,
+    citationPatternCount,
+    quoteShare: mainBody.length > 0 ? quotedChars / mainBody.length : 0,
+  };
+}
+
+function excerptWordCount(excerpt: string) {
+  return excerpt.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function isRepeatedAcademicPhrase(excerpt: string) {
+  const normalized = collapseWhitespace(excerpt);
+  return excerptWordCount(excerpt) < 8 || COMMON_ACADEMIC_PHRASES.some((phrase) => normalized.includes(phrase));
+}
+
+function excerptMatchesSection(sectionText: string, excerpt: string) {
+  if (!sectionText || !excerpt.trim()) return false;
+  const collapsedSection = collapseWhitespace(sectionText);
+  const collapsedExcerpt = collapseWhitespace(excerpt);
+  if (!collapsedExcerpt) return false;
+  return collapsedSection.includes(collapsedExcerpt) ||
+    (collapsedExcerpt.length > 40 && collapsedSection.includes(collapsedExcerpt.slice(0, 40)));
+}
+
+function excerptAppearsQuotedOrCited(text: string, excerpt: string) {
+  if (!text || !excerpt.trim()) return false;
+  if (/^".*"$/.test(excerpt.trim())) return true;
+  if (/^["“].*["”]$/.test(excerpt.trim())) return true;
+
+  const candidates = [excerpt.trim(), excerpt.trim().slice(0, 120), excerpt.trim().slice(0, 80)].filter(
+    (candidate) => candidate.length >= 20,
+  );
+
+  for (const candidate of candidates) {
+    const index = text.indexOf(candidate);
+    if (index === -1) continue;
+
+    const before = text.slice(Math.max(0, index - 120), index);
+    const after = text.slice(index + candidate.length, index + candidate.length + 140);
+    if (before.trimEnd().endsWith(`"`) || after.trimStart().startsWith(`"`)) return true;
+    const quoteLead = before.trimEnd().endsWith(`"`) || before.trimEnd().endsWith(`“`);
+    const quoteTail = after.trimStart().startsWith(`"`) || after.trimStart().startsWith(`”`);
+    if (quoteLead || quoteTail) return true;
+
+    if (hasCitationPattern(after) || hasCitationPattern(before)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function buildFallbackEvidenceItem(label: string, value: string, score: number): EvidenceItem {
+  return { label, value: value.trim(), score: clampScore(score) };
+}
+
+function classifySimilarityContext(
+  excerpt: string,
+  submissionA: ProcessedSubmissionText | undefined,
+  submissionB: ProcessedSubmissionText | undefined,
+) {
+  if (!excerpt.trim()) return "uncited";
+  if (isRepeatedAcademicPhrase(excerpt)) return "common";
+  if (
+    (submissionA && excerptMatchesSection(submissionA.referenceSection, excerpt)) ||
+    (submissionB && excerptMatchesSection(submissionB.referenceSection, excerpt))
+  ) {
+    return "reference";
+  }
+
+  if (
+    (submissionA && excerptAppearsQuotedOrCited(submissionA.originalText, excerpt)) ||
+    (submissionB && excerptAppearsQuotedOrCited(submissionB.originalText, excerpt))
+  ) {
+    return "cited";
+  }
+
+  return "uncited";
+}
+
+function deriveCitationAwareOverlap(params: {
+  baseSimilarity: number;
+  excerpt: string;
+  submissionA?: ProcessedSubmissionText;
+  submissionB?: ProcessedSubmissionText;
+  provided?: Record<string, unknown>;
+  isPeerMatch: boolean;
+}) {
+  const { baseSimilarity, excerpt, submissionA, submissionB, provided, isPeerMatch } = params;
+  if (
+    (submissionA?.extractionQuality && !submissionA.extractionQuality.isUsable) ||
+    (submissionB?.extractionQuality && !submissionB.extractionQuality.isUsable)
+  ) {
+    return {
+      classification: "uncited",
+      effectiveSimilarity: 0,
+      overlap: {
+        total_overlap: 0,
+        cited_overlap: 0,
+        uncited_overlap: 0,
+        internal_peer_overlap: 0,
+        external_source_overlap: 0,
+        reference_section_overlap: 0,
+        heavy_source_reliance: false,
+      },
+    };
+  }
+
+  const classification = classifySimilarityContext(excerpt, submissionA, submissionB);
+  const providedTotal = clampScore(provided?.total_overlap);
+  const totalOverlap = providedTotal || baseSimilarity;
+  let citedOverlap = clampScore(provided?.cited_overlap);
+  let uncitedOverlap = clampScore(provided?.uncited_overlap);
+  let internalPeerOverlap = clampScore(provided?.internal_peer_overlap);
+  let externalSourceOverlap = clampScore(provided?.external_source_overlap);
+  let referenceSectionOverlap = clampScore(provided?.reference_section_overlap);
+
+  if (classification === "reference") {
+    citedOverlap = 0;
+    uncitedOverlap = 0;
+    internalPeerOverlap = isPeerMatch ? totalOverlap : internalPeerOverlap;
+    externalSourceOverlap = isPeerMatch ? externalSourceOverlap : Math.max(externalSourceOverlap, totalOverlap);
+    referenceSectionOverlap = totalOverlap;
+  } else if (classification === "cited") {
+    citedOverlap = totalOverlap;
+    uncitedOverlap = 0;
+    if (isPeerMatch) internalPeerOverlap = Math.max(internalPeerOverlap, totalOverlap);
+  } else if (classification === "common") {
+    citedOverlap = Math.max(citedOverlap, Math.round(totalOverlap * 0.35));
+    uncitedOverlap = 0;
+    if (isPeerMatch) internalPeerOverlap = Math.max(internalPeerOverlap, Math.round(totalOverlap * 0.35));
+  } else if (uncitedOverlap === 0) {
+    uncitedOverlap = totalOverlap;
+    if (isPeerMatch) internalPeerOverlap = Math.max(internalPeerOverlap, totalOverlap);
+  }
+
+  const heavySourceReliance =
+    (submissionA?.quoteShare || 0) >= 0.2 ||
+    (submissionB?.quoteShare || 0) >= 0.2 ||
+    citedOverlap >= 25;
+
+  const effectiveSimilarity =
+    classification === "reference"
+      ? 0
+      : classification === "common"
+        ? Math.round(totalOverlap * 0.1)
+        : clampScore(uncitedOverlap + citedOverlap * 0.15);
+
+  return {
+    classification,
+    effectiveSimilarity,
+    overlap: {
+      total_overlap: totalOverlap,
+      cited_overlap: citedOverlap,
+      uncited_overlap: uncitedOverlap,
+      internal_peer_overlap: internalPeerOverlap,
+      external_source_overlap: externalSourceOverlap,
+      reference_section_overlap: referenceSectionOverlap,
+      heavy_source_reliance: heavySourceReliance,
+    },
+  };
 }
 
 function normalizeType(value: unknown): IntegrityType {
@@ -126,16 +398,6 @@ function actionFromRisk(score: number): IntegrityFlag["recommended_action"] {
   return "clear";
 }
 
-function decodePdfText(base64: string) {
-  try {
-    const binary = atob(base64);
-    const printable = binary.match(/[\x20-\x7E]{4,}/g) || [];
-    return normalizeReadableText(printable.join(" ").replace(/\s+/g, " "));
-  } catch {
-    return "";
-  }
-}
-
 function truncateText(text: string, maxChars: number) {
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}\n\n[truncated]`;
@@ -160,11 +422,16 @@ function isRecoverablePersistenceError(error: unknown) {
 async function fetchFileContent(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   sub: { file_url?: string; file_name?: string | null },
-): Promise<{ llmContent: string; plainText: string; isPdf: boolean }> {
-  if (!sub.file_url) return { llmContent: "", plainText: "", isPdf: false };
+): Promise<{
+  llmContent: string;
+  plainText: string;
+  isPdf: boolean;
+  extractionQuality: ReturnType<typeof assessExtractionQuality> | null;
+}> {
+  if (!sub.file_url) return { llmContent: "", plainText: "", isPdf: false, extractionQuality: null };
   try {
     const { data, error } = await supabaseAdmin.storage.from("submissions").download(sub.file_url);
-    if (error || !data) return { llmContent: "", plainText: "", isPdf: false };
+    if (error || !data) return { llmContent: "", plainText: "", isPdf: false, extractionQuality: null };
 
     const isPdf = data.type?.includes("pdf") || sub.file_name?.toLowerCase().endsWith(".pdf");
     if (isPdf) {
@@ -173,21 +440,25 @@ async function fetchFileContent(
       let binary = "";
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       const llmContent = btoa(binary);
+      const extracted = truncateText(extractReadablePdfTextFromBase64(llmContent), MAX_SINGLE_TEXT_CHARS);
       return {
         llmContent: bytes.byteLength <= MAX_INLINE_PDF_BYTES ? llmContent : "",
-        plainText: truncateText(decodePdfText(llmContent), MAX_SINGLE_TEXT_CHARS),
+        plainText: extracted,
         isPdf: true,
+        extractionQuality: assessExtractionQuality(extracted),
       };
     }
 
     const text = await data.text();
+    const cleaned = truncateText(cleanExtractedDocumentText(text), MAX_SINGLE_TEXT_CHARS);
     return {
       llmContent: "",
-      plainText: truncateText(normalizeReadableText(text), MAX_SINGLE_TEXT_CHARS),
+      plainText: cleaned,
       isPdf: false,
+      extractionQuality: assessExtractionQuality(cleaned),
     };
   } catch {
-    return { llmContent: "", plainText: "", isPdf: false };
+    return { llmContent: "", plainText: "", isPdf: false, extractionQuality: null };
   }
 }
 
@@ -207,7 +478,11 @@ async function createIntegrityResponseWithRetry(body: Record<string, unknown>) {
   throw lastError instanceof Error ? lastError : new Error("Integrity analysis request failed");
 }
 
-function normalizeFlags(flags: unknown, submissions: SubmissionRow[]): IntegrityFlag[] {
+function normalizeFlags(
+  flags: unknown,
+  submissions: SubmissionRow[],
+  processedContent: Map<string, ProcessedSubmissionText>,
+): IntegrityFlag[] {
   if (!Array.isArray(flags)) return [];
 
   return flags
@@ -231,8 +506,48 @@ function normalizeFlags(flags: unknown, submissions: SubmissionRow[]): Integrity
         integrityType,
         recommendedAction,
       );
+      const overlap = deriveCitationAwareOverlap({
+        baseSimilarity: normalizedScores.similarity,
+        excerpt: typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
+        submissionA: processedContent.get(submissionAId),
+        submissionB: processedContent.get(submissionBId),
+        provided: candidate.overlap_analysis && typeof candidate.overlap_analysis === "object"
+          ? (candidate.overlap_analysis as Record<string, unknown>)
+          : undefined,
+        isPeerMatch: submissionAId !== submissionBId,
+      });
       const baselineDeviationScore = clampScore(candidate.baseline_deviation_score);
-      const totalRisk = computeRisk(normalizedScores.similarity, normalizedScores.ai, baselineDeviationScore);
+      const totalRisk = computeRisk(overlap.effectiveSimilarity, normalizedScores.ai, baselineDeviationScore);
+      const matchedExcerpt = typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "";
+      const baseEvidenceText =
+        (typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()) ||
+        (typeof candidate.reason === "string" && candidate.reason.trim()) ||
+        matchedExcerpt ||
+        "Potential overlap detected.";
+      const uncitedMatches = Array.isArray((candidate.evidence_groups as Record<string, unknown> | undefined)?.uncited_matches)
+        ? ((candidate.evidence_groups as Record<string, unknown>).uncited_matches as EvidenceItem[])
+        : overlap.classification === "uncited"
+          ? [buildFallbackEvidenceItem("Uncited match", baseEvidenceText, overlap.overlap.uncited_overlap)]
+          : [];
+      const citedMatches = Array.isArray((candidate.evidence_groups as Record<string, unknown> | undefined)?.cited_matches)
+        ? ((candidate.evidence_groups as Record<string, unknown>).cited_matches as EvidenceItem[])
+        : overlap.classification === "cited" || overlap.overlap.cited_overlap > 0
+          ? [
+            buildFallbackEvidenceItem(
+              overlap.overlap.heavy_source_reliance ? "Cited material with heavy reliance on sources" : "Cited material",
+              baseEvidenceText,
+              overlap.overlap.cited_overlap || Math.round(normalizedScores.similarity * 0.2),
+            ),
+          ]
+          : [];
+      const peerMatches = Array.isArray((candidate.evidence_groups as Record<string, unknown> | undefined)?.peer_matches)
+        ? ((candidate.evidence_groups as Record<string, unknown>).peer_matches as EvidenceItem[])
+        : submissionAId !== submissionBId
+          ? [buildFallbackEvidenceItem("Peer overlap", baseEvidenceText, overlap.overlap.internal_peer_overlap)]
+          : [];
+      const externalMatches = Array.isArray((candidate.evidence_groups as Record<string, unknown> | undefined)?.external_matches)
+        ? ((candidate.evidence_groups as Record<string, unknown>).external_matches as EvidenceItem[])
+        : [];
 
       return {
         student_a:
@@ -247,7 +562,7 @@ function normalizeFlags(flags: unknown, submissions: SubmissionRow[]): Integrity
           (submissionAId === submissionBId ? "Writing profile" : "Student B"),
         submission_a_id: submissionAId,
         submission_b_id: submissionBId,
-        similarity_score: normalizedScores.similarity,
+        similarity_score: overlap.effectiveSimilarity,
         ai_suspicion_score: normalizedScores.ai,
         baseline_deviation_score: baselineDeviationScore,
         total_risk_score: totalRisk,
@@ -259,10 +574,17 @@ function normalizeFlags(flags: unknown, submissions: SubmissionRow[]): Integrity
           typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()
             ? candidate.evidence_summary.trim()
             : "Potential integrity issue detected.",
-        matched_excerpt: typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
-        recommended_action: recommendedAction,
+        matched_excerpt: matchedExcerpt,
+        recommended_action: actionFromRisk(totalRisk),
         integrity_type: integrityType,
         severity: severityFromRisk(totalRisk),
+        overlap_analysis: overlap.overlap,
+        evidence_groups: {
+          uncited_matches: uncitedMatches,
+          cited_matches: citedMatches,
+          peer_matches: peerMatches,
+          external_matches: externalMatches,
+        },
       } satisfies IntegrityFlag;
     })
     .filter((flag): flag is IntegrityFlag => Boolean(flag))
@@ -320,8 +642,19 @@ serve(async (req) => {
 
     const isSingleMode = submissions.length === 1;
     const contentMap = new Map<string, { llmContent: string; plainText: string; isPdf: boolean }>();
+    const processedContentMap = new Map<string, ProcessedSubmissionText>();
     for (const sub of submissions) {
-      contentMap.set(sub.id, await fetchFileContent(supabaseAdmin, sub));
+      const content = await fetchFileContent(supabaseAdmin, sub);
+      contentMap.set(sub.id, content);
+      const processed = preprocessSubmissionText(content.plainText);
+      processed.extractionQuality = content.extractionQuality ?? undefined;
+      processedContentMap.set(sub.id, processed);
+
+      if (content.isPdf && content.extractionQuality && !content.extractionQuality.isUsable) {
+        warnings.push(
+          `Low-quality PDF extraction for ${sub.file_name || sub.id}: ${content.extractionQuality.reasons.join(" ")} Word count ${content.extractionQuality.wordCount}, quality ${content.extractionQuality.qualityScore}/100.`,
+        );
+      }
     }
 
     const studentIds = submissions.map((submission) => submission.student_id).filter((value): value is string => Boolean(value));
@@ -400,7 +733,9 @@ Compare submissions for suspicious similarity and independently assess AI-writin
 
 Rules:
 - Similarity concerns must be based on substantive overlap in student-authored content.
-- Ignore prompt text, boilerplate templates, file metadata, and PDF artefacts.
+- Ignore prompt text, boilerplate templates, file metadata, PDF artefacts, and reference sections.
+- Treat properly quoted or cited material as cited overlap, not high-risk plagiarism.
+- Distinguish cited overlap from uncited overlap.
 - AI-writing concerns must rely on multiple indicators rather than one stylistic feature.
 - Never output a verdict, only a risk indicator with evidence.`;
 
@@ -410,7 +745,8 @@ Rules:
     if (isSingleMode) {
       const sub = submissions[0];
       const content = contentMap.get(sub.id) || { llmContent: "", plainText: "", isPdf: false };
-      const preview = truncateText(content.plainText, MAX_SINGLE_TEXT_CHARS);
+      const processed = processedContentMap.get(sub.id) || preprocessSubmissionText(content.plainText);
+      const preview = truncateText(processed.mainBody, MAX_SINGLE_TEXT_CHARS);
       const includeInlinePdf = content.isPdf && Boolean(content.llmContent);
 
       userContent.push({
@@ -421,7 +757,12 @@ Assignment: ${assignment.title}
 Student: ${sub.student_name || sub.student_email || "Anonymous"}
 File: ${sub.file_name || "submission"}
 
-${includeInlinePdf ? "PDF is attached. Use it as the primary source." : `Content:\n${preview || "No readable text could be extracted."}`}
+${includeInlinePdf ? "PDF is attached. Use it as the primary source, but ignore the reference section when judging overlap-related evidence." : `Main body (reference section removed for scoring):\n${preview || "No readable text could be extracted."}`}
+
+Citation signals detected: ${processed.citationPatternCount}
+Reference section detected: ${processed.hasReferenceSection ? "yes" : "no"}
+Quoted content share: ${Math.round(processed.quoteShare * 100)}%
+Extraction quality: ${processed.extractionQuality ? `${processed.extractionQuality.qualityScore}/100` : "unknown"}
 
 Return a structured flag only if there is a genuine concern. Otherwise return no flags.`,
       });
@@ -438,7 +779,8 @@ Return a structured flag only if there is a genuine concern. Otherwise return no
     } else {
       const summaries = submissions.map((submission) => {
         const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
-        const preview = truncateText(content.plainText, MAX_MULTI_TEXT_CHARS);
+        const processed = processedContentMap.get(submission.id) || preprocessSubmissionText(content.plainText);
+        const preview = truncateText(processed.mainBody, MAX_MULTI_TEXT_CHARS);
         const studentLabel = `${submission.student_name || submission.student_email || "Anonymous"} (submission id: ${submission.id})`;
         if (!preview) {
           warnings.push(`No readable text extracted for ${submission.file_name || submission.id}; similarity analysis may be less reliable.`);
@@ -448,7 +790,13 @@ Return a structured flag only if there is a genuine concern. Otherwise return no
           warnings.push(`Processed ${submission.file_name || submission.id} as extracted text only because the PDF was too large to inline.`);
         }
 
-        return `${studentLabel}\n${preview}`;
+        return `${studentLabel}
+Reference section excluded: ${processed.hasReferenceSection ? "yes" : "no"}
+Quoted content share: ${Math.round(processed.quoteShare * 100)}%
+Citation markers detected: ${processed.citationPatternCount}
+Extraction quality: ${processed.extractionQuality ? `${processed.extractionQuality.qualityScore}/100` : "unknown"}
+Main body for scoring:
+${preview}`;
       });
 
       userContent.push({
@@ -502,6 +850,83 @@ Only flag real concerns. Return valid JSON only.`,
                         enum: ["similarity", "ai-writing", "baseline-deviation", "mixed"],
                       },
                       severity: { type: "string", enum: ["low", "medium", "high"] },
+                      overlap_analysis: {
+                        type: "object",
+                        properties: {
+                          total_overlap: { type: "number" },
+                          cited_overlap: { type: "number" },
+                          uncited_overlap: { type: "number" },
+                          internal_peer_overlap: { type: "number" },
+                          external_source_overlap: { type: "number" },
+                        },
+                        required: [
+                          "total_overlap",
+                          "cited_overlap",
+                          "uncited_overlap",
+                          "internal_peer_overlap",
+                          "external_source_overlap",
+                        ],
+                        additionalProperties: false,
+                      },
+                      evidence_groups: {
+                        type: "object",
+                        properties: {
+                          uncited_matches: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                label: { type: "string" },
+                                value: { type: "string" },
+                                score: { type: "number" },
+                              },
+                              required: ["label", "value", "score"],
+                              additionalProperties: false,
+                            },
+                          },
+                          cited_matches: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                label: { type: "string" },
+                                value: { type: "string" },
+                                score: { type: "number" },
+                              },
+                              required: ["label", "value", "score"],
+                              additionalProperties: false,
+                            },
+                          },
+                          peer_matches: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                label: { type: "string" },
+                                value: { type: "string" },
+                                score: { type: "number" },
+                              },
+                              required: ["label", "value", "score"],
+                              additionalProperties: false,
+                            },
+                          },
+                          external_matches: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                label: { type: "string" },
+                                value: { type: "string" },
+                                score: { type: "number" },
+                              },
+                              required: ["label", "value", "score"],
+                              additionalProperties: false,
+                            },
+                          },
+                        },
+                        required: ["uncited_matches", "cited_matches", "peer_matches", "external_matches"],
+                        additionalProperties: false,
+                      },
                     },
                     required: [
                       "student_a",
@@ -518,6 +943,8 @@ Only flag real concerns. Return valid JSON only.`,
                       "recommended_action",
                       "integrity_type",
                       "severity",
+                      "overlap_analysis",
+                      "evidence_groups",
                     ],
                     additionalProperties: false,
                   },
@@ -534,10 +961,10 @@ Only flag real concerns. Return valid JSON only.`,
 
       try {
         const parsed = parseJsonText(extractOutputText(aiData));
-        parsedFlags = normalizeFlags(parsed?.flags, submissions);
+        parsedFlags = normalizeFlags(parsed?.flags, submissions, processedContentMap);
         summary = typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : summary;
       } catch {
-        parsedFlags = normalizeFlags(aiData?.output?.[0]?.content?.[0]?.json?.flags, submissions);
+        parsedFlags = normalizeFlags(aiData?.output?.[0]?.content?.[0]?.json?.flags, submissions, processedContentMap);
       }
     } catch (aiError) {
       warnings.push("AI similarity analysis was temporarily unavailable; returning baseline and persistence-safe results only.");
@@ -567,16 +994,29 @@ Only flag real concerns. Return valid JSON only.`,
     const profileUpserts: Array<Record<string, unknown>> = [];
     const snapshots = new Map<
       string,
-      {
-        totalScore: number;
-        aiWritingScore: number;
-        similarityScore: number;
-        baselineDeviationScore: number;
-        riskLevel: "high" | "medium" | "low";
-        evidence: {
-          aiWriting: Array<{ label: string; value: string; score: number }>;
-          similarity: Array<{ label: string; value: string; score: number }>;
+        {
+          totalScore: number;
+          aiWritingScore: number;
+          similarityScore: number;
+          overlapBreakdown: {
+          totalOverlap: number;
+          citedOverlap: number;
+          uncitedOverlap: number;
+          internalPeerOverlap: number;
+            externalSourceOverlap: number;
+          };
+          baselineDeviationScore: number;
+          analysisLimited: boolean;
+          limitations: string[];
+          riskLevel: "high" | "medium" | "low";
+          evidence: {
+            aiWriting: Array<{ label: string; value: string; score: number }>;
+            similarity: Array<{ label: string; value: string; score: number }>;
           baselineDeviation: Array<{ label: string; value: string; score: number }>;
+          uncitedMatches: EvidenceItem[];
+          citedMatches: EvidenceItem[];
+          peerMatches: EvidenceItem[];
+          externalMatches: EvidenceItem[];
         };
         flags: string[];
       }
@@ -589,12 +1029,25 @@ Only flag real concerns. Return valid JSON only.`,
         totalScore: 0,
         aiWritingScore: 0,
         similarityScore: 0,
-        baselineDeviationScore: 0,
-        riskLevel: "low" as const,
-        evidence: {
-          aiWriting: [] as Array<{ label: string; value: string; score: number }>,
-          similarity: [] as Array<{ label: string; value: string; score: number }>,
+        overlapBreakdown: {
+          totalOverlap: 0,
+          citedOverlap: 0,
+          uncitedOverlap: 0,
+          internalPeerOverlap: 0,
+          externalSourceOverlap: 0,
+          },
+          baselineDeviationScore: 0,
+          analysisLimited: false,
+          limitations: [] as string[],
+          riskLevel: "low" as const,
+          evidence: {
+            aiWriting: [] as Array<{ label: string; value: string; score: number }>,
+            similarity: [] as Array<{ label: string; value: string; score: number }>,
           baselineDeviation: [] as Array<{ label: string; value: string; score: number }>,
+          uncitedMatches: [] as EvidenceItem[],
+          citedMatches: [] as EvidenceItem[],
+          peerMatches: [] as EvidenceItem[],
+          externalMatches: [] as EvidenceItem[],
         },
         flags: [] as string[],
       };
@@ -604,6 +1057,7 @@ Only flag real concerns. Return valid JSON only.`,
 
     for (const submission of submissions) {
       const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
+      const processed = processedContentMap.get(submission.id) || preprocessSubmissionText(content.plainText);
       const metrics: WritingProfileMetrics = computeWritingProfileMetrics(content.plainText);
       const baseline = submission.student_id ? profileMap.get(submission.student_id) : null;
       const currentGrade = gradeMap.get(submission.id) ?? null;
@@ -645,6 +1099,32 @@ Only flag real concerns. Return valid JSON only.`,
           score: baselineDeviation.score,
         });
         snapshot.flags.push("baseline deviation");
+      }
+
+      if (processed.hasReferenceSection) {
+        snapshot.flags.push("reference section excluded from overlap scoring");
+      }
+
+        if (processed.extractionQuality && !processed.extractionQuality.isUsable) {
+          snapshot.analysisLimited = true;
+          snapshot.limitations = Array.from(
+            new Set([...snapshot.limitations, ...processed.extractionQuality.reasons]),
+          );
+          snapshot.evidence.similarity.push({
+            label: "Low-quality PDF extraction",
+            value: processed.extractionQuality.reasons.join(" "),
+            score: 0,
+        });
+        snapshot.flags.push("low-quality text extraction");
+      }
+
+      if (processed.quoteShare >= 0.2) {
+        snapshot.evidence.citedMatches.push({
+          label: "Heavy reliance on sources",
+          value: `${Math.round(processed.quoteShare * 100)}% of the scored main body appears inside quoted blocks or close to citations. Low plagiarism risk, but lecturer review may still be useful.`,
+          score: Math.round(processed.quoteShare * 100),
+        });
+        snapshot.flags.push("heavy reliance on sources");
       }
 
       if (submission.student_id && metrics.word_count >= 80 && totalRiskScore < 45) {
@@ -692,6 +1172,26 @@ Only flag real concerns. Return valid JSON only.`,
       snapshot.aiWritingScore = Math.max(snapshot.aiWritingScore, flag.ai_suspicion_score);
       snapshot.similarityScore = Math.max(snapshot.similarityScore, flag.similarity_score);
       snapshot.baselineDeviationScore = Math.max(snapshot.baselineDeviationScore, flag.baseline_deviation_score);
+      snapshot.overlapBreakdown.totalOverlap = Math.max(
+        snapshot.overlapBreakdown.totalOverlap,
+        flag.overlap_analysis?.total_overlap || flag.similarity_score,
+      );
+      snapshot.overlapBreakdown.citedOverlap = Math.max(
+        snapshot.overlapBreakdown.citedOverlap,
+        flag.overlap_analysis?.cited_overlap || 0,
+      );
+      snapshot.overlapBreakdown.uncitedOverlap = Math.max(
+        snapshot.overlapBreakdown.uncitedOverlap,
+        flag.overlap_analysis?.uncited_overlap || 0,
+      );
+      snapshot.overlapBreakdown.internalPeerOverlap = Math.max(
+        snapshot.overlapBreakdown.internalPeerOverlap,
+        flag.overlap_analysis?.internal_peer_overlap || 0,
+      );
+      snapshot.overlapBreakdown.externalSourceOverlap = Math.max(
+        snapshot.overlapBreakdown.externalSourceOverlap,
+        flag.overlap_analysis?.external_source_overlap || 0,
+      );
       snapshot.riskLevel = severityFromRisk(snapshot.totalScore) === "high"
         ? "high"
         : severityFromRisk(snapshot.totalScore) === "medium"
@@ -709,11 +1209,34 @@ Only flag real concerns. Return valid JSON only.`,
 
       if (flag.similarity_score > 0) {
         snapshot.evidence.similarity.push({
-          label: "Similarity overlap",
+          label: (flag.overlap_analysis?.uncited_overlap || 0) > 0
+            ? "Uncited overlap"
+            : (flag.overlap_analysis?.cited_overlap || 0) > 0
+              ? "Cited material"
+              : "Similarity overlap",
           value: flag.reason,
           score: flag.similarity_score,
         });
-        snapshot.flags.push("similarity overlap");
+        snapshot.flags.push(
+          (flag.overlap_analysis?.uncited_overlap || 0) > 0
+            ? "uncited overlap"
+            : (flag.overlap_analysis?.cited_overlap || 0) > 0
+              ? "cited material"
+              : "similarity overlap",
+        );
+      }
+
+      for (const evidence of flag.evidence_groups?.uncited_matches || []) {
+        snapshot.evidence.uncitedMatches.push(evidence);
+      }
+      for (const evidence of flag.evidence_groups?.cited_matches || []) {
+        snapshot.evidence.citedMatches.push(evidence);
+      }
+      for (const evidence of flag.evidence_groups?.peer_matches || []) {
+        snapshot.evidence.peerMatches.push(evidence);
+      }
+      for (const evidence of flag.evidence_groups?.external_matches || []) {
+        snapshot.evidence.externalMatches.push(evidence);
       }
     }
 
@@ -780,6 +1303,10 @@ Only flag real concerns. Return valid JSON only.`,
             ? [
                 ...snapshot.evidence.aiWriting.map((entry) => `${entry.label}: ${entry.value}`),
                 ...snapshot.evidence.similarity.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.uncitedMatches.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.citedMatches.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.peerMatches.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.externalMatches.map((entry) => `${entry.label}: ${entry.value}`),
                 ...snapshot.evidence.baselineDeviation.map((entry) => `${entry.label}: ${entry.value}`),
               ]
                 .slice(0, 8)

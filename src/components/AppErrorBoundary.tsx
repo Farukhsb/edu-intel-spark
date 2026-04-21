@@ -10,15 +10,20 @@ type Props = {
 
 type State = {
   hasError: boolean;
+  errorMessage?: string;
 };
 
 export class AppErrorBoundary extends React.Component<Props, State> {
   state: State = {
     hasError: false,
+    errorMessage: undefined,
   };
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): State {
+    return {
+      hasError: true,
+      errorMessage: error?.message || "Unknown runtime error",
+    };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
@@ -27,9 +32,13 @@ export class AppErrorBoundary extends React.Component<Props, State> {
 
   componentDidUpdate(prevProps: Props) {
     if (this.state.hasError && this.props.resetKey !== prevProps.resetKey) {
-      this.setState({ hasError: false });
+      this.setState({ hasError: false, errorMessage: undefined });
     }
   }
+
+  private handleTryAgain = () => {
+    this.setState({ hasError: false, errorMessage: undefined });
+  };
 
   private handleReload = () => {
     window.location.reload();
@@ -47,7 +56,18 @@ export class AppErrorBoundary extends React.Component<Props, State> {
               <p className="text-sm text-muted-foreground">
                 A runtime error interrupted this page. Reload and try again.
               </p>
-              <Button onClick={this.handleReload}>Reload Page</Button>
+              {this.state.errorMessage && (
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <p className="text-xs font-medium">Runtime error</p>
+                  <p className="mt-1 break-words font-mono text-xs text-muted-foreground">
+                    {this.state.errorMessage}
+                  </p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={this.handleTryAgain}>Try Again</Button>
+                <Button onClick={this.handleReload}>Reload Page</Button>
+              </div>
             </CardContent>
           </Card>
         </div>

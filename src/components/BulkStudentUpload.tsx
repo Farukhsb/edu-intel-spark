@@ -32,6 +32,11 @@ interface CreatedStudentVerification {
   department_id: string | null;
 }
 
+interface BulkStudentUploadProps {
+  triggerClassName?: string;
+  compact?: boolean;
+}
+
 const REQUIRED_HEADERS = ["name", "email", "cohort", "department"] as const;
 const BULK_CREATE_FUNCTION = "bulk-create-students";
 const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
@@ -137,7 +142,7 @@ const formatBulkCreateError = async (error: unknown, response?: Response) => {
   return error instanceof Error ? error.message : "Bulk upload failed";
 };
 
-export const BulkStudentUpload = () => {
+export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStudentUploadProps = {}) => {
   const [open, setOpen] = useState(false);
   const [fileName, setFileName] = useState("");
   const [parsed, setParsed] = useState<ParsedStudent[]>([]);
@@ -302,10 +307,13 @@ export const BulkStudentUpload = () => {
   const verifiedCount = verifiedProfiles.length;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm"><Upload className="mr-2 h-3.5 w-3.5" /> Bulk Upload Students</Button>
-      </DialogTrigger>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className={triggerClassName}>
+            <Upload className={compact ? "h-4 w-4" : "mr-2 h-3.5 w-3.5"} />
+            <span className={compact ? "ml-3" : ""}>Bulk Upload Students</span>
+          </Button>
+        </DialogTrigger>
       <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Bulk Student Upload</DialogTitle>
