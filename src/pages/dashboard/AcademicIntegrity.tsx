@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,6 +70,28 @@ interface FlaggedCase {
   history: IntegrityHistoryEntry[];
 }
 
+const isEvidenceItem = (value: unknown): value is IntegrityEvidenceItem =>
+  !!value &&
+  typeof value === "object" &&
+  "label" in value &&
+  "value" in value &&
+  "score" in value;
+
+const ensureEvidenceList = (value: unknown): IntegrityEvidenceItem[] =>
+  Array.isArray(value) ? value.filter(isEvidenceItem) : [];
+
+const ensureStringList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+
+const MetricBar = ({ value }: { value: number }) => (
+  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+    <div
+      className="h-full rounded-full bg-primary transition-all"
+      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+    />
+  </div>
+);
+
 type StoredIntegrityReview = Tables<"academic_integrity_reviews">;
 type SubmissionRow = Pick<
   Tables<"submissions">,
@@ -83,6 +104,11 @@ const decisionOptions: IntegrityDecision[] = [
   "investigate",
   "misconduct-concern",
 ];
+
+const normalizeDecision = (value: unknown): IntegrityDecision =>
+  value === "clear" || value === "investigate" || value === "misconduct-concern" || value === "pending"
+    ? value
+    : "pending";
 
 const getReviewType = (item: Pick<FlaggedCase, "aiWritingScore" | "similarityScore" | "baselineDeviationScore">) => {
   if (item.aiWritingScore > 0 && item.similarityScore > 0) return "mixed";
@@ -168,12 +194,14 @@ const AcademicIntegrity = () => {
               assignmentId: submission.assignment_id,
               student: submission.student_name || submission.student_email || "Student",
               assignment: assignmentMap.get(submission.assignment_id) || "Unknown assignment",
-                status: submission.status,
-                submittedAt: submission.submitted_at,
-                riskLevel: snapshot?.riskLevel || "low",
-                analysisLimited: snapshot?.analysisLimited || false,
-                limitations: snapshot?.limitations || [],
-                totalScore: snapshot?.totalScore || 0,
+              status: submission.status,
+              submittedAt: submission.submitted_at,
+              riskLevel: snapshot?.riskLevel === "high" || snapshot?.riskLevel === "medium" || snapshot?.riskLevel === "low"
+                ? snapshot.riskLevel
+                : "low",
+              analysisLimited: Boolean(snapshot?.analysisLimited),
+              limitations: ensureStringList(snapshot?.limitations),
+              totalScore: typeof snapshot?.totalScore === "number" ? snapshot.totalScore : 0,
               aiWritingScore: snapshot?.aiWritingScore || 0,
               similarityScore: snapshot?.similarityScore || 0,
               overlapBreakdown: snapshot?.overlapBreakdown || {
@@ -185,16 +213,16 @@ const AcademicIntegrity = () => {
               },
               baselineDeviationScore: snapshot?.baselineDeviationScore || 0,
               evidence: {
-                aiWriting: snapshot?.evidence?.aiWriting || [],
-                similarity: snapshot?.evidence?.similarity || [],
-                uncitedMatches: snapshot?.evidence?.uncitedMatches || [],
-                citedMatches: snapshot?.evidence?.citedMatches || [],
-                peerMatches: snapshot?.evidence?.peerMatches || [],
-                externalMatches: snapshot?.evidence?.externalMatches || [],
-                baselineDeviation: snapshot?.evidence?.baselineDeviation || [],
+                aiWriting: ensureEvidenceList(snapshot?.evidence?.aiWriting),
+                similarity: ensureEvidenceList(snapshot?.evidence?.similarity),
+                uncitedMatches: ensureEvidenceList(snapshot?.evidence?.uncitedMatches),
+                citedMatches: ensureEvidenceList(snapshot?.evidence?.citedMatches),
+                peerMatches: ensureEvidenceList(snapshot?.evidence?.peerMatches),
+                externalMatches: ensureEvidenceList(snapshot?.evidence?.externalMatches),
+                baselineDeviation: ensureEvidenceList(snapshot?.evidence?.baselineDeviation),
               },
-              flags: snapshot?.flags || [],
-              decision: (review.decision as IntegrityDecision) || "pending",
+              flags: ensureStringList(snapshot?.flags),
+              decision: normalizeDecision(review.decision),
               history: payload.history,
             } satisfies FlaggedCase;
           })
@@ -333,7 +361,8 @@ const AcademicIntegrity = () => {
     );
   }
 
-  return (
+  try {
+    return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {overview.map((stat) => (
@@ -462,7 +491,7 @@ const AcademicIntegrity = () => {
                           <span className="text-muted-foreground">{metric.label}</span>
                           <span className="font-bold">{metric.value}%</span>
                         </div>
-                        <Progress value={metric.value} className="h-1.5" />
+                        <MetricBar value={metric.value} />
                       </div>
                     ))}
                   </div>
@@ -649,7 +678,17 @@ const AcademicIntegrity = () => {
         </CardContent>
       </Card>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error("Academic integrity page render failed:", error);
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-muted-foreground">
+          Academic integrity data could not be rendered cleanly. Reload the page or re-run the integrity check for the affected assignment.
+        </CardContent>
+      </Card>
+    );
+  }
 };
 
 export default AcademicIntegrity;

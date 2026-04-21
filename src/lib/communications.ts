@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getE2EAuthenticatedUserId } from "@/lib/e2eAuth";
 
 export type CommunicationCategory =
   | "feedback-summary"
@@ -48,18 +49,22 @@ const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessag
 export const queueCommunicationMessage = async (
   message: Omit<CommunicationMessage, "id" | "createdAt">
 ) => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const e2eUserId = getE2EAuthenticatedUserId();
+  const userId =
+    e2eUserId ??
+    (
+      await supabase.auth.getUser()
+    ).data.user?.id ??
+    null;
 
-  if (!user) {
+  if (!userId) {
     return null;
   }
 
   const { data, error } = await supabase
     .from("communication_messages")
     .insert({
-      sender_id: user.id,
+      sender_id: userId,
       category: message.category,
       recipient_name: message.recipientName,
       recipient_email: message.recipientEmail,

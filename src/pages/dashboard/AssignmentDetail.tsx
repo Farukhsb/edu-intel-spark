@@ -45,6 +45,14 @@ import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
 import type { Tables } from "@/integrations/supabase/types";
 import { evaluateModerationSignals, formatSubmissionStatus } from "@/lib/moderation";
+import {
+  canReleaseStatus,
+  getApprovalBlockReason,
+  getAssessmentSummary,
+  isGradedWorkflowStatus,
+  isStudentGradeVisible,
+  resolveFinalGradeValues,
+} from "@/lib/assessmentWorkflow";
 
 type SubmissionStatus =
   | "submitted"
@@ -666,7 +674,7 @@ const AssignmentDetail = () => {
   };
 
   const handleReleaseGrades = async () => {
-    const toRelease = submissions.filter((s) => selected.has(s.id) && s.status === "approved");
+    const toRelease = submissions.filter((s) => selected.has(s.id) && canReleaseStatus(s.status));
     if (toRelease.length === 0) {
       toast.error("Select approved submissions to release");
       return;
@@ -879,18 +887,22 @@ const AssignmentDetail = () => {
       return false;
     }
 
-    const moderationCase = moderationCases[submission.id];
-    const needsModeration = shouldRequireModeration(submission.id, grade);
+      const moderationCase = moderationCases[submission.id];
+      const needsModeration = shouldRequireModeration(submission.id, grade);
+      const approvalBlockReason = getApprovalBlockReason({
+        status: submission.status,
+        needsModeration,
+      });
 
-    if (["moderation_pending", "moderation_in_progress", "escalated"].includes(submission.status)) {
-      toast.error("This submission is in the moderation workflow and cannot be approved yet.");
-      return false;
-    }
+      if (approvalBlockReason === "moderation_in_progress") {
+        toast.error("This submission is in the moderation workflow and cannot be approved yet.");
+        return false;
+      }
 
-    if (needsModeration && submission.status !== "moderated") {
-      const createdCase = await ensureModerationCase({
-        submission,
-        grade,
+      if (approvalBlockReason === "moderation_required") {
+        const createdCase = await ensureModerationCase({
+          submission,
+          grade,
         status: "moderation_pending",
       });
       await supabase.from("submissions").update({ status: "moderation_pending" as const }).eq("id", submission.id);
@@ -909,16 +921,10 @@ const AssignmentDetail = () => {
       return false;
     }
 
-    const finalScore =
-      moderationCase?.final_agreed_score ??
-      grade.final_score ??
-      grade.lecturer_score ??
-      grade.ai_score;
-    const finalFeedback =
-      moderationCase?.final_agreed_feedback ??
-      grade.final_feedback ??
-      grade.lecturer_feedback ??
-      grade.ai_feedback;
+      const { finalScore, finalFeedback } = resolveFinalGradeValues({
+        grade,
+        moderationCase,
+      });
 
     await supabase
       .from("grades")
@@ -1086,12 +1092,8 @@ const AssignmentDetail = () => {
       return;
     }
 
-    const score = grade.final_score ?? grade.lecturer_score ?? grade.ai_score;
-    const feedback =
-      grade.final_feedback ??
-      grade.lecturer_feedback ??
-      grade.ai_feedback ??
-      "Feedback will be added in the grading workflow.";
+      const { finalScore: score, finalFeedback } = resolveFinalGradeValues({ grade });
+      const feedback = finalFeedback ?? "Feedback will be added in the grading workflow.";
 
     const result = await queueCommunicationMessage({
       category: "feedback-summary",
@@ -1122,7 +1124,7 @@ Please review the feedback in the platform and let me know if you would like to 
 
   const queueGradeReleaseNotification = async (sub: Submission) => {
     const grade = grades[sub.id];
-    const score = grade?.final_score ?? grade?.lecturer_score ?? grade?.ai_score;
+      const { finalScore: score } = resolveFinalGradeValues({ grade: grade ?? {} });
 
     const result = await queueCommunicationMessage({
       category: "grade-released",
@@ -1149,39 +1151,8 @@ Please log in to review the released grade and feedback.`,
   };
 
   const summary = useMemo(() => {
-    const graded = submissions.filter((s) =>
-      [
-        "ai_graded",
-        "first_review",
-        "moderation_pending",
-        "moderation_in_progress",
-        "moderated",
-        "escalated",
-        "under_review",
-        "approved",
-        "released",
-      ].includes(s.status)
-    );
-    const released = submissions.filter((s) => s.status === "released");
-    const pending = submissions.filter((s) =>
-      [
-        "submitted",
-        "ai_grading",
-        "ai_graded",
-        "first_review",
-        "moderation_pending",
-        "moderation_in_progress",
-        "escalated",
-        "under_review",
-      ].includes(s.status)
-    );
-    return {
-      submittedCount: submissions.length,
-      gradedCount: graded.length,
-      releasedCount: released.length,
-      pendingCount: pending.length,
-    };
-  }, [submissions]);
+      return getAssessmentSummary(submissions);
+    }, [submissions]);
 
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((submission) => {
@@ -1227,10 +1198,8 @@ Please log in to review the released grade and feedback.`,
     );
   const selectedStatuses = submissions.filter((s) => selected.has(s.id)).map((s) => s.status);
   const hasSubmitted = selectedStatuses.some((s) => s === "submitted");
-  const hasGraded = selectedStatuses.some((s) =>
-    ["ai_graded", "first_review", "moderated", "under_review"].includes(s)
-  );
-  const hasApproved = selectedStatuses.some((s) => s === "approved");
+  const hasGraded = selectedStatuses.some((s) => isGradedWorkflowStatus(s) && !canReleaseStatus(s) && !isStudentGradeVisible(s));
+  const hasApproved = selectedStatuses.some((s) => canReleaseStatus(s));
 
   const exportReviewedReports = () => {
     const reviewedSubmissions = submissions.filter((submission) => {
@@ -1522,6 +1491,7 @@ Please log in to review the released grade and feedback.`,
                     return (
                       <div
                         key={sub.id}
+                        data-testid={`submission-card-${sub.id}`}
                         className="rounded-2xl border p-4 shadow-sm transition-colors hover:bg-muted/20"
                       >
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1584,7 +1554,7 @@ Please log in to review the released grade and feedback.`,
                                 </div>
                               )}
 
-                              {!isLecturer && sub.status === "released" && grade?.final_feedback && (
+                              {!isLecturer && isStudentGradeVisible(sub.status) && grade?.final_feedback && (
                                 <p className="pt-1 text-xs text-muted-foreground line-clamp-2">{grade.final_feedback}</p>
                               )}
                             </div>
@@ -1602,7 +1572,11 @@ Please log in to review the released grade and feedback.`,
                                   {grade.assignment_type}
                                 </Badge>
                               )}
-                              <Badge variant={sc.variant as any} className={`text-xs ${sc.tone}`}>
+                              <Badge
+                                data-testid={`submission-status-${sub.id}`}
+                                variant={sc.variant as any}
+                                className={`text-xs ${sc.tone}`}
+                              >
                                 <StatusIcon className="mr-1 h-3 w-3" />
                                 {sc.label}
                               </Badge>
@@ -1615,13 +1589,19 @@ Please log in to review the released grade and feedback.`,
                                     <Sparkles className="mr-1 h-3 w-3" /> Feedback summary
                                   </Button>
                                 )}
-                                {grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
-                                  <Button size="sm" variant="ghost" onClick={() => openReview(sub)}>
+                                {grade?.ai_score != null && !canReleaseStatus(sub.status) && !isStudentGradeVisible(sub.status) && (
+                                  <Button
+                                    data-testid={`submission-review-${sub.id}`}
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => openReview(sub)}
+                                  >
                                     <Edit className="mr-1 h-3 w-3" /> First review
                                   </Button>
                                 )}
-                                {grade?.ai_score != null && sub.status !== "approved" && sub.status !== "released" && (
+                                {grade?.ai_score != null && !canReleaseStatus(sub.status) && !isStudentGradeVisible(sub.status) && (
                                   <Button
+                                    data-testid={`submission-approve-${sub.id}`}
                                     size="sm"
                                     variant="outline"
                                     onClick={async () => {
@@ -1638,8 +1618,9 @@ Please log in to review the released grade and feedback.`,
                                     <CheckCheck className="mr-1 h-3 w-3" /> Approve
                                   </Button>
                                 )}
-                                {sub.status === "approved" && (
+                                {canReleaseStatus(sub.status) && (
                                   <Button
+                                    data-testid={`submission-release-${sub.id}`}
                                     size="sm"
                                     variant="default"
                                     onClick={async () => {
@@ -1659,7 +1640,7 @@ Please log in to review the released grade and feedback.`,
                                     <Send className="mr-1 h-3 w-3" /> Release
                                   </Button>
                                 )}
-                                {sub.status === "released" && (
+                                {isStudentGradeVisible(sub.status) && (
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1743,7 +1724,7 @@ Please log in to review the released grade and feedback.`,
       </div>
 
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent data-testid="submission-review-dialog" className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Review Submission</DialogTitle>
             <DialogDescription>
@@ -1827,7 +1808,7 @@ Please log in to review the released grade and feedback.`,
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={saveReview} className="flex-1">Save Review</Button>
+                <Button data-testid="submission-review-save" onClick={saveReview} className="flex-1">Save Review</Button>
                 <Button variant="outline" onClick={() => setReviewOpen(false)} className="flex-1">Cancel</Button>
               </div>
             </div>

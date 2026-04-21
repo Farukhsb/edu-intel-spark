@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Award, CheckCircle, AlertTriangle, XCircle, Clock, FileText,
@@ -58,6 +57,18 @@ interface ProgrammeReport {
 const tefRating = (score: number): "gold" | "silver" | "bronze" | "pending" =>
   score >= 80 ? "gold" : score >= 65 ? "silver" : score >= 50 ? "bronze" : "pending";
 
+const ensureNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+const ensureString = (value: unknown, fallback = "") => (typeof value === "string" ? value : fallback);
+
+const MetricBar = ({ value, className = "h-2" }: { value: number; className?: string }) => (
+  <div className={`overflow-hidden rounded-full bg-muted ${className}`}>
+    <div
+      className="h-full rounded-full bg-primary transition-all"
+      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+    />
+  </div>
+);
+
 const AccreditationDashboard = () => {
   const { isDemo } = useAuth();
   const navigate = useNavigate();
@@ -75,12 +86,22 @@ const AccreditationDashboard = () => {
 
     const fetchData = async () => {
       try {
-        const [{ data: gradesRaw }, { data: subsRaw }, { data: assignmentsRaw }, { data: profilesRaw }] = await Promise.all([
+        const [
+          { data: gradesRaw, error: gradesError },
+          { data: subsRaw, error: submissionsError },
+          { data: assignmentsRaw, error: assignmentsError },
+          { data: profilesRaw, error: profilesError },
+        ] = await Promise.all([
           supabase.from("grades").select(GRADE_FIELDS),
           supabase.from("submissions").select(SUBMISSION_FIELDS),
           supabase.from("assignments").select(ASSIGNMENT_FIELDS),
           supabase.from("profiles").select(PROFILE_FIELDS),
         ]);
+
+        if (gradesError) throw gradesError;
+        if (submissionsError) throw submissionsError;
+        if (assignmentsError) throw assignmentsError;
+        if (profilesError) throw profilesError;
 
         const grades = gradesRaw || [];
         const subs = subsRaw || [];
@@ -88,7 +109,7 @@ const AccreditationDashboard = () => {
         const profiles = profilesRaw || [];
 
         const scores = grades
-          .map(d => d.final_score ?? d.ai_score)
+          .map(d => ensureNumber(d.final_score ?? d.ai_score))
           .filter((s): s is number => s != null);
 
         const studentCount = profiles.filter(d => d.role === "student").length;
@@ -182,7 +203,7 @@ const AccreditationDashboard = () => {
         // Derive NSS-style metrics from real data
         const rubricClarityScore = rubricPct;
         const feedbackTimelinessScore = turnaroundDays.length > 0 ? Math.min(Math.round((compliantCount / turnaroundDays.length) * 100), 100) : 0;
-        const feedbackHelpfulness = grades.filter(g => g.ai_feedback && g.ai_feedback.length > 100).length;
+        const feedbackHelpfulness = grades.filter(g => ensureString(g.ai_feedback).length > 100).length;
         const feedbackHelpPct = grades.length > 0 ? Math.min(Math.round((feedbackHelpfulness / grades.length) * 100), 100) : 0;
         const organisationScore = assignments.filter(a => a.due_date && a.description).length;
         const orgPct = assignments.length > 0 ? Math.min(Math.round((organisationScore / assignments.length) * 100), 100) : 0;
@@ -211,6 +232,9 @@ const AccreditationDashboard = () => {
         ]);
       } catch (err) {
         console.error("Failed to fetch accreditation data:", err);
+        setQaaMetrics([]);
+        setNssMetrics([]);
+        setTefIndicators([]);
       }
       setLoading(false);
     };
@@ -261,7 +285,8 @@ const AccreditationDashboard = () => {
 
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
-  return (
+  try {
+    return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && (
         <Card className="border-warning bg-warning/5">
@@ -291,7 +316,9 @@ const AccreditationDashboard = () => {
               </div>
               <Award className="h-8 w-8 text-primary" />
             </div>
-            <Progress value={overallCompliance} className="mt-3 h-2" />
+            <div className="mt-3">
+              <MetricBar value={overallCompliance} />
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -549,7 +576,7 @@ const AccreditationDashboard = () => {
                     </div>
                     <span className="text-lg font-bold">{t.score}%</span>
                   </div>
-                  <Progress value={t.score} className="h-2" />
+                  <MetricBar value={t.score} />
                   <p className="text-xs text-muted-foreground">{t.detail}</p>
                 </div>
               ))}
@@ -563,7 +590,17 @@ const AccreditationDashboard = () => {
         </TabsContent>
       </Tabs>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error("Accreditation dashboard render failed:", error);
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-muted-foreground">
+          Accreditation metrics could not be rendered from the current dataset. Reload the page after new assessment data is available.
+        </CardContent>
+      </Card>
+    );
+  }
 };
 
 const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
@@ -573,11 +610,19 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }] = await Promise.all([
+        const [
+          { data: assignmentsRaw, error: assignmentsError },
+          { data: subsRaw, error: submissionsError },
+          { data: gradesRaw, error: gradesError },
+        ] = await Promise.all([
           supabase.from("assignments").select("id, title, module_code"),
           supabase.from("submissions").select("id, assignment_id"),
           supabase.from("grades").select("submission_id, ai_score, final_score"),
         ]);
+
+        if (assignmentsError) throw assignmentsError;
+        if (submissionsError) throw submissionsError;
+        if (gradesError) throw gradesError;
 
         const assignments = assignmentsRaw || [];
         const subs = subsRaw || [];
@@ -585,7 +630,7 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
 
         const gradeBySubmission: Record<string, number> = {};
         grades.forEach(d => {
-          const score = d.final_score ?? d.ai_score;
+          const score = ensureNumber(d.final_score ?? d.ai_score);
           if (score != null) gradeBySubmission[d.submission_id] = score;
         });
 

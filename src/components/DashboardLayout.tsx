@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  Award, BarChart3, Bell, BookOpen, Brain, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut,
+  Award, BarChart3, Bell, Brain, ChevronDown, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut,
   Menu, MessageSquare, Moon, Search, Settings, Shield, Sun, Target, TrendingUp, University,
-  Upload, User, X, Users, Download, FileOutput,
+  Upload, Users, FileOutput,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,19 +18,55 @@ import {
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
 
-const lecturerLinks = [
-  { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
-  { to: "/dashboard/moderation", label: "Moderation", icon: Shield },
-  { to: "/dashboard/learning-outcomes", label: "Learning Outcomes", icon: Target },
-  { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
-  { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
-  { to: "/dashboard/integrity", label: "Academic Integrity", icon: Shield },
-  { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
-  { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
-  { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
-  { to: "/dashboard/settings", label: "Settings", icon: Settings },
-];
+const lecturerSections = [
+  {
+    label: "Core",
+    description: "Daily teaching workflow",
+    defaultOpen: true,
+    links: [
+      { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
+      { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
+    ],
+  },
+  {
+    label: "Assessment",
+    description: "Review, integrity, and moderation",
+    defaultOpen: true,
+    links: [
+      { to: "/dashboard/integrity", label: "Academic Integrity", icon: Shield },
+      { to: "/dashboard/moderation", label: "Moderation", icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: "Insights",
+    description: "Cohort and learner signals",
+    defaultOpen: false,
+    links: [
+      { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
+      { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
+      { to: "/dashboard/learning-outcomes", label: "Learning Outcomes", icon: Target },
+    ],
+  },
+  {
+    label: "Institution",
+    description: "Quality and reporting views",
+    defaultOpen: false,
+    links: [
+      { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
+      { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
+      { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
+    ],
+  },
+  {
+    label: "Admin",
+    description: "Setup and operational tools",
+    defaultOpen: false,
+    links: [
+      { to: "/dashboard/bulk-upload-students", label: "Bulk Upload Students", icon: Users, isAction: true },
+      { to: "/dashboard/settings", label: "Settings", icon: Settings },
+    ],
+  },
+] as const;
 
 const studentLinks = [
   { to: "/dashboard", label: "My Grades", icon: GraduationCap },
@@ -39,6 +75,10 @@ const studentLinks = [
   { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
+
+const defaultLecturerSectionState = Object.fromEntries(
+  lecturerSections.map((section) => [section.label, section.defaultOpen]),
+) as Record<(typeof lecturerSections)[number]["label"], boolean>;
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { profile, user, signOut, isDemo } = useAuth();
@@ -52,6 +92,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   });
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
+  const [openSections, setOpenSections] = useState(defaultLecturerSectionState);
 
   useEffect(() => {
     if (darkMode) {
@@ -121,6 +162,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate("/dashboard");
   };
 
+  const lecturerLinks = lecturerSections.flatMap((section) => section.links);
   const links = profile?.role === "lecturer" ? lecturerLinks : studentLinks;
 
   const handleSignOut = async () => {
@@ -128,55 +170,170 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate(isDemo ? "/" : "/auth");
   };
 
+  const filteredLecturerSections = lecturerSections
+    .map((section) => ({
+      ...section,
+      links: searchQuery
+        ? section.links.filter((link) => link.label.toLowerCase().includes(searchQuery.toLowerCase()))
+        : [...section.links],
+    }))
+    .filter((section) => section.links.length > 0);
+
   const filteredLinks = searchQuery
     ? links.filter((l) => l.label.toLowerCase().includes(searchQuery.toLowerCase()))
     : links;
 
+  const activeLink = links.find((link) => link.to === location.pathname);
+  const activeSection = profile?.role === "lecturer"
+    ? lecturerSections.find((section) => section.links.some((link) => link.to === location.pathname))
+    : null;
+
+  useEffect(() => {
+    if (!activeSection || searchQuery) return;
+
+    setOpenSections((current) => (
+      current[activeSection.label] ? current : { ...current, [activeSection.label]: true }
+    ));
+  }, [activeSection, searchQuery]);
+
+  const toggleSection = (label: keyof typeof defaultLecturerSectionState) => {
+    setOpenSections((current) => ({ ...current, [label]: !current[label] }));
+  };
+
+  const renderNavLink = (link: (typeof lecturerSections)[number]["links"][number] | typeof studentLinks[number]) => {
+    const isActive = location.pathname === link.to;
+    const isActionLink = "isAction" in link && !!link.isAction;
+
+    return (
+      <Link
+        key={link.to}
+        to={isActionLink ? "#" : link.to}
+        onClick={(event) => {
+          if (isActionLink) {
+            event.preventDefault();
+            setSidebarOpen(false);
+            setSearchQuery("");
+            return;
+          }
+
+          setSidebarOpen(false);
+          setSearchQuery("");
+        }}
+        className={cn(
+          "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-primary shadow-sm ring-1 ring-sidebar-border"
+            : "text-sidebar-foreground/78 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground",
+        )}
+      >
+        <span
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
+            isActive
+              ? "border-sidebar-primary/20 bg-sidebar-primary/10 text-sidebar-primary"
+              : "border-sidebar-border/60 bg-sidebar-accent/35 text-sidebar-foreground/70 group-hover:border-sidebar-border group-hover:bg-sidebar-accent",
+          )}
+        >
+          <link.icon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{link.label}</span>
+        {isActive && <span className="h-2 w-2 rounded-full bg-sidebar-primary" />}
+      </Link>
+    );
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.08),transparent_28%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.28))]">
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar text-sidebar-foreground transition-transform duration-300 lg:static lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-sidebar-border/80 bg-sidebar/95 text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="flex items-center gap-3 border-b border-sidebar-border px-6 py-5">
-          <Brain className="h-7 w-7 text-sidebar-primary" />
-          <span className="font-display text-lg font-bold text-sidebar-primary-foreground">GradeAI</span>
-          {isDemo && <Badge variant="outline" className="text-[10px] border-sidebar-border text-sidebar-foreground/60">Demo</Badge>}
+        <div className="border-b border-sidebar-border/80 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent/60 shadow-sm">
+              <Brain className="h-5 w-5 text-sidebar-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-display text-lg font-bold tracking-tight text-sidebar-primary-foreground">GradeAI</p>
+              <p className="text-xs text-sidebar-foreground/60">
+                {profile?.role === "lecturer" ? "Academic workspace" : "Student workspace"}
+              </p>
+            </div>
+            {isDemo && <Badge variant="outline" className="ml-auto text-[10px] border-sidebar-border text-sidebar-foreground/60">Demo</Badge>}
+          </div>
         </div>
 
-        <div className="px-3 pt-4 pb-2">
+        <div className="px-4 pt-4 pb-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
-            <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-8 text-xs bg-sidebar-accent border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/40" />
+            <Input placeholder="Search workspace" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-10 rounded-xl border-sidebar-border bg-sidebar-accent/55 pl-9 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground/40" />
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-2 overflow-y-auto">
-          {filteredLinks.map((link) => (
-            <Link key={link.to} to={link.to} onClick={() => { setSidebarOpen(false); setSearchQuery(""); }}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                location.pathname === link.to ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}>
-              <link.icon className="h-4 w-4" />
-              {link.label}
-            </Link>
-          ))}
+        <nav className="flex-1 overflow-y-auto px-4 py-3">
+          {profile?.role === "lecturer" ? (
+            <div className="space-y-5">
+              {filteredLecturerSections.map((section) => {
+                const isExpanded = searchQuery ? true : openSections[section.label];
+
+                return (
+                <div key={section.label} className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.label)}
+                    className="flex w-full items-start justify-between rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/30"
+                    aria-expanded={isExpanded}
+                  >
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
+                        {section.label}
+                      </p>
+                      <p className="mt-1 text-[11px] text-sidebar-foreground/50">
+                        {section.description}
+                      </p>
+                    </div>
+                    <ChevronDown
+                      className={cn(
+                        "mt-0.5 h-4 w-4 shrink-0 text-sidebar-foreground/45 transition-transform",
+                        isExpanded && "rotate-180",
+                      )}
+                    />
+                  </button>
+                  {isExpanded && (
+                    <div className="space-y-1">
+                      {section.links.map((link) =>
+                        "isAction" in link && link.isAction ? (
+                          <div key={link.to} className="rounded-xl border border-dashed border-sidebar-border/80 bg-sidebar-accent/25 p-2">
+                            <BulkStudentUpload
+                              triggerClassName="w-full justify-start rounded-lg border-0 bg-transparent px-2 py-2 text-sm font-medium text-sidebar-foreground/78 shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                              compact
+                            />
+                          </div>
+                        ) : (
+                          renderNavLink(link)
+                        ),
+                      )}
+                    </div>
+                  )}
+                </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {filteredLinks.map((link) => renderNavLink(link))}
+            </div>
+          )}
         </nav>
 
-        {profile?.role === "lecturer" && !isDemo && (
-          <div className="px-3 pb-2">
-            <BulkStudentUpload />
-          </div>
-        )}
-
-        <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-3 px-2 pb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
+        <div className="border-t border-sidebar-border/80 p-4">
+          <div className="rounded-2xl border border-sidebar-border/80 bg-sidebar-accent/35 p-3">
+            <div className="flex items-center gap-3 px-1 pb-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground shadow-sm">
               {profile?.full_name?.[0]?.toUpperCase() || "U"}
             </div>
             <div className="flex-1 truncate">
@@ -184,36 +341,43 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
               <p className="text-xs text-sidebar-foreground/60 capitalize">{profile?.role}</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-foreground" onClick={handleSignOut}>
+          <Button variant="ghost" size="sm" className="w-full justify-start rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={handleSignOut}>
             <LogOut className="mr-2 h-4 w-4" />
             {isDemo ? "Exit Demo" : "Sign Out"}
           </Button>
+          </div>
         </div>
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-xl lg:px-8">
+          <Button variant="ghost" size="icon" className="rounded-xl lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="font-display text-lg font-semibold">
-            {links.find((l) => l.to === location.pathname)?.label || "Dashboard"}
-          </h1>
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              {activeSection?.label || (profile?.role === "lecturer" ? "Workspace" : "Student")}
+            </p>
+            <h1 className="truncate font-display text-xl font-semibold tracking-tight">
+              {activeLink?.label || "Dashboard"}
+            </h1>
+          </div>
           <div className="ml-auto flex items-center gap-2">
             {isDemo && (
               <Badge variant="secondary" className="text-xs">
                 Demo Mode
               </Badge>
             )}
-            <Button variant="ghost" size="icon" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
+            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setShowNotifications(!showNotifications)}>
+            <Button variant="ghost" size="icon" className="relative rounded-xl" onClick={() => setShowNotifications(!showNotifications)}>
               <Bell className="h-4 w-4" />
+              {notifications.length > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
             </Button>
             {showNotifications && (
-              <div className="absolute right-4 top-14 z-50 w-72 rounded-lg border bg-card shadow-lg">
-                <div className="p-3 border-b">
+              <div className="absolute right-4 top-16 z-50 w-80 rounded-2xl border bg-card shadow-xl">
+                <div className="border-b p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium">Notifications</p>
                     {notifications.length > 0 && <Badge variant="secondary">{notifications.length}</Badge>}
@@ -228,7 +392,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                         key={notification.id}
                         type="button"
                         onClick={() => openNotification(notification)}
-                        className="block w-full rounded-md p-2 text-left text-xs hover:bg-muted/40"
+                        className="block w-full rounded-xl p-3 text-left text-xs hover:bg-muted/40"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium">{notification.subject}</span>
@@ -246,7 +410,9 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             )}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
+          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        </main>
       </div>
     </div>
   );

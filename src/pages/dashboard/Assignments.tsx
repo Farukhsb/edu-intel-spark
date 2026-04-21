@@ -19,6 +19,12 @@ import { Plus, FileText, Calendar, BookOpen, Loader2, Search, Clock3, CheckCircl
 import { toast } from "sonner";
 import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
+import {
+  canReleaseStatus,
+  isGradedWorkflowStatus,
+  isReviewQueueStatus,
+  isStudentGradeVisible,
+} from "@/lib/assessmentWorkflow";
 
 const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
@@ -122,33 +128,10 @@ const Assignments = () => {
           const relatedSubs = subs.filter(s => s.assignment_id === assignment.id);
           statsMap[assignment.id] = {
             total: relatedSubs.length,
-            graded: relatedSubs.filter(s =>
-              [
-                "ai_graded",
-                "first_review",
-                "moderation_pending",
-                "moderation_in_progress",
-                "moderated",
-                "escalated",
-                "under_review",
-                "approved",
-                "released",
-              ].includes(s.status)
-            ).length,
-            approved: relatedSubs.filter(s => ["approved", "released"].includes(s.status)).length,
-            released: relatedSubs.filter(s => s.status === "released").length,
-            needsReview: relatedSubs.filter(s =>
-              [
-                "submitted",
-                "ai_grading",
-                "ai_graded",
-                "first_review",
-                "moderation_pending",
-                "moderation_in_progress",
-                "escalated",
-                "under_review",
-              ].includes(s.status)
-            ).length,
+            graded: relatedSubs.filter(s => isGradedWorkflowStatus(s.status)).length,
+            approved: relatedSubs.filter(s => canReleaseStatus(s.status) || isStudentGradeVisible(s.status)).length,
+            released: relatedSubs.filter(s => isStudentGradeVisible(s.status)).length,
+            needsReview: relatedSubs.filter(s => isReviewQueueStatus(s.status)).length,
           };
         }
         setSubmissionStats(statsMap);
