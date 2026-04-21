@@ -241,6 +241,18 @@ High-trust workflows in this repo depend on the database layer, not just the UI.
 
 If the app behavior and the database drift apart, trust boundaries become unreliable.
 
+### Migration history note
+
+This project still carries two legacy short-form migration versions in historical Supabase metadata:
+- `20260412`
+- `20260413`
+
+They correspond to:
+- [20260412_fix_multi_tenant_rls.sql](C:/Users/a3dullahi/edu-intel-spark/supabase/migrations/20260412_fix_multi_tenant_rls.sql)
+- [20260413_create_student_interventions.sql](C:/Users/a3dullahi/edu-intel-spark/supabase/migrations/20260413_create_student_interventions.sql)
+
+The live project is functioning with these migrations applied, but Supabase CLI history output may still show them as legacy unmatched entries. Treat that as a migration-ledger hygiene issue, not a live permissions failure. Do not rename historical migration IDs on a live project without a deliberate migration-history cleanup plan.
+
 ## Important Edge Functions
 
 The current backend uses these Supabase Edge Functions:

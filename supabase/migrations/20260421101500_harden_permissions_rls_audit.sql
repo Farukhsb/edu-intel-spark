@@ -181,7 +181,9 @@ CREATE POLICY "Lecturers can insert own recommendation actions"
     )
   );
 
-CREATE OR REPLACE FUNCTION public.apply_recommendation_action(
+DROP FUNCTION IF EXISTS public.apply_recommendation_action(text, text, jsonb);
+
+CREATE FUNCTION public.apply_recommendation_action(
   p_recommendation_id text,
   p_action_type text,
   p_payload jsonb default '{}'::jsonb

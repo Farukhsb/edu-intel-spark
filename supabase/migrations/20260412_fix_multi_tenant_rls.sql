@@ -13,6 +13,7 @@ DROP POLICY IF EXISTS "Lecturers can manage grades" ON public.grades;
 
 -- Restore lecturer ownership enforcement through assignments. Use text casts because
 -- a prior migration changed submissions.assignment_id from uuid to text.
+DROP POLICY IF EXISTS "Lecturers can view submissions for their assignments" ON public.submissions;
 CREATE POLICY "Lecturers can view submissions for their assignments"
 ON public.submissions
 FOR SELECT TO authenticated
@@ -25,6 +26,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Lecturers can update submissions for their assignments" ON public.submissions;
 CREATE POLICY "Lecturers can update submissions for their assignments"
 ON public.submissions
 FOR UPDATE TO authenticated
@@ -45,6 +47,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Lecturers can insert submissions for their assignments" ON public.submissions;
 CREATE POLICY "Lecturers can insert submissions for their assignments"
 ON public.submissions
 FOR INSERT TO authenticated
@@ -57,6 +60,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Lecturers can manage grades for their assignments" ON public.grades;
 CREATE POLICY "Lecturers can manage grades for their assignments"
 ON public.grades
 FOR ALL TO authenticated
