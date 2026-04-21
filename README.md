@@ -5,7 +5,7 @@
 GradeAI helps universities manage the full assessment cycle in one connected system: assignment design, student submission, AI-assisted grading, integrity review, moderation, release, analytics, and student support. The platform is built around a simple principle: AI does the analytical heavy lifting, but lecturers keep control of every academic decision.
 
 Live deployment:
-- `https://edu-spark.pages.dev`
+- `https://gradeai.pages.dev`
 
 ## What GradeAI Does
 
