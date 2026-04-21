@@ -18,6 +18,8 @@ import {
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
 
+const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
+
 const lecturerSections = [
   {
     label: "Core",
@@ -92,7 +94,19 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   });
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
-  const [openSections, setOpenSections] = useState(defaultLecturerSectionState);
+  const [openSections, setOpenSections] = useState(() => {
+    if (typeof window === "undefined") return defaultLecturerSectionState;
+
+    try {
+      const stored = window.localStorage.getItem(LECTURER_SIDEBAR_STATE_KEY);
+      if (!stored) return defaultLecturerSectionState;
+
+      const parsed = JSON.parse(stored) as Partial<typeof defaultLecturerSectionState>;
+      return { ...defaultLecturerSectionState, ...parsed };
+    } catch {
+      return defaultLecturerSectionState;
+    }
+  });
 
   useEffect(() => {
     if (darkMode) {
@@ -196,6 +210,12 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     ));
   }, [activeSection, searchQuery]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || profile?.role !== "lecturer") return;
+
+    window.localStorage.setItem(LECTURER_SIDEBAR_STATE_KEY, JSON.stringify(openSections));
+  }, [openSections, profile?.role]);
+
   const toggleSection = (label: keyof typeof defaultLecturerSectionState) => {
     setOpenSections((current) => ({ ...current, [label]: !current[label] }));
   };
@@ -281,17 +301,28 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                 const isExpanded = searchQuery ? true : openSections[section.label];
 
                 return (
-                <div key={section.label} className="space-y-2">
+                <div
+                  key={section.label}
+                  className={cn(
+                    "space-y-2 rounded-2xl border border-transparent px-1 py-1 transition-colors",
+                    isExpanded && "border-sidebar-border/60 bg-sidebar-accent/15",
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => toggleSection(section.label)}
                     className="flex w-full items-start justify-between rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/30"
                     aria-expanded={isExpanded}
                   >
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
-                        {section.label}
-                      </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
+                          {section.label}
+                        </p>
+                        <span className="rounded-full border border-sidebar-border/70 bg-sidebar px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/55">
+                          {section.links.length}
+                        </span>
+                      </div>
                       <p className="mt-1 text-[11px] text-sidebar-foreground/50">
                         {section.description}
                       </p>
@@ -304,7 +335,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                     />
                   </button>
                   {isExpanded && (
-                    <div className="space-y-1">
+                    <div className="space-y-1 pb-1">
                       {section.links.map((link) =>
                         "isAction" in link && link.isAction ? (
                           <div key={link.to} className="rounded-xl border border-dashed border-sidebar-border/80 bg-sidebar-accent/25 p-2">
@@ -411,7 +442,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           </div>
         </header>
         <main className="flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
-          <div className="mx-auto w-full max-w-7xl">{children}</div>
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">{children}</div>
         </main>
       </div>
     </div>

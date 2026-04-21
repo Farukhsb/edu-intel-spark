@@ -441,7 +441,6 @@ const AssignmentDetail = () => {
       fileType: file.type || "application/octet-stream",
       storagePath: data.path,
     };
-    return { fileUrl: data.path, fileName: safeFileName, fileType: file.type || "application/octet-stream", storagePath: data.path };
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -450,7 +449,6 @@ const AssignmentDetail = () => {
       e.target.value = "";
       return;
     }
-    if (!file || !assignment || !user?.id) { e.target.value = ""; return; }
 
     const hasExisting = submissions.some(
       (s) => s.student_id === user.id || (user.email && s.student_email === user.email)
