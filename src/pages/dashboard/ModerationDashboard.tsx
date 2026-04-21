@@ -45,6 +45,14 @@ type Grade = Tables<"grades">;
 type Profile = Tables<"profiles">;
 
 const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
+const getErrorText = (error: unknown) => {
+  if (error && typeof error === "object") {
+    const candidate = error as { message?: string; details?: string; hint?: string };
+    return [candidate.message, candidate.details, candidate.hint].filter(Boolean).join(" | ");
+  }
+
+  return error instanceof Error ? error.message : "Unknown error";
+};
 
 const ModerationDashboard = () => {
   const { user, profile } = useAuth();
@@ -157,7 +165,7 @@ const ModerationDashboard = () => {
 
     if (error) {
       console.error("Failed to assign moderator:", error);
-      toast.error("Could not assign moderator.");
+      toast.error(getErrorText(error) || "Could not assign moderator.");
       setSaving(false);
       return;
     }
@@ -264,7 +272,7 @@ const ModerationDashboard = () => {
       await fetchCases();
     } catch (error) {
       console.error("Failed to save moderation action:", error);
-      toast.error("Could not save moderation action.");
+      toast.error(getErrorText(error) || "Could not save moderation action.");
     }
     setSaving(false);
   };
