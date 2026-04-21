@@ -23,65 +23,17 @@ import { safeFormatDate } from "@/lib/date";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   type IntegrityDecision,
-  type IntegrityEvidenceItem,
-  type IntegrityHistoryEntry,
-  parseStoredReviewPayload,
-  serializeReviewPayload,
 } from "@/lib/integrityReviews";
-
-interface OverviewStat {
-  label: string;
-  value: string;
-  icon: React.ElementType;
-}
-
-interface FlaggedCase {
-  submissionId: string;
-  assignmentId: string;
-  student: string;
-  assignment: string;
-  status: string;
-  submittedAt: string;
-  riskLevel: "high" | "medium" | "low";
-  analysisLimited: boolean;
-  limitations: string[];
-  totalScore: number;
-  aiWritingScore: number;
-  similarityScore: number;
-  overlapBreakdown: {
-    totalOverlap: number;
-    citedOverlap: number;
-    uncitedOverlap: number;
-    internalPeerOverlap: number;
-    externalSourceOverlap: number;
-  };
-  baselineDeviationScore: number;
-  evidence: {
-    aiWriting: IntegrityEvidenceItem[];
-    similarity: IntegrityEvidenceItem[];
-    uncitedMatches: IntegrityEvidenceItem[];
-    citedMatches: IntegrityEvidenceItem[];
-    peerMatches: IntegrityEvidenceItem[];
-    externalMatches: IntegrityEvidenceItem[];
-    baselineDeviation: IntegrityEvidenceItem[];
-  };
-  flags: string[];
-  decision: IntegrityDecision;
-  history: IntegrityHistoryEntry[];
-}
-
-const isEvidenceItem = (value: unknown): value is IntegrityEvidenceItem =>
-  !!value &&
-  typeof value === "object" &&
-  "label" in value &&
-  "value" in value &&
-  "score" in value;
-
-const ensureEvidenceList = (value: unknown): IntegrityEvidenceItem[] =>
-  Array.isArray(value) ? value.filter(isEvidenceItem) : [];
-
-const ensureStringList = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+import {
+  type AcademicIntegrityOverviewStat,
+  buildIntegrityCases,
+  buildIntegrityDrafts,
+  buildIntegrityOverview,
+  buildIntegrityTotals,
+  type FlaggedIntegrityCase,
+  getIntegrityReviewType,
+} from "@/lib/integrityQueue";
+import { persistIntegrityDecision } from "@/lib/integrityDecisionPersistence";
 
 const MetricBar = ({ value }: { value: number }) => (
   <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -105,23 +57,11 @@ const decisionOptions: IntegrityDecision[] = [
   "misconduct-concern",
 ];
 
-const normalizeDecision = (value: unknown): IntegrityDecision =>
-  value === "clear" || value === "investigate" || value === "misconduct-concern" || value === "pending"
-    ? value
-    : "pending";
-
-const getReviewType = (item: Pick<FlaggedCase, "aiWritingScore" | "similarityScore" | "baselineDeviationScore">) => {
-  if (item.aiWritingScore > 0 && item.similarityScore > 0) return "mixed";
-  if (item.aiWritingScore > 0) return "ai-writing-suspicion";
-  if (item.baselineDeviationScore > 0 && item.similarityScore === 0) return "baseline-deviation";
-  return "similarity-plagiarism-suspicion";
-};
-
 const AcademicIntegrity = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [overview, setOverview] = useState<OverviewStat[]>([]);
-  const [flagged, setFlagged] = useState<FlaggedCase[]>([]);
+  const [overview, setOverview] = useState<Array<AcademicIntegrityOverviewStat & { icon: React.ElementType }>>([]);
+  const [flagged, setFlagged] = useState<FlaggedIntegrityCase[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -143,8 +83,6 @@ const AcademicIntegrity = () => {
 
         const assignments = assignmentsData || [];
         const assignmentIds = assignments.map((assignment) => assignment.id);
-        const assignmentMap = new Map(assignments.map((assignment) => [assignment.id, assignment.title]));
-
         if (assignmentIds.length === 0) {
           setOverview([
             { label: "Submissions Scanned", value: "0", icon: FileSearch },
@@ -165,7 +103,6 @@ const AcademicIntegrity = () => {
         if (submissionsError) throw submissionsError;
 
         const submissions = (submissionsData || []) as SubmissionRow[];
-        const submissionMap = new Map(submissions.map((submission) => [submission.id, submission]));
 
         const { data: storedReviews, error: reviewsError } = await supabase
           .from("academic_integrity_reviews")
@@ -175,82 +112,29 @@ const AcademicIntegrity = () => {
 
         if (reviewsError) throw reviewsError;
 
-        const cases: FlaggedCase[] = (storedReviews || [])
-          .map((review) => {
-            const submission = submissionMap.get(review.submission_id);
-            if (!submission) return null;
-
-            const payload = parseStoredReviewPayload(
-              review as Pick<StoredIntegrityReview, "lecturer_note" | "updated_at" | "decision">
-            );
-            const snapshot = payload.integritySnapshot;
-
-            if (!snapshot && payload.history.length === 0 && review.decision === "pending") {
-              return null;
-            }
-
-            return {
-              submissionId: submission.id,
-              assignmentId: submission.assignment_id,
-              student: submission.student_name || submission.student_email || "Student",
-              assignment: assignmentMap.get(submission.assignment_id) || "Unknown assignment",
-              status: submission.status,
-              submittedAt: submission.submitted_at,
-              riskLevel: snapshot?.riskLevel === "high" || snapshot?.riskLevel === "medium" || snapshot?.riskLevel === "low"
-                ? snapshot.riskLevel
-                : "low",
-              analysisLimited: Boolean(snapshot?.analysisLimited),
-              limitations: ensureStringList(snapshot?.limitations),
-              totalScore: typeof snapshot?.totalScore === "number" ? snapshot.totalScore : 0,
-              aiWritingScore: snapshot?.aiWritingScore || 0,
-              similarityScore: snapshot?.similarityScore || 0,
-              overlapBreakdown: snapshot?.overlapBreakdown || {
-                totalOverlap: snapshot?.similarityScore || 0,
-                citedOverlap: 0,
-                uncitedOverlap: snapshot?.similarityScore || 0,
-                internalPeerOverlap: snapshot?.similarityScore || 0,
-                externalSourceOverlap: 0,
-              },
-              baselineDeviationScore: snapshot?.baselineDeviationScore || 0,
-              evidence: {
-                aiWriting: ensureEvidenceList(snapshot?.evidence?.aiWriting),
-                similarity: ensureEvidenceList(snapshot?.evidence?.similarity),
-                uncitedMatches: ensureEvidenceList(snapshot?.evidence?.uncitedMatches),
-                citedMatches: ensureEvidenceList(snapshot?.evidence?.citedMatches),
-                peerMatches: ensureEvidenceList(snapshot?.evidence?.peerMatches),
-                externalMatches: ensureEvidenceList(snapshot?.evidence?.externalMatches),
-                baselineDeviation: ensureEvidenceList(snapshot?.evidence?.baselineDeviation),
-              },
-              flags: ensureStringList(snapshot?.flags),
-              decision: normalizeDecision(review.decision),
-              history: payload.history,
-            } satisfies FlaggedCase;
-          })
-          .filter((item): item is FlaggedCase => item !== null)
-          .sort((left, right) => right.totalScore - left.totalScore);
-
-        setDecisionDrafts(Object.fromEntries(cases.map((item) => [item.submissionId, item.decision])));
-        setNoteDrafts(
-          Object.fromEntries(
-            cases.map((item) => [
-              item.submissionId,
-              item.history[0]?.note === "No note recorded." ? "" : item.history[0]?.note || "",
-            ])
-          )
-        );
-
-        const openInvestigations = cases.filter(
-          (item) => item.decision === "investigate" || item.decision === "misconduct-concern"
-        ).length;
-        const cleared = cases.filter((item) => item.decision === "clear").length;
+        const cases = buildIntegrityCases({
+          reviews: (storedReviews || []) as Array<Pick<StoredIntegrityReview, "submission_id" | "decision" | "lecturer_note" | "updated_at">>,
+          submissions,
+          assignments: assignments.map((assignment) => ({ id: assignment.id, title: assignment.title })),
+        });
+        const drafts = buildIntegrityDrafts(cases);
 
         setOverview([
-          { label: "Submissions Scanned", value: submissions.length.toString(), icon: FileSearch },
-          { label: "Flagged for Review", value: cases.length.toString(), icon: AlertTriangle },
-          { label: "Open Investigations", value: openInvestigations.toString(), icon: Scale },
-          { label: "Cleared", value: cleared.toString(), icon: Shield },
+          ...buildIntegrityOverview({ submissionsScanned: submissions.length, cases }).map((stat) => ({
+            ...stat,
+            icon:
+              stat.label === "Submissions Scanned"
+                ? FileSearch
+                : stat.label === "Flagged for Review"
+                  ? AlertTriangle
+                  : stat.label === "Open Investigations"
+                    ? Scale
+                    : Shield,
+          })),
         ]);
         setFlagged(cases);
+        setDecisionDrafts(drafts.decisionDrafts);
+        setNoteDrafts(drafts.noteDrafts);
       } catch (error) {
         console.error("Failed to fetch integrity data:", error);
         toast.error("Could not load academic integrity cases.");
@@ -268,59 +152,27 @@ const AcademicIntegrity = () => {
     return "outline";
   };
 
-  const riskVariant = (level: FlaggedCase["riskLevel"]) =>
+  const riskVariant = (level: FlaggedIntegrityCase["riskLevel"]) =>
     level === "high" ? "destructive" : level === "medium" ? "secondary" : "outline";
 
-  const riskLabel = (item: FlaggedCase) =>
+  const riskLabel = (item: FlaggedIntegrityCase) =>
     item.analysisLimited && item.riskLevel === "low" ? "analysis limited" : `${item.riskLevel} risk`;
 
-  const saveDecision = async (item: FlaggedCase) => {
+  const saveDecision = async (item: FlaggedIntegrityCase) => {
     if (!user) return;
 
     const nextDecision = decisionDrafts[item.submissionId] || "pending";
     const note = noteDrafts[item.submissionId]?.trim() || "";
-    const nextEntry: IntegrityHistoryEntry = {
-      id: `${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      decision: nextDecision,
-      note: note || "No note recorded.",
-    };
-    const nextHistory = [nextEntry, ...item.history];
-    const evidenceSummary = [
-      ...item.evidence.aiWriting.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.similarity.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.uncitedMatches.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.citedMatches.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.peerMatches.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.externalMatches.map((entry) => `${entry.label}: ${entry.value}`),
-      ...item.evidence.baselineDeviation.map((entry) => `${entry.label}: ${entry.value}`),
-    ]
-      .slice(0, 8)
-      .join("\n\n");
 
     setSavingId(item.submissionId);
-    const { error } = await supabase.from("academic_integrity_reviews").upsert(
-      {
-        submission_id: item.submissionId,
-        lecturer_id: user.id,
-        review_type: getReviewType(item),
-        decision: nextDecision,
-        evidence_summary: evidenceSummary || null,
-        lecturer_note: serializeReviewPayload(note, nextHistory, {
-          totalScore: item.totalScore,
-          aiWritingScore: item.aiWritingScore,
-          similarityScore: item.similarityScore,
-          overlapBreakdown: item.overlapBreakdown,
-            baselineDeviationScore: item.baselineDeviationScore,
-            riskLevel: item.riskLevel,
-            analysisLimited: item.analysisLimited,
-            limitations: item.limitations,
-            evidence: item.evidence,
-            flags: item.flags,
-        }),
-      },
-      { onConflict: "submission_id,lecturer_id" }
-    );
+    const { error, nextHistory } = await persistIntegrityDecision({
+      supabase,
+      lecturerId: user.id,
+      item,
+      decision: nextDecision,
+      note,
+      reviewType: getIntegrityReviewType(item),
+    });
     setSavingId(null);
 
     if (error) {
@@ -344,14 +196,7 @@ const AcademicIntegrity = () => {
     toast.success("Integrity review saved.");
   };
 
-  const totals = useMemo(() => {
-    return {
-      aiWriting: flagged.filter((item) => item.aiWritingScore >= 40).length,
-      similarity: flagged.filter((item) => item.similarityScore >= 40).length,
-      baselineDeviation: flagged.filter((item) => item.baselineDeviationScore >= 40).length,
-      pending: flagged.filter((item) => item.decision === "pending").length,
-    };
-  }, [flagged]);
+  const totals = useMemo(() => buildIntegrityTotals(flagged), [flagged]);
 
   if (loading) {
     return (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,54 +11,19 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import {
+  deriveAccreditationMetrics,
+  deriveProgrammeReports,
+  type NSSMetric,
+  type ProgrammeReport,
+  type QAAMetric,
+  type TEFIndicator,
+} from "@/lib/accreditationMetrics";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code, due_date, description, rubric";
 const SUBMISSION_FIELDS = "id, assignment_id, submitted_at, status";
 const GRADE_FIELDS = "submission_id, ai_score, final_score, ai_feedback, lecturer_score, reviewed_by, created_at";
 const PROFILE_FIELDS = "id, role";
-
-interface QAAMetric {
-  id: string;
-  category: string;
-  metric: string;
-  value: number;
-  target: number;
-  status: "met" | "at-risk" | "below";
-  detail: string;
-}
-
-interface NSSMetric {
-  question: string;
-  score: number;
-  benchmark: number;
-  trend: string;
-}
-
-interface TEFIndicator {
-  name: string;
-  rating: "gold" | "silver" | "bronze" | "pending";
-  score: number;
-  detail: string;
-}
-
-interface ProgrammeReport {
-  code: string;
-  submissions: number;
-  graded: number;
-  avg: number;
-  passRate: number;
-  firstClass: number;
-  twoOne: number;
-  twoTwo: number;
-  third: number;
-  fail: number;
-}
-
-const tefRating = (score: number): "gold" | "silver" | "bronze" | "pending" =>
-  score >= 80 ? "gold" : score >= 65 ? "silver" : score >= 50 ? "bronze" : "pending";
-
-const ensureNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
-const ensureString = (value: unknown, fallback = "") => (typeof value === "string" ? value : fallback);
 
 const MetricBar = ({ value, className = "h-2" }: { value: number; className?: string }) => (
   <div className={`overflow-hidden rounded-full bg-muted ${className}`}>
@@ -73,6 +38,7 @@ const AccreditationDashboard = () => {
   const { isDemo } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(!isDemo);
+  const [loadError, setLoadError] = useState(false);
   const [qaaMetrics, setQaaMetrics] = useState<QAAMetric[]>([]);
   const [nssMetrics, setNssMetrics] = useState<NSSMetric[]>([]);
   const [tefIndicators, setTefIndicators] = useState<TEFIndicator[]>([]);
@@ -108,133 +74,23 @@ const AccreditationDashboard = () => {
         const assignments = assignmentsRaw || [];
         const profiles = profilesRaw || [];
 
-        const scores = grades
-          .map(d => ensureNumber(d.final_score ?? d.ai_score))
-          .filter((s): s is number => s != null);
-
-        const studentCount = profiles.filter(d => d.role === "student").length;
-        const passRate = scores.length > 0 ? Math.round((scores.filter(s => s >= 40).length / scores.length) * 100) : 0;
-        const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-        const completionRate = subs.length > 0 && assignments.length > 0 && studentCount > 0
-          ? Math.min(Math.round((subs.length / (assignments.length * studentCount)) * 100), 100)
-          : 0;
-        const gradedPct = Math.min(Math.round((grades.length / Math.max(subs.length, 1)) * 100), 100);
-
-        // Feedback turnaround
-        const turnaroundDays: number[] = [];
-        const gradeMap: Record<string, any> = {};
-        grades.forEach(d => { gradeMap[d.submission_id] = d; });
-        subs.forEach(d => {
-          const grade = gradeMap[d.id];
-          if (grade?.created_at && d.submitted_at) {
-            const diff = (new Date(grade.created_at).getTime() - new Date(d.submitted_at).getTime()) / (1000 * 60 * 60 * 24);
-            if (diff >= 0) turnaroundDays.push(diff);
-          }
+        const derived = deriveAccreditationMetrics({
+          grades,
+          submissions: subs,
+          assignments,
+          profiles,
         });
-        const avgTurnaround = turnaroundDays.length > 0 ? Math.round(turnaroundDays.reduce((a, b) => a + b, 0) / turnaroundDays.length) : 0;
-        const compliantCount = turnaroundDays.filter(d => d <= 15).length;
-        setFeedbackTurnaround({ avg: avgTurnaround, target: 15, compliant: compliantCount, total: turnaroundDays.length });
-
-        const withRubric = assignments.filter(d => {
-          const r = d.rubric;
-          return r && Array.isArray(r) && (r as any[]).length > 0;
-        }).length;
-        const rubricPct = assignments.length > 0 ? Math.round((withRubric / assignments.length) * 100) : 0;
-
-        const moderated = grades.filter(d => d.reviewed_by || d.lecturer_score != null).length;
-        const moderationPct = grades.length > 0 ? Math.round((moderated / grades.length) * 100) : 0;
-
-        const released = subs.filter(d => d.status === "released").length;
-        const releasedPct = subs.length > 0 ? Math.round((released / subs.length) * 100) : 0;
-
-        const metrics: QAAMetric[] = [
-          {
-            id: "criteria-transparency", category: "Assessment Design",
-            metric: "Assessment Criteria Transparency", value: rubricPct, target: 100,
-            status: rubricPct >= 90 ? "met" : rubricPct >= 70 ? "at-risk" : "below",
-            detail: `${withRubric}/${assignments.length} assignments have published rubrics`,
-          },
-          {
-            id: "feedback-turnaround", category: "Feedback Quality",
-            metric: "Feedback Turnaround (<=15 days)", value: turnaroundDays.length > 0 ? Math.round((compliantCount / turnaroundDays.length) * 100) : 0, target: 90,
-            status: compliantCount >= turnaroundDays.length * 0.9 ? "met" : compliantCount >= turnaroundDays.length * 0.7 ? "at-risk" : "below",
-            detail: `${compliantCount}/${turnaroundDays.length} submissions graded within 15 days (avg: ${avgTurnaround} days)`,
-          },
-          {
-            id: "moderation", category: "Quality Assurance",
-            metric: "Moderation Evidence", value: moderationPct, target: 100,
-            status: moderationPct >= 90 ? "met" : moderationPct >= 70 ? "at-risk" : "below",
-            detail: `${moderated}/${grades.length} grades have lecturer review/moderation`,
-          },
-          {
-            id: "pass-rate", category: "Student Outcomes",
-            metric: "Module Pass Rate", value: passRate, target: 75,
-            status: passRate >= 75 ? "met" : passRate >= 65 ? "at-risk" : "below",
-            detail: `${scores.filter(s => s >= 40).length}/${scores.length} students passed (>=40%)`,
-          },
-          {
-            id: "completion", category: "Student Engagement",
-            metric: "Assessment Completion Rate", value: completionRate, target: 85,
-            status: completionRate >= 85 ? "met" : completionRate >= 70 ? "at-risk" : "below",
-            detail: `${subs.length} submissions across ${assignments.length} assignments`,
-          },
-          {
-            id: "grade-release", category: "Feedback Quality",
-            metric: "Grade Release Rate", value: releasedPct, target: 95,
-            status: releasedPct >= 95 ? "met" : releasedPct >= 80 ? "at-risk" : "below",
-            detail: `${released}/${subs.length} grades released to students`,
-          },
-          {
-            id: "graded", category: "Quality Assurance",
-            metric: "Graded Submissions", value: gradedPct, target: 95,
-            status: gradedPct >= 95 ? "met" : gradedPct >= 80 ? "at-risk" : "below",
-            detail: `${grades.length}/${subs.length} submissions graded`,
-          },
-          {
-            id: "avg-score", category: "Student Outcomes",
-            metric: "Average Assessment Score", value: avgScore, target: 55,
-            status: avgScore >= 55 ? "met" : avgScore >= 45 ? "at-risk" : "below",
-            detail: `Mean score across all graded submissions`,
-          },
-        ];
-
-        setQaaMetrics(metrics);
-
-        // Derive NSS-style metrics from real data
-        const rubricClarityScore = rubricPct;
-        const feedbackTimelinessScore = turnaroundDays.length > 0 ? Math.min(Math.round((compliantCount / turnaroundDays.length) * 100), 100) : 0;
-        const feedbackHelpfulness = grades.filter(g => ensureString(g.ai_feedback).length > 100).length;
-        const feedbackHelpPct = grades.length > 0 ? Math.min(Math.round((feedbackHelpfulness / grades.length) * 100), 100) : 0;
-        const organisationScore = assignments.filter(a => a.due_date && a.description).length;
-        const orgPct = assignments.length > 0 ? Math.min(Math.round((organisationScore / assignments.length) * 100), 100) : 0;
-        const overallSat = scores.length > 0 ? Math.min(Math.round(avgScore * 1.1), 100) : 0;
-
-        setNssMetrics([
-          { question: "Assessment criteria are clear in advance", score: rubricClarityScore, benchmark: 78, trend: rubricClarityScore >= 78 ? `+${rubricClarityScore - 78}%` : `${rubricClarityScore - 78}%` },
-          { question: "Feedback has been timely", score: feedbackTimelinessScore, benchmark: 72, trend: feedbackTimelinessScore >= 72 ? `+${feedbackTimelinessScore - 72}%` : `${feedbackTimelinessScore - 72}%` },
-          { question: "Feedback has helped clarify things", score: feedbackHelpPct, benchmark: 75, trend: feedbackHelpPct >= 75 ? `+${feedbackHelpPct - 75}%` : `${feedbackHelpPct - 75}%` },
-          { question: "The course is well organised", score: orgPct, benchmark: 77, trend: orgPct >= 77 ? `+${orgPct - 77}%` : `${orgPct - 77}%` },
-          { question: "Assessment is fair", score: passRate, benchmark: 80, trend: passRate >= 80 ? `+${passRate - 80}%` : `${passRate - 80}%` },
-          { question: "Overall satisfaction with quality", score: overallSat, benchmark: 80, trend: overallSat >= 80 ? `+${overallSat - 80}%` : `${overallSat - 80}%` },
-        ]);
-
-        // Derive TEF indicators from real data
-        const teachingScore = Math.min(Math.round((rubricClarityScore * 0.4 + feedbackHelpPct * 0.3 + orgPct * 0.3)), 100);
-        const outcomeScore = Math.min(Math.round((passRate * 0.5 + avgScore * 0.5)), 100);
-        const feedbackScore = Math.min(Math.round((feedbackTimelinessScore * 0.5 + feedbackHelpPct * 0.3 + moderationPct * 0.2)), 100);
-        const engagementScore = Math.min(Math.round((completionRate * 0.6 + gradedPct * 0.4)), 100);
-
-        setTefIndicators([
-          { name: "Teaching Quality", rating: tefRating(teachingScore), score: teachingScore, detail: `Based on rubric clarity (${rubricClarityScore}%), feedback quality, and organisation` },
-          { name: "Student Outcomes", rating: tefRating(outcomeScore), score: outcomeScore, detail: `Pass rate: ${passRate}%, average score: ${avgScore}%` },
-          { name: "Assessment & Feedback", rating: tefRating(feedbackScore), score: feedbackScore, detail: `Turnaround compliance: ${feedbackTimelinessScore}%, moderation: ${moderationPct}%` },
-          { name: "Student Engagement", rating: tefRating(engagementScore), score: engagementScore, detail: `Completion rate: ${completionRate}%, grading rate: ${gradedPct}%` },
-        ]);
+        setQaaMetrics(derived.qaaMetrics);
+        setNssMetrics(derived.nssMetrics);
+        setTefIndicators(derived.tefIndicators);
+        setFeedbackTurnaround(derived.feedbackTurnaround);
+        setLoadError(false);
       } catch (err) {
         console.error("Failed to fetch accreditation data:", err);
         setQaaMetrics([]);
         setNssMetrics([]);
         setTefIndicators([]);
+        setLoadError(true);
       }
       setLoading(false);
     };
@@ -255,26 +111,39 @@ const AccreditationDashboard = () => {
     return "bg-muted text-muted-foreground";
   };
 
-  const overallCompliance = qaaMetrics.length > 0
-    ? Math.round(qaaMetrics.filter(m => m.status === "met").length / qaaMetrics.length * 100) : 0;
-  const metCount = qaaMetrics.filter(m => m.status === "met").length;
-  const atRiskCount = qaaMetrics.filter(m => m.status === "at-risk").length;
-  const belowCount = qaaMetrics.filter(m => m.status === "below").length;
-  const nssAverage = nssMetrics.length > 0
-    ? Math.round(nssMetrics.reduce((sum, m) => sum + m.score, 0) / nssMetrics.length)
-    : 0;
-  const nssBenchmarkAverage = nssMetrics.length > 0
-    ? Math.round(nssMetrics.reduce((sum, m) => sum + m.benchmark, 0) / nssMetrics.length)
-    : 0;
-  const weakestQaaMetric = [...qaaMetrics].sort((left, right) => left.value - right.value)[0];
-  const weakestTefIndicator = [...tefIndicators].sort((left, right) => left.score - right.score)[0];
+  const summary = useMemo(() => {
+    const overallCompliance =
+      qaaMetrics.length > 0
+        ? Math.round((qaaMetrics.filter((metric) => metric.status === "met").length / qaaMetrics.length) * 100)
+        : 0;
+    const metCount = qaaMetrics.filter((metric) => metric.status === "met").length;
+    const atRiskCount = qaaMetrics.filter((metric) => metric.status === "at-risk").length;
+    const belowCount = qaaMetrics.filter((metric) => metric.status === "below").length;
+    const nssAverage =
+      nssMetrics.length > 0 ? Math.round(nssMetrics.reduce((sum, metric) => sum + metric.score, 0) / nssMetrics.length) : 0;
+    const nssBenchmarkAverage =
+      nssMetrics.length > 0
+        ? Math.round(nssMetrics.reduce((sum, metric) => sum + metric.benchmark, 0) / nssMetrics.length)
+        : 0;
+
+    return {
+      overallCompliance,
+      metCount,
+      atRiskCount,
+      belowCount,
+      nssAverage,
+      nssBenchmarkAverage,
+      weakestQaaMetric: [...qaaMetrics].sort((left, right) => left.value - right.value)[0],
+      weakestTefIndicator: [...tefIndicators].sort((left, right) => left.score - right.score)[0],
+    };
+  }, [nssMetrics, qaaMetrics, tefIndicators]);
 
   const exportQAAReport = () => {
     const lines = ["QAA Compliance Report — GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
     lines.push("Metric,Value,Target,Status,Detail");
     qaaMetrics.forEach(m => lines.push(`"${m.metric}",${m.value}%,${m.target}%,${m.status},"${m.detail}"`));
-    lines.push("", `Overall Compliance: ${overallCompliance}%`);
-    lines.push(`Met: ${metCount}, At Risk: ${atRiskCount}, Below: ${belowCount}`);
+    lines.push("", `Overall Compliance: ${summary.overallCompliance}%`);
+    lines.push(`Met: ${summary.metCount}, At Risk: ${summary.atRiskCount}, Below: ${summary.belowCount}`);
 
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -300,7 +169,9 @@ const AccreditationDashboard = () => {
       {!isDemo && qaaMetrics.length === 0 && (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
-            Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading.
+            {loadError
+              ? "Accreditation metrics could not be loaded right now. Try again later."
+              : "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading."}
           </CardContent>
         </Card>
       )}
@@ -312,12 +183,12 @@ const AccreditationDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Overall Compliance</p>
-                <p className="text-2xl font-bold font-display">{overallCompliance}%</p>
+                <p className="text-2xl font-bold font-display">{summary.overallCompliance}%</p>
               </div>
               <Award className="h-8 w-8 text-primary" />
             </div>
             <div className="mt-3">
-              <MetricBar value={overallCompliance} />
+              <MetricBar value={summary.overallCompliance} />
             </div>
           </CardContent>
         </Card>
@@ -326,7 +197,7 @@ const AccreditationDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Standards Met</p>
-                <p className="text-2xl font-bold font-display text-success">{metCount}</p>
+                <p className="text-2xl font-bold font-display text-success">{summary.metCount}</p>
               </div>
               <CheckCircle className="h-8 w-8 text-success" />
             </div>
@@ -337,7 +208,7 @@ const AccreditationDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">At Risk</p>
-                <p className="text-2xl font-bold font-display text-warning">{atRiskCount}</p>
+                <p className="text-2xl font-bold font-display text-warning">{summary.atRiskCount}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-warning" />
             </div>
@@ -348,7 +219,7 @@ const AccreditationDashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Below Target</p>
-                <p className="text-2xl font-bold font-display text-destructive">{belowCount}</p>
+                <p className="text-2xl font-bold font-display text-destructive">{summary.belowCount}</p>
               </div>
               <XCircle className="h-8 w-8 text-destructive" />
             </div>
@@ -364,10 +235,10 @@ const AccreditationDashboard = () => {
         <CardContent className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg border p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weakest compliance area</p>
-            <p className="mt-2 text-sm font-semibold">{weakestQaaMetric?.metric || "No compliance data yet"}</p>
+            <p className="mt-2 text-sm font-semibold">{summary.weakestQaaMetric?.metric || "No compliance data yet"}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {weakestQaaMetric
-                ? `${weakestQaaMetric.value}% against a ${weakestQaaMetric.target}% target. This is the first metric you would be asked to explain.`
+              {summary.weakestQaaMetric
+                ? `${summary.weakestQaaMetric.value}% against a ${summary.weakestQaaMetric.target}% target. This is the first metric you would be asked to explain.`
                 : "Populate assignments, submissions, and grading to generate live compliance findings."}
             </p>
           </div>
@@ -386,10 +257,10 @@ const AccreditationDashboard = () => {
           </div>
           <div className="rounded-lg border p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">TEF watch area</p>
-            <p className="mt-2 text-sm font-semibold">{weakestTefIndicator?.name || "No TEF indicator yet"}</p>
+            <p className="mt-2 text-sm font-semibold">{summary.weakestTefIndicator?.name || "No TEF indicator yet"}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {weakestTefIndicator
-                ? `${weakestTefIndicator.score}% with a ${weakestTefIndicator.rating} rating. This is the weakest evidence line in the current dataset.`
+              {summary.weakestTefIndicator
+                ? `${summary.weakestTefIndicator.score}% with a ${summary.weakestTefIndicator.rating} rating. This is the weakest evidence line in the current dataset.`
                 : "TEF-style indicators become meaningful after more grading and release activity."}
             </p>
           </div>
@@ -552,8 +423,8 @@ const AccreditationDashboard = () => {
               ))}
               <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">Overall NSS Score</p>
-                <p className="text-2xl font-bold font-display text-foreground">{nssAverage}%</p>
-                <p className="text-xs mt-1">Benchmark average: {nssBenchmarkAverage}%</p>
+                <p className="text-2xl font-bold font-display text-foreground">{summary.nssAverage}%</p>
+                <p className="text-xs mt-1">Benchmark average: {summary.nssBenchmarkAverage}%</p>
               </div>
             </CardContent>
           </Card>
@@ -624,46 +495,13 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
         if (submissionsError) throw submissionsError;
         if (gradesError) throw gradesError;
 
-        const assignments = assignmentsRaw || [];
-        const subs = subsRaw || [];
-        const grades = gradesRaw || [];
-
-        const gradeBySubmission: Record<string, number> = {};
-        grades.forEach(d => {
-          const score = ensureNumber(d.final_score ?? d.ai_score);
-          if (score != null) gradeBySubmission[d.submission_id] = score;
-        });
-
-        const modules: Record<string, { title: string; scores: number[]; submissions: number; total: number }> = {};
-        assignments.forEach(d => {
-          const key = d.module_code || "Unassigned";
-          if (!modules[key]) modules[key] = { title: d.title, scores: [], submissions: 0, total: 0 };
-        });
-
-        subs.forEach(d => {
-          const assignment = assignments.find(a => a.id === d.assignment_id);
-          if (assignment) {
-            const key = assignment.module_code || "Unassigned";
-            if (modules[key]) {
-              modules[key].submissions++;
-              const score = gradeBySubmission[d.id];
-              if (score != null) modules[key].scores.push(score);
-            }
-          }
-        });
-
-        const programmeData = Object.entries(modules).map(([code, data]) => {
-          const avg = data.scores.length > 0 ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length) : 0;
-          const passRate = data.scores.length > 0 ? Math.round((data.scores.filter(s => s >= 40).length / data.scores.length) * 100) : 0;
-          const firstClass = data.scores.length > 0 ? Math.round((data.scores.filter(s => s >= 70).length / data.scores.length) * 100) : 0;
-          const twoOne = data.scores.length > 0 ? Math.round((data.scores.filter(s => s >= 60 && s < 70).length / data.scores.length) * 100) : 0;
-          const twoTwo = data.scores.length > 0 ? Math.round((data.scores.filter(s => s >= 50 && s < 60).length / data.scores.length) * 100) : 0;
-          const third = data.scores.length > 0 ? Math.round((data.scores.filter(s => s >= 40 && s < 50).length / data.scores.length) * 100) : 0;
-          const fail = data.scores.length > 0 ? Math.round((data.scores.filter(s => s < 40).length / data.scores.length) * 100) : 0;
-          return { code, submissions: data.submissions, graded: data.scores.length, avg, passRate, firstClass, twoOne, twoTwo, third, fail };
-        });
-
-        setProgrammes(programmeData);
+        setProgrammes(
+          deriveProgrammeReports({
+            assignments: assignmentsRaw || [],
+            submissions: subsRaw || [],
+            grades: gradesRaw || [],
+          })
+        );
       } catch (err) { console.error(err); }
       setLoading(false);
     };
