@@ -2,10 +2,12 @@
 
 GradeAI is an academic intelligence platform for higher education assessment workflows. It brings assignment setup, AI-assisted grading, academic integrity review, moderation, release, analytics, and student support into one connected system.
 
-The product philosophy is simple: AI should do the repetitive analytical work, while lecturers remain responsible for the academic decisions.
+The idea behind the product is simple: AI should handle the repetitive analytical work, while lecturers remain responsible for the academic decisions.
 
 Live deployment:
 - `https://gradeai.pages.dev`
+
+GradeAI is designed around the full assessment lifecycle rather than a single AI grading feature. The aim is to make marking, moderation, integrity review, release, and follow-up support feel like parts of one coherent workflow instead of a collection of disconnected tools.
 
 ## What The Platform Covers
 
@@ -18,6 +20,8 @@ Live deployment:
 - cohort analytics and explainable recommendations
 - student risk tracking and intervention logging
 - student-facing feedback, improvement plans, and AI tutoring
+
+In practice, that means a lecturer can move from creating an assignment, to grading, to moderation, to release, to cohort-level reflection without leaving the platform.
 
 ## Workflow Snapshot
 
@@ -90,7 +94,7 @@ It now distinguishes between:
 - uncited overlap
 - reference sections
 
-Reference sections such as `References`, `Bibliography`, and `Works Cited` are excluded from scoring. Quoted or cited material is still shown to lecturers, but labeled as lower-risk cited material rather than treated the same way as uncited copying.
+Reference sections such as `References`, `Bibliography`, and `Works Cited` are excluded from scoring. Quoted or cited material is still shown to lecturers, but it is labelled clearly as lower-risk cited material rather than being treated the same way as uncited copying.
 
 Overlap is split into:
 - `total_overlap`
@@ -101,7 +105,7 @@ Overlap is split into:
 
 ### PDF extraction quality
 
-The integrity pipeline now checks extraction quality before similarity analysis. If a PDF is dominated by object streams, metadata, or unreadable artefacts, the result is marked as **analysis limited** instead of being shown as a normal low-risk result.
+The integrity pipeline checks extraction quality before similarity analysis. If a PDF is dominated by object streams, metadata, or unreadable artefacts, the result is marked as **analysis limited** instead of being presented as a normal low-risk result.
 
 ### Moderation
 
@@ -130,6 +134,8 @@ Examples include:
 - weak rubric criteria
 - high-risk student clusters
 - integrity spikes
+
+The intention is to support lecturer judgement with signals and context, not to hide decisions behind opaque scoring.
 
 ## Technology Stack
 
@@ -220,6 +226,8 @@ Current browser-level coverage includes:
 - student visibility boundaries for approved vs released grades
 - academic integrity smoke flow for reviewing and saving a decision
 
+Live browser verification has also been completed on the deployed environment for the core lecturer and student flows, so the current branch is no longer relying only on local or mocked confidence.
+
 ## Operational Checklists
 
 For final verification and presentation readiness, use:
@@ -245,7 +253,7 @@ High-trust workflows in this repo depend on the database layer, not just the UI.
 - audit logging triggers
 - integrity review constraints
 
-If the app behavior and the database drift apart, trust boundaries become unreliable.
+If the app layer and database layer drift apart, the trust boundary becomes weaker very quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
 ### Migration history note
 
@@ -290,6 +298,7 @@ The strongest areas are:
 - moderation and audit direction
 - integrity pipeline improvements
 - growing automated coverage around critical flows
+- successful live verification of the core deployed workflows
 
 The main work still worth doing is operational hardening:
 - more live-environment verification

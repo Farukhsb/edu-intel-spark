@@ -46,6 +46,12 @@ import { queueCommunicationMessage } from "@/lib/communications";
 import type { Tables } from "@/integrations/supabase/types";
 import { evaluateModerationSignals, formatSubmissionStatus } from "@/lib/moderation";
 import {
+  buildModerationAuditPayload,
+  buildModerationCasePayload,
+  insertModerationAuditEntry,
+  upsertModerationCase,
+} from "@/lib/moderationWorkflow";
+import {
   canReleaseStatus,
   getApprovalBlockReason,
   getAssessmentSummary,
@@ -798,17 +804,20 @@ const AssignmentDetail = () => {
   }) => {
     if (!user) return;
 
-    const { error } = await supabase.from("grade_audit_log").insert({
-      submission_id: submissionId,
-      grade_id: gradeId ?? null,
-      moderation_case_id: moderationCaseId ?? null,
-      changed_by: user.id,
-      event_type: eventType,
-      actor_role: actorRole,
-      previous_values: previousValues ?? {},
-      new_values: newValues ?? {},
-      reason: reason ?? null,
-    });
+    const { error } = await insertModerationAuditEntry(
+      supabase,
+      buildModerationAuditPayload({
+        submissionId,
+        gradeId: gradeId ?? null,
+        moderationCaseId: moderationCaseId ?? null,
+        changedBy: user.id,
+        eventType,
+        actorRole,
+        previousValues,
+        newValues,
+        reason: reason ?? null,
+      })
+    );
 
     if (error) {
       console.warn("Failed to write grade audit log:", error);
@@ -833,32 +842,24 @@ const AssignmentDetail = () => {
     });
 
     const existingCase = moderationCases[submission.id];
-    const payload = {
-      submission_id: submission.id,
-      assignment_id: assignment.id,
-      grade_id: grade.id,
-      lecturer_id: assignment.lecturer_id,
-      first_marker_id: user.id,
-      moderator_id: existingCase?.moderator_id ?? null,
-      status,
-      trigger_flags: moderationResult.triggerFlags,
-      trigger_summary: moderationResult.triggerSummary || null,
-      confidence_score: moderationResult.confidenceScore,
-      integrity_risk_score: moderationResult.integrityRiskScore,
-      ai_score_snapshot: grade.ai_score,
-      first_marker_score: grade.lecturer_score,
-      moderator_score: existingCase?.moderator_score ?? null,
-      final_agreed_score: existingCase?.final_agreed_score ?? null,
-      final_agreed_feedback: existingCase?.final_agreed_feedback ?? null,
-      moderated_at: status === "moderated" ? new Date().toISOString() : existingCase?.moderated_at ?? null,
-      approved_at: existingCase?.approved_at ?? null,
-    };
-
-    const { data, error } = await supabase
-      .from("moderation_cases")
-      .upsert(payload, { onConflict: "submission_id" })
-      .select()
-      .single();
+    const { data, error } = await upsertModerationCase(
+      supabase,
+      buildModerationCasePayload({
+        submissionId: submission.id,
+        assignmentId: assignment.id,
+        gradeId: grade.id,
+        lecturerId: assignment.lecturer_id,
+        firstMarkerId: user.id,
+        status,
+        aiScoreSnapshot: grade.ai_score,
+        firstMarkerScore: grade.lecturer_score,
+        triggerFlags: moderationResult.triggerFlags,
+        triggerSummary: moderationResult.triggerSummary || null,
+        confidenceScore: moderationResult.confidenceScore,
+        integrityRiskScore: moderationResult.integrityRiskScore,
+        existingCase,
+      })
+    );
 
     if (error) {
       throw error;

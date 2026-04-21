@@ -26,6 +26,17 @@ import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
 import { toast } from "sonner";
 import {
+  buildManualInterventionPayload,
+  fetchStudentInterventions,
+  getInterventionErrorText,
+  insertManualIntervention,
+  normalizeManualInterventionStatus,
+  normalizeManualInterventionType,
+  type InterventionEntry,
+  type ManualInterventionStatus,
+  type ManualInterventionType,
+} from "@/lib/interventions";
+import {
   CartesianGrid,
   Line,
   LineChart,
@@ -38,49 +49,6 @@ import {
 const ASSIGNMENT_FIELDS = "id, title, module_code, due_date, max_score";
 const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
 const GRADE_FIELDS = "submission_id, ai_score, final_score";
-
-type InterventionType = "email" | "meeting" | "feedback" | "referral";
-type InterventionStatus = "ongoing" | "resolved";
-
-const normalizeInterventionType = (value: string): InterventionType => {
-  if (value === "email" || value === "meeting" || value === "feedback" || value === "referral") {
-    return value;
-  }
-  return "email";
-};
-
-const normalizeInterventionStatus = (value: string): InterventionStatus => {
-  if (value === "ongoing" || value === "resolved") {
-    return value;
-  }
-  return "ongoing";
-};
-
-interface InterventionEntry {
-  id: string;
-  createdAt: string;
-  type: InterventionType;
-  note: string;
-  followUpDate: string | null;
-  status: InterventionStatus;
-}
-
-interface StudentInterventionRow {
-  id: string;
-  lecturer_id: string;
-  student_id: string;
-  student_name?: string | null;
-  student_email?: string | null;
-  intervention_type: InterventionType;
-  status: InterventionStatus;
-  priority?: string | null;
-  title?: string | null;
-  notes?: string | null;
-  follow_up_date?: string | null;
-  assignment_id?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-}
 
 interface StudentAssignment {
   id: string;
@@ -130,9 +98,6 @@ const UUID_PATTERN =
 const isUuid = (value: string | null | undefined): value is string =>
   typeof value === "string" && UUID_PATTERN.test(value);
 
-const getSupabaseErrorText = (error: { message?: string; details?: string; hint?: string } | null) =>
-  [error?.message, error?.details, error?.hint].filter(Boolean).join(" | ");
-
 const StudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
@@ -142,8 +107,8 @@ const StudentProfile = () => {
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<StudentInsightData | null>(null);
   const [interventions, setInterventions] = useState<InterventionEntry[]>([]);
-  const [interventionType, setInterventionType] = useState<InterventionType>("email");
-  const [interventionStatus, setInterventionStatus] = useState<InterventionStatus>("ongoing");
+  const [interventionType, setInterventionType] = useState<ManualInterventionType>("email");
+  const [interventionStatus, setInterventionStatus] = useState<ManualInterventionStatus>("ongoing");
   const [interventionNote, setInterventionNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const resolvedStudentRecordId =
@@ -361,34 +326,19 @@ const StudentProfile = () => {
     return "steady";
   }, [student]);
 
-  const mapInterventionRow = (row: StudentInterventionRow): InterventionEntry => ({
-    id: row.id,
-    createdAt: row.created_at || row.updated_at || new Date().toISOString(),
-    type: row.intervention_type,
-    note: row.notes || "",
-    followUpDate: row.follow_up_date || null,
-    status: row.status,
-  });
-
   useEffect(() => {
     if (!user?.id || !resolvedStudentRecordId || isDemo) return;
 
     const loadInterventions = async () => {
-      const supabaseClient = supabase as any;
-      const { data, error } = await supabaseClient
-        .from("student_interventions")
-        .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, priority, title, notes, follow_up_date, assignment_id, created_at, updated_at")
-        .eq("lecturer_id", user.id)
-        .eq("student_id", resolvedStudentRecordId)
-        .order("created_at", { ascending: false });
+      const { data, error } = await fetchStudentInterventions(supabase, user.id, resolvedStudentRecordId);
 
       if (error) {
         console.error("Failed to load interventions:", error);
-        toast.error(getSupabaseErrorText(error) || "Could not load intervention history");
+        toast.error(getInterventionErrorText(error) || "Could not load intervention history");
         return;
       }
 
-      setInterventions(((data || []) as StudentInterventionRow[]).map(mapInterventionRow));
+      setInterventions(data || []);
     };
 
     void loadInterventions();
@@ -425,40 +375,32 @@ const StudentProfile = () => {
       return;
     }
 
-    const safeInterventionType = normalizeInterventionType(interventionType);
-    const safeInterventionStatus = normalizeInterventionStatus(interventionStatus);
-    const supabaseClient = supabase as any;
-    const payload = {
-      lecturer_id: user.id,
-      student_id: resolvedStudentRecordId,
-      student_name: student.name,
-      student_email: student.email,
-      intervention_type: safeInterventionType,
-      title: `${safeInterventionType.charAt(0).toUpperCase()}${safeInterventionType.slice(1)} intervention`,
-      notes: interventionNote.trim(),
-      priority: student.riskLevel === "critical" || student.riskLevel === "high" ? "high" : "medium",
-      follow_up_date: followUpDate || null,
-      status: safeInterventionStatus,
-      assignment_id: null,
-      updated_at: new Date().toISOString(),
-    };
+    const safeInterventionType = normalizeManualInterventionType(interventionType);
+    const safeInterventionStatus = normalizeManualInterventionStatus(interventionStatus);
+    const payload = buildManualInterventionPayload({
+      lecturerId: user.id,
+      studentId: resolvedStudentRecordId,
+      studentName: student.name,
+      studentEmail: student.email,
+      interventionType: safeInterventionType,
+      interventionStatus: safeInterventionStatus,
+      note: interventionNote,
+      followUpDate: followUpDate || null,
+      riskLevel: student.riskLevel,
+    });
 
-    const { data, error } = await supabaseClient
-      .from("student_interventions")
-      .insert(payload)
-      .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, priority, title, notes, follow_up_date, assignment_id, created_at, updated_at")
-      .single();
+    const { data, error } = await insertManualIntervention(supabase, payload);
 
     if (error) {
       console.error("Failed to save intervention:", error);
       toast.error(
-        getSupabaseErrorText(error) ||
+        getInterventionErrorText(error) ||
           `Could not save intervention (type: ${safeInterventionType}, status: ${safeInterventionStatus})`
       );
       return;
     }
 
-    setInterventions((current) => [mapInterventionRow(data as StudentInterventionRow), ...current]);
+    setInterventions((current) => (data ? [data, ...current] : current));
     setInterventionNote("");
     setFollowUpDate("");
     setInterventionType("email");
@@ -777,7 +719,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Intervention type</Label>
-                <Select value={interventionType} onValueChange={(value) => setInterventionType(normalizeInterventionType(value))}>
+                <Select value={interventionType} onValueChange={(value) => setInterventionType(normalizeManualInterventionType(value))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -791,7 +733,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={interventionStatus} onValueChange={(value) => setInterventionStatus(normalizeInterventionStatus(value))}>
+                <Select value={interventionStatus} onValueChange={(value) => setInterventionStatus(normalizeManualInterventionStatus(value))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
