@@ -288,6 +288,16 @@ npx supabase functions deploy grade-submission
 npx supabase functions deploy check-plagiarism
 ```
 
+## Recent Improvements
+
+A few areas of the platform were tightened up recently to make the product feel more reliable in day-to-day use.
+
+- moderation permissions were aligned between local and hosted policy state, and the moderation workflow was rechecked against the current migration chain
+- moderation UI coverage now includes nullable fallback cases, so missing linked submission data is handled explicitly and tested
+- route-level lazy loading was improved to reduce the main frontend bundle
+- export and chart-heavy vendor buckets were split more conservatively, so those libraries load closer to the routes and actions that actually use them
+- React Router future flags were enabled early to remove upgrade warnings and keep the app closer to upcoming router behavior
+
 ## Current State
 
 This project is best described as a fast-moving integrated prototype with hardened core workflows. It is no longer just a UI demo, but it is also not pretending to be a fully finished institutional platform.
