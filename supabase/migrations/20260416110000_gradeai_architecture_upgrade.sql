@@ -28,7 +28,7 @@ USING (
   EXISTS (
     SELECT 1
     FROM public.submissions s
-    JOIN public.assignments a ON a.id = s.assignment_id
+    JOIN public.assignments a ON a.id::text = s.assignment_id
     WHERE s.student_id = public.student_writing_profiles.student_id
       AND a.lecturer_id = auth.uid()
   )

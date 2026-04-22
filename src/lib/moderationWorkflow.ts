@@ -13,7 +13,7 @@ export type IntegrityReviewRow = Tables<"academic_integrity_reviews">;
 
 export interface ModerationCaseView {
   moderationCase: ModerationCaseRow;
-  submission: SubmissionRow;
+  submission: SubmissionRow | null;
   grade: GradeRow | null;
   assignment: AssignmentRow | null;
   firstMarker: ProfileRow | null;
@@ -239,24 +239,17 @@ export async function fetchModerationCaseViews(
     auditBySubmission.set(entry.submission_id, current);
   }
 
-  const cases = moderationCases
-    .map((moderationCase) => {
-      const submission = submissionsById.get(moderationCase.submission_id);
-      if (!submission) return null;
-
-      return {
-        moderationCase,
-        submission,
-        grade: moderationCase.grade_id ? gradesById.get(moderationCase.grade_id) || null : null,
-        assignment: assignmentsById.get(moderationCase.assignment_id) || null,
-        firstMarker: moderationCase.first_marker_id ? profilesById.get(moderationCase.first_marker_id) || null : null,
-        moderator: moderationCase.moderator_id ? profilesById.get(moderationCase.moderator_id) || null : null,
-        integrityReview: integrityBySubmission.get(moderationCase.submission_id) || null,
-        reviews: reviewsByCase.get(moderationCase.id) || [],
-        auditLog: auditBySubmission.get(moderationCase.submission_id) || [],
-      } satisfies ModerationCaseView;
-    })
-    .filter((item): item is ModerationCaseView => item !== null);
+  const cases = moderationCases.map((moderationCase) => ({
+    moderationCase,
+    submission: submissionsById.get(moderationCase.submission_id) || null,
+    grade: moderationCase.grade_id ? gradesById.get(moderationCase.grade_id) || null : null,
+    assignment: assignmentsById.get(moderationCase.assignment_id) || null,
+    firstMarker: moderationCase.first_marker_id ? profilesById.get(moderationCase.first_marker_id) || null : null,
+    moderator: moderationCase.moderator_id ? profilesById.get(moderationCase.moderator_id) || null : null,
+    integrityReview: integrityBySubmission.get(moderationCase.submission_id) || null,
+    reviews: reviewsByCase.get(moderationCase.id) || [],
+    auditLog: auditBySubmission.get(moderationCase.submission_id) || [],
+  }) satisfies ModerationCaseView[]);
 
   return { cases, lecturers };
 }

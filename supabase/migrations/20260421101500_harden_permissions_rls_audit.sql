@@ -30,7 +30,7 @@ CREATE POLICY "Lecturers can view own reviews"
     AND EXISTS (
       SELECT 1
       FROM public.submissions s
-      JOIN public.assignments a ON a.id = s.assignment_id
+      JOIN public.assignments a ON a.id::text = s.assignment_id
       WHERE s.id = submission_id
         AND a.lecturer_id = auth.uid()
     )
@@ -44,7 +44,7 @@ CREATE POLICY "Lecturers can insert own reviews"
     AND EXISTS (
       SELECT 1
       FROM public.submissions s
-      JOIN public.assignments a ON a.id = s.assignment_id
+      JOIN public.assignments a ON a.id::text = s.assignment_id
       WHERE s.id = submission_id
         AND a.lecturer_id = auth.uid()
     )
@@ -58,7 +58,7 @@ CREATE POLICY "Lecturers can update own reviews"
     AND EXISTS (
       SELECT 1
       FROM public.submissions s
-      JOIN public.assignments a ON a.id = s.assignment_id
+      JOIN public.assignments a ON a.id::text = s.assignment_id
       WHERE s.id = submission_id
         AND a.lecturer_id = auth.uid()
     )
@@ -68,7 +68,7 @@ CREATE POLICY "Lecturers can update own reviews"
     AND EXISTS (
       SELECT 1
       FROM public.submissions s
-      JOIN public.assignments a ON a.id = s.assignment_id
+      JOIN public.assignments a ON a.id::text = s.assignment_id
       WHERE s.id = submission_id
         AND a.lecturer_id = auth.uid()
     )
@@ -82,7 +82,7 @@ CREATE POLICY "Lecturers can delete own reviews"
     AND EXISTS (
       SELECT 1
       FROM public.submissions s
-      JOIN public.assignments a ON a.id = s.assignment_id
+      JOIN public.assignments a ON a.id::text = s.assignment_id
       WHERE s.id = submission_id
         AND a.lecturer_id = auth.uid()
     )
@@ -272,7 +272,7 @@ CREATE POLICY "Lecturers can view own interventions"
       OR EXISTS (
         SELECT 1
         FROM public.submissions s
-        JOIN public.assignments a ON a.id = s.assignment_id
+        JOIN public.assignments a ON a.id::text = s.assignment_id
         WHERE s.student_id = student_interventions.student_id
           AND a.lecturer_id = auth.uid()
       )
@@ -298,7 +298,7 @@ CREATE POLICY "Lecturers can insert own interventions"
       OR EXISTS (
         SELECT 1
         FROM public.submissions s
-        JOIN public.assignments a ON a.id = s.assignment_id
+        JOIN public.assignments a ON a.id::text = s.assignment_id
         WHERE s.student_id = student_interventions.student_id
           AND a.lecturer_id = auth.uid()
       )
@@ -324,7 +324,7 @@ CREATE POLICY "Lecturers can update own interventions"
       OR EXISTS (
         SELECT 1
         FROM public.submissions s
-        JOIN public.assignments a ON a.id = s.assignment_id
+        JOIN public.assignments a ON a.id::text = s.assignment_id
         WHERE s.student_id = student_interventions.student_id
           AND a.lecturer_id = auth.uid()
       )
@@ -346,7 +346,7 @@ CREATE POLICY "Lecturers can update own interventions"
       OR EXISTS (
         SELECT 1
         FROM public.submissions s
-        JOIN public.assignments a ON a.id = s.assignment_id
+        JOIN public.assignments a ON a.id::text = s.assignment_id
         WHERE s.student_id = student_interventions.student_id
           AND a.lecturer_id = auth.uid()
       )
@@ -372,7 +372,7 @@ CREATE POLICY "Lecturers can delete own interventions"
       OR EXISTS (
         SELECT 1
         FROM public.submissions s
-        JOIN public.assignments a ON a.id = s.assignment_id
+        JOIN public.assignments a ON a.id::text = s.assignment_id
         WHERE s.student_id = student_interventions.student_id
           AND a.lecturer_id = auth.uid()
       )

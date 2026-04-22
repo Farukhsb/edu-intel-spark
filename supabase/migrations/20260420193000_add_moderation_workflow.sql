@@ -176,7 +176,7 @@ CREATE POLICY "Lecturers can view grade audit log"
     OR EXISTS (
       SELECT 1
       FROM public.submissions s
-      JOIN public.assignments a ON a.id = s.assignment_id
+      JOIN public.assignments a ON a.id::text = s.assignment_id
       WHERE s.id = submission_id
         AND a.lecturer_id = auth.uid()
     )
@@ -197,7 +197,7 @@ CREATE POLICY "Lecturers can insert grade audit log"
     OR EXISTS (
       SELECT 1
       FROM public.submissions s
-      JOIN public.assignments a ON a.id = s.assignment_id
+      JOIN public.assignments a ON a.id::text = s.assignment_id
       WHERE s.id = submission_id
         AND a.lecturer_id = auth.uid()
     )
