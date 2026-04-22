@@ -37,7 +37,7 @@ const renderAccreditationDashboard = async ({
   const { default: AccreditationDashboard } = await import("@/pages/dashboard/AccreditationDashboard");
 
   render(
-    <MemoryRouter>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AccreditationDashboard />
     </MemoryRouter>
   );
