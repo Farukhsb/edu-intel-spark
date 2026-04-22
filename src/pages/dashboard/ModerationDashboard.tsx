@@ -140,6 +140,11 @@ const ModerationDashboard = () => {
   };
 
   const assignModerator = async (item: ModerationCaseView) => {
+    if (!item.submission) {
+      toast.error("Submission details are unavailable for this moderation case.");
+      return;
+    }
+
     const moderatorId = moderatorDrafts[item.moderationCase.id];
     if (!moderatorId || moderatorId === "unassigned") {
       toast.error("Select a moderator first.");
@@ -182,6 +187,10 @@ const ModerationDashboard = () => {
 
   const saveAction = async (action: ModerationAction) => {
     if (!selectedCase || !user) return;
+    if (!selectedCase.submission) {
+      toast.error("Submission details are unavailable for this moderation case.");
+      return;
+    }
 
     const { moderationCase, submission, grade } = selectedCase;
     const resolvedScore =
@@ -334,7 +343,7 @@ const ModerationDashboard = () => {
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-medium">
-                          {item.submission.student_name || item.submission.student_email || "Student"}
+                          {item.submission?.student_name || item.submission?.student_email || "Student record unavailable"}
                         </p>
                         <Badge variant="outline">{formatSubmissionStatus(item.moderationCase.status)}</Badge>
                         {item.moderationCase.integrity_risk_score != null && item.moderationCase.integrity_risk_score >= 55 && (
@@ -343,7 +352,7 @@ const ModerationDashboard = () => {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {item.assignment?.title || "Assignment"} • Submitted{" "}
-                        {safeFormatDate(item.submission.submitted_at, "MMM d, yyyy HH:mm")}
+                        {safeFormatDate(item.submission?.submitted_at, "MMM d, yyyy HH:mm")}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         First marker: {item.firstMarker?.full_name || "Unassigned"} • Moderator:{" "}
@@ -372,6 +381,7 @@ const ModerationDashboard = () => {
                         data-testid={`moderation-review-open-${item.moderationCase.id}`}
                         size="sm"
                         variant="outline"
+                        disabled={!item.submission}
                         onClick={() => setSelectedCaseId(item.moderationCase.id)}
                       >
                         Review case
@@ -390,7 +400,7 @@ const ModerationDashboard = () => {
           <DialogHeader>
             <DialogTitle>Moderation Review</DialogTitle>
             <DialogDescription>
-              {selectedCase?.submission.student_name || selectedCase?.submission.student_email || "Student"} •{" "}
+              {selectedCase?.submission?.student_name || selectedCase?.submission?.student_email || "Student record unavailable"} •{" "}
               {selectedCase?.assignment?.title || "Assignment"}
             </DialogDescription>
           </DialogHeader>
@@ -443,7 +453,7 @@ const ModerationDashboard = () => {
                       data-testid={`moderation-assign-${selectedCase.moderationCase.id}`}
                       variant="outline"
                       className="w-full"
-                      disabled={saving || selectedCase.moderationCase.lecturer_id !== user?.id}
+                      disabled={saving || !selectedCase.submission || selectedCase.moderationCase.lecturer_id !== user?.id}
                       onClick={() => void assignModerator(selectedCase)}
                     >
                       Assign Moderator
@@ -490,19 +500,19 @@ const ModerationDashboard = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <Button data-testid="moderation-action-agree" variant="outline" disabled={saving} onClick={() => void saveAction("agree")}>
+                      <Button data-testid="moderation-action-agree" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => void saveAction("agree")}>
                         Agree
                       </Button>
-                      <Button data-testid="moderation-action-adjust" variant="outline" disabled={saving} onClick={() => void saveAction("adjust")}>
+                      <Button data-testid="moderation-action-adjust" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => void saveAction("adjust")}>
                         Adjust
                       </Button>
-                      <Button data-testid="moderation-action-return" variant="outline" disabled={saving} onClick={() => void saveAction("return")}>
+                      <Button data-testid="moderation-action-return" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => void saveAction("return")}>
                         Return
                       </Button>
-                      <Button data-testid="moderation-action-escalate" variant="outline" disabled={saving} onClick={() => void saveAction("escalate")}>
+                      <Button data-testid="moderation-action-escalate" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => void saveAction("escalate")}>
                         Escalate
                       </Button>
-                      <Button data-testid="moderation-action-approve" disabled={saving} onClick={() => void saveAction("approve")}>
+                      <Button data-testid="moderation-action-approve" disabled={saving || !selectedCase.submission} onClick={() => void saveAction("approve")}>
                         Approve
                       </Button>
                     </div>
@@ -567,3 +577,4 @@ const ModerationDashboard = () => {
 };
 
 export default ModerationDashboard;
+
