@@ -34,12 +34,6 @@ export default defineConfig(({ mode }) => ({
             if (id.includes("@supabase/")) {
               return "supabase-vendor";
             }
-            if (id.includes("recharts")) {
-              return "charts-vendor";
-            }
-            if (id.includes("jspdf") || id.includes("html2canvas")) {
-              return "export-vendor";
-            }
             if (id.includes("react-markdown") || id.includes("remark") || id.includes("rehype")) {
               return "markdown-vendor";
             }

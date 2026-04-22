@@ -9,13 +9,13 @@ import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import Install from "./pages/Install";
-import { DashboardLayout } from "./components/DashboardLayout";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 
+const Auth = lazy(() => import("./pages/Auth"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Install = lazy(() => import("./pages/Install"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const DashboardLayout = lazy(() => import("./components/DashboardLayout").then((module) => ({ default: module.DashboardLayout })));
 const LecturerOverview = lazy(() => import("./pages/dashboard/LecturerOverview"));
 const CohortAnalytics = lazy(() => import("./pages/dashboard/CohortAnalytics"));
 const PerformanceTrends = lazy(() => import("./pages/dashboard/PerformanceTrends"));
@@ -107,11 +107,13 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
   return (
     <ProtectedRoute>
       <RoleGate allowedRole={allowedRole}>
-        <DashboardLayout>
-          <AppErrorBoundary title="Dashboard page failed to load" resetKey={location.pathname}>
-            <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
-          </AppErrorBoundary>
-        </DashboardLayout>
+        <Suspense fallback={<DashboardSkeleton />}>
+          <DashboardLayout>
+            <AppErrorBoundary title="Dashboard page failed to load" resetKey={location.pathname}>
+              <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
+            </AppErrorBoundary>
+          </DashboardLayout>
+        </Suspense>
       </RoleGate>
     </ProtectedRoute>
   );
@@ -131,11 +133,18 @@ const App = () => (
       <Toaster />
       <Sonner />
       <NetworkStatus />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
+            <Route
+              path="/auth"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <Auth />
+                </Suspense>
+              }
+            />
             <Route
               path="/reset-password"
               element={
@@ -159,8 +168,22 @@ const App = () => (
             <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
             <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />
             <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
-            <Route path="/install" element={<Install />} />
-            <Route path="*" element={<NotFound />} />
+            <Route
+              path="/install"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <Install />
+                </Suspense>
+              }
+            />
+            <Route
+              path="*"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <NotFound />
+                </Suspense>
+              }
+            />
           </Routes>
         </AuthProvider>
       </BrowserRouter>
