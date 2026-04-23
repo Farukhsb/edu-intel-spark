@@ -21,6 +21,7 @@ const CohortAnalytics = lazy(() => import("./pages/dashboard/CohortAnalytics"));
 const PerformanceTrends = lazy(() => import("./pages/dashboard/PerformanceTrends"));
 const AcademicIntegrity = lazy(() => import("./pages/dashboard/AcademicIntegrity"));
 const ModerationDashboard = lazy(() => import("./pages/dashboard/ModerationDashboard"));
+const AdminDashboard = lazy(() => import("./pages/dashboard/AdminDashboard"));
 const InstitutionalInsights = lazy(() => import("./pages/dashboard/InstitutionalInsights"));
 const LearningOutcomes = lazy(() => import("./pages/dashboard/LearningOutcomes"));
 const StudentGrades = lazy(() => import("./pages/dashboard/StudentGrades"));
@@ -97,6 +98,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 const DashboardRouter = () => {
   const { role } = useAuth();
+  if (role === "admin") return <AdminDashboard />;
   if (role === "lecturer") return <LecturerOverview />;
   return <StudentGrades />;
 };
@@ -121,7 +123,8 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
 
 const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
   const { role } = useAuth();
-  if (allowedRole && role && role !== allowedRole) {
+  const resolvedRole = role === "admin" ? "lecturer" : role;
+  if (allowedRole && resolvedRole && resolvedRole !== allowedRole) {
     return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;

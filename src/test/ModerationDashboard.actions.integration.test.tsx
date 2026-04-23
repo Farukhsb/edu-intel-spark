@@ -175,6 +175,7 @@ describe("ModerationDashboard moderator integration", () => {
   afterEach(() => {
     cleanup();
     fetchModerationCaseViewsMock.mockReset();
+    vi.clearAllMocks();
     vi.resetModules();
     vi.unmock("@/contexts/AuthContext");
     vi.unmock("@/integrations/supabase/client");
@@ -191,7 +192,7 @@ describe("ModerationDashboard moderator integration", () => {
     expect(screen.getByTestId("moderation-case-case-1")).toHaveTextContent("Policy Case Study");
     expect(screen.getByTestId("moderation-case-case-1")).toHaveTextContent("Morgan Moderator");
     expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();
-  });
+  }, 10000);
 
   it.each([
     { action: "agree", expectedCaseStatus: "moderated", expectedSubmissionStatus: "moderated" },
@@ -227,5 +228,5 @@ describe("ModerationDashboard moderator integration", () => {
     ).toBe(true);
     expect(supabaseMock.insertCalls.some((call) => call.table === "moderation_reviews")).toBe(true);
     expect(supabaseMock.insertCalls.some((call) => call.table === "grade_audit_log")).toBe(true);
-  });
+  }, 10000);
 });

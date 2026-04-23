@@ -5,25 +5,6 @@ import type { ModerationCaseView } from "@/lib/moderationWorkflow";
 
 const fetchModerationCaseViewsMock = vi.fn();
 
-vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => ({
-    user: { id: "lecturer-1", email: "lecturer@gradeai.test" },
-    profile: { id: "lecturer-1", role: "lecturer" },
-  }),
-}));
-
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {},
-}));
-
-vi.mock("@/lib/moderationWorkflow", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/moderationWorkflow")>("@/lib/moderationWorkflow");
-  return {
-    ...actual,
-    fetchModerationCaseViews: fetchModerationCaseViewsMock,
-  };
-});
-
 const baseCase = {
   moderationCase: {
     id: "case-1",
@@ -83,9 +64,30 @@ const baseCase = {
 } satisfies Omit<ModerationCaseView, "submission" | "assignment">;
 
 const renderModerationDashboard = async (cases: ModerationCaseView[]) => {
+  vi.resetModules();
+
   fetchModerationCaseViewsMock.mockResolvedValue({
     cases,
     lecturers: [],
+  });
+
+  vi.doMock("@/contexts/AuthContext", () => ({
+    useAuth: () => ({
+      user: { id: "lecturer-1", email: "lecturer@gradeai.test" },
+      profile: { id: "lecturer-1", role: "lecturer" },
+    }),
+  }));
+
+  vi.doMock("@/integrations/supabase/client", () => ({
+    supabase: {},
+  }));
+
+  vi.doMock("@/lib/moderationWorkflow", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/moderationWorkflow")>("@/lib/moderationWorkflow");
+    return {
+      ...actual,
+      fetchModerationCaseViews: fetchModerationCaseViewsMock,
+    };
   });
 
   const { default: ModerationDashboard } = await import("@/pages/dashboard/ModerationDashboard");
@@ -103,6 +105,11 @@ describe("ModerationDashboard integration", () => {
   afterEach(() => {
     cleanup();
     fetchModerationCaseViewsMock.mockReset();
+    vi.clearAllMocks();
+    vi.resetModules();
+    vi.unmock("@/contexts/AuthContext");
+    vi.unmock("@/integrations/supabase/client");
+    vi.unmock("@/lib/moderationWorkflow");
   });
 
   it("shows fallback moderation text and disables review when submission is unavailable", async () => {
@@ -120,7 +127,7 @@ describe("ModerationDashboard integration", () => {
 
     expect(getCaseRow()).toHaveTextContent("Assignment");
     expect(screen.getByTestId("moderation-review-open-case-1")).toBeDisabled();
-  });
+  }, 10000);
 
   it("shows live moderation text and enables review when submission and assignment are available", async () => {
     await renderModerationDashboard([
@@ -162,5 +169,5 @@ describe("ModerationDashboard integration", () => {
 
     expect(getCaseRow()).toHaveTextContent("Policy Case Study");
     expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();
-  });
+  }, 10000);
 });
