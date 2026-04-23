@@ -1,9 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import type { ModerationCaseView } from "@/lib/moderationWorkflow";
-
-const fetchModerationCaseViewsMock = vi.fn();
+import {
+  cleanupModerationDashboardMocks,
+  renderModerationDashboard,
+} from "@/test/helpers/renderModerationDashboard";
 
 type UpdateCall = {
   table: string;
@@ -132,41 +133,16 @@ const assignedCase: ModerationCaseView = {
   auditLog: [],
 };
 
-const renderModerationDashboard = async () => {
-  vi.resetModules();
-
+const renderAssignedModerationDashboard = async () => {
   const supabaseMock = createSupabaseMock();
-  fetchModerationCaseViewsMock.mockResolvedValue({
-    cases: [assignedCase],
-    lecturers: [],
-  });
-
-  vi.doMock("@/contexts/AuthContext", () => ({
-    useAuth: () => ({
+  await renderModerationDashboard({
+    auth: {
       user: { id: "moderator-1", email: "moderator@gradeai.test" },
       profile: { id: "moderator-1", role: "lecturer" },
-    }),
-  }));
-
-  vi.doMock("@/integrations/supabase/client", () => ({
+    },
+    cases: [assignedCase],
     supabase: supabaseMock,
-  }));
-
-  vi.doMock("@/lib/moderationWorkflow", async () => {
-    const actual = await vi.importActual<typeof import("@/lib/moderationWorkflow")>("@/lib/moderationWorkflow");
-    return {
-      ...actual,
-      fetchModerationCaseViews: fetchModerationCaseViewsMock,
-    };
   });
-
-  const { default: ModerationDashboard } = await import("@/pages/dashboard/ModerationDashboard");
-
-  render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ModerationDashboard />
-    </MemoryRouter>
-  );
 
   return supabaseMock;
 };
@@ -174,20 +150,13 @@ const renderModerationDashboard = async () => {
 describe("ModerationDashboard moderator integration", () => {
   afterEach(() => {
     cleanup();
-    fetchModerationCaseViewsMock.mockReset();
-    vi.clearAllMocks();
-    vi.resetModules();
-    vi.unmock("@/contexts/AuthContext");
-    vi.unmock("@/integrations/supabase/client");
-    vi.unmock("@/lib/moderationWorkflow");
+    cleanupModerationDashboardMocks();
   });
 
   it("shows an assigned case to the moderator with student context and an enabled review action", async () => {
-    await renderModerationDashboard();
+    await renderAssignedModerationDashboard();
 
-    await waitFor(() => {
-      expect(screen.getByText("Sarah Student")).toBeInTheDocument();
-    });
+    await screen.findByText("Sarah Student");
 
     expect(screen.getByTestId("moderation-case-case-1")).toHaveTextContent("Policy Case Study");
     expect(screen.getByTestId("moderation-case-case-1")).toHaveTextContent("Morgan Moderator");
@@ -200,11 +169,10 @@ describe("ModerationDashboard moderator integration", () => {
     { action: "return", expectedCaseStatus: "first_review", expectedSubmissionStatus: "first_review" },
     { action: "escalate", expectedCaseStatus: "escalated", expectedSubmissionStatus: "escalated" },
   ])("allows the assigned moderator to call the $action action", async ({ action, expectedCaseStatus, expectedSubmissionStatus }) => {
-    const supabaseMock = await renderModerationDashboard();
+    const supabaseMock = await renderAssignedModerationDashboard();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();
-    });
+    await screen.findByTestId("moderation-review-open-case-1");
+    expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();
 
     fireEvent.click(screen.getByTestId("moderation-review-open-case-1"));
 
