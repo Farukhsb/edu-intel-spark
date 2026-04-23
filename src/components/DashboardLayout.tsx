@@ -19,6 +19,7 @@ import {
 import { safeFormatDate } from "@/lib/date";
 
 const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
+const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 
 const lecturerSections = [
   {
@@ -70,6 +71,46 @@ const lecturerSections = [
   },
 ] as const;
 
+const adminSections = [
+  {
+    label: "Control",
+    description: "Platform overview and monitoring",
+    defaultOpen: true,
+    links: [
+      { to: "/dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
+      { to: "/dashboard?view=users", label: "User Management", icon: Users },
+      { to: "/dashboard?view=system", label: "System Overview", icon: Shield },
+    ],
+  },
+  {
+    label: "Reports",
+    description: "Institution-level reporting views",
+    defaultOpen: true,
+    links: [
+      { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
+      { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
+      { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
+    ],
+  },
+  {
+    label: "Academic Access",
+    description: "Read-only workflow visibility",
+    defaultOpen: false,
+    links: [
+      { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
+      { to: "/dashboard/moderation", label: "Moderation", icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: "Workspace",
+    description: "Account-level tools",
+    defaultOpen: false,
+    links: [
+      { to: "/dashboard/settings", label: "Settings", icon: Settings },
+    ],
+  },
+] as const;
+
 const studentLinks = [
   { to: "/dashboard", label: "My Grades", icon: GraduationCap },
   { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
@@ -82,11 +123,19 @@ const defaultLecturerSectionState = Object.fromEntries(
   lecturerSections.map((section) => [section.label, section.defaultOpen]),
 ) as Record<(typeof lecturerSections)[number]["label"], boolean>;
 
+const defaultAdminSectionState = Object.fromEntries(
+  adminSections.map((section) => [section.label, section.defaultOpen]),
+) as Record<(typeof adminSections)[number]["label"], boolean>;
+
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const isAdmin = profile?.role === "admin";
   const isLecturerEquivalent = profile?.role === "lecturer" || profile?.role === "admin";
+  const roleSections = isAdmin ? adminSections : lecturerSections;
+  const defaultSectionState = isAdmin ? defaultAdminSectionState : defaultLecturerSectionState;
+  const sidebarStateKey = isAdmin ? ADMIN_SIDEBAR_STATE_KEY : LECTURER_SIDEBAR_STATE_KEY;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(() => {
@@ -96,16 +145,16 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
   const [openSections, setOpenSections] = useState(() => {
-    if (typeof window === "undefined") return defaultLecturerSectionState;
+    if (typeof window === "undefined") return defaultSectionState;
 
     try {
-      const stored = window.localStorage.getItem(LECTURER_SIDEBAR_STATE_KEY);
-      if (!stored) return defaultLecturerSectionState;
+      const stored = window.localStorage.getItem(sidebarStateKey);
+      if (!stored) return defaultSectionState;
 
-      const parsed = JSON.parse(stored) as Partial<typeof defaultLecturerSectionState>;
-      return { ...defaultLecturerSectionState, ...parsed };
+      const parsed = JSON.parse(stored) as Partial<typeof defaultSectionState>;
+      return { ...defaultSectionState, ...parsed };
     } catch {
-      return defaultLecturerSectionState;
+      return defaultSectionState;
     }
   });
 
@@ -177,7 +226,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate("/dashboard");
   };
 
-  const lecturerLinks = lecturerSections.flatMap((section) => section.links);
+  const lecturerLinks = roleSections.flatMap((section) => section.links);
   const links = isLecturerEquivalent ? lecturerLinks : studentLinks;
 
   const handleSignOut = async () => {
@@ -185,7 +234,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate(isDemo ? "/" : "/auth");
   };
 
-  const filteredLecturerSections = lecturerSections
+  const filteredLecturerSections = roleSections
     .map((section) => ({
       ...section,
       links: searchQuery
@@ -198,9 +247,15 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     ? links.filter((l) => l.label.toLowerCase().includes(searchQuery.toLowerCase()))
     : links;
 
-  const activeLink = links.find((link) => link.to === location.pathname);
+  const isLinkActive = (to: string) => {
+    const [path, query = ""] = to.split("?");
+    if (location.pathname !== path) return false;
+    return query ? location.search === `?${query}` : location.search === "";
+  };
+
+  const activeLink = links.find((link) => isLinkActive(link.to));
   const activeSection = isLecturerEquivalent
-    ? lecturerSections.find((section) => section.links.some((link) => link.to === location.pathname))
+    ? roleSections.find((section) => section.links.some((link) => isLinkActive(link.to)))
     : null;
 
   useEffect(() => {
@@ -214,15 +269,15 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     if (typeof window === "undefined" || !isLecturerEquivalent) return;
 
-    window.localStorage.setItem(LECTURER_SIDEBAR_STATE_KEY, JSON.stringify(openSections));
-  }, [isLecturerEquivalent, openSections]);
+    window.localStorage.setItem(sidebarStateKey, JSON.stringify(openSections));
+  }, [isLecturerEquivalent, openSections, sidebarStateKey]);
 
-  const toggleSection = (label: keyof typeof defaultLecturerSectionState) => {
+  const toggleSection = (label: string) => {
     setOpenSections((current) => ({ ...current, [label]: !current[label] }));
   };
 
-  const renderNavLink = (link: (typeof lecturerSections)[number]["links"][number] | typeof studentLinks[number]) => {
-    const isActive = location.pathname === link.to;
+  const renderNavLink = (link: (typeof lecturerSections)[number]["links"][number] | (typeof adminSections)[number]["links"][number] | typeof studentLinks[number]) => {
+    const isActive = isLinkActive(link.to);
     const isActionLink = "isAction" in link && !!link.isAction;
 
     return (
@@ -281,7 +336,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             <div className="min-w-0">
               <p className="font-display text-lg font-bold tracking-tight text-sidebar-primary-foreground">GradeAI</p>
               <p className="text-xs text-sidebar-foreground/60">
-                {isLecturerEquivalent ? "Academic workspace" : "Student workspace"}
+                {isAdmin ? "Admin workspace" : isLecturerEquivalent ? "Academic workspace" : "Student workspace"}
               </p>
             </div>
             {isDemo && <Badge variant="outline" className="ml-auto text-[10px] border-sidebar-border text-sidebar-foreground/60">Demo</Badge>}
