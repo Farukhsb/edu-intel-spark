@@ -6,7 +6,7 @@ import { clearE2EAuthState, createE2EUser, readE2EAuthState } from "@/lib/e2eAut
 import { getPasswordResetRedirectUrl } from "@/lib/authUrls";
 import type { User } from "@supabase/supabase-js";
 
-type AppRole = "lecturer" | "student";
+type AppRole = "lecturer" | "student" | "admin";
 
 interface Profile {
   id: string;
@@ -17,6 +17,14 @@ interface Profile {
   cohort_id: string | null;
   department_id: string | null;
 }
+
+const parseAppRole = (role: string | null | undefined): AppRole | null => {
+  if (role === "lecturer" || role === "student" || role === "admin") {
+    return role;
+  }
+
+  return null;
+};
 
 interface AuthContextType {
   user: User | null;
@@ -92,15 +100,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       .maybeSingle();
 
     if (data) {
+      const resolvedRole = parseAppRole(data.role);
+      if (!resolvedRole) {
+        setProfile(null);
+        setProfileError(`Unsupported role: ${data.role}`);
+        return;
+      }
+
       setProfile({
         id: data.id,
         full_name: data.full_name,
         email: data.email ?? email ?? null,
-        role: data.role === "lecturer" ? "lecturer" : "student",
+        role: resolvedRole,
         avatar_url: data.avatar_url,
         cohort_id: data.cohort_id ?? null,
         department_id: data.department_id ?? null,
       });
+      setProfileError(null);
       posthog.identify(userId, { email });
     } else {
       setProfileError("Profile not found");

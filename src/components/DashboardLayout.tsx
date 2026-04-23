@@ -86,6 +86,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const isLecturerEquivalent = profile?.role === "lecturer" || profile?.role === "admin";
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(() => {
@@ -168,7 +169,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       }
     }
 
-    if (profile?.role === "lecturer" && notification.relatedStudentId) {
+    if (isLecturerEquivalent && notification.relatedStudentId) {
       navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
       return;
     }
@@ -177,7 +178,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   };
 
   const lecturerLinks = lecturerSections.flatMap((section) => section.links);
-  const links = profile?.role === "lecturer" ? lecturerLinks : studentLinks;
+  const links = isLecturerEquivalent ? lecturerLinks : studentLinks;
 
   const handleSignOut = async () => {
     await signOut();
@@ -198,7 +199,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     : links;
 
   const activeLink = links.find((link) => link.to === location.pathname);
-  const activeSection = profile?.role === "lecturer"
+  const activeSection = isLecturerEquivalent
     ? lecturerSections.find((section) => section.links.some((link) => link.to === location.pathname))
     : null;
 
@@ -211,10 +212,10 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   }, [activeSection, searchQuery]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || profile?.role !== "lecturer") return;
+    if (typeof window === "undefined" || !isLecturerEquivalent) return;
 
     window.localStorage.setItem(LECTURER_SIDEBAR_STATE_KEY, JSON.stringify(openSections));
-  }, [openSections, profile?.role]);
+  }, [isLecturerEquivalent, openSections]);
 
   const toggleSection = (label: keyof typeof defaultLecturerSectionState) => {
     setOpenSections((current) => ({ ...current, [label]: !current[label] }));
@@ -280,7 +281,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             <div className="min-w-0">
               <p className="font-display text-lg font-bold tracking-tight text-sidebar-primary-foreground">GradeAI</p>
               <p className="text-xs text-sidebar-foreground/60">
-                {profile?.role === "lecturer" ? "Academic workspace" : "Student workspace"}
+                {isLecturerEquivalent ? "Academic workspace" : "Student workspace"}
               </p>
             </div>
             {isDemo && <Badge variant="outline" className="ml-auto text-[10px] border-sidebar-border text-sidebar-foreground/60">Demo</Badge>}
@@ -295,7 +296,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         </div>
 
         <nav className="flex-1 overflow-y-auto px-4 py-3">
-          {profile?.role === "lecturer" ? (
+          {isLecturerEquivalent ? (
             <div className="space-y-5">
               {filteredLecturerSections.map((section) => {
                 const isExpanded = searchQuery ? true : openSections[section.label];
@@ -387,7 +388,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           </Button>
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              {activeSection?.label || (profile?.role === "lecturer" ? "Workspace" : "Student")}
+              {activeSection?.label || (isLecturerEquivalent ? "Workspace" : "Student")}
             </p>
             <h1 className="truncate font-display text-xl font-semibold tracking-tight">
               {activeLink?.label || "Dashboard"}
