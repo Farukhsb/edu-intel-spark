@@ -13,6 +13,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +43,8 @@ type AdminUserRow = {
   id: string;
   fullName: string | null;
   email: string | null;
+  departmentId: string | null;
+  cohortId: string | null;
   role: string;
   createdAt: string | null;
 };
@@ -44,6 +56,14 @@ type PendingRoleChange = {
   fullName: string | null;
   currentRole: string;
   nextRole: "student" | "lecturer";
+} | null;
+
+type PendingProfileEdit = {
+  userId: string;
+  role: string;
+  fullName: string;
+  departmentId: string;
+  cohortId: string;
 } | null;
 
 const EMPTY_METRICS: AdminMetrics = {
@@ -107,12 +127,16 @@ const AdminOverview = ({ metrics }: { metrics: AdminMetrics }) => (
 
 const UserManagement = ({
   users,
+  onRequestProfileEdit,
   onRequestRoleChange,
   changingUserId,
+  savingProfileUserId,
 }: {
   users: AdminUserRow[];
+  onRequestProfileEdit: (user: AdminUserRow) => void;
   onRequestRoleChange: (user: AdminUserRow, nextRole: "student" | "lecturer") => void;
   changingUserId: string | null;
+  savingProfileUserId: string | null;
 }) => (
   <div className="space-y-6">
     <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
@@ -124,8 +148,8 @@ const UserManagement = ({
         <div className="space-y-2">
           <h2 className="text-2xl font-bold font-display tracking-tight">User Management</h2>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            Review account coverage, role distribution, and creation history. Role changes are limited to the
-            supported student and lecturer transitions and always require confirmation.
+            Review account coverage, role distribution, and profile data for student and lecturer records.
+            Profile edits and role changes are kept as separate actions so admin corrections stay explicit.
           </p>
         </div>
       </CardContent>
@@ -151,9 +175,12 @@ const UserManagement = ({
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Cohort</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-right">Profile</TableHead>
+                  <TableHead className="text-right">Role Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -161,6 +188,10 @@ const UserManagement = ({
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.fullName || "Unknown user"}</TableCell>
                     <TableCell className="text-muted-foreground">{user.email || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{user.departmentId || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.role === "student" ? user.cohortId || "—" : "—"}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -170,6 +201,20 @@ const UserManagement = ({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{safeFormatDate(user.createdAt, "MMM d, yyyy", "—")}</TableCell>
+                    <TableCell className="text-right">
+                      {user.role === "student" || user.role === "lecturer" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={savingProfileUserId === user.id}
+                          onClick={() => onRequestProfileEdit(user)}
+                        >
+                          Edit Profile
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No profile edit</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       {user.role === "student" ? (
                         <Button
@@ -271,6 +316,8 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [pendingRoleChange, setPendingRoleChange] = useState<PendingRoleChange>(null);
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
+  const [pendingProfileEdit, setPendingProfileEdit] = useState<PendingProfileEdit>(null);
+  const [savingProfileUserId, setSavingProfileUserId] = useState<string | null>(null);
 
   const activeView = useMemo<AdminView>(() => {
     const view = searchParams.get("view");
@@ -290,7 +337,7 @@ const AdminDashboard = () => {
       const [profilesRes, assignmentsRes, submissionsRes, moderationCasesRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, email, role, created_at")
+          .select("id, full_name, email, role, created_at, department_id, cohort_id")
           .order("created_at", { ascending: false }),
         supabase.from("assignments").select("id", { count: "exact", head: true }),
         supabase.from("submissions").select("id", { count: "exact", head: true }),
@@ -301,10 +348,20 @@ const AdminDashboard = () => {
         throw profilesRes.error || assignmentsRes.error || submissionsRes.error || moderationCasesRes.error;
       }
 
-      const profileRows = (profilesRes.data || []).map((row) => ({
+      const profileRows = ((profilesRes.data || []) as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+        department_id?: string | null;
+        cohort_id?: string | null;
+        role: string;
+        created_at: string | null;
+      }>).map((row) => ({
         id: row.id,
         fullName: row.full_name,
         email: row.email,
+        departmentId: row.department_id ?? null,
+        cohortId: row.cohort_id ?? null,
         role: String(row.role),
         createdAt: row.created_at ?? null,
       }));
@@ -348,6 +405,16 @@ const AdminDashboard = () => {
     });
   };
 
+  const requestProfileEdit = (user: AdminUserRow) => {
+    setPendingProfileEdit({
+      userId: user.id,
+      role: user.role,
+      fullName: user.fullName || "",
+      departmentId: user.departmentId || "",
+      cohortId: user.cohortId || "",
+    });
+  };
+
   const confirmRoleChange = async () => {
     if (!pendingRoleChange) return;
 
@@ -370,6 +437,30 @@ const AdminDashboard = () => {
       toast.error(error instanceof Error ? error.message : "Role change could not be completed.");
     }
     setChangingUserId(null);
+  };
+
+  const saveProfileEdit = async () => {
+    if (!pendingProfileEdit) return;
+
+    setSavingProfileUserId(pendingProfileEdit.userId);
+    try {
+      const { error } = await supabase.rpc("admin_update_user_profile", {
+        p_target_user_id: pendingProfileEdit.userId,
+        p_full_name: pendingProfileEdit.fullName,
+        p_department_id: pendingProfileEdit.departmentId || null,
+        p_cohort_id: pendingProfileEdit.cohortId || null,
+      });
+
+      if (error) throw error;
+
+      toast.success(`${pendingProfileEdit.fullName || "User"} profile updated.`);
+      setPendingProfileEdit(null);
+      await loadAdminDashboard({ silent: true });
+    } catch (error) {
+      console.error("Failed to update user profile:", error);
+      toast.error(error instanceof Error ? error.message : "Profile update could not be completed.");
+    }
+    setSavingProfileUserId(null);
   };
 
   if (loading) {
@@ -398,8 +489,10 @@ const AdminDashboard = () => {
       {activeView === "users" ? (
         <UserManagement
           users={users}
+          onRequestProfileEdit={requestProfileEdit}
           onRequestRoleChange={requestRoleChange}
           changingUserId={changingUserId}
+          savingProfileUserId={savingProfileUserId}
         />
       ) : activeView === "system" ? (
         <SystemOverview metrics={metrics} />
@@ -435,6 +528,76 @@ const AdminDashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={Boolean(pendingProfileEdit)} onOpenChange={(open) => !open && setPendingProfileEdit(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit profile</DialogTitle>
+            <DialogDescription>
+              Update profile fields for this {pendingProfileEdit?.role || "user"}. This only affects
+              the profile record and does not change role, email, password, or auth metadata.
+            </DialogDescription>
+          </DialogHeader>
+          {pendingProfileEdit ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="admin-profile-full-name">Full name</Label>
+                <Input
+                  id="admin-profile-full-name"
+                  value={pendingProfileEdit.fullName}
+                  onChange={(event) =>
+                    setPendingProfileEdit((current) =>
+                      current ? { ...current, fullName: event.target.value } : current
+                    )
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-profile-department">Department</Label>
+                <Input
+                  id="admin-profile-department"
+                  value={pendingProfileEdit.departmentId}
+                  onChange={(event) =>
+                    setPendingProfileEdit((current) =>
+                      current ? { ...current, departmentId: event.target.value } : current
+                    )
+                  }
+                  placeholder="Department"
+                />
+              </div>
+              {pendingProfileEdit.role === "student" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="admin-profile-cohort">Cohort</Label>
+                  <Input
+                    id="admin-profile-cohort"
+                    value={pendingProfileEdit.cohortId}
+                    onChange={(event) =>
+                      setPendingProfileEdit((current) =>
+                        current ? { ...current, cohortId: event.target.value } : current
+                      )
+                    }
+                    placeholder="Cohort or level"
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={Boolean(savingProfileUserId)}
+              onClick={() => setPendingProfileEdit(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={Boolean(savingProfileUserId || refreshing)}
+              onClick={() => void saveProfileEdit()}
+            >
+              {savingProfileUserId ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
