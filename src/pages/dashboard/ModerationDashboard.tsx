@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ModerationQueueSummary } from "@/components/moderation/ModerationQueueSummary";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -37,7 +38,7 @@ import {
   insertModerationAuditEntry,
   type ModerationCaseView,
 } from "@/lib/moderationWorkflow";
-import { Loader2, Shield, Scale, CheckCheck, AlertTriangle, Clock } from "lucide-react";
+import { Loader2, Scale } from "lucide-react";
 import { toast } from "sonner";
 
 type Submission = Tables<"submissions">;
@@ -78,7 +79,7 @@ const ModerationDashboard = () => {
       );
     } catch (error) {
       console.error("Failed to load moderation cases:", error);
-      toast.error("Could not load moderation cases.");
+      toast.error("Moderation cases could not be loaded right now. Refresh the page or try again in a moment.");
     }
     setLoading(false);
   };
@@ -141,13 +142,13 @@ const ModerationDashboard = () => {
 
   const assignModerator = async (item: ModerationCaseView) => {
     if (!item.submission) {
-      toast.error("Submission details are unavailable for this moderation case.");
+      toast.error("This case is missing its linked submission details, so moderator assignment cannot continue.");
       return;
     }
 
     const moderatorId = moderatorDrafts[item.moderationCase.id];
     if (!moderatorId || moderatorId === "unassigned") {
-      toast.error("Select a moderator first.");
+      toast.error("Choose a moderator before saving this case.");
       return;
     }
 
@@ -162,7 +163,7 @@ const ModerationDashboard = () => {
 
     if (error) {
       console.error("Failed to assign moderator:", error);
-      toast.error("Could not assign moderator.");
+      toast.error("The moderator was not assigned. Try again, and check your access if this keeps happening.");
       setSaving(false);
       return;
     }
@@ -188,7 +189,7 @@ const ModerationDashboard = () => {
   const saveAction = async (action: ModerationAction) => {
     if (!selectedCase || !user) return;
     if (!selectedCase.submission) {
-      toast.error("Submission details are unavailable for this moderation case.");
+      toast.error("This case is missing its linked submission details, so moderation actions are unavailable.");
       return;
     }
 
@@ -202,7 +203,7 @@ const ModerationDashboard = () => {
     const isOwner = moderationCase.lecturer_id === user.id;
 
     if (action === "approve" && !isOwner) {
-      toast.error("Only the assignment lecturer can approve the moderated outcome.");
+      toast.error("Only the assignment owner can approve the final moderated outcome. Ask the owning lecturer to complete approval.");
       return;
     }
 
@@ -273,7 +274,7 @@ const ModerationDashboard = () => {
       await fetchCases();
     } catch (error) {
       console.error("Failed to save moderation action:", error);
-      toast.error("Could not save moderation action.");
+      toast.error("The moderation action was not saved. Try again, and if it keeps failing check that you still have access to this case.");
     }
     setSaving(false);
   };
@@ -288,26 +289,7 @@ const ModerationDashboard = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="grid gap-4 md:grid-cols-4">
-        {[
-          { label: "Pending", value: queueStats.pending, icon: Clock },
-          { label: "In Progress", value: queueStats.inProgress, icon: Shield },
-          { label: "Moderated", value: queueStats.moderated, icon: CheckCheck },
-          { label: "Escalated", value: queueStats.escalated, icon: AlertTriangle },
-        ].map((item) => (
-          <Card key={item.label}>
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
-                <item.icon className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold font-display">{item.value}</p>
-                <p className="text-xs text-muted-foreground">{item.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <ModerationQueueSummary queueStats={queueStats} />
 
       <Card>
         <CardHeader>
