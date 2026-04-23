@@ -694,34 +694,14 @@ const LecturerOverview = () => {
               variant="outline"
               size="sm"
               onClick={async () => {
-                const { default: jsPDF } = await import("jspdf");
-                const { default: autoTable } = await import("jspdf-autotable");
-                const doc = new jsPDF();
-                doc.setFontSize(16);
-                doc.text("GradeAI - Grade Report", 14, 20);
-                doc.setFontSize(10);
-                doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28);
-                doc.text(`Lecturer: ${profile?.full_name || "-"}`, 14, 34);
-                doc.text(
-                  `Total Submissions: ${stats.totalSubmissions} | Graded: ${stats.gradedCount} | Avg: ${stats.avgScore ?? "-"}%`,
-                  14,
-                  40
-                );
-                autoTable(doc, {
-                  startY: 48,
-                  head: [["Student", "Assignment", "Score", "Max", "Status", "Date"]],
-                  body: recent.map((submission) => [
-                    submission.student_name || "Unknown",
-                    submission.assignment_title,
-                    submission.score != null ? String(submission.score) : "-",
-                    String(submission.max_score),
-                    formatStatusLabel(submission.status),
-                    safeToLocaleDate(submission.submitted_at),
-                  ]),
-                  styles: { fontSize: 9 },
-                  headStyles: { fillColor: [59, 65, 122] },
+                const { exportLecturerOverviewPdf } = await import("@/lib/exportLecturerOverviewPdf");
+                await exportLecturerOverviewPdf({
+                  profile,
+                  stats,
+                  recent,
+                  formatStatusLabel,
+                  safeToLocaleDate,
                 });
-                doc.save("grades_report.pdf");
               }}
             >
               <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
