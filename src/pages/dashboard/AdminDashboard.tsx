@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,21 +13,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { safeFormatDate } from "@/lib/date";
-import { Loader2, Settings, Shield, Users } from "lucide-react";
+import { ArrowRight, Loader2, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
 
 type AdminMetrics = {
@@ -43,8 +33,6 @@ type AdminUserRow = {
   id: string;
   fullName: string | null;
   email: string | null;
-  departmentId: string | null;
-  cohortId: string | null;
   role: string;
   createdAt: string | null;
 };
@@ -58,13 +46,13 @@ type PendingRoleChange = {
   nextRole: "student" | "lecturer";
 } | null;
 
-type PendingProfileEdit = {
-  userId: string;
-  role: string;
-  fullName: string;
-  departmentId: string;
-  cohortId: string;
-} | null;
+type AdminOverviewCard = {
+  title: string;
+  value: number;
+  icon: typeof Users;
+  helper: string;
+  href?: string;
+};
 
 const EMPTY_METRICS: AdminMetrics = {
   totalUsers: 0,
@@ -81,62 +69,128 @@ const ROLE_BADGE_STYLES: Record<string, string> = {
   student: "border-sky-500/30 bg-sky-500/10 text-sky-700",
 };
 
-const AdminOverview = ({ metrics }: { metrics: AdminMetrics }) => (
-  <div className="space-y-6">
-    <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
-      <CardContent className="space-y-4 p-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-primary/25 bg-background/70">Admin Workspace</Badge>
-          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Overview</span>
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold font-display tracking-tight">Admin Dashboard</h2>
-          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            Monitor platform activity, account distribution, and assessment volume from one read-only control panel.
-            This view is intended for quick operational awareness rather than direct workflow management.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+const AdminOverview = ({ metrics }: { metrics: AdminMetrics }) => {
+  const navigate = useNavigate();
+  const cards: AdminOverviewCard[] = [
+    {
+      title: "Total Users",
+      value: metrics.totalUsers,
+      icon: Users,
+      helper: "All visible user accounts across the workspace.",
+      href: "/dashboard?view=users",
+    },
+    {
+      title: "Lecturers",
+      value: metrics.lecturers,
+      icon: Shield,
+      helper: "Academic staff accounts currently available.",
+      href: "/dashboard?view=users&filter=lecturer",
+    },
+    {
+      title: "Students",
+      value: metrics.students,
+      icon: Users,
+      helper: "Learner accounts with profile records in place.",
+      href: "/dashboard?view=users&filter=student",
+    },
+    {
+      title: "Assignments",
+      value: metrics.assignments,
+      icon: Settings,
+      helper: "Published and draft assignment records combined.",
+    },
+    {
+      title: "Submissions",
+      value: metrics.submissions,
+      icon: Shield,
+      helper: "Student submission rows currently stored.",
+    },
+    {
+      title: "Moderation Cases",
+      value: metrics.moderationCases,
+      icon: Shield,
+      helper: "Cases that entered the moderation workflow.",
+      href: "/dashboard/moderation",
+    },
+  ];
 
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {[
-        { title: "Total Users", value: metrics.totalUsers, icon: Users, helper: "All visible user accounts across the workspace." },
-        { title: "Lecturers", value: metrics.lecturers, icon: Shield, helper: "Academic staff accounts currently available." },
-        { title: "Students", value: metrics.students, icon: Users, helper: "Learner accounts with profile records in place." },
-        { title: "Assignments", value: metrics.assignments, icon: Settings, helper: "Published and draft assignment records combined." },
-        { title: "Submissions", value: metrics.submissions, icon: Shield, helper: "Student submission rows currently stored." },
-        { title: "Moderation Cases", value: metrics.moderationCases, icon: Shield, helper: "Cases that entered the moderation workflow." },
-      ].map((item) => (
-        <Card key={item.title} className="border-border/70 shadow-sm">
-          <CardContent className="flex items-start justify-between gap-4 p-5">
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.title}</p>
-              <p className="text-3xl font-bold font-display tracking-tight">{item.value}</p>
-              <p className="max-w-[18rem] text-xs leading-5 text-muted-foreground">{item.helper}</p>
-            </div>
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
-              <item.icon className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+  return (
+    <div className="space-y-6">
+      <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
+        <CardContent className="space-y-4 p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/25 bg-background/70">Admin Workspace</Badge>
+            <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Overview</span>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold font-display tracking-tight">Admin Dashboard</h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Monitor platform activity, account distribution, and assessment volume from one read-only control panel.
+              This view is intended for quick operational awareness rather than direct workflow management.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {cards.map((item) => {
+          const clickable = Boolean(item.href);
+
+          const card = (
+            <Card
+              className={`border-border/70 shadow-sm transition-all ${
+                clickable
+                  ? "cursor-pointer hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-within:border-primary/40 focus-within:shadow-md"
+                  : ""
+              }`}
+            >
+              <CardContent className="flex items-start justify-between gap-4 p-5">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.title}</p>
+                  <p className="text-3xl font-bold font-display tracking-tight">{item.value}</p>
+                  <p className="max-w-[18rem] text-xs leading-5 text-muted-foreground">{item.helper}</p>
+                  {clickable ? (
+                    <p className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+                      View details <ArrowRight className="h-3.5 w-3.5" />
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                  <item.icon className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          );
+
+          if (!clickable) {
+            return <div key={item.title}>{card}</div>;
+          }
+
+          return (
+            <button
+              key={item.title}
+              type="button"
+              onClick={() => navigate(item.href!)}
+              className="w-full text-left"
+              aria-label={`View details for ${item.title}`}
+            >
+              {card}
+            </button>
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const UserManagement = ({
   users,
-  onRequestProfileEdit,
   onRequestRoleChange,
   changingUserId,
-  savingProfileUserId,
 }: {
   users: AdminUserRow[];
-  onRequestProfileEdit: (user: AdminUserRow) => void;
   onRequestRoleChange: (user: AdminUserRow, nextRole: "student" | "lecturer") => void;
   changingUserId: string | null;
-  savingProfileUserId: string | null;
 }) => (
   <div className="space-y-6">
     <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
@@ -148,8 +202,8 @@ const UserManagement = ({
         <div className="space-y-2">
           <h2 className="text-2xl font-bold font-display tracking-tight">User Management</h2>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            Review account coverage, role distribution, and profile data for student and lecturer records.
-            Profile edits and role changes are kept as separate actions so admin corrections stay explicit.
+            Review account coverage, role distribution, and creation history. Role changes are limited to the
+            supported student and lecturer transitions and always require confirmation.
           </p>
         </div>
       </CardContent>
@@ -175,12 +229,9 @@ const UserManagement = ({
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Cohort</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Profile</TableHead>
-                  <TableHead className="text-right">Role Action</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -188,10 +239,6 @@ const UserManagement = ({
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.fullName || "Unknown user"}</TableCell>
                     <TableCell className="text-muted-foreground">{user.email || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{user.departmentId || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {user.role === "student" ? user.cohortId || "—" : "—"}
-                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -201,20 +248,6 @@ const UserManagement = ({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{safeFormatDate(user.createdAt, "MMM d, yyyy", "—")}</TableCell>
-                    <TableCell className="text-right">
-                      {user.role === "student" || user.role === "lecturer" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={savingProfileUserId === user.id}
-                          onClick={() => onRequestProfileEdit(user)}
-                        >
-                          Edit Profile
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No profile edit</span>
-                      )}
-                    </TableCell>
                     <TableCell className="text-right">
                       {user.role === "student" ? (
                         <Button
@@ -316,12 +349,15 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [pendingRoleChange, setPendingRoleChange] = useState<PendingRoleChange>(null);
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
-  const [pendingProfileEdit, setPendingProfileEdit] = useState<PendingProfileEdit>(null);
-  const [savingProfileUserId, setSavingProfileUserId] = useState<string | null>(null);
 
   const activeView = useMemo<AdminView>(() => {
     const view = searchParams.get("view");
     return view === "users" || view === "system" ? view : "overview";
+  }, [searchParams]);
+
+  const activeUserFilter = useMemo(() => {
+    const filter = searchParams.get("filter");
+    return filter === "lecturer" || filter === "student" ? filter : null;
   }, [searchParams]);
 
   const loadAdminDashboard = async (options?: { silent?: boolean }) => {
@@ -337,7 +373,7 @@ const AdminDashboard = () => {
       const [profilesRes, assignmentsRes, submissionsRes, moderationCasesRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, email, role, created_at, department_id, cohort_id")
+          .select("id, full_name, email, role, created_at")
           .order("created_at", { ascending: false }),
         supabase.from("assignments").select("id", { count: "exact", head: true }),
         supabase.from("submissions").select("id", { count: "exact", head: true }),
@@ -348,20 +384,10 @@ const AdminDashboard = () => {
         throw profilesRes.error || assignmentsRes.error || submissionsRes.error || moderationCasesRes.error;
       }
 
-      const profileRows = ((profilesRes.data || []) as Array<{
-        id: string;
-        full_name: string | null;
-        email: string | null;
-        department_id?: string | null;
-        cohort_id?: string | null;
-        role: string;
-        created_at: string | null;
-      }>).map((row) => ({
+      const profileRows = (profilesRes.data || []).map((row) => ({
         id: row.id,
         fullName: row.full_name,
         email: row.email,
-        departmentId: row.department_id ?? null,
-        cohortId: row.cohort_id ?? null,
         role: String(row.role),
         createdAt: row.created_at ?? null,
       }));
@@ -387,6 +413,14 @@ const AdminDashboard = () => {
     }
   };
 
+  const visibleUsers = useMemo(() => {
+    if (!activeUserFilter) {
+      return users;
+    }
+
+    return users.filter((user) => user.role === activeUserFilter);
+  }, [activeUserFilter, users]);
+
   useEffect(() => {
     if (profile?.role !== "admin") {
       setLoading(false);
@@ -402,16 +436,6 @@ const AdminDashboard = () => {
       fullName: user.fullName,
       currentRole: user.role,
       nextRole,
-    });
-  };
-
-  const requestProfileEdit = (user: AdminUserRow) => {
-    setPendingProfileEdit({
-      userId: user.id,
-      role: user.role,
-      fullName: user.fullName || "",
-      departmentId: user.departmentId || "",
-      cohortId: user.cohortId || "",
     });
   };
 
@@ -439,30 +463,6 @@ const AdminDashboard = () => {
     setChangingUserId(null);
   };
 
-  const saveProfileEdit = async () => {
-    if (!pendingProfileEdit) return;
-
-    setSavingProfileUserId(pendingProfileEdit.userId);
-    try {
-      const { error } = await supabase.rpc("admin_update_user_profile", {
-        p_target_user_id: pendingProfileEdit.userId,
-        p_full_name: pendingProfileEdit.fullName,
-        p_department_id: pendingProfileEdit.departmentId || null,
-        p_cohort_id: pendingProfileEdit.cohortId || null,
-      });
-
-      if (error) throw error;
-
-      toast.success(`${pendingProfileEdit.fullName || "User"} profile updated.`);
-      setPendingProfileEdit(null);
-      await loadAdminDashboard({ silent: true });
-    } catch (error) {
-      console.error("Failed to update user profile:", error);
-      toast.error(error instanceof Error ? error.message : "Profile update could not be completed.");
-    }
-    setSavingProfileUserId(null);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -488,11 +488,9 @@ const AdminDashboard = () => {
     <div className="animate-fade-in">
       {activeView === "users" ? (
         <UserManagement
-          users={users}
-          onRequestProfileEdit={requestProfileEdit}
+          users={visibleUsers}
           onRequestRoleChange={requestRoleChange}
           changingUserId={changingUserId}
-          savingProfileUserId={savingProfileUserId}
         />
       ) : activeView === "system" ? (
         <SystemOverview metrics={metrics} />
@@ -528,76 +526,6 @@ const AdminDashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Dialog open={Boolean(pendingProfileEdit)} onOpenChange={(open) => !open && setPendingProfileEdit(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit profile</DialogTitle>
-            <DialogDescription>
-              Update profile fields for this {pendingProfileEdit?.role || "user"}. This only affects
-              the profile record and does not change role, email, password, or auth metadata.
-            </DialogDescription>
-          </DialogHeader>
-          {pendingProfileEdit ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="admin-profile-full-name">Full name</Label>
-                <Input
-                  id="admin-profile-full-name"
-                  value={pendingProfileEdit.fullName}
-                  onChange={(event) =>
-                    setPendingProfileEdit((current) =>
-                      current ? { ...current, fullName: event.target.value } : current
-                    )
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="admin-profile-department">Department</Label>
-                <Input
-                  id="admin-profile-department"
-                  value={pendingProfileEdit.departmentId}
-                  onChange={(event) =>
-                    setPendingProfileEdit((current) =>
-                      current ? { ...current, departmentId: event.target.value } : current
-                    )
-                  }
-                  placeholder="Department"
-                />
-              </div>
-              {pendingProfileEdit.role === "student" ? (
-                <div className="space-y-2">
-                  <Label htmlFor="admin-profile-cohort">Cohort</Label>
-                  <Input
-                    id="admin-profile-cohort"
-                    value={pendingProfileEdit.cohortId}
-                    onChange={(event) =>
-                      setPendingProfileEdit((current) =>
-                        current ? { ...current, cohortId: event.target.value } : current
-                      )
-                    }
-                    placeholder="Cohort or level"
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={Boolean(savingProfileUserId)}
-              onClick={() => setPendingProfileEdit(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={Boolean(savingProfileUserId || refreshing)}
-              onClick={() => void saveProfileEdit()}
-            >
-              {savingProfileUserId ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
