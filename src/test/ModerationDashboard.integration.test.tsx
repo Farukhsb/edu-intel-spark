@@ -1,9 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModerationCaseView } from "@/lib/moderationWorkflow";
-
-const fetchModerationCaseViewsMock = vi.fn();
+import {
+  cleanupModerationDashboardMocks,
+  renderModerationDashboard,
+} from "@/test/helpers/renderModerationDashboard";
 
 const baseCase = {
   moderationCase: {
@@ -63,109 +64,76 @@ const baseCase = {
   auditLog: [],
 } satisfies Omit<ModerationCaseView, "submission" | "assignment">;
 
-const renderModerationDashboard = async (cases: ModerationCaseView[]) => {
-  vi.resetModules();
-
-  fetchModerationCaseViewsMock.mockResolvedValue({
-    cases,
-    lecturers: [],
-  });
-
-  vi.doMock("@/contexts/AuthContext", () => ({
-    useAuth: () => ({
-      user: { id: "lecturer-1", email: "lecturer@gradeai.test" },
-      profile: { id: "lecturer-1", role: "lecturer" },
-    }),
-  }));
-
-  vi.doMock("@/integrations/supabase/client", () => ({
-    supabase: {},
-  }));
-
-  vi.doMock("@/lib/moderationWorkflow", async () => {
-    const actual = await vi.importActual<typeof import("@/lib/moderationWorkflow")>("@/lib/moderationWorkflow");
-    return {
-      ...actual,
-      fetchModerationCaseViews: fetchModerationCaseViewsMock,
-    };
-  });
-
-  const { default: ModerationDashboard } = await import("@/pages/dashboard/ModerationDashboard");
-
-  render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ModerationDashboard />
-    </MemoryRouter>
-  );
-};
-
 const getCaseRow = () => screen.getByTestId("moderation-case-case-1");
 
 describe("ModerationDashboard integration", () => {
   afterEach(() => {
     cleanup();
-    fetchModerationCaseViewsMock.mockReset();
-    vi.clearAllMocks();
-    vi.resetModules();
-    vi.unmock("@/contexts/AuthContext");
-    vi.unmock("@/integrations/supabase/client");
-    vi.unmock("@/lib/moderationWorkflow");
+    cleanupModerationDashboardMocks();
   });
 
   it("shows fallback moderation text and disables review when submission is unavailable", async () => {
-    await renderModerationDashboard([
-      {
-        ...baseCase,
-        submission: null,
-        assignment: null,
+    await renderModerationDashboard({
+      auth: {
+        user: { id: "lecturer-1", email: "lecturer@gradeai.test" },
+        profile: { id: "lecturer-1", role: "lecturer" },
       },
-    ]);
-
-    await waitFor(() => {
-      expect(screen.getByText("Student record unavailable")).toBeInTheDocument();
+      cases: [
+        {
+          ...baseCase,
+          submission: null,
+          assignment: null,
+        },
+      ],
     });
+
+    await screen.findByText("Student record unavailable");
 
     expect(getCaseRow()).toHaveTextContent("Assignment");
     expect(screen.getByTestId("moderation-review-open-case-1")).toBeDisabled();
   }, 10000);
 
   it("shows live moderation text and enables review when submission and assignment are available", async () => {
-    await renderModerationDashboard([
-      {
-        ...baseCase,
-        submission: {
-          id: "submission-1",
-          assignment_id: "assignment-1",
-          student_name: "Sarah Student",
-          student_email: "sarah@student.test",
-          student_id: "student-1",
-          file_name: "essay.pdf",
-          file_type: "application/pdf",
-          file_url: "student-1/assignment-1/essay.pdf",
-          status: "moderation_pending",
-          submitted_at: "2026-04-22T09:00:00.000Z",
-          uploaded_by: "student-1",
-        },
-        assignment: {
-          id: "assignment-1",
-          title: "Policy Case Study",
-          description: "Policy analysis",
-          due_date: "2026-04-20T09:00:00.000Z",
-          file_url: null,
-          lecturer_id: "lecturer-1",
-          max_score: 100,
-          module_code: "POL305",
-          rubric: [],
-          status: "published",
-          created_at: "2026-04-22T10:00:00.000Z",
-          updated_at: "2026-04-22T10:00:00.000Z",
-        },
+    await renderModerationDashboard({
+      auth: {
+        user: { id: "lecturer-1", email: "lecturer@gradeai.test" },
+        profile: { id: "lecturer-1", role: "lecturer" },
       },
-    ]);
-
-    await waitFor(() => {
-      expect(screen.getByText("Sarah Student")).toBeInTheDocument();
+      cases: [
+        {
+          ...baseCase,
+          submission: {
+            id: "submission-1",
+            assignment_id: "assignment-1",
+            student_name: "Sarah Student",
+            student_email: "sarah@student.test",
+            student_id: "student-1",
+            file_name: "essay.pdf",
+            file_type: "application/pdf",
+            file_url: "student-1/assignment-1/essay.pdf",
+            status: "moderation_pending",
+            submitted_at: "2026-04-22T09:00:00.000Z",
+            uploaded_by: "student-1",
+          },
+          assignment: {
+            id: "assignment-1",
+            title: "Policy Case Study",
+            description: "Policy analysis",
+            due_date: "2026-04-20T09:00:00.000Z",
+            file_url: null,
+            lecturer_id: "lecturer-1",
+            max_score: 100,
+            module_code: "POL305",
+            rubric: [],
+            status: "published",
+            created_at: "2026-04-22T10:00:00.000Z",
+            updated_at: "2026-04-22T10:00:00.000Z",
+          },
+        },
+      ],
     });
+
+    await screen.findByText("Sarah Student");
 
     expect(getCaseRow()).toHaveTextContent("Policy Case Study");
     expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();

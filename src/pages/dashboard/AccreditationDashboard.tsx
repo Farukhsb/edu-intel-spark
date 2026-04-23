@@ -37,6 +37,7 @@ const MetricBar = ({ value, className = "h-2" }: { value: number; className?: st
 const AccreditationDashboard = () => {
   const { isDemo } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("qaa");
   const [loading, setLoading] = useState(!isDemo);
   const [loadError, setLoadError] = useState(false);
   const [qaaMetrics, setQaaMetrics] = useState<QAAMetric[]>([]);
@@ -315,7 +316,7 @@ const AccreditationDashboard = () => {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="qaa" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <TabsList>
             <TabsTrigger value="qaa">QAA Compliance</TabsTrigger>
@@ -457,7 +458,7 @@ const AccreditationDashboard = () => {
 
         {/* Programme Reports Tab */}
         <TabsContent value="programme" className="space-y-4">
-          <ProgrammeReports isDemo={isDemo} />
+          {activeTab === "programme" ? <ProgrammeReports isDemo={isDemo} /> : null}
         </TabsContent>
       </Tabs>
     </div>
