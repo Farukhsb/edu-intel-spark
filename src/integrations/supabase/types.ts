@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.4"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -48,22 +68,7 @@ export type Database = {
           submission_id?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "academic_integrity_reviews_lecturer_id_fkey"
-            columns: ["lecturer_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "academic_integrity_reviews_submission_id_fkey"
-            columns: ["submission_id"]
-            isOneToOne: false
-            referencedRelation: "submissions"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       analytics_recommendations: {
         Row: {
@@ -134,98 +139,6 @@ export type Database = {
           },
         ]
       }
-      communication_messages: {
-        Row: {
-          body: string
-          category: string
-          created_at: string
-          id: string
-          recipient_email: string | null
-          recipient_id: string | null
-          recipient_name: string
-          related_assignment_id: string | null
-          related_student_id: string | null
-          sender_id: string
-          subject: string
-        }
-        Insert: {
-          body: string
-          category: string
-          created_at?: string
-          id?: string
-          recipient_email?: string | null
-          recipient_id?: string | null
-          recipient_name: string
-          related_assignment_id?: string | null
-          related_student_id?: string | null
-          sender_id: string
-          subject: string
-        }
-        Update: {
-          body?: string
-          category?: string
-          created_at?: string
-          id?: string
-          recipient_email?: string | null
-          recipient_id?: string | null
-          recipient_name?: string
-          related_assignment_id?: string | null
-          related_student_id?: string | null
-          sender_id?: string
-          subject?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "communication_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      recommendation_actions: {
-        Row: {
-          action_type: string
-          created_at: string
-          id: string
-          lecturer_id: string
-          payload: Json
-          recommendation_id: string
-        }
-        Insert: {
-          action_type: string
-          created_at?: string
-          id?: string
-          lecturer_id: string
-          payload?: Json
-          recommendation_id: string
-        }
-        Update: {
-          action_type?: string
-          created_at?: string
-          id?: string
-          lecturer_id?: string
-          payload?: Json
-          recommendation_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "recommendation_actions_lecturer_id_fkey"
-            columns: ["lecturer_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "recommendation_actions_recommendation_id_fkey"
-            columns: ["recommendation_id"]
-            isOneToOne: false
-            referencedRelation: "analytics_recommendations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       assignments: {
         Row: {
           created_at: string
@@ -270,6 +183,63 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      communication_messages: {
+        Row: {
+          body: string
+          category: string
+          created_at: string
+          id: string
+          recipient_email: string | null
+          recipient_id: string | null
+          recipient_name: string
+          related_assignment_id: string | null
+          related_student_id: string | null
+          sender_id: string
+          subject: string
+        }
+        Insert: {
+          body: string
+          category: string
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          recipient_name: string
+          related_assignment_id?: string | null
+          related_student_id?: string | null
+          sender_id: string
+          subject: string
+        }
+        Update: {
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          recipient_name?: string
+          related_assignment_id?: string | null
+          related_student_id?: string | null
+          sender_id?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communication_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       grade_audit_log: {
         Row: {
@@ -404,6 +374,33 @@ export type Database = {
           },
         ]
       }
+      improvement_plan_progress: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          id: string
+          student_id: string
+          task_key: string
+          updated_at: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          student_id: string
+          task_key: string
+          updated_at?: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          student_id?: string
+          task_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       moderation_cases: {
         Row: {
           ai_score_snapshot: number | null
@@ -513,7 +510,7 @@ export type Database = {
           {
             foreignKeyName: "moderation_cases_submission_id_fkey"
             columns: ["submission_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "submissions"
             referencedColumns: ["id"]
           },
@@ -583,6 +580,135 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          cohort_id: string | null
+          created_at: string
+          department_id: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          cohort_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          email?: string | null
+          full_name?: string | null
+          id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          cohort_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recommendation_actions: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: string
+          lecturer_id: string
+          payload: Json
+          recommendation_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: string
+          lecturer_id: string
+          payload?: Json
+          recommendation_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          lecturer_id?: string
+          payload?: Json
+          recommendation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendation_actions_lecturer_id_fkey"
+            columns: ["lecturer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recommendation_actions_recommendation_id_fkey"
+            columns: ["recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "analytics_recommendations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_interventions: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          follow_up_date: string | null
+          id: string
+          intervention_type: string
+          lecturer_id: string
+          notes: string | null
+          priority: string
+          status: string
+          student_email: string | null
+          student_id: string | null
+          student_name: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          intervention_type: string
+          lecturer_id: string
+          notes?: string | null
+          priority?: string
+          status?: string
+          student_email?: string | null
+          student_id?: string | null
+          student_name: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          intervention_type?: string
+          lecturer_id?: string
+          notes?: string | null
+          priority?: string
+          status?: string
+          student_email?: string | null
+          student_id?: string | null
+          student_name?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       student_writing_profiles: {
         Row: {
           average_sentence_complexity: number
@@ -624,82 +750,11 @@ export type Database = {
           {
             foreignKeyName: "student_writing_profiles_student_id_fkey"
             columns: ["student_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
-      }
-      improvement_plan_progress: {
-        Row: {
-          completed: boolean
-          completed_at: string | null
-          id: string
-          student_id: string
-          task_key: string
-          updated_at: string
-        }
-        Insert: {
-          completed?: boolean
-          completed_at?: string | null
-          id?: string
-          student_id: string
-          task_key: string
-          updated_at?: string
-        }
-        Update: {
-          completed?: boolean
-          completed_at?: string | null
-          id?: string
-          student_id?: string
-          task_key?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "improvement_plan_progress_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      profiles: {
-        Row: {
-          avatar_url: string | null
-          cohort_id: string | null
-          created_at: string
-          department_id: string | null
-          email: string | null
-          full_name: string | null
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          updated_at: string
-        }
-        Insert: {
-          avatar_url?: string | null
-          cohort_id?: string | null
-          created_at?: string
-          department_id?: string | null
-          email?: string | null
-          full_name?: string | null
-          id: string
-          role?: Database["public"]["Enums"]["app_role"]
-          updated_at?: string
-        }
-        Update: {
-          avatar_url?: string | null
-          cohort_id?: string | null
-          created_at?: string
-          department_id?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          updated_at?: string
-        }
-        Relationships: []
       }
       submissions: {
         Row: {
@@ -743,57 +798,6 @@ export type Database = {
         }
         Relationships: []
       }
-      student_interventions: {
-        Row: {
-          assignment_id: string | null
-          created_at: string
-          follow_up_date: string | null
-          id: string
-          intervention_type: string
-          lecturer_id: string
-          notes: string | null
-          priority: string | null
-          status: string
-          student_email: string | null
-          student_id: string
-          student_name: string
-          title: string | null
-          updated_at: string
-        }
-        Insert: {
-          assignment_id?: string | null
-          created_at?: string
-          follow_up_date?: string | null
-          id?: string
-          intervention_type: string
-          lecturer_id: string
-          notes?: string | null
-          priority?: string | null
-          status?: string
-          student_email?: string | null
-          student_id: string
-          student_name: string
-          title?: string | null
-          updated_at?: string
-        }
-        Update: {
-          assignment_id?: string | null
-          created_at?: string
-          follow_up_date?: string | null
-          id?: string
-          intervention_type?: string
-          lecturer_id?: string
-          notes?: string | null
-          priority?: string | null
-          status?: string
-          student_email?: string | null
-          student_id?: string
-          student_name?: string
-          title?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       user_roles: {
         Row: {
           id: string
@@ -817,13 +821,46 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_set_user_role: {
+        Args: {
+          p_target_role: Database["public"]["Enums"]["app_role"]
+          p_target_user_id: string
+        }
+        Returns: {
+          previous_role: string
+          updated_role: string
+          user_id: string
+        }[]
+      }
       apply_recommendation_action: {
         Args: {
           p_action_type: string
           p_payload?: Json
           p_recommendation_id: string
         }
-        Returns: Database["public"]["Tables"]["analytics_recommendations"]["Row"]
+        Returns: {
+          assignment_id: string | null
+          confidence: number
+          created_at: string
+          evidence: Json
+          explanation: string
+          id: string
+          lecturer_id: string
+          recommended_actions: Json
+          rule_code: string
+          severity: string
+          status: string
+          summary: string
+          title: string
+          type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "analytics_recommendations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       has_role: {
         Args: {
@@ -832,24 +869,25 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: never; Returns: boolean }
       is_lecturer: { Args: never; Returns: boolean }
       is_student: { Args: never; Returns: boolean }
     }
     Enums: {
-      app_role: "lecturer" | "student"
+      app_role: "lecturer" | "student" | "admin"
       assignment_status: "draft" | "published" | "closed"
       submission_status:
         | "submitted"
         | "ai_grading"
         | "ai_graded"
+        | "under_review"
+        | "approved"
+        | "released"
         | "first_review"
         | "moderation_pending"
         | "moderation_in_progress"
         | "moderated"
         | "escalated"
-        | "under_review"
-        | "approved"
-        | "released"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -975,23 +1013,27 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
-      app_role: ["lecturer", "student"],
+      app_role: ["lecturer", "student", "admin"],
       assignment_status: ["draft", "published", "closed"],
       submission_status: [
         "submitted",
         "ai_grading",
         "ai_graded",
+        "under_review",
+        "approved",
+        "released",
         "first_review",
         "moderation_pending",
         "moderation_in_progress",
         "moderated",
         "escalated",
-        "under_review",
-        "approved",
-        "released",
       ],
     },
   },
 } as const
+

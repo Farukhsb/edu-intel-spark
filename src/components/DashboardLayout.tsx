@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
+import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
 import {
   loadVisibleCommunicationMessages,
   type CommunicationMessage,
@@ -80,6 +81,7 @@ const adminSections = [
       { to: "/dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
       { to: "/dashboard?view=users", label: "User Management", icon: Users },
       { to: "/dashboard?view=system", label: "System Overview", icon: Shield },
+      { to: "/dashboard?view=audit", label: "Audit Log", icon: FileOutput },
     ],
   },
   {
@@ -97,7 +99,8 @@ const adminSections = [
     description: "Read-only workflow visibility",
     defaultOpen: false,
     links: [
-      { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
+      { to: "/dashboard?view=assignments", label: "Assignments", icon: Upload },
+      { to: "/dashboard?view=submissions", label: "Submissions", icon: FileOutput },
       { to: "/dashboard/moderation", label: "Moderation", icon: ClipboardCheck },
     ],
   },
@@ -131,8 +134,8 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const isAdmin = profile?.role === "admin";
-  const isLecturerEquivalent = profile?.role === "lecturer" || profile?.role === "admin";
+  const isAdmin = isAdminRole(profile?.role);
+  const isLecturerEquivalent = isLecturerEquivalentRole(profile?.role);
   const roleSections = isAdmin ? adminSections : lecturerSections;
   const defaultSectionState = isAdmin ? defaultAdminSectionState : defaultLecturerSectionState;
   const sidebarStateKey = isAdmin ? ADMIN_SIDEBAR_STATE_KEY : LECTURER_SIDEBAR_STATE_KEY;
@@ -199,7 +202,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const openNotification = (notification: CommunicationMessage) => {
     setShowNotifications(false);
 
-    if (profile?.role === "student") {
+    if (isStudentRole(profile?.role)) {
       if (notification.category === "at-risk-alert" || notification.category === "intervention-follow-up") {
         navigate(`/dashboard/improvements?notice=${encodeURIComponent(notification.id)}`, {
           state: { notification },

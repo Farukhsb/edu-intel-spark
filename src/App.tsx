@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NetworkStatus } from "@/components/NetworkStatus";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isAdminRole, isLecturerEquivalentRole } from "@/lib/roles";
 
 import Index from "./pages/Index";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
@@ -98,7 +99,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 const DashboardRouter = () => {
   const { role } = useAuth();
-  if (role === "admin") return <AdminDashboard />;
+  if (isAdminRole(role)) return <AdminDashboard />;
   if (role === "lecturer") return <LecturerOverview />;
   return <StudentGrades />;
 };
@@ -123,7 +124,7 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
 
 const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
   const { role } = useAuth();
-  const resolvedRole = role === "admin" ? "lecturer" : role;
+  const resolvedRole = isLecturerEquivalentRole(role) ? "lecturer" : role;
   if (allowedRole && resolvedRole && resolvedRole !== allowedRole) {
     return <Navigate to="/dashboard" replace />;
   }
