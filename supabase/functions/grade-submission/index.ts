@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -21,6 +22,18 @@ const GRADING_PASSES = 1;
 const PASS_SPREAD_REVIEW_THRESHOLD_RATIO = 0.08;
 const PASS_SPREAD_REVIEW_THRESHOLD_MIN = 8;
 const GRADING_PROMPT_VERSION = "2026-04-24-v4";
+
+const GradeSubmissionRequestSchema = z
+  .object({
+    submissionIds: z.array(z.string().uuid()).max(50).optional(),
+    submissionId: z.string().uuid().optional(),
+    assignmentId: z.string().uuid().optional(),
+    force_regenerate: z.boolean().optional(),
+  })
+  .refine((value) => Boolean(value.submissionId) || Boolean(value.submissionIds?.length), {
+    message: "At least one of submissionId or submissionIds is required",
+    path: ["submissionIds"],
+  });
 
 type EvidenceCoverage = {
   dataset_selected: boolean;
@@ -1253,23 +1266,59 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    const rawBody = body && typeof body === "object" ? body as Record<string, unknown> : null;
+    const normalizedSubmissionIds = Array.isArray(rawBody?.submissionIds)
+      ? rawBody.submissionIds.filter((item): item is string => typeof item === "string")
+      : Array.isArray(rawBody?.submissions)
+        ? rawBody.submissions
+            .map((submission) =>
+              typeof submission === "string"
+                ? submission
+                : submission && typeof submission === "object" && typeof (submission as Record<string, unknown>).id === "string"
+                  ? (submission as Record<string, unknown>).id as string
+                  : null
+            )
+            .filter((item): item is string => Boolean(item))
+        : undefined;
+    const parsedRequest = GradeSubmissionRequestSchema.safeParse({
+      submissionIds: normalizedSubmissionIds,
+      submissionId: typeof rawBody?.submissionId === "string" ? rawBody.submissionId : undefined,
+      assignmentId:
+        typeof rawBody?.assignmentId === "string"
+          ? rawBody.assignmentId
+          : rawBody?.assignment && typeof rawBody.assignment === "object" && typeof (rawBody.assignment as Record<string, unknown>).id === "string"
+            ? (rawBody.assignment as Record<string, unknown>).id
+            : undefined,
+      force_regenerate: typeof rawBody?.force_regenerate === "boolean" ? rawBody.force_regenerate : undefined,
+    });
+
+    if (!parsedRequest.success) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid request format",
+          details: parsedRequest.error.issues,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const { assignmentId, submissionId, submissionIds, force_regenerate } = parsedRequest.data;
     const gradingModel = getModel("OPENAI_GRADING_MODEL", "gpt-5.4-mini");
-    const forceRegenerate = Boolean(body?.force_regenerate);
+    const forceRegenerate = force_regenerate ?? false;
     const regradeReason =
-      typeof body?.regrade_reason === "string" && body.regrade_reason.trim()
-        ? body.regrade_reason.trim()
+      typeof rawBody?.regrade_reason === "string" && rawBody.regrade_reason.trim()
+        ? rawBody.regrade_reason.trim()
         : forceRegenerate
           ? "Forced re-grade requested."
           : "Grading input changed.";
 
     const { user } = await requireLecturer(req);
-    const requestedAssignmentId = body?.assignmentId ?? body?.assignment?.id ?? null;
-    const requestedSubmissionIds = Array.isArray(body?.submissions)
-      ? body.submissions
-          .map((submission: { id?: string } | string) => typeof submission === "string" ? submission : submission?.id)
-          .filter(Boolean)
-      : [];
+    const requestedAssignmentId = assignmentId ?? null;
+    const requestedSubmissionIds = submissionIds ?? (submissionId ? [submissionId] : []);
 
     if (!requestedAssignmentId || requestedSubmissionIds.length === 0) {
       throw new HttpError(400, "Missing assignment or submissions data");
