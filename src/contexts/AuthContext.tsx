@@ -4,9 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { posthog } from "@/lib/posthog";
 import { clearE2EAuthState, createE2EUser, readE2EAuthState } from "@/lib/e2eAuth";
 import { getPasswordResetRedirectUrl } from "@/lib/authUrls";
+import { parseAppRole, type AppRole, type PublicSignupRole } from "@/lib/roles";
 import type { User } from "@supabase/supabase-js";
-
-type AppRole = "lecturer" | "student" | "admin";
 
 interface Profile {
   id: string;
@@ -17,14 +16,6 @@ interface Profile {
   cohort_id: string | null;
   department_id: string | null;
 }
-
-const parseAppRole = (role: string | null | undefined): AppRole | null => {
-  if (role === "lecturer" || role === "student" || role === "admin") {
-    return role;
-  }
-
-  return null;
-};
 
 interface AuthContextType {
   user: User | null;
@@ -37,7 +28,7 @@ interface AuthContextType {
     email: string,
     password: string,
     fullName: string,
-    role: AppRole,
+    role: PublicSignupRole,
     cohortId?: string,
     departmentId?: string
   ) => Promise<{ requiresEmailConfirmation: boolean }>;
@@ -169,7 +160,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     email: string,
     password: string,
     fullName: string,
-    role: AppRole,
+    role: PublicSignupRole,
     cohortId?: string,
     departmentId?: string
   ) => {

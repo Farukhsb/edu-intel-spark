@@ -42,6 +42,8 @@ export function createAdminClient() {
   return createClient(supabaseUrl!, serviceRoleKey!);
 }
 
+type AppRole = "lecturer" | "student" | "admin";
+
 export async function requireUser(req: Request) {
   const supabase = createUserClient(req);
   const { data, error } = await supabase.auth.getUser();
@@ -53,21 +55,41 @@ export async function requireUser(req: Request) {
   return { supabase, user: data.user };
 }
 
-export async function requireLecturer(req: Request) {
-  const { supabase, user } = await requireUser(req);
+async function resolveUserRoles(
+  supabase: ReturnType<typeof createUserClient>,
+  userId: string,
+): Promise<AppRole[]> {
+  const [rolesRes, profileRes] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    throw new HttpError(500, "Failed to verify profile");
+  if (rolesRes.error || profileRes.error) {
+    throw new HttpError(500, "Failed to verify user role");
   }
 
-  if (!profile || profile.role !== "lecturer") {
-    throw new HttpError(403, "Lecturer access required");
+  const roles = new Set<AppRole>();
+
+  for (const row of rolesRes.data ?? []) {
+    if (row.role === "lecturer" || row.role === "student" || row.role === "admin") {
+      roles.add(row.role);
+    }
+  }
+
+  const profileRole = profileRes.data?.role;
+  if (profileRole === "lecturer" || profileRole === "student" || profileRole === "admin") {
+    roles.add(profileRole);
+  }
+
+  return [...roles];
+}
+
+export async function requireLecturer(req: Request) {
+  const { supabase, user } = await requireUser(req);
+  const roles = await resolveUserRoles(supabase, user.id);
+
+  if (!roles.includes("lecturer") && !roles.includes("admin")) {
+    throw new HttpError(403, "Lecturer or admin access required");
   }
 
   return { supabase, user };

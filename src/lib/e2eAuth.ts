@@ -1,8 +1,9 @@
 import type { User } from "@supabase/supabase-js";
+import { parseAppRole, type AppRole } from "@/lib/roles";
 
 export const E2E_AUTH_STORAGE_KEY = "gradeai:e2e-auth";
 
-export type E2EAuthRole = "lecturer" | "student";
+export type E2EAuthRole = AppRole;
 
 export interface E2EAuthProfile {
   id: string;
@@ -38,8 +39,7 @@ export const readE2EAuthState = (): E2EAuthState | null => {
     if (
       !parsed?.user?.id ||
       !parsed?.profile?.id ||
-      !parsed?.profile?.role ||
-      (parsed.profile.role !== "lecturer" && parsed.profile.role !== "student")
+      !parseAppRole(parsed?.profile?.role)
     ) {
       return null;
     }
@@ -53,7 +53,7 @@ export const readE2EAuthState = (): E2EAuthState | null => {
         id: parsed.profile.id,
         full_name: parsed.profile.full_name ?? null,
         email: parsed.profile.email ?? null,
-        role: parsed.profile.role,
+        role: parseAppRole(parsed.profile.role)!,
         avatar_url: parsed.profile.avatar_url ?? null,
         cohort_id: parsed.profile.cohort_id ?? null,
         department_id: parsed.profile.department_id ?? null,

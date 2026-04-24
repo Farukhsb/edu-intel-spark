@@ -22,6 +22,12 @@ These are the migrations that most directly shaped the current baseline.
   - added the protected `public.admin_set_user_role(...)` RPC for admin-driven student/lecturer role changes
 - `20260423152000_fix_admin_set_user_role_ambiguity.sql`
   - fixed the first RPC version so it no longer fails at runtime on ambiguous `user_id` references
+- `20260424101500_add_admin_role_and_harden_signup.sql`
+  - added `admin` to the real database role model and stopped public signup from creating admin accounts
+- `20260424102000_add_is_admin_helper.sql`
+  - added `public.is_admin()` so admin-aware checks do not have to keep reimplementing the same logic
+- `20260424113000_add_admin_audit_log.sql`
+  - added the admin audit log table and the role-change audit write path used by `admin_set_user_role(...)`
 
 ## Hosted drift that was normalized
 
@@ -38,25 +44,29 @@ This matters because the current database story is not just "local migrations ex
 
 The current baseline is considered good when all local migrations apply cleanly through:
 
-- `20260423152000_fix_admin_set_user_role_ambiguity.sql`
+- `20260424113000_add_admin_audit_log.sql`
 
 At that point, the following are expected to be true:
 
 - moderation RLS reflects the hosted-aligned policy set
 - submission storage reads are no longer lecturer-wide
+- `admin` exists in `public.app_role`
+- public signup cannot create admin users through signup metadata
+- `public.is_admin()` exists
 - `public.admin_set_user_role(target_user_id uuid, target_role app_role)` exists
+- `public.admin_audit_log` exists
 - the role-change RPC works for:
   - `student -> lecturer`
   - `lecturer -> student`
 
 ## Current caveat
 
-There is still one known schema-model inconsistency to keep in mind:
+The main caveat now is less about the enum itself and more about rollout discipline:
 
-- the frontend now recognizes `admin`
-- the local historical role model in migrations and generated types still centers on `student` and `lecturer`
+- the schema and generated types now include `admin`
+- but new admin-facing migrations still need to be applied consistently in every real environment before those features are fully live there
 
-That means the migration baseline is operationally good for the current app, but the role model is not fully cleaned up yet. Treat that as a follow-up alignment task, not as proof that the current corrective migrations are invalid.
+In practice, if an environment is missing `20260424113000_add_admin_audit_log.sql`, the app should still load, but admin audit history will not be active there yet.
 
 ## How to validate schema from scratch
 
@@ -74,6 +84,9 @@ npx supabase db reset --local
 - `20260423105000_restrict_submission_storage_reads.sql`
 - `20260423143000_add_admin_set_user_role_rpc.sql`
 - `20260423152000_fix_admin_set_user_role_ambiguity.sql`
+- `20260424101500_add_admin_role_and_harden_signup.sql`
+- `20260424102000_add_is_admin_helper.sql`
+- `20260424113000_add_admin_audit_log.sql`
 
 3. Verify the admin role-change function exists:
 
@@ -89,6 +102,7 @@ where proname = 'admin_set_user_role';
 - moderation UI path still loads with the aligned moderation policies
 - unrelated lecturers cannot read other users' submission files
 - admin role changes work through `public.admin_set_user_role(...)`
+- admin audit rows are written when role changes happen in an environment where the audit migration is applied
 
 5. If you need to compare local and hosted migration state, check the linked project:
 
@@ -108,6 +122,7 @@ When validating the baseline after a reset or after pushing migrations, these ar
 - admin can promote a student to lecturer
 - admin can demote a lecturer to student
 - role changes update both `public.profiles.role` and `public.user_roles`
+- admin audit rows appear for successful role changes when the audit migration is live
 
 ## What this document does not claim
 

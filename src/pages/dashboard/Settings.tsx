@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { User, Shield } from "lucide-react";
+import { isLecturerEquivalentRole } from "@/lib/roles";
 
 const Settings = () => {
   const { profile, signOut } = useAuth();
@@ -33,7 +34,7 @@ const Settings = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Role</span>
-            <Badge variant={profile?.role === "lecturer" ? "default" : "secondary"}>
+            <Badge variant={isLecturerEquivalentRole(profile?.role) ? "default" : "secondary"}>
               {profile?.role || "-"}
             </Badge>
           </div>
