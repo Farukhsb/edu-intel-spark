@@ -42,6 +42,13 @@ type EvidenceCoverage = {
   methods_relevant: boolean;
 };
 
+type RelevanceClassification = "RELEVANT" | "PARTIALLY_RELEVANT" | "OFF_TOPIC";
+
+type RelevanceAssessment = {
+  classification: RelevanceClassification;
+  reasons: string[];
+};
+
 type RubricCriterion = {
   criterion: string;
   weight: number;
@@ -698,6 +705,126 @@ function deriveUkBand(score: number, maxScore: number) {
   if (percent >= 40) return "Third / basic pass";
   if (percent >= 30) return "Fail";
   return "Clear fail";
+}
+
+function redistributeBreakdownToTotal(breakdown: GradeBreakdownItem[], targetTotal: number) {
+  if (breakdown.length === 0) return breakdown;
+
+  let remaining = Math.max(0, Number(targetTotal.toFixed(2)));
+
+  return breakdown.map((item, index) => {
+    const nextScore = index === 0 ? Math.min(item.max_score, remaining) : 0;
+    remaining = Math.max(0, remaining - nextScore);
+    return {
+      ...item,
+      score: nextScore,
+      review_required: true,
+    };
+  });
+}
+
+function extractKeywordSet(text: string) {
+  const stopWords = new Set([
+    "the", "and", "for", "with", "that", "this", "from", "into", "about", "your", "their", "have", "has", "had",
+    "were", "was", "are", "is", "be", "been", "being", "will", "shall", "would", "could", "should", "can", "may",
+    "might", "must", "than", "then", "them", "they", "you", "our", "out", "but", "not", "all", "any", "each",
+    "using", "use", "used", "within", "which", "what", "when", "where", "while", "into", "onto", "upon", "also",
+    "only", "main", "core", "work", "task", "assignment", "brief", "report", "submission", "criterion", "criteria",
+    "student", "students", "required", "requirements",
+  ]);
+
+  return new Set(
+    text
+      .toLowerCase()
+      .match(/[a-z][a-z0-9_-]{2,}/g)?.filter((token) => !stopWords.has(token)) ?? [],
+  );
+}
+
+function assessSubmissionRelevance({
+  assignmentTitle,
+  assignmentInstructions,
+  rubric,
+  submissionText,
+  feedback,
+  criterionReasons,
+}: {
+  assignmentTitle: string;
+  assignmentInstructions: string;
+  rubric: RubricCriterion[];
+  submissionText: string;
+  feedback: string;
+  criterionReasons: string[];
+}): RelevanceAssessment {
+  const combinedEvaluatorText = `${feedback}\n${criterionReasons.join("\n")}`.toLowerCase();
+  const redFlagPatterns = [
+    /off-topic/,
+    /does not address the required task/,
+    /no relevant evidence/,
+    /cannot be credited against this assignment/,
+    /unrelated to the assignment brief/,
+    /wrong subject/,
+    /wrong task/,
+  ];
+
+  const matchedRedFlags = redFlagPatterns.filter((pattern) => pattern.test(combinedEvaluatorText));
+  if (matchedRedFlags.length > 0) {
+    const explicitWrongTask = matchedRedFlags.some((pattern) =>
+      /off-topic|wrong task|wrong subject|unrelated to the assignment brief|cannot be credited against this assignment/.test(
+        pattern.source,
+      )
+    );
+    return {
+      classification: explicitWrongTask ? "OFF_TOPIC" : "PARTIALLY_RELEVANT",
+      reasons: ["Evaluator feedback indicates the submission does not answer the assignment brief."],
+    };
+  }
+
+  const assignmentKeywords = extractKeywordSet(
+    `${assignmentTitle}\n${assignmentInstructions}\n${rubric.map((item) => `${item.criterion} ${item.description ?? ""}`).join("\n")}`,
+  );
+  const submissionKeywords = extractKeywordSet(submissionText);
+  const overlapCount = Array.from(assignmentKeywords).filter((keyword) => submissionKeywords.has(keyword)).length;
+
+  const rubricCriteriaMatched = rubric.filter((criterion) => {
+    const criterionKeywords = extractKeywordSet(`${criterion.criterion} ${criterion.description ?? ""}`);
+    const criterionOverlap = Array.from(criterionKeywords).filter((keyword) => submissionKeywords.has(keyword)).length;
+    return criterionOverlap > 0;
+  }).length;
+
+  const relevantSignals = [
+    "relevant",
+    "addresses the task",
+    "addresses the brief",
+    "meets requirements",
+    "maps to the rubric",
+    "clear evidence",
+    "reasonable interpretation",
+  ].filter((signal) => combinedEvaluatorText.includes(signal)).length;
+
+  const briefSpecificityHigh = assignmentKeywords.size >= 6;
+
+  if (overlapCount === 0 && rubricCriteriaMatched === 0 && relevantSignals === 0) {
+    return {
+      classification: "OFF_TOPIC",
+      reasons: ["Submission text does not align with assignment or rubric keywords."],
+    };
+  }
+
+  if (
+    rubricCriteriaMatched === 0 ||
+    (briefSpecificityHigh && overlapCount <= 1) ||
+    (overlapCount <= 2 && relevantSignals === 0)
+  ) {
+    return {
+      classification: "PARTIALLY_RELEVANT",
+      reasons: ["Submission touches the broad area but does not map clearly to the required task."],
+    };
+  }
+
+  return {
+    classification: "RELEVANT",
+    reasons: ["Submission content aligns with the assignment brief and rubric."],
+  };
 }
 
 function buildRubricCalibrationGuide(rubric: RubricCriterion[], maxScore: number) {
@@ -1888,6 +2015,7 @@ Return corrected JSON only.`;
         const mathAnalysis = normalizeMathAnalysis(gradeResult.math_analysis);
         const fairnessNotes = [...normalized.fairnessNotes];
         let fairnessRecalibrationApplied = false;
+        const preRecalibrationScore = normalized.total;
         const initialSingleCriterion = normalized.breakdown.length === 1 ? normalized.breakdown[0] : null;
         let evidenceCoverage = initialSingleCriterion
           ? detectEvidenceCoverage({
@@ -1898,6 +2026,15 @@ Return corrected JSON only.`;
           })
           : null;
         let ukBand = deriveUkBand(normalized.total, assignment.max_score);
+        const relevanceAssessment = assessSubmissionRelevance({
+          assignmentTitle: assignment.title,
+          assignmentInstructions: assignment.description ?? "",
+          rubric: normalizedRubric,
+          submissionText: blindedText,
+          feedback: modelFeedback,
+          criterionReasons: normalized.breakdown.map((item) => item.reason_for_score),
+        });
+        const relevanceBlocksFairness = relevanceAssessment.classification !== "RELEVANT";
         if (positiveFeedbackLowScoreMismatch && normalized.breakdown.length === 1) {
           const single = normalized.breakdown[0];
           const integrityRiskHigh =
@@ -1905,41 +2042,44 @@ Return corrected JSON only.`;
             reviewReasons.some((reason) =>
               /academic integrity|suspected ai|inconsistent voice|implausible sophistication/i.test(reason)
             );
-          const recalibratedBand = resolveSingleCriterionFairnessRecalibration({
-            feedback: modelFeedback,
-            reasonForScore: single.reason_for_score,
-            awardedScore: single.score,
-            evidenceText: single.evidence_from_submission,
-            submissionText: blindedText,
-            maxScore: assignment.max_score,
-            extractionSuccess: Boolean(extractionMetadata.extraction_success),
-            extractedTextLength: Number(extractionMetadata.extracted_text_length || 0),
-            integrityRiskHigh,
-          });
-          if (recalibratedBand != null && normalized.total < recalibratedBand.score) {
-            normalized = {
-              ...normalized,
-              breakdown: normalized.breakdown.map((item) => ({
-                ...item,
-                score: recalibratedBand.score,
-                performance_band: recalibratedBand.performanceBand,
-                confidence_score: Math.min(item.confidence_score, 0.7),
-                review_required: true,
-              })),
-              total: recalibratedBand.score,
-            };
-            fairnessNotes.push(recalibratedBand.note);
-            gradingConfidence = Math.min(gradingConfidence, 0.7);
-            fairnessRecalibrationApplied = true;
-            evidenceCoverage = recalibratedBand.evidenceCoverage;
-            ukBand = recalibratedBand.ukBand;
+          if (!relevanceBlocksFairness) {
+            const recalibratedBand = resolveSingleCriterionFairnessRecalibration({
+              feedback: modelFeedback,
+              reasonForScore: single.reason_for_score,
+              awardedScore: single.score,
+              evidenceText: single.evidence_from_submission,
+              submissionText: blindedText,
+              maxScore: assignment.max_score,
+              extractionSuccess: Boolean(extractionMetadata.extraction_success),
+              extractedTextLength: Number(extractionMetadata.extracted_text_length || 0),
+              integrityRiskHigh,
+            });
+            if (recalibratedBand != null && normalized.total < recalibratedBand.score) {
+              normalized = {
+                ...normalized,
+                breakdown: normalized.breakdown.map((item) => ({
+                  ...item,
+                  score: recalibratedBand.score,
+                  performance_band: recalibratedBand.performanceBand,
+                  confidence_score: Math.min(item.confidence_score, 0.7),
+                  review_required: true,
+                })),
+                total: recalibratedBand.score,
+              };
+              fairnessNotes.push(recalibratedBand.note);
+              gradingConfidence = Math.min(gradingConfidence, 0.7);
+              fairnessRecalibrationApplied = true;
+              evidenceCoverage = recalibratedBand.evidenceCoverage;
+              ukBand = recalibratedBand.ukBand;
+            }
           }
         }
         if (
           !fairnessRecalibrationApplied &&
           evidenceCoverage &&
           normalized.breakdown.length === 1 &&
-          !Boolean(mathAnalysis?.solver_signals.length)
+          !Boolean(mathAnalysis?.solver_signals.length) &&
+          !relevanceBlocksFairness
         ) {
           let coverageTarget: number | null = null;
           if (
@@ -1977,6 +2117,28 @@ Return corrected JSON only.`;
             ukBand = currentBand;
           }
         }
+        if (relevanceAssessment.classification === "OFF_TOPIC") {
+          fairnessNotes.push("Fairness recalibration skipped because the submission does not address the assignment brief.");
+          gradingConfidence = Math.min(gradingConfidence, 0.7);
+        } else if (relevanceAssessment.classification === "PARTIALLY_RELEVANT") {
+          fairnessNotes.push("Fairness recalibration skipped because the submission addresses the wrong task.");
+          gradingConfidence = Math.min(gradingConfidence, 0.7);
+        }
+        if (relevanceAssessment.classification !== "RELEVANT" && normalized.total >= 40) {
+          const cappedScore = relevanceAssessment.classification === "OFF_TOPIC"
+            ? Math.min(preRecalibrationScore, 20)
+            : Math.min(preRecalibrationScore, 39);
+          normalized = {
+            ...normalized,
+            breakdown: redistributeBreakdownToTotal(normalized.breakdown, cappedScore),
+            total: cappedScore,
+          };
+          fairnessNotes.push(
+            "Score corrected because fairness recalibration attempted to raise a non-relevant submission into a passing band.",
+          );
+          gradingConfidence = Math.min(gradingConfidence, 0.7);
+          fairnessRecalibrationApplied = false;
+        }
         ukBand = deriveUkBand(normalized.total, assignment.max_score);
         if (scoreAdjusted) {
           fairnessNotes.push("Total score was recalculated to match the exact sum of criterion awarded_scores.");
@@ -2000,6 +2162,9 @@ Return corrected JSON only.`;
         if (fairnessRecalibrationApplied) {
           reviewReasons.push("UK band fairness recalibration applied.");
         }
+        if (relevanceAssessment.classification !== "RELEVANT") {
+          reviewReasons.push(...relevanceAssessment.reasons);
+        }
         if (regradeVariancePreservedPrior) {
           reviewReasons.push("Repeated regrading produced materially different scores, so the prior AI grade was preserved.");
         }
@@ -2022,6 +2187,7 @@ Return corrected JSON only.`;
           positiveFeedbackLowScoreMismatch ||
           normalized.recalibrated ||
           fairnessRecalibrationApplied ||
+          relevanceAssessment.classification !== "RELEVANT" ||
           passSpread >= passSpreadThreshold ||
           regradeVariancePreservedPrior ||
           isNearGradeBoundary(normalized.total, assignment.max_score);
@@ -2087,6 +2253,8 @@ Return corrected JSON only.`;
             original_ai_score: originalAiScoreBeforeValidation,
             final_validated_score: normalized.total,
             uk_band: ukBand,
+            relevance_classification: relevanceAssessment.classification,
+            relevance_reasons: relevanceAssessment.reasons,
             evidence_coverage: evidenceCoverage,
             previous_ai_score: previousAiScore,
             recalibration_applied: recalibrationApplied,
@@ -2126,6 +2294,8 @@ Return corrected JSON only.`;
             original_ai_score: originalAiScoreBeforeValidation,
             final_validated_score: normalized.total,
             uk_band: ukBand,
+            relevance_classification: relevanceAssessment.classification,
+            relevance_reasons: relevanceAssessment.reasons,
             evidence_coverage: evidenceCoverage,
             previous_ai_score: previousAiScore,
             recalibration_applied: recalibrationApplied,
