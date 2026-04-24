@@ -37,7 +37,7 @@ The app entry point is `src/App.tsx`. It sets up:
 Routing is still explicit rather than generated. The app uses route-level lazy loading for most non-trivial pages. The important route groups are:
 
 - public routes: `/`, `/auth`, `/reset-password`, `/install`
-- lecturer and student dashboard routes under `/dashboard`
+- dashboard routes under `/dashboard` for lecturer, student, and admin users
 - a catch-all `*` route for `NotFound`
 
 ### Route and Layout Pattern
@@ -48,6 +48,8 @@ Protected dashboard routes are wrapped through two layers:
 - `RoleGate` narrows access where a page is role-specific
 
 Most dashboard pages then render inside `DashboardLayout`, which provides the shared shell and navigation.
+
+Today, admin is not treated as a hidden lecturer. The app now has a separate admin dashboard path and admin-oriented navigation, while still keeping lecturer and student flows intact.
 
 ### Main Frontend Areas
 
@@ -60,6 +62,12 @@ The frontend code is mostly organized as:
 - `src/lib`: workflow helpers, recommendation persistence, communications, interventions, and other domain logic
 - `src/integrations/supabase`: the client and generated database types
 - `src/test` and `tests/e2e`: integration and browser tests
+
+The admin area currently focuses on safe oversight rather than broad mutation. In practice that means:
+
+- admin has its own dashboard entry point
+- admin can inspect users, assignments, submissions, reporting, and system-level summaries
+- admin is intentionally not reusing the lecturer's write-heavy assessment pages as a general control surface
 
 ### Auth and Session Handling
 
@@ -75,7 +83,7 @@ The frontend code is mostly organized as:
 In practice, most pages depend on the auth context for:
 
 - the current `user`
-- the application role (`lecturer` or `student`)
+- the application role (`lecturer`, `student`, or `admin`)
 - profile metadata
 - whether the app is running in demo mode
 
@@ -267,7 +275,9 @@ The schema is broader than the core grading path, but the main working set today
 
 ### Identity and ownership
 
-- `profiles`: application-level user profile and role metadata
+- `profiles`: application-level user profile and mirrored role metadata used by parts of the UI
+- `user_roles`: authorization-facing role records used by SQL helpers and RLS
+- `admin_audit_log`: audit trail for admin operational actions such as role changes
 
 ### Teaching and submissions
 
@@ -315,6 +325,7 @@ The common pattern is:
 
 - students can access their own submissions and released results
 - lecturers can access rows tied to assignments they own
+- admins get a narrower system-oversight surface plus explicit protected actions, rather than blanket write access to academic workflows
 - moderation access is granted to the first marker, assigned moderator, and assignment owner, depending on the table
 
 The project has been tightening these policies through follow-up migrations, especially around moderation, analytics, interventions, and audit visibility.
@@ -351,6 +362,8 @@ The current authorization model is spread across three places:
 - role checks inside Edge Functions
 
 The database is the strongest boundary for table access. The frontend should be treated as a convenience layer, not the authority.
+
+There is also an important implementation detail here: the project is moving toward `user_roles` as the canonical authorization source, with `profiles.role` still mirrored for compatibility in some UI code. That is more accurate than the older lecturer-vs-student-only model that parts of the app started with.
 
 ## Deployment Setup
 

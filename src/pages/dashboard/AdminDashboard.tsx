@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { safeFormatDate } from "@/lib/date";
-import { ArrowRight, Loader2, Settings, Shield, Users } from "lucide-react";
+import { ArrowRight, FileOutput, Loader2, Settings, Shield, Upload, Users } from "lucide-react";
 import { toast } from "sonner";
 
 type AdminMetrics = {
@@ -37,7 +37,37 @@ type AdminUserRow = {
   createdAt: string | null;
 };
 
-type AdminView = "overview" | "users" | "system";
+type AdminAssignmentRow = {
+  id: string;
+  title: string;
+  moduleCode: string | null;
+  status: string;
+  dueDate: string | null;
+  createdAt: string;
+  lecturerName: string;
+};
+
+type AdminSubmissionRow = {
+  id: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentLabel: string;
+  status: string;
+  submittedAt: string;
+  fileName: string;
+};
+
+type AdminAuditRow = {
+  id: string;
+  createdAt: string;
+  actorName: string;
+  targetUserName: string;
+  targetUserEmail: string | null;
+  previousRole: string | null;
+  updatedRole: string | null;
+};
+
+type AdminView = "overview" | "users" | "system" | "assignments" | "submissions" | "audit";
 
 type PendingRoleChange = {
   userId: string;
@@ -69,6 +99,23 @@ const ROLE_BADGE_STYLES: Record<string, string> = {
   student: "border-sky-500/30 bg-sky-500/10 text-sky-700",
 };
 
+const ASSIGNMENT_STATUS_BADGE_STYLES: Record<string, string> = {
+  published: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
+  draft: "border-amber-500/30 bg-amber-500/10 text-amber-700",
+  closed: "border-slate-500/30 bg-slate-500/10 text-slate-700",
+};
+
+const SUBMISSION_STATUS_BADGE_STYLES: Record<string, string> = {
+  submitted: "border-sky-500/30 bg-sky-500/10 text-sky-700",
+  ai_grading: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700",
+  ai_graded: "border-violet-500/30 bg-violet-500/10 text-violet-700",
+  moderation_pending: "border-amber-500/30 bg-amber-500/10 text-amber-700",
+  moderation_in_progress: "border-orange-500/30 bg-orange-500/10 text-orange-700",
+  moderated: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
+  approved: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
+  released: "border-primary/30 bg-primary/10 text-primary",
+};
+
 const AdminOverview = ({ metrics }: { metrics: AdminMetrics }) => {
   const navigate = useNavigate();
   const cards: AdminOverviewCard[] = [
@@ -96,14 +143,16 @@ const AdminOverview = ({ metrics }: { metrics: AdminMetrics }) => {
     {
       title: "Assignments",
       value: metrics.assignments,
-      icon: Settings,
+      icon: Upload,
       helper: "Published and draft assignment records combined.",
+      href: "/dashboard?view=assignments",
     },
     {
       title: "Submissions",
       value: metrics.submissions,
-      icon: Shield,
+      icon: FileOutput,
       helper: "Student submission rows currently stored.",
+      href: "/dashboard?view=submissions",
     },
     {
       title: "Moderation Cases",
@@ -282,6 +331,228 @@ const UserManagement = ({
   </div>
 );
 
+const AssignmentsOverview = ({ assignments }: { assignments: AdminAssignmentRow[] }) => (
+  <div className="space-y-6">
+    <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
+      <CardContent className="space-y-4 p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-primary/25 bg-background/70">Admin Workspace</Badge>
+          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Assignments Oversight</span>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold font-display tracking-tight">Assignments</h2>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            Review assignment volume and ownership from an admin-safe read-only view. This screen is for oversight
+            only and does not expose lecturer workflow controls.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="border-b border-border/60 pb-4">
+        <CardTitle className="text-base">Assignment Records</CardTitle>
+        <CardDescription>Read-only assignment summary across the current workspace.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {assignments.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <p className="text-sm font-medium">No assignments are available</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Assignment rows will appear here when records are visible to the current admin account.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Assignment</TableHead>
+                  <TableHead>Module</TableHead>
+                  <TableHead>Lecturer</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Due</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assignments.map((assignment) => (
+                  <TableRow key={assignment.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{assignment.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Created {safeFormatDate(assignment.createdAt, "MMM d, yyyy")}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{assignment.moduleCode || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{assignment.lecturerName}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`capitalize ${ASSIGNMENT_STATUS_BADGE_STYLES[assignment.status] || "border-muted bg-muted/40 text-foreground"}`}
+                      >
+                        {assignment.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{safeFormatDate(assignment.dueDate, "MMM d, yyyy", "—")}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
+);
+
+const SubmissionsOverview = ({ submissions }: { submissions: AdminSubmissionRow[] }) => (
+  <div className="space-y-6">
+    <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
+      <CardContent className="space-y-4 p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-primary/25 bg-background/70">Admin Workspace</Badge>
+          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Submissions Oversight</span>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold font-display tracking-tight">Submissions</h2>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            Review submission volume and workflow state from an admin-safe read-only view. This screen shows
+            operational status without exposing grading or editing controls.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="border-b border-border/60 pb-4">
+        <CardTitle className="text-base">Submission Records</CardTitle>
+        <CardDescription>Read-only submission summary across the current workspace.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {submissions.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <p className="text-sm font-medium">No submissions are available</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Submission rows will appear here when records are visible to the current admin account.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Assignment</TableHead>
+                  <TableHead>Student</TableHead>
+                  <TableHead>File</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {submissions.map((submission) => (
+                  <TableRow key={submission.id}>
+                    <TableCell className="font-medium">{submission.assignmentTitle}</TableCell>
+                    <TableCell className="text-muted-foreground">{submission.studentLabel}</TableCell>
+                    <TableCell className="text-muted-foreground">{submission.fileName}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`capitalize ${SUBMISSION_STATUS_BADGE_STYLES[submission.status] || "border-muted bg-muted/40 text-foreground"}`}
+                      >
+                        {submission.status.replaceAll("_", " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{safeFormatDate(submission.submittedAt, "MMM d, yyyy")}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
+);
+
+const AdminAuditOverview = ({ auditRows }: { auditRows: AdminAuditRow[] }) => (
+  <div className="space-y-6">
+    <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
+      <CardContent className="space-y-4 p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-primary/25 bg-background/70">Admin Workspace</Badge>
+          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Audit Log</span>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold font-display tracking-tight">Admin Audit Log</h2>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            Review protected admin actions from a read-only audit trail. This log currently records supported
+            role changes and is designed to expand as more narrow admin actions are added.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="border-b border-border/60 pb-4">
+        <CardTitle className="text-base">Recent Admin Actions</CardTitle>
+        <CardDescription>Protected admin changes recorded by the backend.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {auditRows.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <p className="text-sm font-medium">No admin actions recorded yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Once a protected admin action is completed, it will appear here with timing and role details.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Actor</TableHead>
+                  <TableHead>Target</TableHead>
+                  <TableHead>Change</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {auditRows.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="text-muted-foreground">
+                      {safeFormatDate(entry.createdAt, "MMM d, yyyy HH:mm")}
+                    </TableCell>
+                    <TableCell className="font-medium">{entry.actorName}</TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{entry.targetUserName}</p>
+                        <p className="text-xs text-muted-foreground">{entry.targetUserEmail || "—"}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Badge variant="outline" className="capitalize">
+                          {entry.previousRole || "unknown"}
+                        </Badge>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        <Badge variant="outline" className="capitalize">
+                          {entry.updatedRole || "unknown"}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
+);
+
 const SystemOverview = ({ metrics }: { metrics: AdminMetrics }) => (
   <div className="space-y-6">
     <Card className="border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--primary)/0.05)_45%,transparent)] shadow-sm">
@@ -347,12 +618,17 @@ const AdminDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [metrics, setMetrics] = useState<AdminMetrics>(EMPTY_METRICS);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [assignments, setAssignments] = useState<AdminAssignmentRow[]>([]);
+  const [submissions, setSubmissions] = useState<AdminSubmissionRow[]>([]);
+  const [auditRows, setAuditRows] = useState<AdminAuditRow[]>([]);
   const [pendingRoleChange, setPendingRoleChange] = useState<PendingRoleChange>(null);
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
 
   const activeView = useMemo<AdminView>(() => {
     const view = searchParams.get("view");
-    return view === "users" || view === "system" ? view : "overview";
+    return view === "users" || view === "system" || view === "assignments" || view === "submissions" || view === "audit"
+      ? view
+      : "overview";
   }, [searchParams]);
 
   const activeUserFilter = useMemo(() => {
@@ -370,7 +646,7 @@ const AdminDashboard = () => {
     }
 
     try {
-      const [profilesRes, assignmentsRes, submissionsRes, moderationCasesRes] = await Promise.all([
+      const [profilesRes, assignmentsCountRes, submissionsCountRes, moderationCasesRes, assignmentsRes, submissionsRes] = await Promise.all([
         supabase
           .from("profiles")
           .select("id, full_name, email, role, created_at")
@@ -378,10 +654,32 @@ const AdminDashboard = () => {
         supabase.from("assignments").select("id", { count: "exact", head: true }),
         supabase.from("submissions").select("id", { count: "exact", head: true }),
         supabase.from("moderation_cases").select("id", { count: "exact", head: true }),
+        supabase
+          .from("assignments")
+          .select("id, title, module_code, status, due_date, created_at, lecturer_id")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("submissions")
+          .select("id, assignment_id, student_name, student_email, status, submitted_at, file_name")
+          .order("submitted_at", { ascending: false }),
       ]);
 
-      if (profilesRes.error || assignmentsRes.error || submissionsRes.error || moderationCasesRes.error) {
-        throw profilesRes.error || assignmentsRes.error || submissionsRes.error || moderationCasesRes.error;
+      if (
+        profilesRes.error ||
+        assignmentsCountRes.error ||
+        submissionsCountRes.error ||
+        moderationCasesRes.error ||
+        assignmentsRes.error ||
+        submissionsRes.error
+      ) {
+        throw (
+          profilesRes.error ||
+          assignmentsCountRes.error ||
+          submissionsCountRes.error ||
+          moderationCasesRes.error ||
+          assignmentsRes.error ||
+          submissionsRes.error
+        );
       }
 
       const profileRows = (profilesRes.data || []).map((row) => ({
@@ -392,15 +690,77 @@ const AdminDashboard = () => {
         createdAt: row.created_at ?? null,
       }));
 
+      const lecturerNameById = new Map(
+        profileRows.map((row) => [row.id, row.fullName || row.email || "Unknown lecturer"]),
+      );
+
+      const assignmentRows = (assignmentsRes.data || []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        moduleCode: row.module_code ?? null,
+        status: String(row.status),
+        dueDate: row.due_date ?? null,
+        createdAt: row.created_at,
+        lecturerName: lecturerNameById.get(row.lecturer_id) || "Unknown lecturer",
+      }));
+
+      const assignmentTitleById = new Map(
+        assignmentRows.map((row) => [row.id, row.title]),
+      );
+
+      const submissionRows = (submissionsRes.data || []).map((row) => ({
+        id: row.id,
+        assignmentId: row.assignment_id,
+        assignmentTitle: assignmentTitleById.get(row.assignment_id) || "Unknown assignment",
+        studentLabel: row.student_name || row.student_email || "Student record unavailable",
+        status: String(row.status),
+        submittedAt: row.submitted_at,
+        fileName: row.file_name,
+      }));
+
       setUsers(profileRows);
+      setAssignments(assignmentRows);
+      setSubmissions(submissionRows);
       setMetrics({
         totalUsers: profileRows.length,
         lecturers: profileRows.filter((row) => row.role === "lecturer").length,
         students: profileRows.filter((row) => row.role === "student").length,
-        assignments: assignmentsRes.count ?? 0,
-        submissions: submissionsRes.count ?? 0,
+        assignments: assignmentsCountRes.count ?? 0,
+        submissions: submissionsCountRes.count ?? 0,
         moderationCases: moderationCasesRes.count ?? 0,
       });
+
+      const { data: auditData, error: auditError } = await supabase
+        .from("admin_audit_log")
+        .select("id, created_at, target_user_name, target_user_email, details")
+        .eq("action_type", "role_changed")
+        .order("created_at", { ascending: false })
+        .limit(25);
+
+      if (auditError) {
+        console.warn("Admin audit log is unavailable:", auditError);
+        setAuditRows([]);
+      } else {
+        const auditLogRows = (auditData || []).map((row) => {
+          const details = (row.details ?? {}) as {
+            actor_name?: string;
+            previous_role?: string;
+            updated_role?: string;
+          };
+
+          return {
+            id: row.id,
+            createdAt: row.created_at,
+            actorName: details.actor_name || "Admin",
+            targetUserName: row.target_user_name || "Unknown user",
+            targetUserEmail: row.target_user_email ?? null,
+            previousRole: details.previous_role ?? null,
+            updatedRole: details.updated_role ?? null,
+          };
+        });
+
+        setAuditRows(auditLogRows);
+      }
     } catch (error) {
       console.error("Failed to load admin dashboard:", error);
       toast.error("Admin dashboard data could not be loaded right now.");
@@ -492,6 +852,12 @@ const AdminDashboard = () => {
           onRequestRoleChange={requestRoleChange}
           changingUserId={changingUserId}
         />
+      ) : activeView === "assignments" ? (
+        <AssignmentsOverview assignments={assignments} />
+      ) : activeView === "submissions" ? (
+        <SubmissionsOverview submissions={submissions} />
+      ) : activeView === "audit" ? (
+        <AdminAuditOverview auditRows={auditRows} />
       ) : activeView === "system" ? (
         <SystemOverview metrics={metrics} />
       ) : (

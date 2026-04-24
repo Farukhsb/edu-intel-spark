@@ -78,6 +78,7 @@ Students can:
 ### Institutional workflows
 
 GradeAI also supports:
+- an admin control surface for user oversight and system-level reporting
 - accreditation reporting views
 - external examiner export workflows
 - moderation and audit trails
@@ -267,6 +268,16 @@ They correspond to:
 
 The live project is functioning with these migrations applied, but Supabase CLI history output may still show them as legacy unmatched entries. Treat that as a migration-ledger hygiene issue, not a live permissions failure. Do not rename historical migration IDs on a live project without a deliberate migration-history cleanup plan.
 
+### Current role-model note
+
+The role model is a lot clearer than it was earlier in the project, but it still deserves a quick explanation.
+
+- `admin` is now part of the real database role model
+- public signup is hardened so it cannot create admin users
+- the app is moving toward `user_roles` as the real authorization source, with `profiles.role` still mirrored for compatibility in some UI paths
+
+So if you touch auth, routing, Edge Function checks, or RLS, check the full role path end to end rather than assuming the frontend alone tells the whole story.
+
 ## Important Edge Functions
 
 The current backend uses these Supabase Edge Functions:
@@ -297,6 +308,8 @@ A few areas of the platform were tightened up recently to make the product feel 
 - route-level lazy loading was improved to reduce the main frontend bundle
 - export and chart-heavy vendor buckets were split more conservatively, so those libraries load closer to the routes and actions that actually use them
 - React Router future flags were enabled early to remove upgrade warnings and keep the app closer to upcoming router behavior
+- the role model was tightened so admin is part of the real schema, generated types were brought back in line, and public signup no longer trusts admin role input
+- the admin area now includes read-only oversight views for users, assignments, submissions, reporting, and system-level navigation without forcing admin through lecturer-heavy pages
 
 ## Current State
 

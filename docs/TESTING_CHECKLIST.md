@@ -11,6 +11,7 @@ Make sure you have:
 - a working frontend build connected to the intended Supabase project
 - at least one lecturer account
 - at least one student account
+- at least one admin account if you are validating the admin dashboard or role-management flows
 - enough seeded or real data to test assignments, submissions, grading, and moderation
 
 If you are testing against a shared environment, confirm which project you are using before you start. A lot of confusion in this app comes from thinking you are on one Supabase project when you are actually on another.
@@ -66,6 +67,24 @@ Expected result:
 
 - student can log in and browse student pages
 - student does not see lecturer-only controls or pages
+
+### Admin login
+
+1. Sign in with an admin account.
+2. Confirm the admin lands on the admin dashboard rather than the lecturer or student home.
+3. Open:
+   - Admin Dashboard
+   - User Management
+   - System Overview
+   - one reporting page
+4. Confirm the page loads even if the audit log view is empty in that environment.
+5. Sign out.
+
+Expected result:
+
+- admin can sign in and reach the admin dashboard cleanly
+- admin navigation feels like an admin surface, not a student or lecturer shell
+- missing optional admin-only data should degrade safely instead of blanking the whole page
 
 ## 2. Assignment Creation
 
@@ -235,7 +254,36 @@ Expected result:
 - export actions do not fail silently
 - the file is readable and not obviously empty or malformed
 
-## 7. Error Handling
+## 7. Admin Oversight
+
+Use an admin account.
+
+1. Open `Admin Dashboard`.
+2. Confirm the overview cards load counts for:
+   - users
+   - lecturers
+   - students
+   - assignments
+   - submissions
+   - moderation cases
+3. Click the user-related cards:
+   - Total Users
+   - Lecturers
+   - Students
+4. Confirm the correct user list or filter opens.
+5. Open the read-only admin assignments view.
+6. Open the read-only admin submissions view.
+7. Confirm these views show data without exposing lecturer mutation controls.
+8. If the environment has the audit migration applied, open `Audit Log` and confirm entries appear after a role change.
+
+Expected result:
+
+- admin overview counts load
+- user filters behave as expected
+- assignments and submissions oversight views are readable and clearly admin-safe
+- the audit view is useful where the migration is live, and harmless where it is not
+
+## 8. Error Handling
 
 This section is not about breaking the app on purpose. It is about checking that ordinary failures fail cleanly.
 
@@ -278,7 +326,7 @@ Expected result:
 - unauthorized pages do not expose sensitive data
 - protected actions fail safely instead of half-saving
 
-## 8. Final Pre-Release Pass
+## 9. Final Pre-Release Pass
 
 Before calling the build ready, confirm all of these are true:
 
@@ -288,10 +336,11 @@ Before calling the build ready, confirm all of these are true:
 - the lecturer can see and process that submission
 - moderation still works for a real case
 - analytics pages load without obvious errors
+- admin dashboard and user management load if admin is part of the release scope
 - exports download and contain sensible data
 - common failure cases do not crash the app
 
-## 9. Stop Conditions
+## 10. Stop Conditions
 
 Do not ship or demo if any of these are true:
 
@@ -300,5 +349,6 @@ Do not ship or demo if any of these are true:
 - a lecturer cannot see their own submissions or moderation cases
 - moderation actions fail because of permissions or missing joins
 - analytics pages throw runtime errors on normal data
+- admin landing pages are blank because of missing environment-specific schema or migration drift
 - export downloads are empty, broken, or obviously inaccurate
 - a page crashes instead of showing a fallback or error state
