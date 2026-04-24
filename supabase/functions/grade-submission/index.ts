@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
   logDocumentExtractionResult,
@@ -8,12 +9,6 @@ import {
 } from "../_shared/document-extraction.ts";
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 import { classifyAssignmentType, type AssignmentType } from "../_shared/text-analysis.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
 
 const CONFIDENCE_THRESHOLD = 0.7;
 const REGRADING_DRIFT_THRESHOLD_RATIO = 0.08;
@@ -1263,6 +1258,8 @@ function buildResponseSchema(rubricLength: number, includeMathAnalysis: boolean)
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

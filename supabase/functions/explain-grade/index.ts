@@ -1,12 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { jsonError, requireUser } from "../_shared/auth.ts";
+import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
 
 const ExplainGradeRequestSchema = z.object({
   submissionId: z.string().uuid().optional(),
@@ -31,6 +27,8 @@ function isExplainGradeMessage(value: unknown): value is ExplainGradeMessage {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
