@@ -6,6 +6,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+tmp/
+temp/
+*.tmp
+*.temp
 
 node_modules/
 dist/
@@ -20,6 +24,11 @@ dist-ssr
 .env.production.local
 supabase/.temp/
 .supabase/
+uploads/
+upload/
+private_uploads/
+private-files/
+private_files/
 playwright-report/
 test-results/
 coverage/
