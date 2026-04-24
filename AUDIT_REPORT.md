@@ -1,16 +1,16 @@
 # Repository Audit Report - GradeAI (edu-intel-spark)
 
-**Audit Date:** April 24, 2026  
+**Audit Date:** April 24, 2026 (Updated)  
 **Audit Type:** Comprehensive Code Quality, Security, and Architecture Review  
-**Status:** ✅ Generally Healthy with Minor Issues
+**Status:** ✅ Generally Healthy with Actionable Improvements Needed
 
 ---
 
 ## Executive Summary
 
-The GradeAI repository is a well-structured React + TypeScript + Supabase application with comprehensive assessment workflow features. The codebase demonstrates solid architectural decisions and good separation of concerns, but has reduced type safety due to loose TypeScript configuration. The main concern is a **hardcoded PostHog API key** that should be removed immediately.
+The GradeAI repository is a well-structured React + TypeScript + Supabase application with comprehensive assessment workflow features. The codebase demonstrates excellent architectural decisions and good separation of concerns. Recent improvements include fixing the PostHog API key issue. Main remaining challenges are loose TypeScript configuration (causing 45+ 'any' types), input validation gaps, and test coverage gaps.
 
-**Overall Health Score: 7.4/10**
+**Overall Health Score: 7.6/10** (↑ 0.2 from previous audit - PostHog key fixed)
 
 ---
 
@@ -30,84 +30,138 @@ The GradeAI repository is a well-structured React + TypeScript + Supabase applic
 
 ## Critical Issues
 
-### 🔴 1. Hardcoded PostHog API Key
+### 🔴 1. ✅ RESOLVED: Hardcoded PostHog API Key
 
-**File:** [src/lib/posthog.ts](src/lib/posthog.ts#L10)  
-**Severity:** CRITICAL  
-**Issue:**
+**File:** [src/lib/posthog.ts](src/lib/posthog.ts#L12)  
+**Previous Status:** CRITICAL  
+**Current Status:** ✅ FIXED
+
+**What was fixed:**
 ```typescript
-const key = import.meta.env.VITE_POSTHOG_KEY || "phc_96ZN0coZq6pvN18QFEd759uOHx3ZuZviXK1FxvydNRk";
-```
+// ❌ BEFORE:
+const key = import.meta.env.VITE_POSTHOG_KEY || "phc_REDACTED_EXAMPLE";
 
-The PostHog API key is exposed as a fallback in production code. While PostHog keys are typically considered low-risk (they're meant to be public), this violates security best practices and could lead to:
-- Unauthorized analytics tracking of your instance
-- Account takeover if the account is compromised
-- Inconsistent analytics across environments
-
-**Remediation:**
-```typescript
+// ✅ AFTER:
 const key = import.meta.env.VITE_POSTHOG_KEY;
 if (!key) {
-  console.warn("PostHog key not configured - analytics disabled");
+  if (import.meta.env.DEV && !missingKeyWarningShown) {
+    console.warn("PostHog key missing - analytics disabled.");
+    missingKeyWarningShown = true;
+  }
+  posthogClient = null;
+  return;
 }
 ```
 
-**Priority:** 🔴 URGENT - Fix immediately
+**Result:** The hardcoded fallback key has been removed. PostHog will gracefully disable if environment variable is not set. ✅
+
+---
+
+### 🔴 2. ✅ RESOLVED: Temporary SQL Files Removed
+
+**Resolved Temporary Files:**
+- `temp_admin_profile_validation.sql`
+- `temp_admin_profile_validation_2.sql`
+
+**Current Status:** ✅ NOT FOUND - Files have been deleted
+
+---
+
+### 🟠 3. Unsafe JSON.parse() in DashboardLayout.tsx
+
+**File:** [src/components/DashboardLayout.tsx](src/components/DashboardLayout.tsx#L150-L165)  
+**Severity:** MEDIUM (Recently Fixed)  
+**Status:** ✅ NOW HAS TRY-CATCH
+
+**Current Implementation (✅ Safe):**
+```typescript
+const [openSections, setOpenSections] = useState(() => {
+  if (typeof window === "undefined") return defaultSectionState;
+
+  try {
+    const stored = window.localStorage.getItem(sidebarStateKey);
+    if (!stored) return defaultSectionState;
+
+    const parsed = JSON.parse(stored) as Partial<typeof defaultSectionState>;
+    return { ...defaultSectionState, ...parsed };
+  } catch {
+    return defaultSectionState;  // ✅ Graceful fallback
+  }
+});
+```
+
+**Status:** ✅ Properly protected with try-catch and fallback handling. Good defensive programming.
 
 ---
 
 ## High Priority Issues
 
-### 🟠 1. Loose TypeScript Configuration
+### 🟠 1. 45+ 'any' Type Instances Across Codebase
 
-**File:** [tsconfig.app.json](tsconfig.app.json)  
 **Severity:** HIGH  
-**Issues:**
+**Files:** 8+ critical files
+
+**Detailed Breakdown:**
+
+| File | Count | Specific Lines | Impact |
+|------|-------|-----------------|--------|
+| [AssignmentDetail.tsx](src/pages/dashboard/AssignmentDetail.tsx) | 11 | 106, 128, 157, 297, 330, 498, 567, 659, 802, 1569, 1598 | Grade breakdown, rubric typing |
+| [ExplainGrade.tsx](src/pages/dashboard/ExplainGrade.tsx) | 4 | 99, 103, 119, 120 | Array types, iteration |
+| [supabase/functions/_shared/openai.ts](supabase/functions/_shared/openai.ts) | 5 | 48, 54-57 | Response extraction |
+| [LearningOutcomes.tsx](src/pages/dashboard/LearningOutcomes.tsx) | 3 | 85, 87, 324 | Badge variant casting |
+| [src/components/ui/chart.tsx](src/components/ui/chart.tsx) | 2 | 94, 232 | Chart configuration |
+| [Test helpers/mocks](src/test/) | 2+ | Various | Mock data types |
+
+**Example Problem (AssignmentDetail.tsx line 106):**
+```typescript
+// Current (unsafe)
+rubric: data.rubric as any[] | null,
+breakdown: g.ai_breakdown as any[],
+
+// Should be:
+interface RubricCriterion {
+  criterion: string;
+  max_score: number;
+  score?: number;
+  feedback?: string;
+}
+interface GradeBreakdown {
+  criterion: string;
+  score: number;
+  feedback: string;
+}
+rubric: (data.rubric as RubricCriterion[]) | null,
+breakdown: g.ai_breakdown as GradeBreakdown[],
+```
+
+**Consequences:**
+- ❌ No IDE autocomplete when accessing properties
+- ❌ Runtime errors from incorrect property access
+- ❌ Refactoring becomes error-prone
+- ❌ New developers can't understand data structures
+
+**Remediation Steps (4-week program):**
+
+**Week 1:** Create type definitions
+```bash
+# 1. Create src/types/index.ts
+# 2. Define all data shapes from Supabase schema
+# 3. Export interfaces for component use
+```
+
+**Week 2:** Replace in high-impact files
+- Start with AssignmentDetail.tsx (11 instances)
+- Update supabase/functions/_shared/openai.ts (5 instances)
+- Fix ExplainGrade.tsx (4 instances)
+
+**Week 3-4:** Remaining files + enable ESLint rule
 ```json
 {
-  "compilerOptions": {
-    "strict": false,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "strictNullChecks": false
-  }
+  "@typescript-eslint/no-explicit-any": "warn"
 }
 ```
 
-**Impact:**
-- Eliminates TypeScript's primary benefit of compile-time type safety
-- Masks potential runtime errors
-- Makes refactoring more risky
-- Prevents proper IDE assistance and autocomplete
-
-**Affected ESLint Rules** ([eslint.config.js](eslint.config.js)):
-```javascript
-"@typescript-eslint/no-explicit-any": "off",        // ❌ Allows unsafe 'any' types
-"@typescript-eslint/no-unused-vars": "off",         // ❌ Hides dead code
-"react-hooks/exhaustive-deps": "off",               // ❌ React Hook dangers
-"@typescript-eslint/no-empty-object-type": "off"    // ❌ Allows empty types
-```
-
-**Remediation Strategy:**
-1. **Phase 1 (Week 1):** Enable rules one at a time with warnings
-2. **Phase 2 (Week 2-3):** Address violations
-3. **Phase 3 (Week 4):** Convert to errors
-
-Example progression:
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitAny": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "strictNullChecks": true
-  }
-}
-```
-
-**Priority:** 🟠 HIGH - Implement in current sprint
+**Priority:** 🟠 HIGH - Schedule immediate attention
 
 ---
 
@@ -586,7 +640,7 @@ Consider: Monitor with `vite build --report`
    - Change: Remove fallback, require environment variable
 
 2. **Delete Temp Files** (5 minutes)
-   - Remove: `temp_admin_profile_validation*.sql`
+   - Remove temporary admin profile validation SQL files from the repo root
    - Update: `.gitignore` if needed
 
 ### 🟠 High Priority (This Sprint)
@@ -711,7 +765,7 @@ The GradeAI codebase demonstrates excellent architectural decisions and solid en
 ```bash
 # 1. Remove hardcoded PostHog key
 # Edit: src/lib/posthog.ts line 10
-# Remove: || "phc_96ZN0coZq6pvN18QFEd759uOHx3ZuZviXK1FxvydNRk"
+# Remove: || "phc_REDACTED_EXAMPLE"
 
 # 2. Delete temp files
 rm <temporary admin profile validation sql files>
