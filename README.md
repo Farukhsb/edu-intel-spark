@@ -9,6 +9,26 @@ Live deployment:
 
 GradeAI is designed around the full assessment lifecycle rather than a single AI grading feature. The aim is to make marking, moderation, integrity review, release, and follow-up support feel like parts of one coherent workflow instead of a collection of disconnected tools.
 
+## Platform Preview
+
+Here are a few real views from the product as it works today.
+
+### Lecturer overview
+
+![Lecturer dashboard overview](docs/screenshots/lecturer-dashboard-overview.jpg)
+
+### Analytics and insight
+
+![Cohort analytics dashboard](docs/screenshots/cohort-analytics-dashboard.jpg)
+
+![Grade distribution analytics](docs/screenshots/grade-distribution-analytics.jpg)
+
+### Student support and explainability
+
+![Student improvement plan](docs/screenshots/student-improvement-plan.jpg)
+
+![AI grade explanation](docs/screenshots/ai-grade-explanation.jpg)
+
 ## What The Platform Covers
 
 - rubric-based assignment authoring
