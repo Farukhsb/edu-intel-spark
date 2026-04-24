@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -21,6 +22,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const CheckPlagiarismRequestSchema = z
+  .object({
+    submissionId: z.string().uuid().optional(),
+    submissionIds: z.array(z.string().uuid()).max(50).optional(),
+    assignmentId: z.string().uuid().optional(),
+  })
+  .refine((value) => Boolean(value.submissionId) || Boolean(value.submissionIds?.length), {
+    message: "At least one of submissionId or submissionIds is required",
+    path: ["submissionIds"],
+  });
+const includeValidationDetails = Deno.env.get("ENV") === "development";
 
 const MAX_SINGLE_TEXT_CHARS = 12000;
 const MAX_MULTI_TEXT_CHARS = 3500;
@@ -705,17 +718,50 @@ serve(async (req) => {
 
   try {
     const startedAt = Date.now();
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    const rawBody = body && typeof body === "object" ? body as Record<string, unknown> : null;
+    const normalizedSubmissionIds = Array.isArray(rawBody?.submissionIds)
+      ? rawBody.submissionIds.filter((item): item is string => typeof item === "string")
+      : Array.isArray(rawBody?.submissions)
+        ? rawBody.submissions
+            .map((submission) =>
+              typeof submission === "string"
+                ? submission
+                : submission && typeof submission === "object" && typeof (submission as Record<string, unknown>).id === "string"
+                  ? (submission as Record<string, unknown>).id as string
+                  : null
+            )
+            .filter((item): item is string => Boolean(item))
+        : undefined;
+    const parsedRequest = CheckPlagiarismRequestSchema.safeParse({
+      submissionId: typeof rawBody?.submissionId === "string" ? rawBody.submissionId : undefined,
+      submissionIds: normalizedSubmissionIds,
+      assignmentId:
+        typeof rawBody?.assignmentId === "string"
+          ? rawBody.assignmentId
+          : rawBody?.assignment && typeof rawBody.assignment === "object" && typeof (rawBody.assignment as Record<string, unknown>).id === "string"
+            ? (rawBody.assignment as Record<string, unknown>).id
+            : undefined,
+    });
+
+    if (!parsedRequest.success) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid request format",
+          message: "Please provide a valid submission ID or list of submission IDs.",
+          ...(includeValidationDetails ? { details: parsedRequest.error.issues } : {}),
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     const integrityModel = getModel("OPENAI_INTEGRITY_MODEL", "gpt-5.4-mini");
     const { user } = await requireLecturer(req);
-    const requestedAssignmentId = body?.assignmentId ?? null;
-    const requestedSubmissionIds = Array.isArray(body?.submissionIds)
-      ? body.submissionIds
-      : Array.isArray(body?.submissions)
-        ? body.submissions
-            .map((submission: { id?: string } | string) => (typeof submission === "string" ? submission : submission?.id))
-            .filter(Boolean)
-        : [];
+    const requestedAssignmentId = parsedRequest.data.assignmentId ?? null;
+    const requestedSubmissionIds = parsedRequest.data.submissionIds ?? (parsedRequest.data.submissionId ? [parsedRequest.data.submissionId] : []);
 
     if (!requestedAssignmentId || requestedSubmissionIds.length === 0) {
       return new Response(JSON.stringify({ flags: [], summary: "No submissions provided" }), {
