@@ -9,14 +9,43 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
 
-interface GradeBreakdown {
+interface ExplainGradeBreakdown {
   assessment: string;
   totalGrade: number;
   band: string;
   components: { name: string; weight: number; score: number; maxScore: number }[];
   improvementAreas: { area: string; currentBand: string; nextBand: string; pointsNeeded: number; tips: string[] }[];
 }
+
+interface SubmissionRow {
+  id: string;
+  assignment_id: string | null;
+  student_name: string | null;
+  file_name: string | null;
+}
+
+interface GradeRow {
+  id: string;
+  submission_id: string;
+  ai_score: number | null;
+  final_score: number | null;
+  ai_breakdown: SharedGradeBreakdown[] | null;
+}
+
+interface AssignmentRow {
+  id: string;
+  module_code: string | null;
+  title: string;
+}
+
+type ExplainGradeBreakdownItem = SharedGradeBreakdown & {
+  name?: string;
+  maxScore?: number;
+};
+
+export const getBreakdownMaxScore = (item: ExplainGradeBreakdownItem) => item.max_score ?? item.maxScore ?? 0;
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
@@ -49,7 +78,7 @@ interface SubmissionOption {
   submissionId: string;
   label: string;
   totalGrade: number;
-  breakdown: GradeBreakdown;
+  breakdown: ExplainGradeBreakdown;
 }
 
 const DEMO_SUBMISSIONS: SubmissionOption[] = [
@@ -96,19 +125,21 @@ const ExplainGrade = () => {
       const subIds = (subs || []).map(s => s.id);
       const { data: grades } = subIds.length > 0
         ? await supabase.from("grades").select("*").in("submission_id", subIds)
-        : { data: [] as any[] };
+        : { data: [] as GradeRow[] };
       const assignmentIds = [...new Set((subs || []).map(s => s.assignment_id))];
       const { data: assignments } = assignmentIds.length > 0
         ? await supabase.from("assignments").select("*").in("id", assignmentIds)
-        : { data: [] as any[] };
+        : { data: [] as AssignmentRow[] };
 
       if (!grades?.length || !subs?.length) {
         setLoading(false);
         return;
       }
 
-      const subMap = Object.fromEntries((subs || []).map(s => [s.id, s]));
-      const assignMap = Object.fromEntries((assignments || []).map(a => [a.id, a]));
+      const safeSubs = (subs ?? []) as SubmissionRow[];
+      const safeAssignments = (assignments ?? []) as AssignmentRow[];
+      const subMap = Object.fromEntries(safeSubs.map(s => [s.id, s]));
+      const assignMap = Object.fromEntries(safeAssignments.map(a => [a.id, a]));
 
       const options: SubmissionOption[] = grades
         .filter(g => (g.ai_score != null || g.final_score != null) && g.ai_breakdown)
@@ -116,13 +147,20 @@ const ExplainGrade = () => {
           const sub = subMap[g.submission_id];
           const assignment = sub ? assignMap[sub.assignment_id] : null;
           const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
-          const breakdown = g.ai_breakdown as any[];
-          const totalMax = breakdown?.reduce((s: number, b: any) => s + (b.max_score ?? b.maxScore ?? 10), 0) || 100;
+          const rawBreakdown = g.ai_breakdown;
+          const breakdown = Array.isArray(rawBreakdown)
+            ? (rawBreakdown as ExplainGradeBreakdownItem[])
+            : [];
+          const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
+          if (totalMaxRaw === 0 && import.meta.env.DEV) {
+            console.warn("AI breakdown has no max scores; using fallback totalMax = 1");
+          }
+          const totalMax = totalMaxRaw > 0 ? totalMaxRaw : 1;
 
-          const components = (breakdown || []).map((b: any) => ({
+          const components = breakdown.map((b: ExplainGradeBreakdownItem) => ({
             name: b.criterion || b.name || "Unknown",
-            weight: Math.round(((b.max_score ?? b.maxScore ?? 10) / totalMax) * 100),
-            score: Math.round(((b.score ?? 0) / (b.max_score ?? b.maxScore ?? 10)) * 100),
+            weight: Math.round((getBreakdownMaxScore(b) / totalMax) * 100),
+            score: Math.round(((b.score ?? 0) / Math.max(getBreakdownMaxScore(b), 1)) * 100),
             maxScore: 100,
           }));
 

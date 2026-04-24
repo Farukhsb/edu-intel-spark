@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,11 +39,19 @@ import {
   Shield,
   Sparkles,
   Upload,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
 import type { Tables } from "@/integrations/supabase/types";
+import type {
+  AIResponse,
+  Assignment,
+  GradeBreakdown,
+  RubricCriterion,
+  Submission,
+} from "@/types";
 import { evaluateModerationSignals, formatSubmissionStatus } from "@/lib/moderation";
 import {
   buildModerationAuditPayload,
@@ -85,7 +93,7 @@ const REGRADABLE_STATUSES: SubmissionStatus[] = [
   "approved",
 ];
 
-interface Submission {
+type AssignmentDetailSubmission = Submission & {
   id: string;
   assignment_id: string;
   student_name: string | null;
@@ -96,6 +104,20 @@ interface Submission {
   status: SubmissionStatus;
   submitted_at: string;
   student_id: string | null;
+};
+
+interface AssignmentDetailBreakdown extends GradeBreakdown {
+  evidence_snippet?: string | null;
+  review_required?: boolean | null;
+  error_type?: "arithmetic_slip" | "conceptual_flaw" | "none";
+}
+
+interface GradingMetadata {
+  fairness_notes?: string[];
+  math_analysis?: {
+    solver_signals?: string[];
+  } | null;
+  [key: string]: unknown;
 }
 
 interface Grade {
@@ -103,20 +125,38 @@ interface Grade {
   submission_id: string;
   ai_score: number | null;
   ai_feedback: string | null;
-  ai_breakdown: any[] | null;
+  ai_breakdown: AssignmentDetailBreakdown[] | null;
   assignment_type?: string | null;
   grading_confidence?: number | null;
-  grading_metadata?: Record<string, unknown> | null;
+  grading_metadata?: GradingMetadata | null;
   lecturer_score: number | null;
   lecturer_feedback: string | null;
   final_score: number | null;
   final_feedback: string | null;
 }
 
+interface GradeSubmissionResult {
+  submissionId: string;
+  success: boolean;
+  score?: number | null;
+  feedback?: string | null;
+  breakdown?: GradeBreakdown[] | null;
+  assignmentType?: string | null;
+  gradingConfidence?: number | null;
+  gradingMetadata?: GradingMetadata | null;
+  requiresLecturerReview?: boolean;
+  error?: string | null;
+  aiResponse?: AIResponse | null;
+}
+
+interface GradeSubmissionInvokeData {
+  results?: GradeSubmissionResult[];
+}
+
 type IntegrityReview = Tables<"academic_integrity_reviews">;
 type ModerationCase = Tables<"moderation_cases">;
 
-interface Assignment {
+type AssignmentDetailAssignment = Assignment & {
   id: string;
   title: string;
   description: string | null;
@@ -125,8 +165,8 @@ interface Assignment {
   due_date: string | null;
   status: string;
   lecturer_id: string;
-  rubric: any[] | null;
-}
+  rubric: RubricCriterion[] | null;
+};
 
 interface PlagiarismFlag {
   submission_a_id?: string;
@@ -154,7 +194,7 @@ interface PlagiarismFlag {
 
 const statusConfig: Record<
   SubmissionStatus,
-  { label: string; variant: string; icon: any; tone: string }
+  { label: string; variant: NonNullable<BadgeProps["variant"]>; icon: LucideIcon; tone: string }
 > = {
   submitted: {
     label: "Submitted",
@@ -237,13 +277,15 @@ const normalizeStudentKey = (value: string | null | undefined) =>
 const buildRecommendedActionLabel = (value?: string) =>
   value ? `Recommended action: ${String(value).replace("-", " ")}` : "Review recommended";
 
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
+
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { role, user, profile } = useAuth();
   const navigate = useNavigate();
 
-  const [assignment, setAssignment] = useState<Assignment | null>(null);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [assignment, setAssignment] = useState<AssignmentDetailAssignment | null>(null);
+  const [submissions, setSubmissions] = useState<AssignmentDetailSubmission[]>([]);
   const [grades, setGrades] = useState<Record<string, Grade>>({});
   const [integrityReviews, setIntegrityReviews] = useState<Record<string, IntegrityReview>>({});
   const [moderationCases, setModerationCases] = useState<Record<string, ModerationCase>>({});
@@ -256,7 +298,7 @@ const AssignmentDetail = () => {
   const gradingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewSubmission, setReviewSubmission] = useState<Submission | null>(null);
+  const [reviewSubmission, setReviewSubmission] = useState<AssignmentDetailSubmission | null>(null);
   const [editScore, setEditScore] = useState("");
   const [editFeedback, setEditFeedback] = useState("");
   const [plagiarismFlags, setPlagiarismFlags] = useState<PlagiarismFlag[]>([]);
@@ -294,7 +336,7 @@ const AssignmentDetail = () => {
           due_date: data.due_date,
           status: data.status,
           lecturer_id: data.lecturer_id,
-          rubric: data.rubric as any[] | null,
+          rubric: data.rubric as RubricCriterion[] | null,
         });
       } else {
         setAssignment(null);
@@ -307,7 +349,7 @@ const AssignmentDetail = () => {
     void fetchAssignment();
   }, [id]);
 
-  const loadGrades = async (subs: Submission[]) => {
+  const loadGrades = async (subs: AssignmentDetailSubmission[]) => {
     if (subs.length === 0) {
       setGrades({});
       return;
@@ -327,10 +369,10 @@ const AssignmentDetail = () => {
           submission_id: g.submission_id,
           ai_score: g.ai_score,
           ai_feedback: g.ai_feedback,
-          ai_breakdown: g.ai_breakdown as any[],
+          ai_breakdown: (g.ai_breakdown as AssignmentDetailBreakdown[] | null) ?? [],
           assignment_type: g.assignment_type,
           grading_confidence: g.grading_confidence,
-          grading_metadata: (g.grading_metadata as Record<string, unknown> | null) ?? null,
+          grading_metadata: (g.grading_metadata as GradingMetadata | null) ?? null,
           lecturer_score: g.lecturer_score,
           lecturer_feedback: g.lecturer_feedback,
           final_score: g.final_score,
@@ -341,7 +383,7 @@ const AssignmentDetail = () => {
     }
   };
 
-  const loadIntegrityReviews = async (subs: Submission[]) => {
+  const loadIntegrityReviews = async (subs: AssignmentDetailSubmission[]) => {
     if (subs.length === 0 || !user) {
       setIntegrityReviews({});
       return;
@@ -363,7 +405,7 @@ const AssignmentDetail = () => {
     setIntegrityReviews(reviewMap);
   };
 
-  const loadModerationCases = async (subs: Submission[]) => {
+  const loadModerationCases = async (subs: AssignmentDetailSubmission[]) => {
     if (subs.length === 0) {
       setModerationCases({});
       return;
@@ -392,7 +434,7 @@ const AssignmentDetail = () => {
       .eq("assignment_id", id)
       .order("submitted_at", { ascending: false });
     if (data) {
-      const subs: Submission[] = data.map((d) => ({
+      const subs: AssignmentDetailSubmission[] = data.map((d) => ({
         id: d.id,
         assignment_id: d.assignment_id,
         student_name: d.student_name,
@@ -409,7 +451,7 @@ const AssignmentDetail = () => {
     }
   };
 
-  const openSubmissionFile = async (submission: Submission) => {
+  const openSubmissionFile = async (submission: AssignmentDetailSubmission) => {
     try {
       const rawUrl = submission.file_url || "";
       const isDirectUrl = /^https?:\/\//i.test(rawUrl);
@@ -495,7 +537,7 @@ const AssignmentDetail = () => {
       if (error) throw error;
       toast.success("Submission uploaded successfully");
       await loadSubmissions();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Submission] Failed:", error);
       toast.error("Upload failed");
     } finally {
@@ -564,7 +606,7 @@ const AssignmentDetail = () => {
         } else {
           unmatched++;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[BulkUpload] Failed for ${file.name}:`, err);
         toast.error(`Failed to upload ${file.name}`);
       }
@@ -601,7 +643,7 @@ const AssignmentDetail = () => {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("grade-submission", {
+      const { data, error } = await supabase.functions.invoke<GradeSubmissionInvokeData>("grade-submission", {
         body: {
           assignmentId: assignment.id,
           submissions: toGrade.map((s) => ({ id: s.id })),
@@ -656,8 +698,8 @@ const AssignmentDetail = () => {
         const firstFailure = Array.from(failureMessages)[0];
         toast.error(extractionFailure || firstFailure || `${failCount} submission(s) failed to grade`);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "AI grading failed");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
       for (const sub of toGrade) {
         try {
           await supabase.from("submissions").update({ status: sub.status }).eq("id", sub.id);
@@ -799,7 +841,7 @@ const AssignmentDetail = () => {
       } else if (collectedWarnings.length > 0) {
         toast.warning(collectedWarnings[0]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err?.message || "Plagiarism check failed");
     }
     setCheckingPlagiarism(false);
@@ -899,7 +941,7 @@ const AssignmentDetail = () => {
       maxScore: assignment.max_score,
     }).needsModeration;
 
-  const approveSubmission = async (submission: Submission) => {
+  const approveSubmission = async (submission: AssignmentDetailSubmission) => {
     if (!assignment || !user) return false;
 
     const grade = grades[submission.id];
@@ -979,7 +1021,7 @@ const AssignmentDetail = () => {
     return true;
   };
 
-  const openReview = (sub: Submission) => {
+  const openReview = (sub: AssignmentDetailSubmission) => {
     setReviewSubmission(sub);
     const grade = grades[sub.id];
     setEditScore(grade?.lecturer_score?.toString() ?? grade?.ai_score?.toString() ?? "");
@@ -1106,7 +1148,7 @@ const AssignmentDetail = () => {
     else setSelected(new Set(filteredSubmissions.map((submission) => submission.id)));
   };
 
-  const queueFeedbackSummary = async (sub: Submission) => {
+  const queueFeedbackSummary = async (sub: AssignmentDetailSubmission) => {
     const grade = grades[sub.id];
     if (!grade) {
       toast.error("No grade available to summarise");
@@ -1143,7 +1185,7 @@ Please review the feedback in the platform and let me know if you would like to 
     toast.success("Feedback summary saved");
   };
 
-  const queueGradeReleaseNotification = async (sub: Submission) => {
+  const queueGradeReleaseNotification = async (sub: AssignmentDetailSubmission) => {
     const grade = grades[sub.id];
       const { finalScore: score } = resolveFinalGradeValues({ grade: grade ?? {} });
 
@@ -1566,7 +1608,7 @@ Please log in to review the released grade and feedback.`,
 
                               {grade?.ai_breakdown && Array.isArray(grade.ai_breakdown) && grade.ai_breakdown.length > 0 && (
                                 <div className="flex flex-wrap gap-1 pt-1">
-                          {grade.ai_breakdown.map((b: any, i: number) => (
+                          {grade.ai_breakdown.map((b: AssignmentDetailBreakdown, i: number) => (
                             <span key={i} className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
                                       {b.criterion}: {b.score}/{b.max_score}
                                       {typeof b.confidence_score === "number" ? ` • c${Math.round(b.confidence_score * 100)}%` : ""}
@@ -1595,7 +1637,7 @@ Please log in to review the released grade and feedback.`,
                               )}
                               <Badge
                                 data-testid={`submission-status-${sub.id}`}
-                                variant={sc.variant as any}
+                                variant={sc.variant}
                                 className={`text-xs ${sc.tone}`}
                               >
                                 <StatusIcon className="mr-1 h-3 w-3" />
@@ -1690,7 +1732,7 @@ Please log in to review the released grade and feedback.`,
                 <CardTitle className="text-base">Rubric</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {assignment.rubric.map((r: any, i: number) => (
+                {assignment.rubric.map((r: RubricCriterion, i: number) => (
                   <div key={i} className="rounded-xl border p-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-medium">{r.criterion}</span>
@@ -1769,16 +1811,16 @@ Please log in to review the released grade and feedback.`,
                         Confidence {Math.round(grades[reviewSubmission.id].grading_confidence * 100)}%
                       </Badge>
                     )}
-                    {Boolean((grades[reviewSubmission.id].grading_metadata as any)?.math_analysis?.solver_signals?.length) && (
+                    {Boolean(grades[reviewSubmission.id].grading_metadata?.math_analysis?.solver_signals?.length) && (
                       <Badge variant="secondary">Solver review flagged</Badge>
                     )}
-                    {Boolean((grades[reviewSubmission.id].grading_metadata as any)?.fairness_notes?.length) && (
+                    {Boolean(grades[reviewSubmission.id].grading_metadata?.fairness_notes?.length) && (
                       <Badge variant="secondary">Fairness adjustment noted</Badge>
                     )}
                   </div>
-                  {Boolean((grades[reviewSubmission.id].grading_metadata as any)?.fairness_notes?.length) && (
+                  {Boolean(grades[reviewSubmission.id].grading_metadata?.fairness_notes?.length) && (
                     <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">
-                      {((grades[reviewSubmission.id].grading_metadata as any)?.fairness_notes as string[]).map((note, index) => (
+                      {(grades[reviewSubmission.id].grading_metadata?.fairness_notes ?? []).map((note, index) => (
                         <p key={index} className={index > 0 ? "mt-1" : ""}>
                           {note}
                         </p>
@@ -1795,7 +1837,7 @@ Please log in to review the released grade and feedback.`,
                     <div className="space-y-1 pt-2">
                       <p className="text-xs font-medium text-muted-foreground">Breakdown</p>
                       <div className="max-h-48 space-y-1 overflow-y-auto rounded-md bg-background/80 p-3">
-                        {(grades[reviewSubmission.id].ai_breakdown as any[]).map((b, i) => (
+                        {grades[reviewSubmission.id].ai_breakdown?.map((b, i) => (
                           <div key={i} className="space-y-1 rounded-md border bg-background p-2 text-xs">
                             <div className="flex justify-between gap-3">
                               <span>{b.criterion}</span>
