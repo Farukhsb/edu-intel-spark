@@ -304,7 +304,6 @@ The current backend uses these Supabase Edge Functions:
 - `grade-submission`
 - `check-plagiarism`
 - `explain-grade`
-- `student-ai-tutor`
 - `bulk-create-students`
 
 ## Deployment Notes

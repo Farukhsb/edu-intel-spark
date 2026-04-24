@@ -121,7 +121,6 @@ The main Edge Functions configured in `supabase/config.toml` are:
 - `grade-submission`
 - `check-plagiarism`
 - `explain-grade`
-- `student-ai-tutor`
 - `bulk-create-students`
 
 In the checked-in config, these functions have `verify_jwt = false`. That does not mean they are open by default in practice, but it does mean the function code itself is responsible for checking the caller. For example, the grading and integrity functions use shared auth helpers and explicitly require a lecturer identity before doing work.
