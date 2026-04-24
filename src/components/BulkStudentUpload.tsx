@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
+import { z } from "zod";
 
 interface ParsedStudent {
   rowNumber: number;
@@ -40,6 +41,15 @@ interface BulkStudentUploadProps {
 const REQUIRED_HEADERS = ["name", "email", "cohort", "department"] as const;
 const BULK_CREATE_FUNCTION = "bulk-create-students";
 const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+const OPTIONAL_STUDENT_ID_HEADERS = ["studentid", "student_id", "student id"] as const;
+
+const CsvStudentRowSchema = z.object({
+  email: z.string().trim().email("Invalid email"),
+  name: z.string().trim().min(1, "Missing name"),
+  studentId: z.string().trim().min(1, "Missing student ID").optional(),
+  cohort: z.string().trim().min(1, "Missing cohort"),
+  department: z.string().trim().min(1, "Missing department"),
+});
 
 const parseCsv = (text: string) => {
   const rows: string[][] = [];
@@ -176,20 +186,29 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
       const emailIdx = header.indexOf("email");
       const cohortIdx = header.indexOf("cohort");
       const deptIdx = header.indexOf("department");
+      const studentIdIdx = header.findIndex((column) => OPTIONAL_STUDENT_ID_HEADERS.includes(column as typeof OPTIONAL_STUDENT_ID_HEADERS[number]));
 
       const seenEmails = new Set<string>();
       const students: ParsedStudent[] = rows.slice(1).map((cols, index) => {
         const email = cols[emailIdx] || "";
         const name = nameIdx >= 0 ? cols[nameIdx] : "";
+        const studentIdValue = studentIdIdx >= 0 ? (cols[studentIdIdx] || "").trim() : "";
+        const studentId = studentIdValue ? studentIdValue : undefined;
         const cohort = cohortIdx >= 0 ? cols[cohortIdx] : "";
         const dept = deptIdx >= 0 ? cols[deptIdx] : "";
 
         const normalizedEmail = email.toLowerCase();
         const errors: string[] = [];
-        if (!email || !email.includes("@")) errors.push("Invalid email");
-        if (!name) errors.push("Missing name");
-        if (!cohort) errors.push("Missing cohort");
-        if (!dept) errors.push("Missing department");
+        const validation = CsvStudentRowSchema.safeParse({
+          email,
+          name,
+          studentId,
+          cohort,
+          department: dept,
+        });
+        if (!validation.success) {
+          errors.push(...validation.error.issues.map((issue) => issue.message));
+        }
         if (normalizedEmail && seenEmails.has(normalizedEmail)) errors.push("Duplicate email in file");
         if (normalizedEmail) seenEmails.add(normalizedEmail);
 

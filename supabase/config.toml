@@ -9,8 +9,5 @@ verify_jwt = false
 [functions.explain-grade]
 verify_jwt = false
 
-[functions.student-ai-tutor]
-verify_jwt = false
-
 [functions.bulk-create-students]
 verify_jwt = false

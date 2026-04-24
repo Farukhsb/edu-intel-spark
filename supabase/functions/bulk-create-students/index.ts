@@ -1,32 +1,59 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 
 type StudentInput = {
   name: string;
   email: string;
+  studentId?: string;
   cohort_id?: string;
   department_id?: string;
 };
+
+const StudentInputSchema = z.object({
+  email: z.string().trim().email(),
+  name: z.string().trim().min(1),
+  studentId: z.string().trim().min(1).optional(),
+  cohort_id: z.string().trim().min(1),
+  department_id: z.string().trim().min(1),
+});
+
+const BulkCreateStudentsRequestSchema = z.object({
+  assignmentId: z.string().trim().min(1).optional(),
+  cohort: z.string().trim().min(1).optional(),
+  department: z.string().trim().min(1).optional(),
+  students: z.array(StudentInputSchema).min(1).max(500),
+});
 
 function generateTemporaryPassword() {
   return `GradeAI_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     await requireLecturer(req);
-    const { students } = await req.json();
+    const body = await req.json().catch(() => null);
+    const parsed = BulkCreateStudentsRequestSchema.safeParse(body);
 
-    if (!Array.isArray(students) || students.length === 0) {
-      throw new HttpError(400, "No students provided");
+    if (!parsed.success) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid request format",
+          details: parsed.error.issues,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
+
+    const { students } = parsed.data;
 
     if (students.length > 200) {
       throw new HttpError(400, "Upload is limited to 200 students per request");

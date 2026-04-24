@@ -31,7 +31,6 @@ For this repo, note:
   - `grade-submission`
   - `check-plagiarism`
   - `explain-grade`
-  - `student-ai-tutor`
   - `bulk-create-students`
 
 ## 4. Test State

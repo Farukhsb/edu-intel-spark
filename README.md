@@ -1,13 +1,41 @@
 # GradeAI
 
-GradeAI is an academic intelligence platform for higher education assessment workflows. It brings assignment setup, AI-assisted grading, academic integrity review, moderation, release, analytics, and student support into one connected system.
+GradeAI was built to reduce the time lecturers spend marking assignments while improving consistency, transparency, and reviewability.
 
-The idea behind the product is simple: AI should handle the repetitive analytical work, while lecturers remain responsible for the academic decisions.
+Instead of replacing academic judgement, it supports it.
+
+The system breaks marking into structured steps:
+- rubric-based scoring
+- evidence-backed feedback
+- integrity signals
+- lecturer review before approval and release
 
 Live deployment:
 - `https://gradeai.pages.dev`
 
-GradeAI is designed around the full assessment lifecycle rather than a single AI grading feature. The aim is to make marking, moderation, integrity review, release, and follow-up support feel like parts of one coherent workflow instead of a collection of disconnected tools.
+The project is designed around the full assessment workflow rather than a single AI scoring feature. A lecturer can move from assignment setup, to grading, to moderation, to release, with the system keeping the process structured and inspectable.
+
+## Why We Built It
+
+Marking large numbers of submissions is repetitive, time-consuming, and often difficult to audit afterwards.
+
+Most tools either focus only on grading speed or treat AI output like a black box. That creates trust problems. GradeAI takes a different approach: it keeps lecturers in control and makes the grading path visible.
+
+## How It Works
+
+At a high level:
+
+```text
+submission
+  -> extraction
+  -> rubric-based grading
+  -> validation and fairness checks
+  -> lecturer review
+  -> approval
+  -> release
+```
+
+The same principle applies to integrity review. Similarity signals, structural document artefacts, and AI-writing indicators are separated so the output is easier to interpret.
 
 ## Platform Preview
 
@@ -29,7 +57,7 @@ Here are a few real views from the product as it works today.
 
 ![AI grade explanation](docs/screenshots/ai-grade-explanation.jpg)
 
-## What The Platform Covers
+## Key Features
 
 - rubric-based assignment authoring
 - student submission and secure file access
@@ -40,7 +68,6 @@ Here are a few real views from the product as it works today.
 - cohort analytics and explainable recommendations
 - student risk tracking and intervention logging
 - student-facing feedback, improvement plans, and AI tutoring
-
 In practice, that means a lecturer can move from creating an assignment, to grading, to moderation, to release, to cohort-level reflection without leaving the platform.
 
 ## Workflow Snapshot
@@ -172,6 +199,10 @@ The intention is to support lecturer judgement with signals and context, not to 
 | Product analytics | PostHog |
 | Hosting | Cloudflare Pages |
 | Testing | Vitest, Testing Library, Playwright |
+
+## Technical Summary
+
+For a short one-page technical overview, see [TECHNICAL_SUMMARY.md](TECHNICAL_SUMMARY.md).
 
 ## Project Structure
 
@@ -314,7 +345,6 @@ The current backend uses these Supabase Edge Functions:
 - `grade-submission`
 - `check-plagiarism`
 - `explain-grade`
-- `student-ai-tutor`
 - `bulk-create-students`
 
 ## Deployment Notes
