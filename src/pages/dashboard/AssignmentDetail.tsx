@@ -93,6 +93,11 @@ const REGRADABLE_STATUSES: SubmissionStatus[] = [
   "approved",
 ];
 
+const ALLOWED_SUBMISSION_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+
 type AssignmentDetailSubmission = Submission & {
   id: string;
   assignment_id: string;
@@ -481,6 +486,9 @@ const AssignmentDetail = () => {
 
   const uploadFile = async (file: File, userId: string) => {
     if (!assignment) throw new Error("Missing assignment");
+    if (!ALLOWED_SUBMISSION_TYPES.includes(file.type)) {
+      throw new Error("Unsupported file type");
+    }
     const safeFileName = file.name.replace(/[\\/]/g, "_");
     const filePath = `${userId}/${assignment.id}/${Date.now()}_${safeFileName}`;
 
