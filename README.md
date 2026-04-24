@@ -276,17 +276,27 @@ High-trust workflows in this repo depend on the database layer, not just the UI.
 
 If the app layer and database layer drift apart, the trust boundary becomes weaker very quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
-### Migration history note
+## Migration History Note
 
-This project still carries two legacy short-form migration versions in historical Supabase metadata:
-- `20260412`
-- `20260413`
+This project contains two legacy short-form migration versions in Supabase metadata:
 
-They correspond to:
-- [20260412_fix_multi_tenant_rls.sql](C:/Users/a3dullahi/edu-intel-spark/supabase/migrations/20260412_fix_multi_tenant_rls.sql)
-- [20260413_create_student_interventions.sql](C:/Users/a3dullahi/edu-intel-spark/supabase/migrations/20260413_create_student_interventions.sql)
+- 20260412  
+- 20260413  
 
-The live project is functioning with these migrations applied, but Supabase CLI history output may still show them as legacy unmatched entries. Treat that as a migration-ledger hygiene issue, not a live permissions failure. Do not rename historical migration IDs on a live project without a deliberate migration-history cleanup plan.
+These correspond to:
+
+- 20260412_fix_multi_tenant_rls.sql  
+- 20260413_create_student_interventions.sql  
+
+All migrations have been successfully applied in the live project, and the database is functioning correctly.
+
+However, Supabase CLI may display these entries as “unmatched” due to earlier naming inconsistencies in migration IDs. This is a metadata alignment issue in the migration history, not a schema or permissions failure.
+
+Important:
+- Do not rename or modify historical migration IDs on a live project without a deliberate migration-history reconciliation plan.
+- Treat this as a migration ledger hygiene issue only.
+
+No action is required for normal operation.
 
 ### Current role-model note
 
