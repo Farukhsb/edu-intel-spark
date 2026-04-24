@@ -1,12 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import {
+  DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+  extractSubmissionDocument,
+  logDocumentExtractionResult,
+} from "../_shared/document-extraction.ts";
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 import {
   assessExtractionQuality,
-  cleanExtractedDocumentText,
   computeBaselineDeviation,
   computeWritingProfileMetrics,
-  extractReadablePdfTextFromBase64,
   mergeWritingProfile,
   normalizeReadableText,
   type StoredWritingProfile,
@@ -21,8 +24,8 @@ const corsHeaders = {
 
 const MAX_SINGLE_TEXT_CHARS = 12000;
 const MAX_MULTI_TEXT_CHARS = 3500;
-const MAX_INLINE_PDF_BYTES = 600_000;
 const OPENAI_RETRY_ATTEMPTS = 2;
+const MIN_INTEGRITY_FLAG_SCORE = 25;
 
 type IntegrityType = "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
 
@@ -229,6 +232,73 @@ function buildFallbackEvidenceItem(label: string, value: string, score: number):
   return { label, value: value.trim(), score: clampScore(score) };
 }
 
+function normalizeArtifactDrivenReason(params: {
+  reason: string;
+  evidenceSummary: string;
+  totalRisk: number;
+  overlap: {
+    total_overlap: number;
+    cited_overlap: number;
+    uncited_overlap: number;
+    internal_peer_overlap: number;
+    external_source_overlap: number;
+    reference_section_overlap?: number;
+    heavy_source_reliance?: boolean;
+  };
+}) {
+  const combined = `${params.reason} ${params.evidenceSummary}`.toLowerCase();
+  const artifactSignals = [
+    "artifact",
+    "artifacts",
+    "binary",
+    "docx",
+    "xml",
+    "archive",
+    "file structure",
+    "document format",
+    "formatting noise",
+    "extraction issue",
+    "extraction issues",
+    "extraction quality",
+    "non-textual",
+    "non textual",
+    "file-container",
+    "container data",
+    "package data",
+    "format artefact",
+    "format artifact",
+  ];
+  const impliesSubstantiveOverlap = [
+    "high substantive overlap",
+    "very high substantive overlap",
+    "high overlap",
+    "very high overlap",
+    "substantive overlap",
+    "clear plagiarism in prose",
+    "meaningful variation in the main body",
+  ];
+
+  const artifactDominated = artifactSignals.some((signal) => combined.includes(signal));
+  const lowRisk = params.totalRisk < 45;
+
+  if (!artifactDominated) {
+    return params.reason;
+  }
+
+  if (lowRisk || impliesSubstantiveOverlap.some((signal) => combined.includes(signal))) {
+    if ((params.overlap.uncited_overlap || 0) > 0) {
+      return "Apparent overlap is driven by file structure rather than meaningful assignment content, so the similarity signal reflects document-format artifacts rather than substantive content similarity.";
+    }
+    return "High structural similarity due to document format artifacts, not substantive content overlap.";
+  }
+
+  return params.reason
+    .replace(/high substantive overlap/gi, "high structural similarity due to document format artifacts")
+    .replace(/very high substantive overlap/gi, "very high structural similarity due to document format artifacts")
+    .replace(/high overlap/gi, "high structural similarity")
+    .replace(/substantive overlap/gi, "structural similarity due to document format artifacts");
+}
+
 function classifySimilarityContext(
   excerpt: string,
   submissionA: ProcessedSubmissionText | undefined,
@@ -423,42 +493,67 @@ async function fetchFileContent(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   sub: { file_url?: string; file_name?: string | null },
 ): Promise<{
-  llmContent: string;
   plainText: string;
-  isPdf: boolean;
+  fileType: string;
+  mimeType: string;
+  success: boolean;
+  extractionWarning: string | null;
+  extractionError: string | null;
   extractionQuality: ReturnType<typeof assessExtractionQuality> | null;
 }> {
-  if (!sub.file_url) return { llmContent: "", plainText: "", isPdf: false, extractionQuality: null };
+  if (!sub.file_url) {
+    return {
+      plainText: "",
+      fileType: "unsupported",
+      mimeType: "application/octet-stream",
+      success: false,
+      extractionWarning: null,
+      extractionError: DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+      extractionQuality: null,
+    };
+  }
   try {
     const { data, error } = await supabaseAdmin.storage.from("submissions").download(sub.file_url);
-    if (error || !data) return { llmContent: "", plainText: "", isPdf: false, extractionQuality: null };
-
-    const isPdf = data.type?.includes("pdf") || sub.file_name?.toLowerCase().endsWith(".pdf");
-    if (isPdf) {
-      const buf = await data.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      const llmContent = btoa(binary);
-      const extracted = truncateText(extractReadablePdfTextFromBase64(llmContent), MAX_SINGLE_TEXT_CHARS);
+    if (error || !data) {
       return {
-        llmContent: bytes.byteLength <= MAX_INLINE_PDF_BYTES ? llmContent : "",
-        plainText: extracted,
-        isPdf: true,
-        extractionQuality: assessExtractionQuality(extracted),
+        plainText: "",
+        fileType: "unsupported",
+        mimeType: "application/octet-stream",
+        success: false,
+        extractionWarning: null,
+        extractionError: DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+        extractionQuality: null,
       };
     }
 
-    const text = await data.text();
-    const cleaned = truncateText(cleanExtractedDocumentText(text), MAX_SINGLE_TEXT_CHARS);
+    const extraction = await extractSubmissionDocument({
+      fileName: sub.file_name,
+      mimeType: data.type,
+      fileData: data,
+    });
+
+    logDocumentExtractionResult("check-plagiarism", extraction);
+
+    const cleaned = truncateText(extraction.extractedText, MAX_SINGLE_TEXT_CHARS);
     return {
-      llmContent: "",
       plainText: cleaned,
-      isPdf: false,
-      extractionQuality: assessExtractionQuality(cleaned),
+      fileType: extraction.fileType,
+      mimeType: extraction.mimeType,
+      success: extraction.success,
+      extractionWarning: extraction.extractionWarning,
+      extractionError: extraction.extractionError,
+      extractionQuality: extraction.success ? assessExtractionQuality(cleaned) : null,
     };
   } catch {
-    return { llmContent: "", plainText: "", isPdf: false, extractionQuality: null };
+    return {
+      plainText: "",
+      fileType: "unsupported",
+      mimeType: "application/octet-stream",
+      success: false,
+      extractionWarning: null,
+      extractionError: DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+      extractionQuality: null,
+    };
   }
 }
 
@@ -519,9 +614,23 @@ function normalizeFlags(
       const baselineDeviationScore = clampScore(candidate.baseline_deviation_score);
       const totalRisk = computeRisk(overlap.effectiveSimilarity, normalizedScores.ai, baselineDeviationScore);
       const matchedExcerpt = typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "";
+      const rawReason =
+        typeof candidate.reason === "string" && candidate.reason.trim()
+          ? candidate.reason.trim()
+          : "Potential integrity issue detected.";
+      const rawEvidenceSummary =
+        typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()
+          ? candidate.evidence_summary.trim()
+          : rawReason;
+      const normalizedReason = normalizeArtifactDrivenReason({
+        reason: rawReason,
+        evidenceSummary: rawEvidenceSummary,
+        totalRisk,
+        overlap: overlap.overlap,
+      });
       const baseEvidenceText =
-        (typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()) ||
-        (typeof candidate.reason === "string" && candidate.reason.trim()) ||
+        rawEvidenceSummary ||
+        normalizedReason ||
         matchedExcerpt ||
         "Potential overlap detected.";
       const uncitedMatches = Array.isArray((candidate.evidence_groups as Record<string, unknown> | undefined)?.uncited_matches)
@@ -566,14 +675,8 @@ function normalizeFlags(
         ai_suspicion_score: normalizedScores.ai,
         baseline_deviation_score: baselineDeviationScore,
         total_risk_score: totalRisk,
-        reason:
-          typeof candidate.reason === "string" && candidate.reason.trim()
-            ? candidate.reason.trim()
-            : "Potential integrity issue detected.",
-        evidence_summary:
-          typeof candidate.evidence_summary === "string" && candidate.evidence_summary.trim()
-            ? candidate.evidence_summary.trim()
-            : "Potential integrity issue detected.",
+        reason: normalizedReason,
+        evidence_summary: rawEvidenceSummary,
         matched_excerpt: matchedExcerpt,
         recommended_action: actionFromRisk(totalRisk),
         integrity_type: integrityType,
@@ -590,7 +693,10 @@ function normalizeFlags(
     .filter((flag): flag is IntegrityFlag => Boolean(flag))
     .filter(
       (flag) =>
-        flag.similarity_score > 0 || flag.ai_suspicion_score > 0 || flag.baseline_deviation_score > 0 || flag.total_risk_score > 0,
+        flag.similarity_score >= MIN_INTEGRITY_FLAG_SCORE ||
+        flag.ai_suspicion_score >= MIN_INTEGRITY_FLAG_SCORE ||
+        flag.baseline_deviation_score >= MIN_INTEGRITY_FLAG_SCORE ||
+        flag.total_risk_score >= MIN_INTEGRITY_FLAG_SCORE,
     );
 }
 
@@ -641,7 +747,8 @@ serve(async (req) => {
     }
 
     const isSingleMode = submissions.length === 1;
-    const contentMap = new Map<string, { llmContent: string; plainText: string; isPdf: boolean }>();
+    const warnings: string[] = [];
+    const contentMap = new Map<string, Awaited<ReturnType<typeof fetchFileContent>>>();
     const processedContentMap = new Map<string, ProcessedSubmissionText>();
     for (const sub of submissions) {
       const content = await fetchFileContent(supabaseAdmin, sub);
@@ -650,7 +757,13 @@ serve(async (req) => {
       processed.extractionQuality = content.extractionQuality ?? undefined;
       processedContentMap.set(sub.id, processed);
 
-      if (content.isPdf && content.extractionQuality && !content.extractionQuality.isUsable) {
+      if (!content.success && content.extractionError) {
+        warnings.push(`${sub.file_name || sub.id}: ${content.extractionError}`);
+      } else if (content.extractionWarning) {
+        warnings.push(`${sub.file_name || sub.id}: ${content.extractionWarning}`);
+      }
+
+      if (content.fileType === "pdf" && content.extractionQuality && !content.extractionQuality.isUsable) {
         warnings.push(
           `Low-quality PDF extraction for ${sub.file_name || sub.id}: ${content.extractionQuality.reasons.join(" ")} Word count ${content.extractionQuality.wordCount}, quality ${content.extractionQuality.qualityScore}/100.`,
         );
@@ -740,14 +853,20 @@ Rules:
 - Never output a verdict, only a risk indicator with evidence.`;
 
     const userContent: Array<Record<string, string>> = [];
-    const warnings: string[] = [];
 
     if (isSingleMode) {
       const sub = submissions[0];
-      const content = contentMap.get(sub.id) || { llmContent: "", plainText: "", isPdf: false };
+      const content = contentMap.get(sub.id) || {
+        plainText: "",
+        fileType: "unsupported",
+        mimeType: "application/octet-stream",
+        success: false,
+        extractionWarning: null,
+        extractionError: DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+        extractionQuality: null,
+      };
       const processed = processedContentMap.get(sub.id) || preprocessSubmissionText(content.plainText);
       const preview = truncateText(processed.mainBody, MAX_SINGLE_TEXT_CHARS);
-      const includeInlinePdf = content.isPdf && Boolean(content.llmContent);
 
       userContent.push({
         type: "input_text",
@@ -757,7 +876,8 @@ Assignment: ${assignment.title}
 Student: ${sub.student_name || sub.student_email || "Anonymous"}
 File: ${sub.file_name || "submission"}
 
-${includeInlinePdf ? "PDF is attached. Use it as the primary source, but ignore the reference section when judging overlap-related evidence." : `Main body (reference section removed for scoring):\n${preview || "No readable text could be extracted."}`}
+Main body (reference section removed for scoring):
+${preview || "No readable text could be extracted."}
 
 Citation signals detected: ${processed.citationPatternCount}
 Reference section detected: ${processed.hasReferenceSection ? "yes" : "no"}
@@ -766,28 +886,23 @@ Extraction quality: ${processed.extractionQuality ? `${processed.extractionQuali
 
 Return a structured flag only if there is a genuine concern. Otherwise return no flags.`,
       });
-
-      if (includeInlinePdf) {
-        userContent.push({
-          type: "input_file",
-          filename: sub.file_name || "submission.pdf",
-          file_data: `data:application/pdf;base64,${content.llmContent}`,
-        });
-      } else if (content.isPdf) {
-        warnings.push(`Skipped inline PDF attachment for ${sub.file_name || "submission"} due to size; using extracted text only.`);
-      }
     } else {
       const summaries = submissions.map((submission) => {
-        const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
+        const content = contentMap.get(submission.id) || {
+          plainText: "",
+          fileType: "unsupported",
+          mimeType: "application/octet-stream",
+          success: false,
+          extractionWarning: null,
+          extractionError: DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+          extractionQuality: null,
+        };
         const processed = processedContentMap.get(submission.id) || preprocessSubmissionText(content.plainText);
         const preview = truncateText(processed.mainBody, MAX_MULTI_TEXT_CHARS);
         const studentLabel = `${submission.student_name || submission.student_email || "Anonymous"} (submission id: ${submission.id})`;
         if (!preview) {
           warnings.push(`No readable text extracted for ${submission.file_name || submission.id}; similarity analysis may be less reliable.`);
           return `${studentLabel}\n[no readable text extracted]`;
-        }
-        if (content.isPdf && !content.llmContent) {
-          warnings.push(`Processed ${submission.file_name || submission.id} as extracted text only because the PDF was too large to inline.`);
         }
 
         return `${studentLabel}
@@ -1056,7 +1171,15 @@ Only flag real concerns. Return valid JSON only.`,
     };
 
     for (const submission of submissions) {
-      const content = contentMap.get(submission.id) || { llmContent: "", plainText: "", isPdf: false };
+      const content = contentMap.get(submission.id) || {
+        plainText: "",
+        fileType: "unsupported",
+        mimeType: "application/octet-stream",
+        success: false,
+        extractionWarning: null,
+        extractionError: DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+        extractionQuality: null,
+      };
       const processed = processedContentMap.get(submission.id) || preprocessSubmissionText(content.plainText);
       const metrics: WritingProfileMetrics = computeWritingProfileMetrics(content.plainText);
       const baseline = submission.student_id ? profileMap.get(submission.student_id) : null;
@@ -1343,15 +1466,23 @@ Only flag real concerns. Return valid JSON only.`,
       }
     }
 
+    const thresholdCrossingFlags = allFlags.filter(
+      (flag) =>
+        flag.similarity_score >= MIN_INTEGRITY_FLAG_SCORE ||
+        flag.ai_suspicion_score >= MIN_INTEGRITY_FLAG_SCORE ||
+        flag.baseline_deviation_score >= MIN_INTEGRITY_FLAG_SCORE ||
+        flag.total_risk_score >= MIN_INTEGRITY_FLAG_SCORE,
+    );
+
     const finalSummary =
-      allFlags.length > 0
-        ? `${summary} ${allFlags.length} submission(s) crossed one or more integrity risk thresholds.`
+      thresholdCrossingFlags.length > 0
+        ? `${summary} ${thresholdCrossingFlags.length} submission(s) crossed one or more integrity risk thresholds.`
         : `${summary} No submissions crossed the current integrity thresholds.`;
 
     console.log("check-plagiarism completed", {
       assignmentId: requestedAssignmentId,
       submissionCount: submissions.length,
-      flags: allFlags.length,
+      flags: thresholdCrossingFlags.length,
       warnings: warnings.length,
       durationMs: Date.now() - startedAt,
     });

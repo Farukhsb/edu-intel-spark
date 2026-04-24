@@ -73,6 +73,18 @@ type SubmissionStatus =
   | "approved"
   | "released";
 
+const REGRADABLE_STATUSES: SubmissionStatus[] = [
+  "submitted",
+  "ai_graded",
+  "first_review",
+  "moderation_pending",
+  "moderation_in_progress",
+  "moderated",
+  "escalated",
+  "under_review",
+  "approved",
+];
+
 interface Submission {
   id: string;
   assignment_id: string;
@@ -569,9 +581,9 @@ const AssignmentDetail = () => {
   };
 
   const handleAIGrade = async () => {
-    const toGrade = submissions.filter((s) => selected.has(s.id) && s.status === "submitted");
+    const toGrade = submissions.filter((s) => selected.has(s.id) && REGRADABLE_STATUSES.includes(s.status));
     if (toGrade.length === 0) {
-      toast.error("Select submitted files to grade");
+      toast.error("Select submitted or reviewable files to grade");
       return;
     }
     if (!assignment) return;
@@ -600,6 +612,7 @@ const AssignmentDetail = () => {
       const results = data?.results || [];
       let successCount = 0;
       let failCount = 0;
+      const failureMessages = new Set<string>();
 
       for (const r of results) {
         const sub = toGrade.find((s) => s.id === r.submissionId);
@@ -625,20 +638,29 @@ const AssignmentDetail = () => {
           } catch {}
           successCount++;
         } else {
+          if (typeof r.error === "string" && r.error.trim()) {
+            failureMessages.add(r.error.trim());
+          }
           try {
-            await supabase.from("submissions").update({ status: "submitted" as const }).eq("id", sub.id);
+            await supabase.from("submissions").update({ status: sub.status }).eq("id", sub.id);
           } catch {}
           failCount++;
         }
       }
 
       if (successCount > 0) toast.success(`${successCount} submission(s) graded successfully`);
-      if (failCount > 0) toast.error(`${failCount} submission(s) failed to grade`);
+      if (failCount > 0) {
+        const extractionFailure = Array.from(failureMessages).find((message) =>
+          message.includes("We could not read this document. Please upload a readable PDF, DOCX, or TXT file.")
+        );
+        const firstFailure = Array.from(failureMessages)[0];
+        toast.error(extractionFailure || firstFailure || `${failCount} submission(s) failed to grade`);
+      }
     } catch (err: any) {
       toast.error(err?.message || "AI grading failed");
       for (const sub of toGrade) {
         try {
-          await supabase.from("submissions").update({ status: "submitted" as const }).eq("id", sub.id);
+          await supabase.from("submissions").update({ status: sub.status }).eq("id", sub.id);
         } catch {}
       }
     }
@@ -1196,7 +1218,7 @@ Please log in to review the released grade and feedback.`,
       (s) => s.student_id === currentUserId || (currentUserEmail && s.student_email === currentUserEmail)
     );
   const selectedStatuses = submissions.filter((s) => selected.has(s.id)).map((s) => s.status);
-  const hasSubmitted = selectedStatuses.some((s) => s === "submitted");
+  const hasSubmitted = selectedStatuses.some((s) => REGRADABLE_STATUSES.includes(s));
   const hasGraded = selectedStatuses.some((s) => isGradedWorkflowStatus(s) && !canReleaseStatus(s) && !isStudentGradeVisible(s));
   const hasApproved = selectedStatuses.some((s) => canReleaseStatus(s));
 
@@ -1358,7 +1380,7 @@ Please log in to review the released grade and feedback.`,
                       className="justify-start"
                     >
                       {grading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-                      {grading ? "Grading..." : `AI grade${selected.size > 0 ? ` (${selected.size})` : ""}`}
+                      {grading ? "Grading..." : `AI grade / regrade${selected.size > 0 ? ` (${selected.size})` : ""}`}
                     </Button>
                     <Button
                       variant="default"
@@ -1699,7 +1721,7 @@ Please log in to review the released grade and feedback.`,
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">{flag.reason}</p>
                         <p className="mt-1 text-[11px] text-muted-foreground">
-                          Similarity {flag.similarity_score}% • Uncited {flag.overlap_analysis?.uncited_overlap || 0}% • Cited {flag.overlap_analysis?.cited_overlap || 0}% • AI {flag.ai_suspicion_score || 0}% • Baseline {flag.baseline_deviation_score || 0}% • Total risk {flag.total_risk_score || 0}%
+                          Raw overlap {flag.overlap_analysis?.total_overlap || 0}% | Similarity risk {flag.similarity_score}% | Uncited {flag.overlap_analysis?.uncited_overlap || 0}% | Cited {flag.overlap_analysis?.cited_overlap || 0}% | AI {flag.ai_suspicion_score || 0}% | Baseline {flag.baseline_deviation_score || 0}% | Total risk {flag.total_risk_score || 0}%
                         </p>
                       </div>
                       <Badge
@@ -1750,7 +1772,19 @@ Please log in to review the released grade and feedback.`,
                     {Boolean((grades[reviewSubmission.id].grading_metadata as any)?.math_analysis?.solver_signals?.length) && (
                       <Badge variant="secondary">Solver review flagged</Badge>
                     )}
+                    {Boolean((grades[reviewSubmission.id].grading_metadata as any)?.fairness_notes?.length) && (
+                      <Badge variant="secondary">Fairness adjustment noted</Badge>
+                    )}
                   </div>
+                  {Boolean((grades[reviewSubmission.id].grading_metadata as any)?.fairness_notes?.length) && (
+                    <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">
+                      {((grades[reviewSubmission.id].grading_metadata as any)?.fairness_notes as string[]).map((note, index) => (
+                        <p key={index} className={index > 0 ? "mt-1" : ""}>
+                          {note}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   <p className="pt-1 text-xs font-medium text-muted-foreground">AI Feedback</p>
                   <div className="max-h-56 overflow-y-auto rounded-md bg-background/80 p-3">
                     <p className="whitespace-pre-wrap text-sm">

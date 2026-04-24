@@ -1,0 +1,161 @@
+import { Buffer } from "node:buffer";
+import {
+  assessExtractionQuality,
+  cleanExtractedDocumentText,
+  extractReadablePdfTextFromBase64,
+  normalizeReadableText,
+} from "./text-analysis.ts";
+
+export const DOCUMENT_EXTRACTION_ERROR_MESSAGE =
+  "We could not read this document. Please upload a readable PDF, DOCX, or TXT file.";
+export const MIN_EXTRACTED_TEXT_CHARS = 200;
+
+export type SupportedDocumentType = "docx" | "pdf" | "txt" | "unsupported";
+
+export type DocxExtractor = (bytes: Uint8Array) => Promise<{
+  value: string;
+  messages?: string[];
+}>;
+
+export type DocumentExtractionResult = {
+  fileName: string;
+  fileType: string;
+  mimeType: string;
+  extractedText: string;
+  extractedTextLength: number;
+  success: boolean;
+  extractionWarning: string | null;
+  extractionError: string | null;
+  manualReviewRequired: boolean;
+  extractionQuality: ReturnType<typeof assessExtractionQuality> | null;
+};
+
+function base64FromBytes(bytes: Uint8Array) {
+  return Buffer.from(bytes).toString("base64");
+}
+
+function binaryLooksLikeOfficeArchive(bytes: Uint8Array, text: string) {
+  const startsWithZipMagic = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+  if (!startsWithZipMagic) return false;
+
+  const preview = text.trim().slice(0, 24);
+  if (!preview) return true;
+  return preview.startsWith("PK");
+}
+
+function looksLikeBinaryText(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("PK")) return true;
+
+  const controlChars = trimmed.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || [];
+  return controlChars.length > Math.max(8, Math.floor(trimmed.length * 0.05));
+}
+
+export function detectDocumentType(fileName: string | null | undefined, mimeType: string | null | undefined): SupportedDocumentType {
+  const normalizedMime = (mimeType || "").toLowerCase();
+  const normalizedName = (fileName || "").toLowerCase();
+
+  if (
+    normalizedMime.includes("wordprocessingml.document") ||
+    normalizedName.endsWith(".docx")
+  ) {
+    return "docx";
+  }
+
+  if (normalizedMime.includes("pdf") || normalizedName.endsWith(".pdf")) {
+    return "pdf";
+  }
+
+  if (normalizedMime.startsWith("text/plain") || normalizedName.endsWith(".txt")) {
+    return "txt";
+  }
+
+  return "unsupported";
+}
+
+export async function extractDocumentText(params: {
+  fileName?: string | null;
+  mimeType?: string | null;
+  bytes: Uint8Array;
+  docxExtractor?: DocxExtractor;
+}): Promise<DocumentExtractionResult> {
+  const fileName = params.fileName || "submission";
+  const mimeType = params.mimeType || "application/octet-stream";
+  const fileType = detectDocumentType(fileName, mimeType);
+
+  const fail = (message: string, warning: string | null = null): DocumentExtractionResult => ({
+    fileName,
+    fileType,
+    mimeType,
+    extractedText: "",
+    extractedTextLength: 0,
+    success: false,
+    extractionWarning: warning,
+    extractionError: message,
+    manualReviewRequired: true,
+    extractionQuality: null,
+  });
+
+  if (fileType === "unsupported") {
+    return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, `Unsupported file type: ${mimeType || fileName}`);
+  }
+
+  let extractedText = "";
+  let warningMessage: string | null = null;
+
+  try {
+    if (fileType === "docx") {
+      if (!params.docxExtractor) {
+        return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, "DOCX extractor is not configured.");
+      }
+
+      const result = await params.docxExtractor(params.bytes);
+
+      extractedText = cleanExtractedDocumentText(result.value || "");
+      if (result.messages && result.messages.length > 0) {
+        warningMessage = result.messages.join(" ");
+      }
+    } else if (fileType === "pdf") {
+      extractedText = extractReadablePdfTextFromBase64(base64FromBytes(params.bytes));
+    } else {
+      extractedText = cleanExtractedDocumentText(new TextDecoder().decode(params.bytes));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown extraction error";
+    return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, message);
+  }
+
+  const normalizedText = normalizeReadableText(extractedText);
+  if (
+    binaryLooksLikeOfficeArchive(params.bytes, normalizedText) ||
+    looksLikeBinaryText(normalizedText)
+  ) {
+    return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, "Extracted content still looks binary.");
+  }
+
+  if (!normalizedText || normalizedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
+    return fail(
+      DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+      `Readable text was too short after extraction (${normalizedText.trim().length} characters).`,
+    );
+  }
+
+  const extractionQuality = assessExtractionQuality(normalizedText);
+  if (!extractionQuality.isUsable) {
+    warningMessage = [warningMessage, ...extractionQuality.reasons].filter(Boolean).join(" ").trim() || null;
+  }
+
+  return {
+    fileName,
+    fileType,
+    mimeType,
+    extractedText: normalizedText,
+    extractedTextLength: normalizedText.length,
+    success: true,
+    extractionWarning: warningMessage,
+    extractionError: null,
+    manualReviewRequired: false,
+    extractionQuality,
+  };
+}

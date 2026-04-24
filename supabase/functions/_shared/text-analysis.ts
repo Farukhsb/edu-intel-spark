@@ -184,7 +184,7 @@ export function classifyAssignmentType(params: {
   fileName?: string | null;
   text?: string | null;
 }): AssignmentType {
-  const haystack = `${params.title || ""}\n${params.description || ""}\n${params.rubricText || ""}\n${params.fileName || ""}\n${params.text || ""}`.toLowerCase();
+  const haystack = `${params.title || ""}\n${params.description || ""}\n${params.rubricText || ""}\n${params.text || ""}`.toLowerCase();
   const extension = (params.fileName || "").toLowerCase().split(".").pop() || "";
 
   if (
