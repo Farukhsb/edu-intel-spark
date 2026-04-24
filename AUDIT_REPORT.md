@@ -1,737 +1,302 @@
 # Repository Audit Report - GradeAI (edu-intel-spark)
 
 **Audit Date:** April 24, 2026  
-**Audit Type:** Comprehensive Code Quality, Security, and Architecture Review  
-**Status:** ✅ Generally Healthy with Minor Issues
+**Audit Type:** Current-state code quality, security, and repository hygiene review  
+**Status:** Generally healthy with actionable improvements needed
 
 ---
 
 ## Executive Summary
 
-The GradeAI repository is a well-structured React + TypeScript + Supabase application with comprehensive assessment workflow features. The codebase demonstrates solid architectural decisions and good separation of concerns, but has reduced type safety due to loose TypeScript configuration. The main concern is a **hardcoded PostHog API key** that should be removed immediately.
+GradeAI is a well-structured React + TypeScript + Supabase application with a healthy production build and a broad assessment workflow surface area. The codebase is in a materially better state after recent hygiene fixes. The main active concerns are loose TypeScript usage, missing validation in some input and AI-response paths, test coverage gaps, inconsistent logging patterns, and branch divergence between the audited working branch and `origin/main`.
 
-**Overall Health Score: 7.4/10**
+**Overall Health Score: 7.6/10**
 
 ---
 
 ## Table of Contents
+
 1. [Critical Issues](#critical-issues)
 2. [High Priority Issues](#high-priority-issues)
 3. [Medium Priority Issues](#medium-priority-issues)
-4. [Architecture & Design](#architecture--design)
-5. [Security Assessment](#security-assessment)
-6. [Code Quality](#code-quality)
-7. [Testing Coverage](#testing-coverage)
-8. [Dependencies & Build](#dependencies--build)
-9. [Recommendations](#recommendations)
-10. [Metrics Summary](#metrics-summary)
+4. [Resolved Issues](#resolved-issues)
+5. [Architecture & Design](#architecture--design)
+6. [Security Assessment](#security-assessment)
+7. [Code Quality](#code-quality)
+8. [Testing Coverage](#testing-coverage)
+9. [Dependencies & Build](#dependencies--build)
+10. [Recommendations](#recommendations)
+11. [Metrics Summary](#metrics-summary)
 
 ---
 
 ## Critical Issues
 
-### 🔴 1. Hardcoded PostHog API Key
-
-**File:** [src/lib/posthog.ts](src/lib/posthog.ts#L10)  
-**Severity:** CRITICAL  
-**Issue:**
-```typescript
-const key = import.meta.env.VITE_POSTHOG_KEY || "phc_96ZN0coZq6pvN18QFEd759uOHx3ZuZviXK1FxvydNRk";
-```
-
-The PostHog API key is exposed as a fallback in production code. While PostHog keys are typically considered low-risk (they're meant to be public), this violates security best practices and could lead to:
-- Unauthorized analytics tracking of your instance
-- Account takeover if the account is compromised
-- Inconsistent analytics across environments
-
-**Remediation:**
-```typescript
-const key = import.meta.env.VITE_POSTHOG_KEY;
-if (!key) {
-  console.warn("PostHog key not configured - analytics disabled");
-}
-```
-
-**Priority:** 🔴 URGENT - Fix immediately
+No active critical issues were confirmed in this audit pass.
 
 ---
 
 ## High Priority Issues
 
-### 🟠 1. Loose TypeScript Configuration
+### 1. 45+ `any` Type Instances Across the Codebase
 
-**File:** [tsconfig.app.json](tsconfig.app.json)  
-**Severity:** HIGH  
-**Issues:**
-```json
-{
-  "compilerOptions": {
-    "strict": false,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "strictNullChecks": false
-  }
+**Severity:** High  
+**Files:** 8+ high-impact files
+
+**Detailed breakdown:**
+
+| File | Count | Specific Lines | Impact |
+|------|-------|----------------|--------|
+| [AssignmentDetail.tsx](src/pages/dashboard/AssignmentDetail.tsx) | 11 | 106, 128, 157, 297, 330, 498, 567, 659, 802, 1569, 1598 | Grade breakdown, rubric typing |
+| [ExplainGrade.tsx](src/pages/dashboard/ExplainGrade.tsx) | 4 | 99, 103, 119, 120 | Array types, iteration |
+| [supabase/functions/_shared/openai.ts](supabase/functions/_shared/openai.ts) | 5 | 48, 54-57 | Response extraction |
+| [LearningOutcomes.tsx](src/pages/dashboard/LearningOutcomes.tsx) | 3 | 85, 87, 324 | Badge variant casting |
+| [src/components/ui/chart.tsx](src/components/ui/chart.tsx) | 2 | 94, 232 | Chart configuration |
+| [src/test/](src/test/) | 2+ | Various | Mock data types |
+
+**Example problem:**
+
+```typescript
+// Current
+rubric: data.rubric as any[] | null,
+breakdown: g.ai_breakdown as any[],
+
+// Better
+interface RubricCriterion {
+  criterion: string;
+  max_score: number;
+  score?: number;
+  feedback?: string;
+}
+
+interface GradeBreakdown {
+  criterion: string;
+  score: number;
+  feedback: string;
 }
 ```
 
 **Impact:**
-- Eliminates TypeScript's primary benefit of compile-time type safety
-- Masks potential runtime errors
-- Makes refactoring more risky
-- Prevents proper IDE assistance and autocomplete
+- weaker editor support
+- greater refactor risk
+- more runtime-shape assumptions in grading and dashboard flows
 
-**Affected ESLint Rules** ([eslint.config.js](eslint.config.js)):
-```javascript
-"@typescript-eslint/no-explicit-any": "off",        // ❌ Allows unsafe 'any' types
-"@typescript-eslint/no-unused-vars": "off",         // ❌ Hides dead code
-"react-hooks/exhaustive-deps": "off",               // ❌ React Hook dangers
-"@typescript-eslint/no-empty-object-type": "off"    // ❌ Allows empty types
-```
-
-**Remediation Strategy:**
-1. **Phase 1 (Week 1):** Enable rules one at a time with warnings
-2. **Phase 2 (Week 2-3):** Address violations
-3. **Phase 3 (Week 4):** Convert to errors
-
-Example progression:
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitAny": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "strictNullChecks": true
-  }
-}
-```
-
-**Priority:** 🟠 HIGH - Implement in current sprint
+**Recommendation:**
+1. Define shared data contracts in a central type module.
+2. Remove `any` from the grading/dashboard path first.
+3. Turn on or strengthen lint enforcement for explicit `any`.
 
 ---
 
-### 🟠 2. Temp Files Left in Repository
+### 2. Missing Input Validation
 
-**Files:**
-- Temporary admin profile validation SQL scripts at the repo root
-
-**Severity:** HIGH  
-**Issue:** Debug/temp files should not be committed to the repository  
-**Impact:**
-- Clutters repository
-- Confuses developers about production state
-- May contain test data
-
-**Remediation:** Delete these files and add `.sql` exclusion patterns to `.gitignore` if needed.
-
-**Priority:** 🟠 HIGH - Remove in next commit
-
----
-
-### 🟠 3. Missing Input Validation
-
+**Severity:** High  
 **Files:** [src/components/BulkStudentUpload.tsx](src/components/BulkStudentUpload.tsx), [supabase/functions/check-plagiarism/index.ts](supabase/functions/check-plagiarism/index.ts)
 
-**Severity:** HIGH  
-**Issue:** CSV parsing and JSON manipulation without schema validation
+**Issue:** Some CSV parsing, document extraction results, and AI/API response paths still rely on shape assumptions instead of explicit schema validation.
 
 **Examples:**
-- CSV file parsing uses string manipulation without validation
-- Document extraction results processed without type checking
-- API responses from OpenAI lack validation schema
+- CSV parsing uses string manipulation without strong row validation
+- document extraction output is processed without full runtime type checking
+- AI/API payload handling still trusts expected shapes too early
 
-**Remediation:** Use Zod (already in project) for validation:
-```typescript
-import { z } from 'zod';
-
-const StudentRowSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1),
-  studentId: z.string().regex(/^\d+$/)
-});
-
-// Use in parser
-const rows = csvData.map(row => StudentRowSchema.parse(row));
-```
-
-**Priority:** 🟠 HIGH - Implement for BulkStudentUpload and API endpoints
+**Recommendation:** Use the existing `zod` dependency more systematically for user input and external-response validation.
 
 ---
 
 ## Medium Priority Issues
 
-### 🟡 1. Error Handling Type Safety
+### 1. Error Handling Type Safety
 
-**Severity:** MEDIUM  
-**Issue:** Loose error type checking throughout codebase
+**Severity:** Medium
 
-**Examples:**
+**Issue:** Error handling remains inconsistent across async flows, with some paths still reducing unknown failures to generic messages too early.
+
+**Example:**
+
 ```typescript
 catch (error) {
   const message = error instanceof Error ? error.message : "Unknown error";
-  // ❌ Doesn't handle all error types (fetch errors, API errors, etc.)
 }
 ```
 
-**Better approach:**
-```typescript
-catch (error) {
-  const message = error instanceof Error 
-    ? error.message 
-    : error instanceof Response
-    ? `HTTP ${error.status}`
-    : String(error);
-}
-```
-
-**Files to audit:**
-- All async functions in [src/lib/](src/lib/)
-- Supabase function handlers
-
-**Priority:** 🟡 MEDIUM - Address in next refactoring cycle
+**Recommendation:** Standardize error normalization so network, response, parser, and runtime errors produce clearer telemetry and user-facing diagnostics.
 
 ---
 
-### 🟡 2. Test Coverage Gaps
+### 2. Test Coverage Gaps
 
-**Severity:** MEDIUM  
-**Current State:**
-- ✅ 14 unit/integration tests
-- ✅ E2E tests with Playwright
-- ❌ Missing: Coverage for 6+ dashboard pages
-- ❌ Missing: Component integration tests
-- ❌ Missing: Error scenario testing
-
-**Uncovered areas:**
-- [src/pages/dashboard/LecturerOverview.tsx](src/pages/dashboard/LecturerOverview.tsx)
-- [src/pages/dashboard/AccreditationDashboard.tsx](src/pages/dashboard/AccreditationDashboard.tsx)
-- [src/pages/dashboard/ExternalExaminerExport.tsx](src/pages/dashboard/ExternalExaminerExport.tsx)
-- Student-facing pages (ExplainGrade, StudentProfile)
-- Error boundary scenarios
-
-**Recommendation:**
-```bash
-# Add coverage reporting
-npm test -- --coverage
-
-# Target: >80% coverage for critical paths
-```
-
-**Priority:** 🟡 MEDIUM - Implement coverage targets quarterly
-
----
-
-### 🟡 3. Dependency Update Cycle
-
-**Severity:** MEDIUM  
-**Issue:** Need systematic approach to dependency updates
-
-**Current versions (as of April 2026):**
-- React: 18.3.1 ✅ Current
-- TypeScript: 5.8.3 ✅ Current
-- Vite: 5.4.21 ✅ Current
-- Supabase: 2.99.2 ✅ Current
-- TanStack Query: 5.83.0 ✅ Current
-
-**Observation:** Dependencies are relatively recent, but no evidence of systematic updates.
-
-**Recommendation:**
-1. Run `npm outdated` monthly
-2. Use Dependabot for automation
-3. Establish SemVer policy
-
-**Priority:** 🟡 MEDIUM - Establish policy this quarter
-
----
-
-### 🟡 4. Logging & Observability
-
-**Severity:** MEDIUM  
-**Issue:** Inconsistent logging patterns; no structured logging
+**Severity:** Medium
 
 **Current state:**
-- ✅ Error logging in critical paths
-- ❌ No centralized error tracking (beyond PostHog)
-- ❌ No request/response logging
-- ❌ No performance metrics
+- unit/integration coverage exists
+- Playwright E2E coverage exists
+- missing broader coverage for several dashboard pages
+- missing deeper component integration tests
+- missing more explicit error-path testing
 
-**Recommendation:** Consider adding:
-```typescript
-// Add structured logging
-import { pino } from 'pino'; // Or similar
+**Uncovered areas include:**
+- [LecturerOverview.tsx](src/pages/dashboard/LecturerOverview.tsx)
+- [AccreditationDashboard.tsx](src/pages/dashboard/AccreditationDashboard.tsx)
+- [ExternalExaminerExport.tsx](src/pages/dashboard/ExternalExaminerExport.tsx)
+- student-facing explanation/profile paths
+- failure and boundary scenarios
 
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info'
-});
-
-// Replace console.error with:
-logger.error({ error, context }, 'Failed to grade submission');
-```
-
-**Priority:** 🟡 MEDIUM - Implement before production scaling
+**Note:** `npm test` could not be fully validated in this sandbox because Vitest config loading hit `spawn EPERM`.
 
 ---
 
-## Low Priority Issues
+### 3. Logging and Observability Improvements
 
-### 🔵 1. TODO Comment in index.html
+**Severity:** Medium
 
-**File:** [index.html](index.html#L15)  
-**Issue:** Template TODO not updated
-```html
-<!-- TODO: Update og:title to match your application name -->
-```
+**Issue:** Logging exists in important paths, but patterns are inconsistent and not yet structured enough for reliable operational tracing.
 
-**Remediation:**
-```html
-<meta property="og:title" content="GradeAI - Academic Assessment Platform">
-```
+**Current gaps:**
+- no centralized structured logging approach
+- limited request/response correlation for backend operations
+- limited performance instrumentation
 
-**Priority:** 🔵 LOW - Update in next UI refresh
+**Recommendation:** Standardize log structure and context fields before production-scale operational review.
 
 ---
 
-### 🔵 2. Demo Mode Detection
+### 4. Branch Divergence Note
 
-**File:** [src/contexts/AuthContext.tsx](src/contexts/AuthContext.tsx)  
-**Note:** Demo mode only activates when Supabase is misconfigured, so this is safe but worth documenting.
+**Severity:** Medium
 
-**Priority:** 🔵 LOW - Add inline documentation
+**Issue:** The audited branch and `origin/main` are not currently aligned.
+
+**Current state at audit time:**
+- `cohort-recommendations-rpc-audit` has one commit not on `origin/main`
+- `origin/main` has newer commits not present on the audited branch
+
+**Impact:**
+- audit conclusions depend on which branch is treated as canonical
+- documentation and operational claims can drift across branches
+
+**Recommendation:** Reconcile the branch state before treating a single audit report as the definitive project-wide position.
+
+---
+
+## Resolved Issues
+
+### 1. Hardcoded PostHog Fallback Key Removed
+
+**File:** [src/lib/posthog.ts](src/lib/posthog.ts#L12)  
+**Status:** Resolved
+
+The hardcoded PostHog fallback key was removed. Analytics now initialize only when `VITE_POSTHOG_KEY` is configured, and development mode shows a safe warning instead of silently using fallback credentials.
+
+### 2. Temporary SQL Files Deleted
+
+**Status:** Resolved
+
+Temporary admin profile validation SQL files were removed from the repository and are no longer active audit items.
+
+### 3. Unsafe `JSON.parse()` Protected With `try/catch`
+
+**File:** [src/components/DashboardLayout.tsx](src/components/DashboardLayout.tsx#L150-L165)  
+**Status:** Resolved
+
+The local-storage parsing path now falls back safely when stored JSON is malformed, so this is no longer an active reliability issue.
 
 ---
 
 ## Architecture & Design
 
-### ✅ Strengths
+### Strengths
 
-1. **Component Organization**
-   - Clear separation: [src/components/](src/components/) (features), [src/components/ui/](src/components/ui/) (primitives)
-   - 45+ shadcn/ui components provide consistent design
-   - Proper use of React patterns (Context, hooks, error boundaries)
+1. **Component organization**
+   - Clear separation between feature components and UI primitives
+   - Consistent dashboard layout structure
+   - Good use of React composition patterns
 
-2. **State Management**
-   - Appropriate use of React Context for auth
-   - TanStack React Query for server state (proper caching)
-   - Local component state where needed
-   - No unnecessary global state
+2. **State management**
+   - TanStack Query is used appropriately for server state
+   - Context use is restrained and purposeful
+   - Local state is used where global coordination is unnecessary
 
-3. **Page Structure**
-   - 17 dashboard pages organized by role (lecturer, student, admin)
-   - Lazy loading setup ready
-   - Consistent layout ([DashboardLayout.tsx](src/components/DashboardLayout.tsx))
+3. **Database and backend boundaries**
+   - Supabase and Edge Functions provide clear boundaries for sensitive operations
+   - RLS enforces important access rules at the database layer
 
-4. **Database Design**
-   - RLS (Row Level Security) enforces access at database level ✅
-   - Auto-generated TypeScript types from schema ✅
-   - Proper foreign key relationships
-   - Edge Functions for sensitive operations ✅
+4. **Assessment workflow scope**
+   - The application covers grading, moderation, integrity review, reporting, and student-facing flows in a coherent product shape
 
-5. **Authentication**
-   - Multi-layer strategy: production, demo, E2E testing
-   - Proper JWT token handling
-   - Session persistence
-   - Role-based access control
+### Ongoing concerns
 
-### ⚠️ Architecture Concerns
+1. **Business logic spread**
+   - Important rules are split across frontend, backend functions, and database policy layers
+   - This raises drift risk if rule changes are not documented centrally
 
-1. **No ORM Layer**
-   - Direct Supabase client queries increase SQL injection risk
-   - Mitigation: Parameterized queries are being used ✅
-   - Consider: Future data access layer for abstraction
-
-2. **Business Logic Split**
-   - Logic duplicated between frontend and database
-   - Frontend: React components with business logic
-   - Database: RLS policies enforcing same rules
-   - Risk: Inconsistency if one is updated but not the other
-   - Recommendation: Document business rules in ARCHITECTURE.md
-
-3. **No API Response Validation**
-   - Assumes Supabase responses match expected schema
-   - Recommendation: Add Zod validation layer
+2. **Validation boundaries**
+   - Some external-response and upload paths still trust shape too early
 
 ---
 
 ## Security Assessment
 
-### ✅ Security Strengths
+### Security Strengths
 
 | Item | Status | Notes |
 |------|--------|-------|
-| **Secrets in Code** | ✅ PASS | No hardcoded API keys (except PostHog) |
-| **.env Files** | ✅ PASS | Proper .gitignore: `.env`, `.env.*`, `.supabase/` |
-| **Frontend Secrets** | ✅ PASS | VITE_* variables are meant to be public |
-| **Backend Secrets** | ✅ PASS | Stored in Supabase secrets, not in code |
-| **HTTPS** | ✅ PASS | Supabase enforces HTTPS |
-| **CORS** | ✅ PASS | Supabase handles CORS properly |
-| **RLS Policies** | ✅ PASS | Database-level access control |
-| **JWT Tokens** | ✅ PASS | Supabase Auth handles token management |
-| **XSS Prevention** | ✅ PASS | No `dangerouslySetInnerHTML`, safe markdown rendering |
-| **CSRF Protection** | ✅ PASS | SPA with Supabase handles session tokens |
+| Secrets in code | PASS | No secret-like strings were confirmed in the current audit pass |
+| `.env` handling | PASS | `.gitignore` covers `.env`, `.env.*`, `.supabase/`, and temp paths |
+| Frontend env use | PASS | Frontend-safe `VITE_` variables remain in `.env.example` |
+| Backend secrets | PASS | Backend secrets are documented as Supabase Secrets |
+| RLS policies | PASS | Access control is enforced in the database layer |
+| JWT/session handling | PASS | Supabase Auth remains the auth boundary |
+| XSS prevention | PASS | No broad unsafe rendering pattern was surfaced in this audit pass |
 
-### ⚠️ Security Concerns
+### Security Concerns
 
-1. **Hardcoded PostHog Key** (Critical - see above)
-2. **Demo Mode Security** 
-   - Demo credentials are hardcoded but only activate on misconfiguration
-   - ✅ Safe, but document clearly
-3. **E2E Test Auth** 
-   - Localhost-only check: `window.location.hostname === 'localhost'`
-   - ✅ Sufficient, but could add environment variable check
-4. **File Upload Security**
-   - Supabase Storage handles security (ACLs, size limits)
-   - ✅ Verify storage policies are enforced
+1. **Demo mode behavior**
+   - Safe in the current design, but should remain clearly documented
 
-### Security Checklist
-
-- ✅ No plaintext passwords stored
-- ✅ No sensitive data in LocalStorage (only auth tokens and theme)
-- ✅ API calls authenticated with JWT
-- ✅ Rate limiting: Check Supabase defaults
-- ✅ Input validation: MEDIUM concern (see above)
-- ✅ SQL injection: Protected by parameterized queries
-- ✅ CORS: Properly configured at Supabase level
+2. **Upload and extraction surfaces**
+   - File and extracted-content paths should continue to receive careful validation attention
 
 ---
 
 ## Code Quality
 
-### Type Safety Report
-
-```
-TypeScript Strict Mode:        ❌ OFF
-noImplicitAny:                 ❌ OFF  
-noUnusedLocals:                ❌ OFF
-noUnusedParameters:            ❌ OFF
-strictNullChecks:              ❌ OFF
-React Hooks Exhaustive Deps:   ❌ OFF
-@typescript-eslint/no-any:     ❌ OFF
-```
-
-**Impact Analysis:**
-- 📊 Estimated 30-40% of code could have type errors
-- 📊 Refactoring risk: HIGH
-- 📊 Maintainability: MEDIUM
-
-**Example of current issues:**
-```typescript
-// Without strict types, these compile fine but may fail at runtime:
-const data: any = fetchData();      // ✅ Compiles, type unknown at runtime
-const value = data.nonexistent;     // ✅ Compiles, undefined at runtime
-function process(x) {               // ✅ Compiles, parameter type unknown
-  return x.toLowerCase();           // ❌ Fails if x is a number
-}
-```
-
-### Code Organization: Excellent
-
-**src/lib/** (20 files - All in use)
-- `accreditationMetrics.ts` - Accreditation calculations
-- `assessmentWorkflow.ts` - Workflow state management
-- `integrityReviews.ts` - Plagiarism review logic
-- `moderationWorkflow.ts` - Moderation state machine
-- `roles.ts` - Role-based access
-- `studentRisk.ts` - Risk calculations
-- Plus 14 other utility modules
-
-**src/pages/** (17+ pages, organized by role)
-- Dashboard pages for lecturer, student, admin
-- Proper lazy loading setup
-
-**src/components/** 
-- Feature components: `BulkStudentUpload.tsx`, `DashboardLayout.tsx`, `RubricBuilder.tsx`
-- Moderation components: `moderation/` folder
-- UI components: `ui/` with 45+ primitives
-
-### No Obvious Dead Code
-
-All library files are actively imported and used in components/pages. Good housekeeping.
+The codebase is readable overall and split into sensible product areas. The largest quality drag remains type looseness in several high-impact files. The next most important improvement is better runtime validation around untrusted input and external responses.
 
 ---
 
 ## Testing Coverage
 
-### Test Files Summary
-
-| Type | Count | Coverage |
-|------|-------|----------|
-| Unit Tests | 14 | Core workflows ✅ |
-| E2E Tests | 1+ | Playwright ✅ |
-| Integration | 3 | Dashboard workflows ✅ |
-| **Untested Areas** | — | 6+ dashboard pages ❌ |
-
-### Test Framework Setup
-
-✅ **Vitest** - Fast, ESM-native  
-✅ **jsdom** - DOM testing environment  
-✅ **Testing Library** - React testing best practices  
-✅ **Playwright** - E2E browser automation  
-
-**Config:** [vitest.config.ts](vitest.config.ts)
-```typescript
-test: {
-  environment: "jsdom",
-  globals: true,
-  setupFiles: ["./src/test/setup.ts"]
-}
-```
-
-### Coverage Gaps
-
-**Untested pages:**
-- LecturerOverview (main dashboard)
-- AccreditationDashboard
-- ExternalExaminerExport
-- ExplainGrade (student feature)
-- StudentProfile
-- PerformanceTrends
-- LearningOutcomes
-
-**Untested scenarios:**
-- Error boundary rendering
-- Network error handling
-- Empty state rendering
-- Form validation edge cases
-- Concurrent operations
-
-**Recommendation:**
-```bash
-# Add this to package.json
-"test:coverage": "vitest run --coverage",
-
-# Target: 80%+ for critical paths
-```
+The repo has meaningful testing infrastructure, including Vitest and Playwright. The main gap is breadth rather than complete absence. More dashboard coverage and more failure-path testing would materially improve confidence in grading and reporting workflows.
 
 ---
 
 ## Dependencies & Build
 
-### Dependency Status
-
-**Production Dependencies (41 total)**
-
-✅ **Core React Stack**
-- react 18.3.1
-- react-dom 18.3.1
-- react-router-dom 6.30.1
-- react-hook-form 7.61.1
-
-✅ **UI/Design**
-- @radix-ui/* (28 packages) - Excellent headless UI
-- tailwindcss 3.4.17 - Utility CSS
-- lucide-react - Icon library
-
-✅ **Backend Integration**
-- @supabase/supabase-js 2.99.2
-- @tanstack/react-query 5.83.0
-
-✅ **Utilities**
-- zod 3.25.76 - Schema validation
-- date-fns 3.6.0 - Date manipulation
-- jspdf + jspdf-autotable - PDF export
-- react-markdown - Rich text rendering
-- posthog-js - Analytics
-
-**Security Note:** PostHog key is hardcoded but library choice is good.
-
-### Development Dependencies (19 total)
-
-✅ All essential tools present
-- typescript 5.8.3
-- vite 5.4.21
-- vitest 1.6.1
-- eslint + @typescript-eslint
-- playwright 1.57.0
-- tailwindcss + postcss
-
-### Unused Dependencies Check
-
-No obvious unused dependencies detected. All imports in package.json are utilized.
-
-### Build Configuration
-
-**Vite Config:** Excellent
-
-✅ Proper code splitting strategy:
-```typescript
-manualChunks: {
-  "react-vendor": react + react-dom + scheduler,
-  "router-vendor": react-router-dom,
-  "supabase-vendor": @supabase/*,
-  "markdown-vendor": react-markdown + remark + rehype,
-  "analytics-vendor": posthog-js,
-  "ui-vendor": @radix-ui/*
-}
-```
-
-This reduces main bundle size and improves caching.
-
-**Bundle Size Estimate:**
-- Main: ~150-200KB (with dependencies bundled)
-- React vendor: ~80-100KB
-- UI vendor: ~50-80KB
-- Other vendors: ~30-50KB each
-
-Consider: Monitor with `vite build --report`
+- `npm run build` passed during this audit
+- dependency versions appear broadly modern from the working tree
+- no immediate dependency hygiene emergency was identified in this pass
 
 ---
 
 ## Recommendations
 
-### 🔴 Critical (Do First)
-
-1. **Remove PostHog Hardcoded Key** (1 hour)
-   - File: [src/lib/posthog.ts](src/lib/posthog.ts#L10)
-   - Change: Remove fallback, require environment variable
-
-2. **Delete Temp Files** (5 minutes)
-   - Remove: `temp_admin_profile_validation*.sql`
-   - Update: `.gitignore` if needed
-
-### 🟠 High Priority (This Sprint)
-
-1. **Implement Input Validation** (8 hours)
-   - Add Zod schemas for CSV parsing (BulkStudentUpload)
-   - Add validation for API responses
-   - File: [src/components/BulkStudentUpload.tsx](src/components/BulkStudentUpload.tsx)
-
-2. **Begin TypeScript Strict Migration** (Start this week)
-   - Week 1: Enable rules with warnings
-   - Week 2-3: Fix violations
-   - Week 4: Convert warnings to errors
-   - Follow: [TypeScript strict mode guide](https://www.typescriptlang.org/tsconfig#strict)
-
-3. **Add Basic Test Coverage** (12 hours)
-   - Write tests for LecturerOverview component
-   - Add error boundary tests
-   - Document coverage expectations (80% for critical paths)
-
-### 🟡 Medium Priority (Next Month)
-
-1. **Improve Error Handling** (8 hours)
-   - Audit all catch blocks
-   - Add proper error typing
-   - Create error utility functions
-
-2. **Add Structured Logging** (12 hours)
-   - Consider: Pino.js or similar
-   - Log important business events
-   - Add request/response logging to Supabase calls
-
-3. **Establish Dependency Update Policy** (2 hours)
-   - Set up Dependabot
-   - Define update schedule
-   - Document process
-
-4. **Document Business Rules** (4 hours)
-   - Update ARCHITECTURE.md
-   - Explain RLS policies
-   - Document role model (lecturer/student/admin/examiner)
-
-### 🔵 Low Priority (Quarterly)
-
-1. Monitor bundle size
-2. Update meta tags in index.html
-3. Consider API response validation layer
-4. Add performance monitoring
-5. Set up code review guidelines for type safety
+1. Remove high-impact `any` usage from grading and dashboard flows first.
+2. Add stronger schema validation for uploads, extraction results, and AI/API responses.
+3. Expand test coverage around dashboard behavior and error scenarios.
+4. Standardize logging and error normalization for traceability.
+5. Reconcile the audit branch with `origin/main` so the repo has one clear audit baseline.
 
 ---
 
 ## Metrics Summary
 
-### Code Quality Metrics
-
-| Metric | Current | Target | Gap |
-|--------|---------|--------|-----|
-| TypeScript Strict | ❌ 0% | ✅ 100% | 100% |
-| Type Coverage | ~60% | 95% | 35% |
-| Test Coverage | ~40% | 80% | 40% |
-| ESLint Pass Rate | ⚠️ Modified | 100% | ❌ |
-| No Hardcoded Keys | ❌ 1 | ✅ 0 | 1 |
-
-### Architecture Metrics
-
-| Metric | Status | Note |
-|--------|--------|------|
-| Separation of Concerns | ✅ Excellent | Clear component/page structure |
-| Cohesion | ✅ Good | Related code grouped logically |
-| Coupling | ⚠️ Medium | Context + Query + direct imports balanced |
-| Reusability | ✅ Good | 45+ reusable UI components |
-| Maintainability | ⚠️ Medium | Type safety concerns reduce this |
-
-### Security Metrics
-
-| Metric | Status | Risk Level |
-|--------|--------|-----------|
-| Secrets Exposure | ⚠️ 1 issue | LOW-MEDIUM |
-| Dependency Vulnerabilities | ✅ None known | LOW |
-| Input Validation | ⚠️ Partial | MEDIUM |
-| Authentication | ✅ Robust | LOW |
-| Authorization | ✅ RLS Enforced | LOW |
-
-### Performance Metrics
-
-| Metric | Current | Note |
-|--------|---------|------|
-| Bundle Size | ~500KB gzipped est. | Monitor with vite build |
-| Code Splitting | ✅ 6 chunks | Excellent strategy |
-| Initial Load | — | Measure in staging |
-| Time to Interactive | — | Measure in staging |
-
----
-
-## Conclusion
-
-**Overall Assessment: HEALTHY with Minor Issues**
-
-The GradeAI codebase demonstrates excellent architectural decisions and solid engineering practices. The main areas for improvement are:
-
-1. **Type Safety** - Loose TypeScript configuration reduces safety (fixable via gradual migration)
-2. **Security** - One hardcoded key needs immediate removal (15-minute fix)
-3. **Testing** - Good foundation, but gaps in coverage (fixable incrementally)
-4. **Validation** - Input validation needs formalization (use existing Zod)
-
-**Recommended Action Plan:**
-- **Week 1:** Remove hardcoded key, delete temp files, start TypeScript migration
-- **Weeks 2-4:** Improve input validation, expand test coverage
-- **Ongoing:** Implement logging, monitor dependencies, document business rules
-
-**Team Guidance:**
-- ✅ Continue with current architectural patterns
-- ✅ Use Zod for all external input validation
-- ⚠️ Be cautious with `any` types - document why if used
-- 📚 Document business rules in ARCHITECTURE.md as they evolve
-
----
-
-## Appendix: Quick Fix Checklist
-
-```bash
-# 1. Remove hardcoded PostHog key
-# Edit: src/lib/posthog.ts line 10
-# Remove: || "phc_96ZN0coZq6pvN18QFEd759uOHx3ZuZviXK1FxvydNRk"
-
-# 2. Delete temp files
-rm <temporary admin profile validation sql files>
-
-# 3. Run linter (should pass)
-npm run lint
-
-# 4. Run tests
-npm test
-
-# 5. Build verification
-npm run build
-
-# 6. Check for type errors (current: 0 with strict=false)
-# After enabling strict mode, monitor:
-npx tsc --noEmit
-```
-
----
-
-**Report Generated:** April 24, 2026  
-**Auditor:** GitHub Copilot AI  
-**Next Review:** Recommended in 3 months or after major changes
+| Area | Status | Notes |
+|------|--------|-------|
+| Build | Healthy | `npm run build` passed |
+| Tests in sandbox | Blocked | `npm test` hit `spawn EPERM` during Vitest config loading |
+| Security hygiene | Good | No secret-like strings confirmed in tracked files during this audit |
+| Type safety | Needs work | 45+ `any` usages remain |
+| Validation | Needs work | Runtime validation is still incomplete in some flows |
+| Observability | Moderate | Logging exists but is not yet standardized |
+| Branch alignment | Needs attention | Audited branch and `origin/main` differ |
