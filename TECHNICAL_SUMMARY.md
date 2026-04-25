@@ -2,22 +2,22 @@
 
 ## 1. Problem
 
-University marking is slow, inconsistent, and hard to audit at scale.
+University marking is slow, repetitive, and difficult to audit at scale.
 
-Lecturers often have to balance large submission volumes, rubric-based grading, moderation requirements, academic integrity review, and student feedback release under time pressure. In many workflows, the final mark is visible, but the process behind it is not.
+Lecturers often have to manage large submission volumes, rubric-based grading, moderation requirements, academic integrity review, and student feedback release under time pressure. In many existing workflows, the final mark is visible, but the reasoning and review path behind it are much harder to inspect.
 
 ## 2. Solution
 
-GradeAI is an AI-assisted assessment platform that supports marking without removing lecturer control.
+GradeAI is an AI-assisted assessment platform that supports marking while keeping lecturer control at the centre of the workflow.
 
-The system helps with:
+The system supports:
 - rubric-based scoring
 - evidence-backed feedback
-- integrity flagging
+- academic integrity flagging
 - moderation support
 - lecturer review before approval and release
 
-The goal is not to replace academic judgement. The goal is to reduce repetitive work and make the grading process more consistent and easier to inspect.
+The aim is not to replace academic judgement. It is to reduce repetitive work, improve consistency, and make the assessment process easier to review.
 
 ## 3. Architecture
 
@@ -26,7 +26,7 @@ High-level flow:
 ```text
 React frontend
   -> Supabase Auth / Database / Storage
-  -> Edge Functions
+  -> Supabase Edge Functions
   -> AI model layer
   -> validated results returned to lecturer workflow
 ```
@@ -43,41 +43,51 @@ submission upload
   -> release
 ```
 
-## 4. Key Innovations
+The frontend manages the user experience and workflow state, while Supabase provides authentication, database storage, file storage, row-level security, and server-side Edge Functions for AI-assisted tasks.
+
+## 4. Key Technical Features
 
 - Structured grading pipeline rather than a single black-box score
 - Criterion-level scoring with evidence and confidence signals
-- Fairness validation and recalibration when score and feedback conflict
-- Deterministic caching for unchanged grading inputs
-- Integrity analysis that separates structural overlap from meaningful content similarity
-- Lecturer override, moderation support, and audit history
+- Lecturer review and override before grades are released
+- Moderation workflow with review states and audit history
+- Integrity analysis that separates cited, uncited, internal, and external overlap
+- Student-facing explanations and improvement support after release
+- Cohort analytics and rule-based recommendations for lecturers
 
 ## 5. Technical Stack
 
 - Frontend: React, TypeScript, Vite
+- UI: Tailwind CSS, shadcn/ui, Radix UI
 - Backend platform: Supabase
-- Database: Postgres
+- Database: Postgres with row-level security
 - Storage: Supabase Storage
 - Server logic: Supabase Edge Functions
 - AI integration: OpenAI API
+- Hosting: Cloudflare Pages
 - Testing: Vitest, Testing Library, Playwright
 
 ## 6. My Contribution
 
-Built and integrated the main application workflow, including:
+I built and integrated the main application workflow, including:
 - assignment and submission handling
-- AI grading pipeline
-- fairness and consistency controls
-- plagiarism and integrity review flow
-- lecturer review and moderation support
+- AI-assisted grading pipeline
+- lecturer review, approval, and release controls
+- academic integrity review flow
+- moderation support and audit logic
+- student feedback and explanation flows
+- cohort analytics and reporting views
 - validation and safety improvements across Edge Function boundaries
-- frontend dashboard and reporting flows
 
-## 7. Impact
+I also moved the project beyond an initial prototype by connecting the frontend, Supabase backend, Edge Functions, authentication, storage, and deployment flow into one working application.
 
-Even in its current state, the platform shows practical value:
-- reduces lecturer marking workload
-- improves grading consistency
-- makes AI-generated decisions easier to explain
-- keeps a human approval step before grades are released
-- creates a clearer audit trail for review, moderation, and integrity decisions
+## 7. Current Impact
+
+In its current state, GradeAI demonstrates practical value as a working full-stack prototype. It is designed to:
+- reduce repetitive marking and review work
+- improve consistency across rubric-based assessment
+- make AI-assisted outputs easier for lecturers to inspect
+- keep human approval in place before grades are released
+- create a clearer audit trail for grading, moderation, and integrity decisions
+
+The project is still being tested and hardened, but the core workflows now show how AI can support academic assessment without removing academic oversight.
