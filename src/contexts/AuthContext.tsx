@@ -17,6 +17,9 @@ interface Profile {
   department_id: string | null;
 }
 
+const PROFILE_FETCH_RETRY_COUNT = 5;
+const PROFILE_FETCH_RETRY_DELAY_MS = 400;
+
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
@@ -83,12 +86,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const fetchProfile = async (userId: string, email: string | undefined) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
+    let data: {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      role: string | null;
+      avatar_url: string | null;
+      cohort_id: string | null;
+      department_id: string | null;
+    } | null = null;
+
+    for (let attempt = 0; attempt < PROFILE_FETCH_RETRY_COUNT; attempt++) {
+      const result = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+
+      data = result.data;
+      if (data) break;
+
+      if (attempt < PROFILE_FETCH_RETRY_COUNT - 1) {
+        await wait(PROFILE_FETCH_RETRY_DELAY_MS);
+      }
+    }
 
     if (data) {
       const resolvedRole = parseAppRole(data.role);
@@ -110,6 +134,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setProfileError(null);
       posthog.identify(userId, { email });
     } else {
+      setProfile(null);
       setProfileError("Profile not found");
     }
   };
