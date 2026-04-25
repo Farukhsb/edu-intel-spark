@@ -12,6 +12,8 @@ Live deployment: `https://gradeai.pages.dev`
 
 Repository: `github.com/Farukhsb/edu-intel-spark`
 
+![Lecturer dashboard overview](screenshots/lecturer-dashboard-overview.jpg)
+
 ## Problem Addressed
 
 University marking is often slow, repetitive, and difficult to audit at scale. Lecturers have to balance large submission volumes, rubric-based grading, moderation requirements, academic integrity review, and timely feedback release.
@@ -35,6 +37,22 @@ I built and integrated a working full-stack prototype that brings together:
 - role-based lecturer, student, and admin workflows
 
 The system is not designed as a black-box auto-marker. It is designed as a decision-support tool where lecturers remain responsible for final academic judgement.
+
+## Product Evidence
+
+The screenshots below show the current product rather than mockups.
+
+### Lecturer analytics and cohort insight
+
+![Cohort analytics dashboard](screenshots/cohort-analytics-dashboard.jpg)
+
+![Grade distribution analytics](screenshots/grade-distribution-analytics.jpg)
+
+### Student-facing support and explainability
+
+![Student improvement plan](screenshots/student-improvement-plan.jpg)
+
+![AI grade explanation](screenshots/ai-grade-explanation.jpg)
 
 ## Technical Architecture
 
