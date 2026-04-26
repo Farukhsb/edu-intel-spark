@@ -1,33 +1,35 @@
 # GradeAI
 
-GradeAI was built to reduce the time lecturers spend marking assignments while improving consistency, transparency, and reviewability.
+GradeAI is an academic intelligence platform built primarily to help lecturers and institutions identify students who may need support earlier, before poor performance turns into repeated failure, disengagement, or withdrawal.
 
-It was also built around a wider student-support goal: helping lecturers identify struggling students earlier, before poor performance turns into repeated failure, disengagement, or withdrawal.
+AI-assisted marking is included because assessment data is one of the clearest ways to understand where students are struggling. By keeping marking, feedback, analytics, intervention tracking, and student support in one place, GradeAI makes it easier for lecturers to review student progress and act early.
 
-Instead of replacing academic judgement, it supports it.
+The aim is not to replace academic judgement. It is to give lecturers clearer evidence, reduce repetitive marking work, and make student-support decisions easier to review.
 
-The system breaks marking into structured steps:
+The system breaks assessment and support into structured steps:
 - rubric-based scoring
 - evidence-backed feedback
 - integrity signals
 - lecturer review before approval and release
+- risk indicators and intervention tracking
+- student improvement support after feedback is released
 
 Live deployment:
 - `https://gradeai.pages.dev`
 
-The project is designed around the full assessment workflow rather than a single AI scoring feature. A lecturer can move from assignment setup to grading, moderation, release, and cohort-level review while keeping each step structured and inspectable. The same data can also support early academic intervention by surfacing patterns such as declining performance, missed submissions, weak rubric areas, or repeated feedback issues.
+The project is designed around the full assessment and student-support workflow rather than a single AI scoring feature. A lecturer can move from assignment setup to grading, moderation, release, cohort-level review, and intervention tracking while keeping each step structured and inspectable.
 
 ## Why We Built It
 
-Marking large numbers of submissions is repetitive, time-consuming, and often difficult to audit afterwards.
+The central problem GradeAI addresses is that struggling students are often identified too late.
 
-Many tools focus only on grading speed or treat AI output like a black box. That creates trust problems. GradeAI takes a different approach: it keeps lecturers in control and makes the grading path visible.
+In many cases, the warning signs are already present: missed submissions, declining marks, repeated weaknesses against rubric criteria, poor completion patterns, or low engagement. However, these signals are often scattered across different systems or only reviewed after a student has already failed.
 
-A major reason for building GradeAI is that struggling students are often identified too late. In many cases, the warning signs are already present: missed submissions, declining marks, weak rubric performance, repeated feedback issues, or low engagement. However, these signals are often scattered across different systems or only reviewed after the student has already failed.
+Marking is part of this problem because assessment produces the evidence lecturers need to understand student progress. But in traditional workflows, marking, feedback, analytics, and intervention records are often disconnected. That makes it harder to move from “this student performed poorly” to “this student needs timely support.”
 
-GradeAI brings these signals together so lecturers and support teams can identify students who may need help earlier. The aim is not to label students or replace human judgement, but to give staff a clearer view of who may be falling behind and why. Lecturers can then record interventions, set follow-up actions, and track whether support is helping over time.
+GradeAI brings these pieces together. AI-assisted marking is used to reduce repetitive work and structure feedback, while analytics and intervention tools help lecturers identify students who may be falling behind. The platform is designed to support human judgement, not replace it.
 
-This makes the platform more than a marking tool. It is also a student support and retention tool, helping institutions act before failure, withdrawal, or dropout becomes the outcome.
+This makes GradeAI more than an AI marker. It is a student support and retention system that uses assessment workflows as the foundation for earlier, evidence-informed intervention.
 
 ## How It Works
 
@@ -41,6 +43,8 @@ submission
   -> lecturer review
   -> approval
   -> release
+  -> analytics and student-support signals
+  -> intervention / follow-up where needed
 ```
 
 The same principle applies to integrity review. Similarity signals, structural document artefacts, and AI-writing indicators are separated so the output is easier to interpret.
@@ -69,17 +73,17 @@ Here are a few views from the current product.
 
 ## Key Features
 
+- early identification of struggling students through risk signals and intervention logging
+- cohort analytics and explainable recommendations for lecturer review
+- student-facing feedback, improvement plans, and AI tutoring
 - rubric-based assignment authoring
 - student submission and secure file access
 - AI-assisted grading with criterion-level scoring and confidence signals
 - lecturer review, approval, and release controls
 - citation-aware academic integrity analysis
 - moderation workflows with audit history
-- cohort analytics and explainable recommendations
-- early identification of struggling students through risk signals and intervention logging
-- student-facing feedback, improvement plans, and AI tutoring
 
-In practice, a lecturer can move from creating an assignment to grading, moderation, release, and cohort-level reflection without leaving the platform. The same workflow can help staff notice students who may be at risk before problems become irreversible.
+In practice, a lecturer can move from creating an assignment to grading, moderation, release, cohort-level reflection, and student-support follow-up without leaving the platform. The assessment workflow is included because it creates the structured evidence needed to identify students who may be at risk.
 
 ## Workflow Snapshot
 
@@ -110,19 +114,20 @@ This means:
 - lecturer review remains the decision point before approval
 - moderated work is gated before release
 - release is still an explicit action
+- released feedback can feed into student-support and improvement-plan workflows
 
 ## Key Product Areas
 
 ### Lecturer workspace
 
 Lecturers can:
+- identify students who may be struggling and log intervention or follow-up actions
+- review cohort analytics and recommendations
 - create assignments with weighted rubrics
 - upload or review submissions
 - run AI grading and integrity checks
 - edit marks and feedback before approval
 - manage moderation cases
-- review cohort analytics and recommendations
-- identify students who may be struggling and log intervention or follow-up actions
 
 ### Student workspace
 
@@ -136,12 +141,12 @@ Students can:
 ### Institutional workflows
 
 GradeAI also supports:
+- student support evidence for retention, progression, and early intervention review
 - an admin control surface for user oversight and system-level reporting
 - accreditation reporting views
 - external examiner export workflows
 - moderation and audit trails
 - cohort-level quality and performance insight
-- student support evidence for retention, progression, and early intervention review
 
 ## Student Support And Retention
 
@@ -152,6 +157,8 @@ The platform uses assessment and engagement signals to highlight students who ma
 These signals are not treated as final judgements. They are prompts for lecturers or support teams to review the student’s situation and decide whether an intervention is needed. This keeps human judgement at the centre while making it harder for struggling students to be missed.
 
 Lecturers can record intervention notes, assign priority levels, set follow-up dates, and track progress over time. This creates a clearer support history and helps show what action was taken, when it happened, and whether the student’s situation improved.
+
+AI-assisted marking supports this purpose by making assessment evidence easier to generate, review, and connect to support actions. The marking feature is therefore part of the wider student-support workflow, not the whole product.
 
 This student-support layer is important because assessment data is often one of the earliest indicators that a student is under pressure. GradeAI is designed to turn those signals into timely, practical support rather than waiting until failure or withdrawal has already happened.
 
@@ -191,25 +198,25 @@ Moderation is additive to grading, not a replacement for it. The platform suppor
 ## Cohort Analytics
 
 The analytics layer includes:
+- student risk clustering
+- performance trends
 - grade distribution
 - assignment comparison
-- performance trends
-- student risk clustering
 - integrity signal monitoring
 
 It also includes deterministic AI Recommendations for lecturers. These are explainable rule-based cards derived from analytics data, not black-box predictions.
 
 Examples include:
-- low cohort average
-- high failure rate
+- high-risk student clusters
 - significant score drop between assignments
 - weak rubric criteria
-- high-risk student clusters
+- low cohort average
+- high failure rate
 - integrity spikes
 
 The intention is to support lecturer judgement with signals and context, not to hide decisions behind opaque scoring.
 
-This analytics layer also supports early intervention. When patterns suggest that individual students or groups may be struggling, lecturers can use those signals to review the situation and take action before students fail, disengage, or withdraw.
+This analytics layer supports early intervention. When patterns suggest that individual students or groups may be struggling, lecturers can use those signals to review the situation and take action before students fail, disengage, or withdraw.
 
 ## Technology Stack
 
@@ -389,6 +396,7 @@ npx supabase functions deploy check-plagiarism
 
 A few areas of the platform were tightened recently to make the product more reliable in day-to-day use.
 
+- the product positioning was clarified around early student support and retention, with AI marking framed as one component of a wider intervention workflow
 - moderation permissions were aligned between local and hosted policy state, and the moderation workflow was rechecked against the current migration chain
 - moderation UI coverage now includes nullable fallback cases, so missing linked submission data is handled explicitly and tested
 - route-level lazy loading was improved to reduce the main frontend bundle
@@ -396,18 +404,17 @@ A few areas of the platform were tightened recently to make the product more rel
 - React Router future flags were enabled early to reduce upgrade warnings and keep the app closer to upcoming router behaviour
 - the role model was tightened so admin is part of the real schema, generated types were brought back in line, and public signup no longer trusts admin role input
 - the admin area now includes read-only oversight views for users, assignments, submissions, reporting, and system-level navigation without forcing admin through lecturer-heavy pages
-- the student-support layer was clarified so the platform is positioned not only as an assessment workflow tool, but also as a way to identify and support struggling students before failure, withdrawal, or dropout
 
 ## Current State
 
 This project is best described as a fast-moving integrated prototype with hardened core workflows. It is no longer just a UI demo, but it is also not pretending to be a finished institutional platform.
 
 The strongest areas are:
+- early student support and intervention tracking
 - coherent assessment workflow design
 - lecturer oversight and explainability
 - moderation and audit direction
 - integrity pipeline improvements
-- early student support and intervention tracking
 - growing automated coverage around critical flows
 - live verification of core deployed workflows
 
