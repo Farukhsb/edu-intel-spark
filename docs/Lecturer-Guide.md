@@ -9,7 +9,7 @@ GradeAI is an academic workflow platform designed to help lecturers manage the f
 - AI-assisted grading with lecturer review
 - academic integrity checking
 - release of reviewed grades
-- at-risk student monitoring and intervention tracking
+- early support signals and intervention tracking
 
 The goal is not to replace lecturer judgement. The goal is to reduce repetitive marking effort, surface useful evidence faster, and keep the final decision with the lecturer.
 
@@ -24,7 +24,7 @@ As a lecturer, you can use the platform to:
 - review, edit, approve, and release grades
 - run similarity and AI-writing integrity checks
 - review flagged integrity cases
-- monitor at-risk students
+- review students who may need support
 - log interventions and send follow-up notifications
 
 ## How To Navigate The Website
@@ -40,7 +40,7 @@ The lecturer dashboard is organised around the main assessment workflow.
 - `Cohort Analytics`
   Use this to see trends and distributions across groups of students.
 - `Performance Trends`
-  Use this to track movement in grades over time.
+  Use this to track movement in grades over time and review early support signals.
 - `Academic Integrity`
   Use this to review persisted integrity cases after running checks from an assignment.
 - `Institutional Insights`
@@ -115,11 +115,11 @@ Students can then view:
 - feedback
 - rubric breakdown
 
-### 7. Monitor Risk and Support Students
+### 7. Monitor Support Needs and Follow Up
 
 Use the student profile and improvement workflow to:
 
-- identify students needing attention
+- review students whose assessment patterns suggest they may benefit from extra support
 - log interventions
 - send support notifications and follow-up reminders
 - review improvement-plan progress
@@ -150,16 +150,17 @@ Use this to understand how marks are distributed across the cohort.
 
 ![Grade Distribution Analytics](screenshots/grade-distribution-analytics.jpg)
 
-### Predictive Risk Analytics
+### Early Support Signals
 
-Use this to identify which students may need additional support or intervention.
+Use this to review students whose assessment patterns suggest they may benefit from extra support.
 
-![Predictive Risk Analytics](screenshots/predictive-risk-analytics.jpg)
+![Early Support Signals](screenshots/predictive-risk-analytics.jpg)
 
 ## Important Notes For Lecturers
 
 - AI grading is decision support, not final academic judgement.
 - Integrity analysis is evidence support, not proof of misconduct.
+- Early support signals are prompts for lecturer review, not automatic labels about students.
 - Final review and release decisions should remain with the lecturer.
 - The integrity review queue shows persisted results. To refresh integrity evidence, run the integrity check again from the assignment page.
 
@@ -170,7 +171,7 @@ For the best results:
 - create clear rubrics before grading
 - run integrity checks before final release
 - review AI feedback before approving grades
-- use intervention tracking for students with repeated issues
+- use intervention tracking where a student may need extra support
 - keep follow-up actions documented in the platform
 
 ## Short Summary
