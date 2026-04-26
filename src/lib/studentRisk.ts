@@ -82,7 +82,7 @@ export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null
 
   if (predictedNext < 40) {
     riskScore += 15;
-    flags.push(`Predicted next: ${Math.round(predictedNext)}%`);
+    flags.push(`Expected next outcome: ${Math.round(predictedNext)}%`);
   }
 
   if (scores.length >= 3) {
@@ -112,7 +112,7 @@ export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null
   if (slope < -3) recommendations.push("Urgent: schedule a 1-on-1 meeting to discuss grade trajectory.");
   if (average < 40) recommendations.push("Refer to student support services and consider tutoring.");
   if (last < average - 15) recommendations.push("Recent performance dipped sharply. Check for academic or personal barriers.");
-  if (predictedNext < 40) recommendations.push("Predicted to fail the next assessment. Intervene before the next deadline.");
+  if (predictedNext < 40) recommendations.push("The current assessment pattern suggests this student may need support before the next deadline.");
   if (scores.length === 1) recommendations.push("Data is limited. Monitor closely after the next submission.");
   if (recommendations.length === 0) {
     recommendations.push("Schedule a check-in to review study strategies and agree short-term goals.");
