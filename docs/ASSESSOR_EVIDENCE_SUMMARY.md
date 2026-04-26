@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-GradeAI is a full-stack AI-assisted academic assessment platform built to support university marking workflows without removing lecturer control.
+GradeAI is an academic intelligence platform designed primarily to help lecturers and institutions identify students who may need support earlier, before poor performance turns into repeated failure, disengagement, or withdrawal.
 
-The platform helps lecturers manage the assessment lifecycle from assignment setup through submission handling, AI-assisted grading, integrity review, moderation, approval, release, and cohort-level reflection.
+AI-assisted marking is included to generate structured assessment evidence, but the core purpose of the system is student support, early identification of risk, and intervention tracking.
 
-The core principle is simple: AI supports the structured analytical work, while academic judgement remains with the lecturer.
+The platform connects assignment workflows, feedback, analytics, and intervention records into one system so lecturers can move from assessment to action more easily.
 
 Live deployment: `https://gradeai.pages.dev`
 
@@ -16,27 +16,30 @@ Repository: `github.com/Farukhsb/edu-intel-spark`
 
 ## Problem Addressed
 
-University marking is often slow, repetitive, and difficult to audit at scale. Lecturers have to balance large submission volumes, rubric-based grading, moderation requirements, academic integrity review, and timely feedback release.
+A central issue in higher education is that struggling students are often identified too late.
 
-In many assessment workflows, the final mark is visible, but the reasoning, review path, moderation history, and integrity context behind that mark are harder to inspect.
+Warning signs such as missed submissions, declining marks, weak rubric performance, or low engagement are often visible but spread across different systems or only reviewed after a student has already failed or disengaged.
 
-GradeAI was built to make this process more structured, explainable, and reviewable.
+At the same time, university marking is slow, repetitive, and difficult to audit at scale. This makes it harder for lecturers to connect assessment outcomes to timely student support.
 
 ## What I Built
 
-I built and integrated a working full-stack prototype that brings together:
+I built and integrated a working full-stack prototype that brings together assessment workflows and student-support workflows in one system.
 
+This includes:
+
+- early identification of struggling students through risk indicators and analytics
+- intervention tracking with notes, priority levels, and follow-up actions
+- cohort analytics and explainable recommendations for lecturer review
 - assignment creation and rubric-based assessment setup
 - student submission handling and secure file access
-- AI-assisted grading with criterion-level scoring and feedback
+- AI-assisted grading with structured feedback and criterion-level scoring
 - lecturer review, override, approval, and release controls
 - academic integrity review with cited and uncited overlap separation
 - moderation workflows with case status, reviewer actions, and audit history
-- student-facing feedback and grade explanation flows
-- cohort analytics and rule-based recommendations for lecturers
-- role-based lecturer, student, and admin workflows
+- student-facing feedback and improvement support
 
-The system is not designed as a black-box auto-marker. It is designed as a decision-support tool where lecturers remain responsible for final academic judgement.
+The system is not designed as a black-box auto-marker. AI-assisted marking is used to support structured analysis, while lecturers remain responsible for final academic judgement.
 
 ## Product Evidence
 
@@ -68,6 +71,17 @@ React + Vite frontend
   -> lecturer review and release workflow
 ```
 
+Assessment and student-support workflow:
+
+```text
+submission and engagement signals
+  -> structured grading and feedback
+  -> cohort analytics and risk indicators
+  -> lecturer review
+  -> intervention / follow-up
+  -> progress tracking
+```
+
 Key technical components include:
 
 - React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, and Radix UI for the frontend
@@ -85,15 +99,15 @@ GradeAI demonstrates more than a simple AI prompt interface. The project include
 
 The most important technical design choices are:
 
+- connecting assessment workflows to student-support workflows
 - separating AI-generated output from lecturer-approved grades
 - preventing students from seeing provisional AI results
 - treating approval and release as separate workflow steps
 - using moderation states to prevent premature sign-off
-- recording grade changes and moderation decisions for auditability
-- separating cited, uncited, internal, and external overlap in integrity review
+- recording grade changes, moderation decisions, and intervention actions for auditability
 - using role-aware access patterns rather than a single generic dashboard
 
-These choices make the system more suitable for academic assessment contexts where transparency, fairness, and reviewability matter.
+These choices make the system suitable for academic contexts where transparency, fairness, and early support matter.
 
 ## My Contribution
 
@@ -101,10 +115,10 @@ My contribution has been both product-facing and technical. I developed the plat
 
 This included:
 
-- designing the assessment lifecycle and grading state model
+- designing the student-support and intervention model
 - building lecturer, student, and admin workflows
 - integrating Supabase authentication, database, storage, migrations, and Edge Functions
-- connecting AI-assisted grading and integrity workflows to lecturer review screens
+- connecting AI-assisted grading to analytics and intervention flows
 - adding moderation and audit concepts to strengthen academic oversight
 - improving documentation so the system can be reviewed by non-technical and technical readers
 
@@ -114,6 +128,7 @@ GradeAI is best described as a working full-stack prototype with hardened core w
 
 The strongest areas are:
 
+- early student support and intervention tracking
 - coherent assessment workflow design
 - human-in-the-loop AI grading
 - lecturer approval and release controls
@@ -126,6 +141,6 @@ The next stage is operational hardening, including broader live testing, stronge
 
 ## Relevance
 
-GradeAI shows applied technical ability in a practical digital technology context. It combines AI integration, software engineering, data-backed workflow design, and explainability in a domain where trust and oversight are essential.
+GradeAI shows applied technical ability in a practical digital technology context. It combines AI integration, software engineering, data-backed workflow design, and explainability in a domain where trust, oversight, and early intervention are essential.
 
-The project demonstrates my ability to identify a real workflow problem, design a product response, build the technical system, document the architecture, and continue improving it toward a more robust implementation.
+The project demonstrates my ability to identify a real problem, design a system-level solution, build the technical platform, and iterate it toward a more robust implementation.
