@@ -448,7 +448,7 @@ ${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}
       subject: `Academic support check-in for ${student.name}`,
       body: `Dear ${student.name},
 
-Your recent performance has triggered an academic support review.
+Your recent assessment pattern suggests it may be useful to arrange an academic support review.
 
 Why you are being contacted:
 - ${student.reasons.join("\n- ")}
