@@ -66,7 +66,7 @@ Here are a few real views from the product as it works today.
 - citation-aware academic integrity analysis
 - moderation workflows with audit history
 - cohort analytics and explainable recommendations
-- student risk tracking and intervention logging
+- early support signals for students who may need lecturer attention
 - student-facing feedback, improvement plans, and AI tutoring
 In practice, that means a lecturer can move from creating an assignment, to grading, to moderation, to release, to cohort-level reflection without leaving the platform.
 
@@ -131,6 +131,24 @@ GradeAI also supports:
 - moderation and audit trails
 - cohort-level quality and performance insight
 
+## Early Support Signals
+
+GradeAI includes an early support area inside the Performance Trends page. The purpose is simple: help lecturers notice students who may need support before a small problem becomes a serious one.
+
+This feature does not decide that a student is failing. It does not replace a lecturer, a personal tutor, or a support team. It looks at assessment patterns and brings possible concerns to the lecturer's attention so a human can review the situation.
+
+The support level is based on clear signals such as:
+- low average marks
+- marks falling over time
+- a sharp drop in the latest result
+- very inconsistent marks
+- an expected next outcome based on the student's current pattern
+- limited evidence, for example when only one submission has been graded
+
+Each highlighted student is shown with a support level, the evidence behind that signal, and a suggested next step. For example, the lecturer might open the student plan, arrange a check-in, recommend tutoring, monitor the next submission, or refer the student to wider academic support.
+
+This part of the product is deliberately rule-based and explainable. It is not a hidden black-box model. The aim is to make early support easier to prioritise, while keeping the final judgement with the lecturer.
+
 ## Integrity And Moderation
 
 ### Citation-aware integrity review
@@ -170,7 +188,7 @@ The analytics layer includes:
 - grade distribution
 - assignment comparison
 - performance trends
-- student risk clustering
+- early support clustering
 - integrity signal monitoring
 
 It also includes deterministic AI Recommendations for lecturers. These recommendations are explainable rule-based cards derived from real analytics data, not black-box predictions.
@@ -180,7 +198,7 @@ Examples include:
 - high failure rate
 - significant score drop between assignments
 - weak rubric criteria
-- high-risk student clusters
+- groups of students who may need extra support
 - integrity spikes
 
 The intention is to support lecturer judgement with signals and context, not to hide decisions behind opaque scoring.
@@ -360,6 +378,7 @@ A few areas of the platform were tightened up recently to make the product feel 
 - React Router future flags were enabled early to remove upgrade warnings and keep the app closer to upcoming router behavior
 - the role model was tightened so admin is part of the real schema, generated types were brought back in line, and public signup no longer trusts admin role input
 - the admin area now includes read-only oversight views for users, assignments, submissions, reporting, and system-level navigation without forcing admin through lecturer-heavy pages
+- performance trend wording was softened so student support signals are presented as lecturer review prompts rather than automated judgements
 
 ## Current State
 
@@ -370,6 +389,7 @@ The strongest areas are:
 - lecturer oversight and explainability
 - moderation and audit direction
 - integrity pipeline improvements
+- early support and student intervention design
 - growing automated coverage around critical flows
 - successful live verification of the core deployed workflows
 
