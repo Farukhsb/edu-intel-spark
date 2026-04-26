@@ -31,6 +31,22 @@ GradeAI brings these pieces together. AI-assisted marking is used to reduce repe
 
 This makes GradeAI more than an AI marker. It is a student support and retention system that uses assessment workflows as the foundation for earlier, evidence-informed intervention.
 
+## What Makes GradeAI Different
+
+GradeAI turns assessment data into early support action by showing who may be at risk, why they may be at risk, and what lecturers can do next.
+
+The platform does not stop at dashboards. It connects risk signals to practical workflows such as reviewing at-risk students, opening student plans, contacting students, creating interventions, reviewing weak rubric areas, and clearing feedback bottlenecks.
+
+This creates a clearer chain from assessment evidence to lecturer action:
+
+```text
+assessment evidence
+  -> support signal
+  -> explanation
+  -> recommended action
+  -> intervention / follow-up
+```
+
 ## How It Works
 
 At a high level:
@@ -74,6 +90,7 @@ Here are a few views from the current product.
 ## Key Features
 
 - early identification of struggling students through risk signals and intervention logging
+- explainable support signals with recommended lecturer actions
 - cohort analytics and explainable recommendations for lecturer review
 - student-facing feedback, improvement plans, and AI tutoring
 - rubric-based assignment authoring
@@ -122,6 +139,8 @@ This means:
 
 Lecturers can:
 - identify students who may be struggling and log intervention or follow-up actions
+- review why a student, module, or assessment has been flagged
+- move from support signal to action through student plans, contact routes, and intervention workflows
 - review cohort analytics and recommendations
 - create assignments with weighted rubrics
 - upload or review submissions
@@ -397,6 +416,7 @@ npx supabase functions deploy check-plagiarism
 A few areas of the platform were tightened recently to make the product more reliable in day-to-day use.
 
 - the product positioning was clarified around early student support and retention, with AI marking framed as one component of a wider intervention workflow
+- the documentation now highlights the full action chain from assessment evidence to support signal, explanation, recommended action, and intervention follow-up
 - moderation permissions were aligned between local and hosted policy state, and the moderation workflow was rechecked against the current migration chain
 - moderation UI coverage now includes nullable fallback cases, so missing linked submission data is handled explicitly and tested
 - route-level lazy loading was improved to reduce the main frontend bundle
@@ -411,6 +431,7 @@ This project is best described as a fast-moving integrated prototype with harden
 
 The strongest areas are:
 - early student support and intervention tracking
+- explainable support signals and recommended actions
 - coherent assessment workflow design
 - lecturer oversight and explainability
 - moderation and audit direction
