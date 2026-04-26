@@ -424,6 +424,7 @@ A few areas of the platform were tightened recently to make the product more rel
 - React Router future flags were enabled early to reduce upgrade warnings and keep the app closer to upcoming router behaviour
 - the role model was tightened so admin is part of the real schema, generated types were brought back in line, and public signup no longer trusts admin role input
 - the admin area now includes read-only oversight views for users, assignments, submissions, reporting, and system-level navigation without forcing admin through lecturer-heavy pages
+- performance trend wording was softened so student support signals are presented as lecturer review prompts rather than automated judgements
 
 ## Current State
 
@@ -436,6 +437,7 @@ The strongest areas are:
 - lecturer oversight and explainability
 - moderation and audit direction
 - integrity pipeline improvements
+- early support and student intervention design
 - growing automated coverage around critical flows
 - live verification of core deployed workflows
 

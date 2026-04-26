@@ -388,8 +388,8 @@ const PerformanceTrends = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Risk Score Summary</CardTitle>
-                <CardDescription>Predictive model output - higher score = greater risk</CardDescription>
+                <CardTitle className="text-base">Student Support Summary</CardTitle>
+                <CardDescription>Early support signals based on assessment patterns</CardDescription>
               </CardHeader>
               <CardContent>
                 {filteredAtRiskStudents.length === 0 ? (
@@ -418,7 +418,7 @@ const PerformanceTrends = () => {
                       </div>
                     ))}
                     <p className="mt-2 text-[10px] text-muted-foreground">
-                      Model factors: grade trajectory (linear regression), average score, volatility, predicted next score, submission frequency
+                      Based on: grade trajectory, average score, grade changes, expected next outcome, and submission frequency
                     </p>
                   </div>
                 )}
@@ -430,10 +430,10 @@ const PerformanceTrends = () => {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
-                <CardTitle className="text-base">Predictive At-Risk Detection</CardTitle>
+                <CardTitle className="text-base">Early Support Signals</CardTitle>
               </div>
               <CardDescription>
-                Students flagged by the predictive model - click for trajectory analysis and intervention recommendations
+                Students highlighted for lecturer review, with trajectory evidence and suggested support actions
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -467,7 +467,7 @@ const PerformanceTrends = () => {
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              Avg: {student.avgGrade}% - Risk Score: {student.riskScore}/100 - Predicted Next: {student.predictedNext}%
+                              Avg: {student.avgGrade}% - Support Level: {student.riskScore}/100 - Expected Next: {student.predictedNext}%
                             </p>
                           </div>
                         </div>
@@ -510,7 +510,7 @@ const PerformanceTrends = () => {
                             </div>
                             <div className="rounded bg-muted p-2">
                               <p className="font-medium text-destructive">{student.predictedNext}%</p>
-                              <p className="text-muted-foreground">Predicted</p>
+                              <p className="text-muted-foreground">Expected</p>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
