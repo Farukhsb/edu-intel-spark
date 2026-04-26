@@ -249,8 +249,26 @@ This analytics layer supports early intervention. When patterns suggest that ind
 | Server logic | Supabase Edge Functions |
 | Charts | Recharts |
 | Product analytics | PostHog |
+| Error monitoring | Sentry |
 | Hosting | Cloudflare Pages |
 | Testing | Vitest, Testing Library, Playwright |
+
+## Production Readiness
+
+GradeAI is not presented as a finished institution-wide platform. It is a working prototype with several hardened workflows and a clear plan for responsible pilot use.
+
+Production-readiness work currently includes:
+- privacy-safe Sentry error monitoring and alerting for frontend failures
+- test coverage targets focused on high-risk academic workflows
+- a plain-English security model covering roles, RLS assumptions, data handling, AI safety, logging, and rollout risks
+- a staged rollout plan that avoids claiming institutional scale too early
+
+Supporting documents:
+- [Security Model](docs/SECURITY_MODEL.md)
+- [Test Coverage Strategy](docs/TEST_COVERAGE_STRATEGY.md)
+- [Rollout Plan](docs/ROLLOUT_PLAN.md)
+
+The purpose of these documents is to make the project easier to review, safer to pilot, and more honest about what still needs to be validated before wider use.
 
 ## Technical Summary
 
@@ -293,6 +311,8 @@ Create a local `.env` file with your Supabase project values:
 VITE_SUPABASE_PROJECT_ID="your_project_ref"
 VITE_SUPABASE_PUBLISHABLE_KEY="your_publishable_key"
 VITE_SUPABASE_URL="https://your_project_ref.supabase.co"
+VITE_SENTRY_DSN="your_sentry_dsn"
+VITE_APP_ENV="development"
 ```
 
 Do not commit local environment files.
@@ -404,6 +424,7 @@ The current backend uses these Supabase Edge Functions:
 - Frontend deploys to Cloudflare Pages
 - Backend services run through Supabase
 - Environment variables and Supabase secrets must match the target environment
+- Sentry should be configured through environment variables, not hardcoded in source files
 - Edge Functions should be deployed when function code changes:
 
 ```bash
@@ -415,6 +436,8 @@ npx supabase functions deploy check-plagiarism
 
 A few areas of the platform were tightened recently to make the product more reliable in day-to-day use.
 
+- production-readiness documentation was added for security, testing, rollout planning, and monitoring
+- privacy-safe Sentry monitoring and alerting were configured for frontend error visibility
 - the product positioning was clarified around early student support and retention, with AI marking framed as one component of a wider intervention workflow
 - the documentation now highlights the full action chain from assessment evidence to support signal, explanation, recommended action, and intervention follow-up
 - moderation permissions were aligned between local and hosted policy state, and the moderation workflow was rechecked against the current migration chain
@@ -440,6 +463,7 @@ The strongest areas are:
 - early support and student intervention design
 - growing automated coverage around critical flows
 - live verification of core deployed workflows
+- production-readiness planning through monitoring, security, testing, and rollout documentation
 
 The main work still worth doing is operational hardening:
 - more live-environment verification
