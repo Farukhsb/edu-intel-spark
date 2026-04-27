@@ -188,8 +188,10 @@ export type Database = {
         Row: {
           body: string
           category: string
+          cleared: boolean
           created_at: string
           id: string
+          read: boolean
           recipient_email: string | null
           recipient_id: string | null
           recipient_name: string
@@ -201,8 +203,10 @@ export type Database = {
         Insert: {
           body: string
           category: string
+          cleared?: boolean
           created_at?: string
           id?: string
+          read?: boolean
           recipient_email?: string | null
           recipient_id?: string | null
           recipient_name: string
@@ -214,8 +218,10 @@ export type Database = {
         Update: {
           body?: string
           category?: string
+          cleared?: boolean
           created_at?: string
           id?: string
+          read?: boolean
           recipient_email?: string | null
           recipient_id?: string | null
           recipient_name?: string

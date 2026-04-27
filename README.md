@@ -345,6 +345,8 @@ Do not commit local environment files.
 npm run dev
 ```
 
+If you have pulled recent workflow-notification changes, apply the latest Supabase migrations before testing the notification bell locally. The bell now depends on database support as well as frontend code.
+
 ## Testing
 
 Run unit and integration tests:
@@ -413,6 +415,12 @@ High-trust workflows in this repo depend on the database layer, not just the UI.
 - audit logging triggers
 - integrity review constraints
 
+That also includes the in-app workflow notifications. The existing `communication_messages` table now carries bell state such as:
+- workflow notification categories
+- `read`
+- `cleared`
+- update policies that let the right user mark a notification as read or clear it without deleting history
+
 If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
 ## Migration History Note
@@ -475,6 +483,7 @@ npx supabase functions deploy check-plagiarism
 - Environment variable validation
 - Structured logging with sanitisation
 - Error boundary and network failure handling
+- Persisted in-app workflow notifications with bell clearing
 - Expanded test coverage across critical workflows
 
 ## Recent Improvements

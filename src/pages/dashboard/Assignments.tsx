@@ -20,6 +20,11 @@ import { toast } from "sonner";
 import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
 import {
+  buildAssignmentPublishedNotification,
+  sendWorkflowNotificationEmail,
+} from "@/lib/communications";
+import { log } from "@/lib/logger";
+import {
   canReleaseStatus,
   isGradedWorkflowStatus,
   isReviewQueueStatus,
@@ -44,6 +49,13 @@ interface Assignment {
   status: "draft" | "published" | "closed";
   created_at: string;
   rubric: RubricCriterion[] | null;
+}
+
+interface StudentNotificationProfile {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
 }
 
 const statusVariant = (status: string) => {
@@ -190,9 +202,75 @@ const Assignments = () => {
 
   const handlePublish = async (id: string) => {
     if (isDemo) { toast.info("Publishing disabled in demo mode"); return; }
+    const assignmentToPublish = assignments.find((assignment) => assignment.id === id);
     try {
       const { error } = await supabase.from("assignments").update({ status: "published" as const }).eq("id", id);
       if (error) throw error;
+
+      if (user?.id && assignmentToPublish) {
+        try {
+          const { data: studentProfiles, error: studentProfilesError } = await supabase
+            .from("profiles")
+            .select("id, full_name, email, role")
+            .eq("role", "student");
+
+          if (studentProfilesError) {
+            log.warn("Assignment publish bell notification load failed", {
+              assignmentId: id,
+            });
+          } else {
+            const rows = ((studentProfiles || []) as StudentNotificationProfile[]).map((student) => {
+              const draft = buildAssignmentPublishedNotification({
+                studentName: student.full_name || student.email || "Student",
+                studentEmail: student.email,
+                studentId: student.id,
+                assignmentId: id,
+                assignmentTitle: assignmentToPublish.title,
+              });
+
+              return {
+                sender_id: user.id,
+                category: draft.category,
+                recipient_name: draft.recipientName,
+                recipient_email: draft.recipientEmail,
+                recipient_id: draft.recipientId ?? null,
+                subject: draft.subject,
+                body: draft.body,
+                related_student_id: draft.relatedStudentId ?? null,
+                related_assignment_id: draft.relatedAssignmentId ?? null,
+              };
+            });
+
+            if (rows.length > 0) {
+              const { error: notificationError } = await supabase
+                .from("communication_messages")
+                .insert(rows);
+
+              if (notificationError) {
+                log.warn("Assignment publish bell notifications did not persist", {
+                  assignmentId: id,
+                });
+              } else if (typeof window !== "undefined") {
+                window.dispatchEvent(new Event("gradeai:communications-updated"));
+              }
+            }
+          }
+        } catch (notificationError) {
+          log.warn("Assignment publish bell notifications failed", {
+            assignmentId: id,
+          });
+        }
+
+        void sendWorkflowNotificationEmail({
+          category: "assignment-published",
+          assignmentId: id,
+        }).catch(() => {
+          log.warn("Assignment publish notification email failed", {
+            assignmentId: id,
+          });
+        });
+      }
+
       toast.success("Assignment published - students can now submit");
       fetchAssignments();
     } catch {
