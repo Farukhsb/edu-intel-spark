@@ -122,7 +122,8 @@ const ExplainGrade = () => {
     try {
       // RLS ensures students only see their own submissions/grades
       const { data: subs } = await supabase.from("submissions").select("*");
-      const subIds = (subs || []).map(s => s.id);
+      const releasedSubs = ((subs || []) as SubmissionRow[]).filter((submission) => submission.status === "released");
+      const subIds = releasedSubs.map(s => s.id);
       const { data: grades } = subIds.length > 0
         ? await supabase.from("grades").select("*").in("submission_id", subIds)
         : { data: [] as GradeRow[] };
@@ -131,12 +132,12 @@ const ExplainGrade = () => {
         ? await supabase.from("assignments").select("*").in("id", assignmentIds)
         : { data: [] as AssignmentRow[] };
 
-      if (!grades?.length || !subs?.length) {
+      if (!grades?.length || !releasedSubs.length) {
         setLoading(false);
         return;
       }
 
-      const safeSubs = (subs ?? []) as SubmissionRow[];
+      const safeSubs = releasedSubs;
       const safeAssignments = (assignments ?? []) as AssignmentRow[];
       const subMap = Object.fromEntries(safeSubs.map(s => [s.id, s]));
       const assignMap = Object.fromEntries(safeAssignments.map(a => [a.id, a]));
