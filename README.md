@@ -466,6 +466,15 @@ npx supabase functions deploy grade-submission
 npx supabase functions deploy check-plagiarism
 ```
 
+## Recent Hardening (April 2026)
+
+- AI response validation using Zod
+- Rate limiting for high-cost Edge Functions
+- Environment variable validation
+- Structured logging with sanitisation
+- Error boundary and network failure handling
+- Expanded test coverage across critical workflows
+
 ## Recent Improvements
 
 A few areas of the platform were tightened recently to make the product more reliable in day-to-day use.
