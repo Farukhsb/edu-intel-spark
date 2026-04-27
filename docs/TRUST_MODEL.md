@@ -4,7 +4,7 @@
 
 GradeAI handles academic workflows where trust matters. A grade, a moderation decision, an integrity signal, or a student support flag can affect how a lecturer responds to a student. Because of that, the platform cannot treat safety as an afterthought.
 
-This document explains the trust model behind GradeAI in plain language. It sets out who should see what, when they should see it, and how the platform protects academic judgement, student visibility, moderation, external review, and safe failure behaviour.
+This document explains the trust model behind GradeAI in plain language. It sets out who should see what, when they should see it, and how the platform protects academic judgement, student visibility, moderation, external review, AI response handling, and safe failure behaviour.
 
 The aim is simple: GradeAI should help lecturers work faster and see clearer evidence, but it should never bypass proper academic oversight.
 
@@ -17,11 +17,33 @@ GradeAI can help structure marking, surface risk patterns, summarise evidence, a
 That principle shapes the whole system:
 
 - AI output is treated as provisional until reviewed
+- AI and Edge Function responses are validated before they are trusted
 - lecturers can review, edit, approve, or override AI-assisted outputs
 - students only see released feedback
 - moderation can gate work before final release
 - external examiner exports should only include appropriate governed records
 - risk signals are prompts for human review, not automatic decisions about students
+- failures should fall back safely instead of exposing raw technical details or misleading academic data
+
+## What GradeAI Trusts And Does Not Trust
+
+GradeAI does not assume that every runtime response is safe just because it came from an internal function or AI service.
+
+The system treats the following as untrusted until validated or checked:
+
+- AI grading responses
+- grade breakdown payloads
+- explanation and tutoring responses
+- plagiarism and integrity response payloads
+- parsed JSON from stored records
+- Supabase or Edge Function responses that may drift over time
+- environment configuration used by the frontend
+
+This matters because academic systems should not render, save, or export malformed data. If an AI response changes shape, if an Edge Function returns an unexpected payload, or if a stored breakdown is malformed, GradeAI should fail safely rather than treating that data as a valid academic outcome.
+
+The rule is:
+
+> External or runtime data must be checked before it is used in a decision, shown to a user, or saved as trusted academic information.
 
 ## Assessment Lifecycle
 
@@ -83,6 +105,24 @@ Lecturers can:
 - decide whether a submission should be approved, moderated, returned, escalated, or released
 
 This is important because academic marking often involves context that a model should not decide alone. The system should support the lecturer, not replace them.
+
+## AI And API Validation Rules
+
+GradeAI uses Zod schemas to validate high-risk runtime payloads before those payloads are rendered, saved, or used in workflow decisions.
+
+Current validation covers:
+
+- AI grading response payloads
+- criterion-level grade breakdown structures
+- explanation and tutoring responses
+- plagiarism and integrity response payloads
+- the current batch response shape returned by the plagiarism/integrity Edge Function
+
+The validation is applied at the boundary. For example, raw Edge Function results are checked before grade fields are saved, and stored grade breakdowns are checked before they are rendered to students.
+
+Where legacy or alias fields exist, normalisation happens inside schema/helper paths rather than in UI code first. The canonical shape is then validated again. This helps the app support real-world payload differences without weakening the trust boundary.
+
+If validation fails, the system should not render partial academic results as if they are trusted. Instead, it should use a safe fallback, preserve existing state where appropriate, and log enough safe context to help with debugging.
 
 ## Moderation Rules
 
@@ -148,6 +188,60 @@ The platform is designed around these data-boundary expectations:
 
 This is especially important in academic systems because student records, grades, feedback, and support notes are sensitive.
 
+## Rate Limiting And Abuse Protection
+
+Some GradeAI workflows are expensive because they can trigger AI marking, explanation generation, or integrity analysis. These workflows need protection from accidental loops, repeated clicks, or deliberate abuse.
+
+Rate limiting is applied to the high-cost Edge Functions:
+
+- `grade-submission`
+- `check-plagiarism`
+- `explain-grade`
+
+The limiter uses the authenticated user ID where available. If that is not available, it falls back to request IP, then to a conservative anonymous bucket. When the limit is exceeded, the function returns HTTP `429` with a safe response body and a `Retry-After` header.
+
+The response does not expose internal implementation details. Logging is intentionally minimal and avoids student content, submissions, grades, private feedback, prompts, and document text.
+
+## Environment Configuration Rules
+
+GradeAI validates frontend environment configuration explicitly rather than assuming required values exist.
+
+The app validates key environment variables such as:
+
+- Supabase URL
+- Supabase publishable key
+- app environment
+- optional Sentry configuration
+- optional PostHog configuration
+
+Invalid configuration fails early with a clear error that names the problematic variable without exposing secret values.
+
+This helps avoid confusing runtime failures where the app loads but authentication, monitoring, or backend communication fails later because of a missing or malformed environment value.
+
+Test-mode environment values are normalised safely for Vitest and CI, while real app environments remain limited to the expected deployment modes.
+
+## Logging And Observability Rules
+
+GradeAI uses structured logging so production debugging does not become a source of data leakage.
+
+The logging approach separates development-only logs from production-safe error reporting:
+
+- debug and info logs are development-only
+- warnings are kept controlled
+- errors can route through the existing Sentry capture path where appropriate
+- logged context is sanitised before it is sent through raw logs or reporting
+
+The logger is designed not to log sensitive academic fields such as:
+
+- student submissions
+- grades
+- private feedback
+- AI prompts
+- document text
+- secrets or environment values
+
+This matters because academic data can be sensitive even when it looks like ordinary application state. Logs should help diagnose problems without turning into another place where private assessment data is stored.
+
 ## Error And Failure Safety
 
 Real systems fail. Network requests can timeout. Supabase can return an error. An Edge Function can fail. A component can crash.
@@ -196,6 +290,8 @@ GradeAI is designed to keep important workflow steps inspectable:
 - what final score was agreed
 - when feedback was released
 - what support action was logged
+- whether a response failed validation
+- whether a high-cost function was rate limited
 
 This kind of traceability matters for quality assurance, external review, and responsible rollout.
 
@@ -214,6 +310,11 @@ Current automated coverage includes:
 - governed-record filtering for export workflows
 - application error boundary fallback behaviour
 - network and API failure paths
+- AI grading and grade breakdown validation
+- explanation and integrity response validation
+- rate limit behaviour for high-cost function protection
+- environment parsing and test-mode normalisation
+- structured logger behaviour and safe context handling
 
 These tests are not only about increasing coverage numbers. They are there to protect the rules that make GradeAI safe to review and safer to pilot.
 
@@ -223,18 +324,17 @@ This trust model describes the direction and current safeguards of the project. 
 
 Important areas for continued hardening include:
 
-- stricter TypeScript configuration
-- reducing remaining `any` usage
-- stronger schema validation for AI and API responses
-- structured logging for production debugging and audit trails
+- gradually tightening TypeScript configuration further
+- reducing any remaining low-risk `any` usage
 - broader live-environment testing
 - deeper permissions and RLS validation after migration changes
 - more end-to-end tests across lecturer, student, moderator, admin, and external examiner flows
+- longer-term load and usage validation once real users are involved
 
 ## Closing Note
 
 GradeAI is built around a simple idea: academic technology should make evidence clearer without weakening academic judgement.
 
-The platform can assist with marking, feedback, integrity review, analytics, support signals, and exports. But the trust model keeps the important boundaries clear: lecturers decide, students see only released outcomes, moderation gates sensitive decisions, and failure states should be safe rather than confusing or revealing.
+The platform can assist with marking, feedback, integrity review, analytics, support signals, and exports. But the trust model keeps the important boundaries clear: lecturers decide, students see only released outcomes, moderation gates sensitive decisions, AI responses are validated before use, high-cost functions are rate limited, and failure states should be safe rather than confusing or revealing.
 
 That is what makes GradeAI more than an AI grading interface. It is an attempt to build academic workflow software that respects the reality of teaching, review, governance, and student support.
