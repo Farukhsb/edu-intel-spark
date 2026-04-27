@@ -14,6 +14,7 @@ export type CommunicationCategory =
 export interface CommunicationMessage {
   id: string;
   createdAt: string;
+  cleared: boolean;
   read: boolean;
   category: CommunicationCategory;
   recipientName: string;
@@ -25,11 +26,15 @@ export interface CommunicationMessage {
   relatedAssignmentId?: string;
 }
 
-export type DraftCommunicationMessage = Omit<CommunicationMessage, "id" | "createdAt" | "read">;
+export type DraftCommunicationMessage = Omit<
+  CommunicationMessage,
+  "id" | "createdAt" | "cleared" | "read"
+>;
 
 interface CommunicationMessageRow {
   id: string;
   created_at: string;
+  cleared: boolean | null;
   read: boolean | null;
   category: CommunicationCategory;
   recipient_name: string;
@@ -49,7 +54,7 @@ type SupabaseLikeError = {
 };
 
 const COMMUNICATION_MESSAGE_SELECT =
-  "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
+  "id, created_at, cleared, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
 
 const LEGACY_COMMUNICATION_MESSAGE_SELECT =
   "id, created_at, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
@@ -61,18 +66,19 @@ const toSafeSupabaseErrorContext = (error: SupabaseLikeError | null | undefined)
   errorHint: error?.hint ?? null,
 });
 
-const isMissingReadColumnError = (error: SupabaseLikeError | null | undefined) => {
+const isMissingNotificationStateColumnError = (error: SupabaseLikeError | null | undefined) => {
   const text = [error?.message, error?.details, error?.hint]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 
-  return error?.code === "42703" && text.includes("read");
+  return error?.code === "42703" && (text.includes("read") || text.includes("cleared"));
 };
 
 const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessage => ({
   id: message.id,
   createdAt: message.created_at,
+  cleared: Boolean(message.cleared),
   read: Boolean(message.read),
   category: message.category,
   recipientName: message.recipient_name,
@@ -85,10 +91,11 @@ const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessag
 });
 
 const normalizeLegacyMessage = (
-  message: Omit<CommunicationMessageRow, "read">,
+  message: Omit<CommunicationMessageRow, "read" | "cleared">,
 ): CommunicationMessage => ({
   id: message.id,
   createdAt: message.created_at,
+  cleared: false,
   read: false,
   category: message.category,
   recipientName: message.recipient_name,
@@ -131,8 +138,8 @@ export const queueCommunicationMessage = async (
     .select(COMMUNICATION_MESSAGE_SELECT)
     .single();
 
-  if (isMissingReadColumnError(error)) {
-    log.warn("Communication messages read column missing; retrying legacy notification insert", {
+  if (isMissingNotificationStateColumnError(error)) {
+    log.warn("Communication messages state columns missing; retrying legacy notification insert", {
       category: message.category,
       recipientId: message.recipientId ?? null,
       ...toSafeSupabaseErrorContext(error),
@@ -160,7 +167,7 @@ export const queueCommunicationMessage = async (
       }
 
       return normalizeLegacyMessage(
-        legacyResult.data as Omit<CommunicationMessageRow, "read">,
+        legacyResult.data as Omit<CommunicationMessageRow, "read" | "cleared">,
       );
     }
 
@@ -198,8 +205,27 @@ export const markCommunicationMessageRead = async (id: string) => {
   return updateCommunicationMessageReadState(id, true);
 };
 
-export const markCommunicationMessageUnread = async (id: string) => {
-  return updateCommunicationMessageReadState(id, false);
+export const clearCommunicationMessage = async (id: string) => {
+  const { data, error } = await supabase
+    .from("communication_messages")
+    .update({ cleared: true })
+    .eq("id", id)
+    .select(COMMUNICATION_MESSAGE_SELECT)
+    .single();
+
+  if (error || !data) {
+    log.error("Failed to clear communication message", error, {
+      communicationMessageId: id,
+      ...toSafeSupabaseErrorContext(error),
+    });
+    return null;
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("gradeai:communications-updated"));
+  }
+
+  return normalizeMessage(data as CommunicationMessageRow);
 };
 
 const updateCommunicationMessageReadState = async (id: string, read: boolean) => {
@@ -304,6 +330,10 @@ export const getVisibleCommunicationMessages = (
       .replace(/^-+|-+$/g, "");
 
   return messages.filter((message) => {
+    if (message.cleared) {
+      return false;
+    }
+
     if (
       options.userId &&
       [message.recipientId, message.relatedStudentId].some((value) => value && value === options.userId)
@@ -346,7 +376,7 @@ export const loadVisibleCommunicationMessages = async (options: {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  if (isMissingReadColumnError(error)) {
+  if (isMissingNotificationStateColumnError(error)) {
     const legacyResult = await supabase
       .from("communication_messages")
       .select(LEGACY_COMMUNICATION_MESSAGE_SELECT)
@@ -361,7 +391,7 @@ export const loadVisibleCommunicationMessages = async (options: {
     }
 
     return getVisibleCommunicationMessages(
-      (((legacyResult.data || []) as Array<Omit<CommunicationMessageRow, "read">>).map(
+      (((legacyResult.data || []) as Array<Omit<CommunicationMessageRow, "read" | "cleared">>).map(
         normalizeLegacyMessage,
       )),
       options,

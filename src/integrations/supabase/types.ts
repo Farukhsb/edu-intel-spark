@@ -188,6 +188,7 @@ export type Database = {
         Row: {
           body: string
           category: string
+          cleared: boolean
           created_at: string
           id: string
           read: boolean
@@ -202,6 +203,7 @@ export type Database = {
         Insert: {
           body: string
           category: string
+          cleared?: boolean
           created_at?: string
           id?: string
           read?: boolean
@@ -216,6 +218,7 @@ export type Database = {
         Update: {
           body?: string
           category?: string
+          cleared?: boolean
           created_at?: string
           id?: string
           read?: boolean

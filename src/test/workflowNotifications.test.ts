@@ -23,9 +23,9 @@ import {
   buildGradeReleasedNotification,
   buildIntegrityCheckReadyNotification,
   buildSubmissionReceivedNotification,
+  clearCommunicationMessage,
   getVisibleCommunicationMessages,
   markCommunicationMessageRead,
-  markCommunicationMessageUnread,
 } from "@/lib/communications";
 
 beforeEach(() => {
@@ -42,6 +42,7 @@ beforeEach(() => {
       data: {
         id: "message-1",
         created_at: "2026-04-27T10:00:00.000Z",
+        cleared: false,
         read: true,
         category: "ai-grading-ready",
         recipient_name: "Lecturer",
@@ -150,6 +151,7 @@ describe("workflow notifications", () => {
         {
           id: "message-1",
           createdAt: "2026-04-27T10:00:00.000Z",
+          cleared: false,
           read: false,
           category: "ai-grading-ready",
           recipientName: "Lecturer",
@@ -169,6 +171,7 @@ describe("workflow notifications", () => {
 
     expect(visible).toHaveLength(1);
     expect(visible[0].subject).toBe("AI grading ready");
+    expect(visible[0].cleared).toBe(false);
     expect(visible[0].read).toBe(false);
   });
 
@@ -187,6 +190,7 @@ describe("workflow notifications", () => {
     expect(updateEqMock).toHaveBeenCalledWith("id", "message-1");
     expect(updated).toMatchObject({
       id: "message-1",
+      cleared: false,
       read: true,
       subject: "AI grading ready",
       body: "AI grading is ready for Algorithms Essay",
@@ -195,13 +199,14 @@ describe("workflow notifications", () => {
     dispatchSpy.mockRestore();
   });
 
-  it("marks a notification as unread when toggled back", async () => {
+  it("clears a notification from the bell without deleting it", async () => {
     updateSelectMock.mockReturnValue({
       single: vi.fn().mockResolvedValue({
         data: {
           id: "message-1",
           created_at: "2026-04-27T10:00:00.000Z",
-          read: false,
+          cleared: true,
+          read: true,
           category: "ai-grading-ready",
           recipient_name: "Lecturer",
           recipient_email: null,
@@ -215,13 +220,39 @@ describe("workflow notifications", () => {
       }),
     });
 
-    const updated = await markCommunicationMessageUnread("message-1");
+    const updated = await clearCommunicationMessage("message-1");
 
-    expect(updateMock).toHaveBeenCalledWith({ read: false });
+    expect(updateMock).toHaveBeenCalledWith({ cleared: true });
     expect(updated).toMatchObject({
       id: "message-1",
-      read: false,
+      cleared: true,
+      read: true,
       subject: "AI grading ready",
     });
+  });
+
+  it("hides cleared notifications from the visible bell list", () => {
+    const visible = getVisibleCommunicationMessages(
+      [
+        {
+          id: "message-1",
+          createdAt: "2026-04-27T10:00:00.000Z",
+          cleared: true,
+          read: true,
+          category: "ai-grading-ready",
+          recipientName: "Lecturer",
+          recipientEmail: null,
+          recipientId: "lecturer-1",
+          subject: "AI grading ready",
+          body: "AI grading is ready for Algorithms Essay",
+          relatedAssignmentId: "assignment-1",
+        },
+      ],
+      {
+        userId: "lecturer-1",
+      },
+    );
+
+    expect(visible).toHaveLength(0);
   });
 });

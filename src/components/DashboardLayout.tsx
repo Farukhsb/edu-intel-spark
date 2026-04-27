@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
 import {
+  clearCommunicationMessage,
   loadVisibleCommunicationMessages,
   markCommunicationMessageRead,
-  markCommunicationMessageUnread,
   type CommunicationMessage,
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
@@ -203,20 +203,16 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
-  const toggleNotificationReadState = async (
+  const handleClearNotification = async (
     event: React.MouseEvent<HTMLButtonElement>,
     notification: CommunicationMessage,
   ) => {
     event.stopPropagation();
 
-    const updatedNotification = notification.read
-      ? await markCommunicationMessageUnread(notification.id)
-      : await markCommunicationMessageRead(notification.id);
+    const clearedNotification = await clearCommunicationMessage(notification.id);
 
-    if (updatedNotification) {
-      setNotifications((current) =>
-        current.map((item) => (item.id === updatedNotification.id ? updatedNotification : item)),
-      );
+    if (clearedNotification) {
+      setNotifications((current) => current.filter((item) => item.id !== clearedNotification.id));
     }
   };
 
@@ -540,10 +536,10 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                         <div className="flex justify-end px-3 pb-3">
                           <button
                             type="button"
-                            onClick={(event) => void toggleNotificationReadState(event, notification)}
+                            onClick={(event) => void handleClearNotification(event, notification)}
                             className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                           >
-                            {notification.read ? "Mark unread" : "Mark read"}
+                            Clear
                           </button>
                         </div>
                       </div>
