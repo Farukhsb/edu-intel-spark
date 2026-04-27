@@ -14,6 +14,7 @@ export type CommunicationCategory =
 export interface CommunicationMessage {
   id: string;
   createdAt: string;
+  read: boolean;
   category: CommunicationCategory;
   recipientName: string;
   recipientEmail: string | null;
@@ -24,11 +25,12 @@ export interface CommunicationMessage {
   relatedAssignmentId?: string;
 }
 
-export type DraftCommunicationMessage = Omit<CommunicationMessage, "id" | "createdAt">;
+export type DraftCommunicationMessage = Omit<CommunicationMessage, "id" | "createdAt" | "read">;
 
 interface CommunicationMessageRow {
   id: string;
   created_at: string;
+  read: boolean | null;
   category: CommunicationCategory;
   recipient_name: string;
   recipient_email: string | null;
@@ -42,6 +44,7 @@ interface CommunicationMessageRow {
 const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessage => ({
   id: message.id,
   createdAt: message.created_at,
+  read: Boolean(message.read),
   category: message.category,
   recipientName: message.recipient_name,
   recipientEmail: message.recipient_email,
@@ -81,7 +84,7 @@ export const queueCommunicationMessage = async (
       related_assignment_id: message.relatedAssignmentId ?? null,
     })
     .select(
-      "id, created_at, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
+      "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
     )
     .single();
 
@@ -92,6 +95,30 @@ export const queueCommunicationMessage = async (
       hasRecipientEmail: Boolean(message.recipientEmail),
       relatedAssignmentId: message.relatedAssignmentId ?? null,
       relatedStudentId: message.relatedStudentId ?? null,
+    });
+    return null;
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("gradeai:communications-updated"));
+  }
+
+  return normalizeMessage(data as CommunicationMessageRow);
+};
+
+export const markCommunicationMessageRead = async (id: string) => {
+  const { data, error } = await supabase
+    .from("communication_messages")
+    .update({ read: true })
+    .eq("id", id)
+    .select(
+      "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
+    )
+    .single();
+
+  if (error || !data) {
+    log.error("Failed to mark communication message read", error, {
+      communicationMessageId: id,
     });
     return null;
   }
@@ -220,7 +247,7 @@ export const loadVisibleCommunicationMessages = async (options: {
   const { data, error } = await supabase
     .from("communication_messages")
     .select(
-      "id, created_at, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
+      "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
     )
     .order("created_at", { ascending: false })
     .limit(50);

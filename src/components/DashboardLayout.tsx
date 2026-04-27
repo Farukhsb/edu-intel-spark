@@ -15,6 +15,7 @@ import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
 import {
   loadVisibleCommunicationMessages,
+  markCommunicationMessageRead,
   type CommunicationMessage,
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
@@ -199,8 +200,19 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     }
   }, [profile?.email, profile?.id, user?.email, user?.id]);
 
-  const openNotification = (notification: CommunicationMessage) => {
+  const unreadCount = notifications.filter((notification) => !notification.read).length;
+
+  const openNotification = async (notification: CommunicationMessage) => {
     setShowNotifications(false);
+
+    if (!notification.read) {
+      const updatedNotification = await markCommunicationMessageRead(notification.id);
+      if (updatedNotification) {
+        setNotifications((current) =>
+          current.map((item) => (item.id === updatedNotification.id ? updatedNotification : item)),
+        );
+      }
+    }
 
     if (isStudentRole(profile?.role)) {
       if (notification.category === "at-risk-alert" || notification.category === "intervention-follow-up") {
@@ -468,14 +480,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             </Button>
             <Button variant="ghost" size="icon" className="relative rounded-xl" onClick={() => setShowNotifications(!showNotifications)}>
               <Bell className="h-4 w-4" />
-              {notifications.length > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
+              {unreadCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
             </Button>
             {showNotifications && (
               <div className="absolute right-4 top-16 z-50 w-80 rounded-2xl border bg-card shadow-xl">
                 <div className="border-b p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium">Notifications</p>
-                    {notifications.length > 0 && <Badge variant="secondary">{notifications.length}</Badge>}
+                    {unreadCount > 0 && <Badge variant="secondary">{unreadCount}</Badge>}
                   </div>
                 </div>
                 {notifications.length === 0 ? (
@@ -486,11 +498,17 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                       <button
                         key={notification.id}
                         type="button"
-                        onClick={() => openNotification(notification)}
-                        className="block w-full rounded-xl p-3 text-left text-xs hover:bg-muted/40"
+                        onClick={() => void openNotification(notification)}
+                        className={cn(
+                          "block w-full rounded-xl p-3 text-left text-xs hover:bg-muted/40",
+                          notification.read ? "opacity-75" : "bg-muted/25",
+                        )}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{notification.subject}</span>
+                          <div className="flex min-w-0 items-center gap-2">
+                            {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                            <span className="truncate font-medium">{notification.subject}</span>
+                          </div>
                           <span className="text-[10px] text-muted-foreground">
                             {safeFormatDate(notification.createdAt, "MMM d, HH:mm")}
                           </span>

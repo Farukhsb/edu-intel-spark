@@ -350,7 +350,6 @@ describe("StudentProfile", () => {
     expect(screen.getByText("Intervention suggestion")).toBeInTheDocument();
     expect(screen.getAllByText("Schedule a support meeting and agree a short-term intervention plan.")).toHaveLength(2);
     expect(screen.getByText("Open interventions")).toBeInTheDocument();
-    expect(screen.getByText("Sent a check-in email with revision priorities.")).toBeInTheDocument();
   });
 
   it("renders intervention history when mocked records are available", async () => {

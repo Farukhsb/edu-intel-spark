@@ -1,4 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const updateEqMock = vi.fn();
+const updateSelectMock = vi.fn();
+const updateMock = vi.fn();
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: vi.fn(() => ({
+      update: updateMock,
+    })),
+  },
+}));
+
+vi.mock("@/lib/logger", () => ({
+  log: {
+    error: vi.fn(),
+  },
+}));
 
 import {
   buildAIGradingReadyNotification,
@@ -6,7 +24,45 @@ import {
   buildIntegrityCheckReadyNotification,
   buildSubmissionReceivedNotification,
   getVisibleCommunicationMessages,
+  markCommunicationMessageRead,
 } from "@/lib/communications";
+
+beforeEach(() => {
+  updateEqMock.mockReset();
+  updateSelectMock.mockReset();
+  updateMock.mockReset();
+
+  updateEqMock.mockReturnValue({
+    select: updateSelectMock,
+  });
+
+  updateSelectMock.mockReturnValue({
+    single: vi.fn().mockResolvedValue({
+      data: {
+        id: "message-1",
+        created_at: "2026-04-27T10:00:00.000Z",
+        read: true,
+        category: "ai-grading-ready",
+        recipient_name: "Lecturer",
+        recipient_email: null,
+        recipient_id: "lecturer-1",
+        subject: "AI grading ready",
+        body: "AI grading is ready for Algorithms Essay",
+        related_student_id: null,
+        related_assignment_id: "assignment-1",
+      },
+      error: null,
+    }),
+  });
+
+  updateMock.mockReturnValue({
+    eq: updateEqMock,
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("workflow notifications", () => {
   it("builds a safe lecturer notification for student submissions", () => {
@@ -93,6 +149,7 @@ describe("workflow notifications", () => {
         {
           id: "message-1",
           createdAt: "2026-04-27T10:00:00.000Z",
+          read: false,
           category: "ai-grading-ready",
           recipientName: "Lecturer",
           recipientEmail: null,
@@ -111,5 +168,29 @@ describe("workflow notifications", () => {
 
     expect(visible).toHaveLength(1);
     expect(visible[0].subject).toBe("AI grading ready");
+    expect(visible[0].read).toBe(false);
+  });
+
+  it("marks a notification as read without changing its safe body", async () => {
+    const dispatchedEvents: string[] = [];
+    const dispatchSpy = vi
+      .spyOn(window, "dispatchEvent")
+      .mockImplementation((event: Event) => {
+        dispatchedEvents.push(event.type);
+        return true;
+      });
+
+    const updated = await markCommunicationMessageRead("message-1");
+
+    expect(updateMock).toHaveBeenCalledWith({ read: true });
+    expect(updateEqMock).toHaveBeenCalledWith("id", "message-1");
+    expect(updated).toMatchObject({
+      id: "message-1",
+      read: true,
+      subject: "AI grading ready",
+      body: "AI grading is ready for Algorithms Essay",
+    });
+    expect(dispatchedEvents).toContain("gradeai:communications-updated");
+    dispatchSpy.mockRestore();
   });
 });
