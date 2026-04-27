@@ -77,3 +77,102 @@ export const safeParseEdgeAIGradeResponse = (value: unknown) => {
     ai_breakdown: raw.data.ai_breakdown ?? raw.data.breakdown ?? [],
   });
 };
+
+export const ExplanationResponseSchema = z.object({
+  explanation: z.string().min(1).optional(),
+  answer: z.string().min(1).optional(),
+  guidance: z.string().optional(),
+  next_steps: z.array(z.string()).optional(),
+  criteria: z
+    .array(
+      z.object({
+        name: z.string(),
+        feedback: z.string().optional(),
+      }),
+    )
+    .optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+export type ExplanationResponse = z.infer<typeof ExplanationResponseSchema>;
+
+export function safeParseExplanationResponse(input: unknown) {
+  const result = ExplanationResponseSchema.safeParse(input);
+
+  if (!result.success) {
+    return { success: false as const, data: null };
+  }
+
+  return { success: true as const, data: result.data };
+}
+
+export const SimilarityMatchSchema = z.object({
+  source: z.string().optional(),
+  percentage: z.number().min(0).max(100).optional(),
+  type: z.enum(["internal", "external", "internet"]).optional(),
+});
+
+export const IntegrityCheckResponseSchema = z.object({
+  similarity_score: z.number().min(0).max(100),
+  cited_overlap: z.number().min(0).max(100).optional(),
+  uncited_overlap: z.number().min(0).max(100).optional(),
+  internal_overlap: z.number().min(0).max(100).optional(),
+  external_overlap: z.number().min(0).max(100).optional(),
+  risk_level: z.enum(["low", "medium", "high"]).optional(),
+  matches: z.array(SimilarityMatchSchema).optional(),
+  analysis_limited: z.boolean().optional(),
+});
+
+export type IntegrityCheckResponse = z.infer<typeof IntegrityCheckResponseSchema>;
+
+export function safeParseIntegrityResponse(input: unknown) {
+  const result = IntegrityCheckResponseSchema.safeParse(input);
+
+  if (!result.success) {
+    return { success: false as const, data: null };
+  }
+
+  return { success: true as const, data: result.data };
+}
+
+const IntegrityFlagSchema = z.object({
+  submission_a_id: z.string().optional(),
+  submission_b_id: z.string().optional(),
+  student_a: z.string(),
+  student_b: z.string(),
+  similarity_score: z.number().min(0).max(100),
+  ai_suspicion_score: z.number().min(0).max(100).optional(),
+  baseline_deviation_score: z.number().min(0).max(100).optional(),
+  total_risk_score: z.number().min(0).max(100).optional(),
+  reason: z.string(),
+  evidence_summary: z.string().optional(),
+  matched_excerpt: z.string().optional(),
+  overlap_analysis: z
+    .object({
+      total_overlap: z.number().min(0).max(100),
+      cited_overlap: z.number().min(0).max(100),
+      uncited_overlap: z.number().min(0).max(100),
+      internal_peer_overlap: z.number().min(0).max(100),
+      external_source_overlap: z.number().min(0).max(100),
+    })
+    .optional(),
+  recommended_action: z.enum(["clear", "review", "investigate"]).optional(),
+  integrity_type: z.enum(["similarity", "ai-writing", "baseline-deviation", "mixed"]).optional(),
+  severity: z.string(),
+});
+
+export const IntegrityBatchResponseSchema = z.object({
+  flags: z.array(IntegrityFlagSchema),
+  summary: z.string(),
+  warnings: z.array(z.string()).optional(),
+});
+
+export function safeParseIntegrityBatchResponse(input: unknown) {
+  const result = IntegrityBatchResponseSchema.safeParse(input);
+
+  if (!result.success) {
+    return { success: false as const, data: null };
+  }
+
+  return { success: true as const, data: result.data };
+}

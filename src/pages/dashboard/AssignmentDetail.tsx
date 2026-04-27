@@ -67,7 +67,7 @@ import {
   isStudentGradeVisible,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
-import { safeParseEdgeAIGradeResponse } from "@/lib/schemas/aiResponses";
+import { safeParseEdgeAIGradeResponse, safeParseIntegrityBatchResponse } from "@/lib/schemas/aiResponses";
 
 type SubmissionStatus =
   | "submitted"
@@ -809,17 +809,23 @@ const AssignmentDetail = () => {
           continue;
         }
 
-        if (Array.isArray(data?.flags)) {
-          collectedFlags.push(...(data.flags as PlagiarismFlag[]));
+        const parsed = safeParseIntegrityBatchResponse(data);
+        if (!parsed.success) {
+          failedBatches += 1;
+          console.error("Invalid plagiarism payload received for AssignmentDetail", { batchStart: index, batchSize: batch.length });
+          collectedWarnings.push(`A plagiarism analysis batch of ${batch.length} submission(s) returned invalid data and was skipped.`);
+          continue;
         }
 
-        if (typeof data?.summary === "string" && data.summary.trim()) {
-          collectedSummaries.push(data.summary.trim());
+        collectedFlags.push(...(parsed.data.flags as PlagiarismFlag[]));
+
+        if (parsed.data.summary.trim()) {
+          collectedSummaries.push(parsed.data.summary.trim());
         }
 
-        if (Array.isArray(data?.warnings)) {
+        if (Array.isArray(parsed.data.warnings)) {
           collectedWarnings.push(
-            ...data.warnings.filter((warning: unknown): warning is string => typeof warning === "string" && warning.trim().length > 0),
+            ...parsed.data.warnings.filter((warning) => warning.trim().length > 0),
           );
         }
       }

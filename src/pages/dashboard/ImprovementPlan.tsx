@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import type { CommunicationMessage } from "@/lib/communications";
+import { safeParseExplanationResponse } from "@/lib/schemas/aiResponses";
 import {
   CartesianGrid,
   Line,
@@ -388,7 +389,7 @@ const ImprovementPlan = () => {
     if (plan.length === 0) return;
     setGenerating(true);
     try {
-      await supabase.functions.invoke("explain-grade", {
+      const { data, error } = await supabase.functions.invoke("explain-grade", {
         body: {
           messages: [
             {
@@ -404,6 +405,15 @@ const ImprovementPlan = () => {
           gradeContext: { plan },
         },
       });
+      if (error) throw error;
+
+      const parsed = safeParseExplanationResponse(data);
+      if (!parsed.success) {
+        console.error("Invalid explanation payload received for ImprovementPlan");
+        toast.error("Failed to refresh recommendations. Existing plan kept.");
+        setGenerating(false);
+        return;
+      }
 
       setResources((current) =>
         current.map((resource, index) => ({
