@@ -1,5 +1,7 @@
 # GradeAI
 
+[![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
+
 GradeAI is an academic intelligence platform built primarily to help lecturers and institutions identify students who may need support earlier, before poor performance turns into repeated failure, disengagement, or withdrawal.
 
 AI-assisted marking is included because assessment data is one of the clearest ways to understand where students are struggling. By keeping marking, feedback, analytics, intervention tracking, and student support in one place, GradeAI makes it easier for lecturers to review student progress and act early.
