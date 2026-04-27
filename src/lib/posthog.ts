@@ -1,3 +1,5 @@
+import { env } from "@/lib/env";
+
 type PostHogLike = {
   identify: (distinctId: string, properties?: Record<string, unknown>) => void;
   reset: () => void;
@@ -9,7 +11,7 @@ let missingKeyWarningShown = false;
 const getClient = () => posthogClient;
 
 export const initPostHog = async () => {
-  const key = import.meta.env.VITE_POSTHOG_KEY;
+  const key = env.VITE_POSTHOG_KEY;
   if (!key) {
     if (import.meta.env.DEV && !missingKeyWarningShown) {
       console.warn("PostHog key missing - analytics disabled.");
@@ -21,7 +23,7 @@ export const initPostHog = async () => {
 
   const { default: posthog } = await import("posthog-js");
   posthog.init(key, {
-    api_host: import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
+    api_host: env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
     person_profiles: "identified_only",
     capture_pageview: true,
     capture_pageleave: true,

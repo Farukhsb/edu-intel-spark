@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import { z } from "zod";
+import { env } from "@/lib/env";
 
 interface ParsedStudent {
   rowNumber: number;
@@ -40,7 +41,7 @@ interface BulkStudentUploadProps {
 
 const REQUIRED_HEADERS = ["name", "email", "cohort", "department"] as const;
 const BULK_CREATE_FUNCTION = "bulk-create-students";
-const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+const SUPABASE_PROJECT_ID = env.VITE_SUPABASE_PROJECT_ID;
 const OPTIONAL_STUDENT_ID_HEADERS = ["studentid", "student_id", "student id"] as const;
 
 const CsvStudentRowSchema = z.object({

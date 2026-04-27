@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { env } from "@/lib/env";
 import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 import type { AcademicGradeBreakdownItem } from "@/types/academic";
 import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
@@ -49,7 +50,7 @@ export const getBreakdownMaxScore = (item: ExplainGradeBreakdownItem) => item.ma
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
+const CHAT_URL = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
 
 const getBand = (pct: number) => {
   if (pct >= 70) return "1st";
