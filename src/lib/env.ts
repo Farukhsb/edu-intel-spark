@@ -17,7 +17,12 @@ const EnvSchema = z.object({
 export type AppEnv = z.infer<typeof EnvSchema>;
 
 export function parseEnv(rawEnv: Record<string, unknown>): AppEnv {
-  const parsed = EnvSchema.safeParse(rawEnv);
+  const normalizedEnv = {
+    ...rawEnv,
+    VITE_APP_ENV: rawEnv.VITE_APP_ENV === "test" ? "development" : rawEnv.VITE_APP_ENV,
+  };
+
+  const parsed = EnvSchema.safeParse(normalizedEnv);
   if (parsed.success) {
     return parsed.data;
   }

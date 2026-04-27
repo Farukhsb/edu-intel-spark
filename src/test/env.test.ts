@@ -69,4 +69,22 @@ describe("environment validation", () => {
 
     expect(parsed.VITE_APP_ENV).toBe("development");
   });
+
+  it('normalizes app environment "test" to development', () => {
+    const parsed = parseEnv({
+      ...baseEnv,
+      VITE_APP_ENV: "test",
+    });
+
+    expect(parsed.VITE_APP_ENV).toBe("development");
+  });
+
+  it("fails when the app environment is invalid", () => {
+    expect(() =>
+      parseEnv({
+        ...baseEnv,
+        VITE_APP_ENV: "qa",
+      }),
+    ).toThrow(/VITE_APP_ENV/);
+  });
 });
