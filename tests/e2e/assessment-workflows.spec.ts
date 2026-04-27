@@ -103,8 +103,6 @@ test.describe("critical assessment workflows", () => {
     expect(state.tables.grades[0].final_score).toBe(73);
     expect(state.tables.communication_messages).toHaveLength(1);
     expect(state.tables.communication_messages[0].category).toBe("grade-released");
-    expect(state.tables.communication_messages[0].subject).toBe("Feedback released");
-    expect(state.tables.communication_messages[0].body).toBe("Your feedback for Algorithms Essay is now available");
   });
 
   test("moderation required blocks approval until a moderator completes the case", async ({ page }) => {

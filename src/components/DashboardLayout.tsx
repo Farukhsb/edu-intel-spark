@@ -221,11 +221,6 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       }
     }
 
-    if (isLecturerEquivalent && notification.relatedAssignmentId) {
-      navigate(`/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}`);
-      return;
-    }
-
     if (isLecturerEquivalent && notification.relatedStudentId) {
       navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
       return;
