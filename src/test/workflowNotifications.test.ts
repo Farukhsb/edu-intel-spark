@@ -19,6 +19,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import {
+  buildAssignmentPublishedNotification,
   buildAIGradingReadyNotification,
   buildGradeReleasedNotification,
   buildIntegrityCheckReadyNotification,
@@ -143,6 +144,28 @@ describe("workflow notifications", () => {
       relatedStudentId: "student-1",
     });
     expect(notification.body).not.toMatch(/70|score|feedback:/i);
+  });
+
+  it("builds a safe student notification when an assignment is published", () => {
+    const notification = buildAssignmentPublishedNotification({
+      studentName: "Sam Student",
+      studentEmail: "sam@student.test",
+      studentId: "student-1",
+      assignmentId: "assignment-1",
+      assignmentTitle: "Algorithms Essay",
+    });
+
+    expect(notification).toEqual({
+      category: "assignment-published",
+      recipientName: "Sam Student",
+      recipientEmail: "sam@student.test",
+      recipientId: "student-1",
+      subject: "Assignment published",
+      body: "Algorithms Essay is now available in GradeAI.",
+      relatedAssignmentId: "assignment-1",
+      relatedStudentId: "student-1",
+    });
+    expect(notification.body).not.toMatch(/score|feedback|plagiarism|similarity/i);
   });
 
   it("keeps lecturer workflow notifications visible in the bell for the matching recipient id", () => {

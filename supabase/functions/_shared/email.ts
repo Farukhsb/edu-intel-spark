@@ -81,6 +81,29 @@ export function formatSubmissionNotificationEmail(params: {
   };
 }
 
+export function formatAssignmentPublishedEmail(params: {
+  studentName?: string | null;
+  assignmentTitle: string;
+  dueDate?: string | null;
+  assignmentUrl: string;
+}) {
+  const greeting = params.studentName ? `Hi ${params.studentName},` : "Hello,";
+  const dueDateText = params.dueDate ? `\nDue date: ${params.dueDate}` : "";
+
+  return {
+    subject: `New assignment published`,
+    text: `${greeting}\n\n${params.assignmentTitle} is now available in GradeAI.${dueDateText}\nView assignment: ${params.assignmentUrl}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
+        <p>${greeting}</p>
+        <p><strong>${params.assignmentTitle}</strong> is now available in GradeAI.</p>
+        ${params.dueDate ? `<p><strong>Due date:</strong> ${params.dueDate}</p>` : ""}
+        <p><a href="${params.assignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Open assignment</a></p>
+      </div>
+    `,
+  };
+}
+
 export function formatGradingCompleteEmail(params: {
   lecturerName?: string | null;
   assignmentTitle: string;
@@ -101,6 +124,26 @@ export function formatGradingCompleteEmail(params: {
           <li><strong>Failed:</strong> ${params.failedCount}</li>
         </ul>
         <p><a href="${params.reviewUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Review results</a></p>
+      </div>
+    `,
+  };
+}
+
+export function formatGradeReleasedEmail(params: {
+  studentName?: string | null;
+  assignmentTitle: string;
+  assignmentUrl: string;
+}) {
+  const greeting = params.studentName ? `Hi ${params.studentName},` : "Hello,";
+
+  return {
+    subject: "Feedback released",
+    text: `${greeting}\n\nYour feedback for ${params.assignmentTitle} is now available in GradeAI.\nView feedback: ${params.assignmentUrl}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
+        <p>${greeting}</p>
+        <p>Your feedback for <strong>${params.assignmentTitle}</strong> is now available in GradeAI.</p>
+        <p><a href="${params.assignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">View feedback</a></p>
       </div>
     `,
   };

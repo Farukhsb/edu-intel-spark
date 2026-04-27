@@ -48,6 +48,7 @@ import {
   buildGradeReleasedNotification,
   buildIntegrityCheckReadyNotification,
   buildSubmissionReceivedNotification,
+  sendWorkflowNotificationEmail,
   type DraftCommunicationMessage,
   queueCommunicationMessage,
 } from "@/lib/communications";
@@ -581,6 +582,14 @@ const AssignmentDetail = () => {
           workflow: "submission",
         },
       );
+      void sendWorkflowNotificationEmail({
+        category: "submission-received",
+        assignmentId: assignment.id,
+      }).catch(() => {
+        log.warn("Submission notification email failed", {
+          assignmentId: assignment.id,
+        });
+      });
       toast.success("Submission uploaded successfully");
       await loadSubmissions();
     } catch (error: unknown) {
@@ -1322,6 +1331,16 @@ Please review the feedback in the platform and let me know if you would like to 
       toast.error("Could not save release note");
       return;
     }
+    void sendWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: assignment.id,
+      submissionId: sub.id,
+    }).catch(() => {
+      log.warn("Grade release notification email failed", {
+        assignmentId: assignment.id,
+        submissionId: sub.id,
+      });
+    });
     toast.success("Grade release note saved");
   };
 

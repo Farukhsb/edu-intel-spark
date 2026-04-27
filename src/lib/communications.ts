@@ -9,7 +9,8 @@ export type CommunicationCategory =
   | "intervention-follow-up"
   | "submission-received"
   | "ai-grading-ready"
-  | "integrity-check-ready";
+  | "integrity-check-ready"
+  | "assignment-published";
 
 export interface CommunicationMessage {
   id: string;
@@ -422,6 +423,57 @@ export const buildGradeReleasedNotification = (input: {
   relatedAssignmentId: input.assignmentId,
   relatedStudentId: input.studentId,
 });
+
+export const buildAssignmentPublishedNotification = (input: {
+  studentName: string;
+  studentEmail: string | null;
+  studentId?: string;
+  assignmentId: string;
+  assignmentTitle: string;
+}): DraftCommunicationMessage => ({
+  category: "assignment-published",
+  recipientName: input.studentName,
+  recipientEmail: input.studentEmail,
+  recipientId: input.studentId,
+  subject: "Assignment published",
+  body: `${input.assignmentTitle} is now available in GradeAI.`,
+  relatedAssignmentId: input.assignmentId,
+  relatedStudentId: input.studentId,
+});
+
+type WorkflowEmailCategory = "assignment-published" | "submission-received" | "grade-released";
+
+type WorkflowEmailRequest =
+  | {
+      category: "assignment-published";
+      assignmentId: string;
+    }
+  | {
+      category: "submission-received";
+      assignmentId: string;
+    }
+  | {
+      category: "grade-released";
+      assignmentId: string;
+      submissionId: string;
+    };
+
+export const sendWorkflowNotificationEmail = async (request: WorkflowEmailRequest) => {
+  const { error } = await supabase.functions.invoke("send-workflow-notification-email", {
+    body: request,
+  });
+
+  if (error) {
+    log.warn("Workflow notification email did not send", {
+      category: request.category as WorkflowEmailCategory,
+      assignmentId: request.assignmentId,
+      submissionId: "submissionId" in request ? request.submissionId : null,
+    });
+    return false;
+  }
+
+  return true;
+};
 
 export const getVisibleCommunicationMessages = (
   messages: CommunicationMessage[],
