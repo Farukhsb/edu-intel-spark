@@ -67,6 +67,7 @@ import {
   isStudentGradeVisible,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
+import { safeParseEdgeAIGradeResponse } from "@/lib/schemas/aiResponses";
 
 type SubmissionStatus =
   | "submitted"
@@ -669,14 +670,25 @@ const AssignmentDetail = () => {
         if (!sub) continue;
 
         if (r.success) {
+          const validatedGrade = safeParseEdgeAIGradeResponse(r);
+          if (!validatedGrade.success) {
+            console.error("Invalid AI grading payload received for AssignmentDetail", validatedGrade.error);
+            failureMessages.add("Received an invalid grading response. Please try again.");
+            try {
+              await supabase.from("submissions").update({ status: sub.status }).eq("id", sub.id);
+            } catch {}
+            failCount++;
+            continue;
+          }
+
           try {
             await supabase.from("grades").upsert({
               submission_id: sub.id,
-              ai_score: r.score,
-              ai_feedback: r.feedback,
-              ai_breakdown: r.breakdown || [],
+              ai_score: validatedGrade.data.ai_score,
+              ai_feedback: validatedGrade.data.ai_feedback,
+              ai_breakdown: validatedGrade.data.ai_breakdown,
               assignment_type: r.assignmentType ?? null,
-              grading_confidence: r.gradingConfidence ?? null,
+              grading_confidence: validatedGrade.data.grading_confidence ?? null,
               grading_metadata: r.gradingMetadata ?? {},
             }, { onConflict: "submission_id" });
           } catch (gradeErr) {

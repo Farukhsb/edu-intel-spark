@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
 
 interface ExplainGradeBreakdown {
@@ -24,6 +25,7 @@ interface SubmissionRow {
   assignment_id: string | null;
   student_name: string | null;
   file_name: string | null;
+  status?: string | null;
 }
 
 interface GradeRow {
@@ -143,15 +145,18 @@ const ExplainGrade = () => {
       const assignMap = Object.fromEntries(safeAssignments.map(a => [a.id, a]));
 
       const options: SubmissionOption[] = grades
-        .filter(g => (g.ai_score != null || g.final_score != null) && g.ai_breakdown)
-        .map(g => {
+        .flatMap(g => {
+          if (g.ai_score == null && g.final_score == null) return [];
+          const breakdownResult = safeParseGradeBreakdown(g.ai_breakdown);
+          if (!breakdownResult.success) {
+            console.error("Invalid grade breakdown payload received for ExplainGrade", breakdownResult.error);
+            return [];
+          }
+
           const sub = subMap[g.submission_id];
           const assignment = sub ? assignMap[sub.assignment_id] : null;
           const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
-          const rawBreakdown = g.ai_breakdown;
-          const breakdown = Array.isArray(rawBreakdown)
-            ? (rawBreakdown as ExplainGradeBreakdownItem[])
-            : [];
+          const breakdown = breakdownResult.data as ExplainGradeBreakdownItem[];
           const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
           if (totalMaxRaw === 0 && import.meta.env.DEV) {
             console.warn("AI breakdown has no max scores; using fallback totalMax = 1");
@@ -190,7 +195,7 @@ const ExplainGrade = () => {
             ? `${assignment.module_code || ""} ${assignment.title}`.trim()
             : sub?.student_name || sub?.file_name || g.submission_id;
 
-          return {
+          return [{
             gradeId: g.id,
             submissionId: g.submission_id,
             label,
@@ -202,7 +207,7 @@ const ExplainGrade = () => {
               components,
               improvementAreas,
             },
-          };
+          }];
         });
 
       setSubmissions(options);
