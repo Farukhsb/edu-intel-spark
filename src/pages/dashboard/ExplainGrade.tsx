@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
+import type { AcademicGradeBreakdownItem } from "@/types/academic";
 import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
 
 interface ExplainGradeBreakdown {
@@ -42,10 +43,7 @@ interface AssignmentRow {
   title: string;
 }
 
-type ExplainGradeBreakdownItem = SharedGradeBreakdown & {
-  name?: string;
-  maxScore?: number;
-};
+type ExplainGradeBreakdownItem = AcademicGradeBreakdownItem & SharedGradeBreakdown;
 
 export const getBreakdownMaxScore = (item: ExplainGradeBreakdownItem) => item.max_score ?? item.maxScore ?? 0;
 
@@ -124,12 +122,13 @@ const ExplainGrade = () => {
     try {
       // RLS ensures students only see their own submissions/grades
       const { data: subs } = await supabase.from("submissions").select("*");
-      const releasedSubs = ((subs || []) as SubmissionRow[]).filter((submission) => submission.status === "released");
+      const submissionRows = (subs ?? []) as SubmissionRow[];
+      const releasedSubs = submissionRows.filter((submission) => submission.status === "released");
       const subIds = releasedSubs.map(s => s.id);
       const { data: grades } = subIds.length > 0
         ? await supabase.from("grades").select("*").in("submission_id", subIds)
         : { data: [] as GradeRow[] };
-      const assignmentIds = [...new Set((subs || []).map(s => s.assignment_id))];
+      const assignmentIds = [...new Set(submissionRows.map((submission) => submission.assignment_id))];
       const { data: assignments } = assignmentIds.length > 0
         ? await supabase.from("assignments").select("*").in("id", assignmentIds)
         : { data: [] as AssignmentRow[] };
@@ -156,7 +155,7 @@ const ExplainGrade = () => {
           const sub = subMap[g.submission_id];
           const assignment = sub ? assignMap[sub.assignment_id] : null;
           const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
-          const breakdown = breakdownResult.data as ExplainGradeBreakdownItem[];
+          const breakdown: ExplainGradeBreakdownItem[] = breakdownResult.data;
           const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
           if (totalMaxRaw === 0 && import.meta.env.DEV) {
             console.warn("AI breakdown has no max scores; using fallback totalMax = 1");

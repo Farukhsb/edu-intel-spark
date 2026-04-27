@@ -28,6 +28,7 @@ export const GradeBreakdownItemSchema = BreakdownSourceSchema.transform((value) 
 }));
 
 export const GradeBreakdownArraySchema = z.array(GradeBreakdownItemSchema);
+export type GradeBreakdownItem = z.infer<typeof GradeBreakdownItemSchema>;
 
 const AIGradeResponseSourceSchema = z
   .object({
@@ -48,6 +49,7 @@ export const AIGradeResponseSchema = AIGradeResponseSourceSchema.transform((valu
   grading_confidence: value.grading_confidence,
   ai_breakdown: value.ai_breakdown,
 }));
+export type AIGradeResponse = z.infer<typeof AIGradeResponseSchema>;
 
 const EdgeAIGradeResponseSourceSchema = z.object({
   score: z.number().finite().nullable().optional(),
@@ -160,6 +162,7 @@ const IntegrityFlagSchema = z.object({
   integrity_type: z.enum(["similarity", "ai-writing", "baseline-deviation", "mixed"]).optional(),
   severity: z.string(),
 });
+export type IntegrityBatchFlag = z.infer<typeof IntegrityFlagSchema>;
 
 export const IntegrityBatchResponseSchema = z.object({
   flags: z.array(IntegrityFlagSchema),

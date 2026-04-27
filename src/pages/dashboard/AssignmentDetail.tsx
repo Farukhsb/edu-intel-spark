@@ -49,7 +49,6 @@ import type {
   AIResponse,
   Assignment,
   GradeBreakdown,
-  RubricCriterion,
   Submission,
 } from "@/types";
 import { evaluateModerationSignals, formatSubmissionStatus } from "@/lib/moderation";
@@ -67,7 +66,13 @@ import {
   isStudentGradeVisible,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
-import { safeParseEdgeAIGradeResponse, safeParseIntegrityBatchResponse } from "@/lib/schemas/aiResponses";
+import { safeParseEdgeAIGradeResponse, safeParseGradeBreakdown, safeParseIntegrityBatchResponse } from "@/lib/schemas/aiResponses";
+import {
+  toWorkflowRubric,
+  type AcademicGradeBreakdownItem,
+  type AcademicIntegrityFlag,
+  type WorkflowRubricCriterion,
+} from "@/types/academic";
 
 type SubmissionStatus =
   | "submitted"
@@ -112,7 +117,7 @@ type AssignmentDetailSubmission = Submission & {
   student_id: string | null;
 };
 
-interface AssignmentDetailBreakdown extends GradeBreakdown {
+interface AssignmentDetailBreakdown extends AcademicGradeBreakdownItem, GradeBreakdown {
   evidence_snippet?: string | null;
   review_required?: boolean | null;
   error_type?: "arithmetic_slip" | "conceptual_flaw" | "none";
@@ -171,32 +176,15 @@ type AssignmentDetailAssignment = Assignment & {
   due_date: string | null;
   status: string;
   lecturer_id: string;
-  rubric: RubricCriterion[] | null;
+  rubric: WorkflowRubricCriterion[] | null;
 };
 
-interface PlagiarismFlag {
-  submission_a_id?: string;
-  submission_b_id?: string;
-  student_a: string;
-  student_b: string;
-  similarity_score: number;
-  ai_suspicion_score?: number;
-  baseline_deviation_score?: number;
-  total_risk_score?: number;
-  reason: string;
-  evidence_summary?: string;
-  matched_excerpt?: string;
-  overlap_analysis?: {
-    total_overlap: number;
-    cited_overlap: number;
-    uncited_overlap: number;
-    internal_peer_overlap: number;
-    external_source_overlap: number;
-  };
-  recommended_action?: "clear" | "review" | "investigate";
-  integrity_type?: "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
-  severity: string;
-}
+const toAssignmentDetailBreakdown = (value: unknown): AssignmentDetailBreakdown[] => {
+  const parsed = safeParseGradeBreakdown(value);
+  return parsed.success ? (parsed.data as AssignmentDetailBreakdown[]) : [];
+};
+
+interface PlagiarismFlag extends AcademicIntegrityFlag {}
 
 const statusConfig: Record<
   SubmissionStatus,
@@ -342,7 +330,7 @@ const AssignmentDetail = () => {
           due_date: data.due_date,
           status: data.status,
           lecturer_id: data.lecturer_id,
-          rubric: data.rubric as RubricCriterion[] | null,
+          rubric: toWorkflowRubric(data.rubric),
         });
       } else {
         setAssignment(null);
@@ -375,7 +363,7 @@ const AssignmentDetail = () => {
           submission_id: g.submission_id,
           ai_score: g.ai_score,
           ai_feedback: g.ai_feedback,
-          ai_breakdown: (g.ai_breakdown as AssignmentDetailBreakdown[] | null) ?? [],
+          ai_breakdown: toAssignmentDetailBreakdown(g.ai_breakdown),
           assignment_type: g.assignment_type,
           grading_confidence: g.grading_confidence,
           grading_metadata: (g.grading_metadata as GradingMetadata | null) ?? null,
@@ -817,7 +805,7 @@ const AssignmentDetail = () => {
           continue;
         }
 
-        collectedFlags.push(...(parsed.data.flags as PlagiarismFlag[]));
+        collectedFlags.push(...parsed.data.flags);
 
         if (parsed.data.summary.trim()) {
           collectedSummaries.push(parsed.data.summary.trim());
@@ -1758,7 +1746,7 @@ Please log in to review the released grade and feedback.`,
                 <CardTitle className="text-base">Rubric</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {assignment.rubric.map((r: RubricCriterion, i: number) => (
+                {assignment.rubric.map((r: WorkflowRubricCriterion, i: number) => (
                   <div key={i} className="rounded-xl border p-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-medium">{r.criterion}</span>
