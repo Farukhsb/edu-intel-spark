@@ -5,7 +5,9 @@ export type CommunicationCategory =
   | "feedback-summary"
   | "at-risk-alert"
   | "grade-released"
-  | "intervention-follow-up";
+  | "intervention-follow-up"
+  | "submission-received"
+  | "ai-grading-ready";
 
 export interface CommunicationMessage {
   id: string;
@@ -19,6 +21,8 @@ export interface CommunicationMessage {
   relatedStudentId?: string;
   relatedAssignmentId?: string;
 }
+
+export type DraftCommunicationMessage = Omit<CommunicationMessage, "id" | "createdAt">;
 
 interface CommunicationMessageRow {
   id: string;
@@ -47,7 +51,7 @@ const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessag
 });
 
 export const queueCommunicationMessage = async (
-  message: Omit<CommunicationMessage, "id" | "createdAt">
+  message: DraftCommunicationMessage
 ) => {
   const e2eUserId = getE2EAuthenticatedUserId();
   const userId =
@@ -90,6 +94,52 @@ export const queueCommunicationMessage = async (
 
   return normalizeMessage(data as CommunicationMessageRow);
 };
+
+export const buildSubmissionReceivedNotification = (input: {
+  lecturerId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentName: string;
+}): DraftCommunicationMessage => ({
+  category: "submission-received",
+  recipientName: "Lecturer",
+  recipientEmail: null,
+  recipientId: input.lecturerId,
+  subject: "New submission received",
+  body: `${input.studentName} submitted ${input.assignmentTitle}`,
+  relatedAssignmentId: input.assignmentId,
+});
+
+export const buildAIGradingReadyNotification = (input: {
+  lecturerId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+}): DraftCommunicationMessage => ({
+  category: "ai-grading-ready",
+  recipientName: "Lecturer",
+  recipientEmail: null,
+  recipientId: input.lecturerId,
+  subject: "AI grading ready",
+  body: `AI grading is ready for ${input.assignmentTitle}`,
+  relatedAssignmentId: input.assignmentId,
+});
+
+export const buildGradeReleasedNotification = (input: {
+  studentName: string;
+  studentEmail: string | null;
+  studentId?: string;
+  assignmentId: string;
+  assignmentTitle: string;
+}): DraftCommunicationMessage => ({
+  category: "grade-released",
+  recipientName: input.studentName,
+  recipientEmail: input.studentEmail,
+  recipientId: input.studentId,
+  subject: "Feedback released",
+  body: `Your feedback for ${input.assignmentTitle} is now available`,
+  relatedAssignmentId: input.assignmentId,
+  relatedStudentId: input.studentId,
+});
 
 export const getVisibleCommunicationMessages = (
   messages: CommunicationMessage[],

@@ -43,7 +43,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
-import { queueCommunicationMessage } from "@/lib/communications";
+import {
+  buildAIGradingReadyNotification,
+  buildGradeReleasedNotification,
+  buildSubmissionReceivedNotification,
+  queueCommunicationMessage,
+} from "@/lib/communications";
 import { log } from "@/lib/logger";
 import type { Tables } from "@/integrations/supabase/types";
 import type {
@@ -535,6 +540,14 @@ const AssignmentDetail = () => {
         student_email: user.email ?? null,
       });
       if (error) throw error;
+      await queueCommunicationMessage(
+        buildSubmissionReceivedNotification({
+          lecturerId: assignment.lecturer_id,
+          assignmentId: assignment.id,
+          assignmentTitle: assignment.title,
+          studentName: profile?.full_name || user.email || "A student",
+        }),
+      );
       toast.success("Submission uploaded successfully");
       await loadSubmissions();
     } catch (error: unknown) {
@@ -713,7 +726,16 @@ const AssignmentDetail = () => {
         }
       }
 
-      if (successCount > 0) toast.success(`${successCount} submission(s) graded successfully`);
+      if (successCount > 0) {
+        await queueCommunicationMessage(
+          buildAIGradingReadyNotification({
+            lecturerId: assignment.lecturer_id,
+            assignmentId: assignment.id,
+            assignmentTitle: assignment.title,
+          }),
+        );
+        toast.success(`${successCount} submission(s) graded successfully`);
+      }
       if (failCount > 0) {
         const extractionFailure = Array.from(failureMessages).find((message) =>
           message.includes("We could not read this document. Please upload a readable PDF, DOCX, or TXT file.")
@@ -776,6 +798,7 @@ const AssignmentDetail = () => {
     for (const sub of toRelease) {
       try {
         await supabase.from("submissions").update({ status: "released" as const }).eq("id", sub.id);
+        await queueGradeReleaseNotification(sub);
       } catch {}
     }
     toast.success(`${toRelease.length} grade(s) released to students`);
@@ -1228,26 +1251,20 @@ Please review the feedback in the platform and let me know if you would like to 
   };
 
   const queueGradeReleaseNotification = async (sub: AssignmentDetailSubmission) => {
-    const grade = grades[sub.id];
-      const { finalScore: score } = resolveFinalGradeValues({ grade: grade ?? {} });
+    if (!assignment) {
+      toast.error("Could not save release note");
+      return;
+    }
 
-    const result = await queueCommunicationMessage({
-      category: "grade-released",
-      recipientName: sub.student_name || sub.student_email || "Student",
-      recipientEmail: sub.student_email,
-      recipientId: sub.student_id || undefined,
-      subject: `Grade released for ${assignment?.title || "your assignment"}`,
-      body: `Hello ${sub.student_name || "student"},
-
-Your final grade for ${assignment?.title || "this assignment"} is now available.
-
-Result:
-${score != null ? `${score}/${assignment?.max_score ?? 100}` : "Available in the platform"}
-
-Please log in to review the released grade and feedback.`,
-      relatedAssignmentId: assignment?.id,
-      relatedStudentId: sub.student_id || sub.student_email || sub.student_name || undefined,
-    });
+    const result = await queueCommunicationMessage(
+      buildGradeReleasedNotification({
+        studentName: sub.student_name || sub.student_email || "Student",
+        studentEmail: sub.student_email,
+        studentId: sub.student_id || undefined,
+        assignmentId: assignment.id,
+        assignmentTitle: assignment.title,
+      }),
+    );
     if (!result) {
       toast.error("Could not save release note");
       return;
