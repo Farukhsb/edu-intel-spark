@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getE2EAuthenticatedUserId } from "@/lib/e2eAuth";
-import { log } from "@/lib/logger";
 
 export type CommunicationCategory =
   | "feedback-summary"
@@ -8,8 +7,7 @@ export type CommunicationCategory =
   | "grade-released"
   | "intervention-follow-up"
   | "submission-received"
-  | "ai-grading-ready"
-  | "integrity-check-ready";
+  | "ai-grading-ready";
 
 export interface CommunicationMessage {
   id: string;
@@ -86,13 +84,7 @@ export const queueCommunicationMessage = async (
     .single();
 
   if (error || !data) {
-    log.error("Failed to save communication message", error, {
-      category: message.category,
-      recipientId: message.recipientId ?? null,
-      hasRecipientEmail: Boolean(message.recipientEmail),
-      relatedAssignmentId: message.relatedAssignmentId ?? null,
-      relatedStudentId: message.relatedStudentId ?? null,
-    });
+    console.error("Failed to save communication message:", error);
     return null;
   }
 
@@ -147,20 +139,6 @@ export const buildGradeReleasedNotification = (input: {
   body: `Your feedback for ${input.assignmentTitle} is now available`,
   relatedAssignmentId: input.assignmentId,
   relatedStudentId: input.studentId,
-});
-
-export const buildIntegrityCheckReadyNotification = (input: {
-  lecturerId: string;
-  assignmentId: string;
-  assignmentTitle: string;
-}): DraftCommunicationMessage => ({
-  category: "integrity-check-ready",
-  recipientName: "Lecturer",
-  recipientEmail: null,
-  recipientId: input.lecturerId,
-  subject: "Integrity check ready",
-  body: `Integrity review is ready for ${input.assignmentTitle}`,
-  relatedAssignmentId: input.assignmentId,
 });
 
 export const getVisibleCommunicationMessages = (
@@ -226,7 +204,7 @@ export const loadVisibleCommunicationMessages = async (options: {
     .limit(50);
 
   if (error) {
-    log.error("Failed to load communication messages", error);
+    console.error("Failed to load communication messages:", error);
     return [];
   }
 

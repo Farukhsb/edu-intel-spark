@@ -46,9 +46,7 @@ import { safeFormatDate } from "@/lib/date";
 import {
   buildAIGradingReadyNotification,
   buildGradeReleasedNotification,
-  buildIntegrityCheckReadyNotification,
   buildSubmissionReceivedNotification,
-  type DraftCommunicationMessage,
   queueCommunicationMessage,
 } from "@/lib/communications";
 import { log } from "@/lib/logger";
@@ -453,38 +451,6 @@ const AssignmentDetail = () => {
     }
   };
 
-  const persistWorkflowNotification = async (
-    message: DraftCommunicationMessage,
-    context: {
-      assignmentId: string;
-      workflow: "submission" | "ai-grading" | "integrity-check" | "grade-release";
-    },
-  ) => {
-    try {
-      const result = await queueCommunicationMessage(message);
-      if (!result) {
-        log.warn("Workflow notification did not persist", {
-          assignmentId: context.assignmentId,
-          workflow: context.workflow,
-          category: message.category,
-          recipientId: message.recipientId ?? null,
-        });
-      }
-    } catch (error) {
-      log.warn("Workflow notification failed", {
-        assignmentId: context.assignmentId,
-        workflow: context.workflow,
-        category: message.category,
-        recipientId: message.recipientId ?? null,
-      });
-      log.error("Workflow notification threw unexpectedly", error, {
-        assignmentId: context.assignmentId,
-        workflow: context.workflow,
-        category: message.category,
-      });
-    }
-  };
-
   const openSubmissionFile = async (submission: AssignmentDetailSubmission) => {
     try {
       const rawUrl = submission.file_url || "";
@@ -574,17 +540,13 @@ const AssignmentDetail = () => {
         student_email: user.email ?? null,
       });
       if (error) throw error;
-      await persistWorkflowNotification(
+      await queueCommunicationMessage(
         buildSubmissionReceivedNotification({
           lecturerId: assignment.lecturer_id,
           assignmentId: assignment.id,
           assignmentTitle: assignment.title,
           studentName: profile?.full_name || user.email || "A student",
         }),
-        {
-          assignmentId: assignment.id,
-          workflow: "submission",
-        },
       );
       toast.success("Submission uploaded successfully");
       await loadSubmissions();
@@ -765,16 +727,12 @@ const AssignmentDetail = () => {
       }
 
       if (successCount > 0) {
-        await persistWorkflowNotification(
+        await queueCommunicationMessage(
           buildAIGradingReadyNotification({
             lecturerId: assignment.lecturer_id,
             assignmentId: assignment.id,
             assignmentTitle: assignment.title,
           }),
-          {
-            assignmentId: assignment.id,
-            workflow: "ai-grading",
-          },
         );
         toast.success(`${successCount} submission(s) graded successfully`);
       }
@@ -857,7 +815,6 @@ const AssignmentDetail = () => {
       const collectedSummaries: string[] = [];
       const collectedWarnings: string[] = [];
       let failedBatches = 0;
-      let successfulBatches = 0;
 
       for (let index = 0; index < submissions.length; index += batchSize) {
         const batch = submissions.slice(index, index + batchSize);
@@ -894,7 +851,6 @@ const AssignmentDetail = () => {
           continue;
         }
 
-        successfulBatches += 1;
         collectedFlags.push(...parsed.data.flags);
 
         if (parsed.data.summary.trim()) {
@@ -930,20 +886,6 @@ const AssignmentDetail = () => {
 
       setPlagiarismFlags(uniqueFlags);
       setPlagiarismSummary(summaryParts.filter(Boolean).join(" "));
-
-      if (successfulBatches > 0) {
-        await persistWorkflowNotification(
-          buildIntegrityCheckReadyNotification({
-            lecturerId: assignment.lecturer_id,
-            assignmentId: assignment.id,
-            assignmentTitle: assignment.title,
-          }),
-          {
-            assignmentId: assignment.id,
-            workflow: "integrity-check",
-          },
-        );
-      }
 
       if (uniqueFlags.length === 0) {
         if (collectedWarnings.length > 0 || failedBatches > 0) {
