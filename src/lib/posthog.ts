@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { log } from "@/lib/logger";
 
 type PostHogLike = {
   identify: (distinctId: string, properties?: Record<string, unknown>) => void;
@@ -14,7 +15,7 @@ export const initPostHog = async () => {
   const key = env.VITE_POSTHOG_KEY;
   if (!key) {
     if (import.meta.env.DEV && !missingKeyWarningShown) {
-      console.warn("PostHog key missing - analytics disabled.");
+      log.info("PostHog key missing; analytics disabled.");
       missingKeyWarningShown = true;
     }
     posthogClient = null;

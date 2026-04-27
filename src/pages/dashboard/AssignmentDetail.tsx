@@ -44,6 +44,7 @@ import {
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
+import { log } from "@/lib/logger";
 import type { Tables } from "@/integrations/supabase/types";
 import type {
   AIResponse,
@@ -464,7 +465,9 @@ const AssignmentDetail = () => {
 
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      console.error("Failed to open submission file:", error);
+      log.error("Failed to open submission file", error, {
+        submissionId: submission.id,
+      });
       toast.error("Could not open the file");
     }
   };
@@ -535,7 +538,10 @@ const AssignmentDetail = () => {
       toast.success("Submission uploaded successfully");
       await loadSubmissions();
     } catch (error: unknown) {
-      console.error("[Submission] Failed:", error);
+      log.error("Student submission upload failed", error, {
+        assignmentId: assignment.id,
+        studentId: user.id,
+      });
       toast.error("Upload failed");
     } finally {
       setUploading(false);
@@ -558,7 +564,9 @@ const AssignmentDetail = () => {
       .eq("role", "student");
 
     if (studentProfilesError) {
-      console.error("[BulkUpload] Failed to load student profiles:", studentProfilesError);
+      log.error("Bulk upload failed to load student profiles", studentProfilesError, {
+        assignmentId: assignment.id,
+      });
       toast.error("Could not load student profiles for bulk upload");
       setUploading(false);
       e.target.value = "";
@@ -604,7 +612,10 @@ const AssignmentDetail = () => {
           unmatched++;
         }
       } catch (err: unknown) {
-        console.error(`[BulkUpload] Failed for ${file.name}:`, err);
+        log.error("Bulk upload failed for file", err, {
+          assignmentId: assignment.id,
+          fileName: file.name,
+        });
         toast.error(`Failed to upload ${file.name}`);
       }
     }
@@ -660,7 +671,9 @@ const AssignmentDetail = () => {
         if (r.success) {
           const validatedGrade = safeParseEdgeAIGradeResponse(r);
           if (!validatedGrade.success) {
-            console.error("Invalid AI grading payload received for AssignmentDetail", validatedGrade.error);
+            log.error("Invalid AI grading payload received for AssignmentDetail", undefined, {
+              submissionId: sub.id,
+            });
             failureMessages.add("Received an invalid grading response. Please try again.");
             try {
               await supabase.from("submissions").update({ status: sub.status }).eq("id", sub.id);
@@ -680,7 +693,9 @@ const AssignmentDetail = () => {
               grading_metadata: r.gradingMetadata ?? {},
             }, { onConflict: "submission_id" });
           } catch (gradeErr) {
-            console.error("Failed to write grade:", gradeErr);
+            log.error("Failed to write grade", gradeErr, {
+              submissionId: sub.id,
+            });
           }
           try {
             const nextStatus = r.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
@@ -741,7 +756,9 @@ const AssignmentDetail = () => {
         const approved = await approveSubmission(sub);
         if (approved) approvedCount++;
       } catch (e) {
-        console.warn("Approve failed:", e);
+        log.warn("Bulk approve failed", {
+          submissionId: sub.id,
+        });
       }
     }
     if (approvedCount > 0) toast.success(`${approvedCount} submission(s) approved`);
@@ -792,7 +809,10 @@ const AssignmentDetail = () => {
 
         if (error) {
           failedBatches += 1;
-          console.error("Plagiarism batch failed:", { batchStart: index, batchSize: batch.length, error });
+          log.error("Plagiarism batch failed", error, {
+            batchStart: index,
+            batchSize: batch.length,
+          });
           collectedWarnings.push(`A plagiarism analysis batch of ${batch.length} submission(s) failed and was skipped.`);
           continue;
         }
@@ -800,7 +820,10 @@ const AssignmentDetail = () => {
         const parsed = safeParseIntegrityBatchResponse(data);
         if (!parsed.success) {
           failedBatches += 1;
-          console.error("Invalid plagiarism payload received for AssignmentDetail", { batchStart: index, batchSize: batch.length });
+          log.error("Invalid plagiarism payload received for AssignmentDetail", undefined, {
+            batchStart: index,
+            batchSize: batch.length,
+          });
           collectedWarnings.push(`A plagiarism analysis batch of ${batch.length} submission(s) returned invalid data and was skipped.`);
           continue;
         }
@@ -898,7 +921,10 @@ const AssignmentDetail = () => {
     );
 
     if (error) {
-      console.warn("Failed to write grade audit log:", error);
+      log.warn("Failed to write grade audit log", {
+        submissionId,
+        moderationCaseId,
+      });
     }
   };
 
@@ -1142,7 +1168,9 @@ const AssignmentDetail = () => {
       );
       await loadSubmissions();
     } catch (e) {
-      console.error("Save review failed:", e);
+      log.error("Save review failed", e, {
+        submissionId: reviewSubmission.id,
+      });
       toast.error("Failed to save review");
     }
     setReviewOpen(false);
@@ -1687,7 +1715,9 @@ Please log in to review the released grade and feedback.`,
                                         if (approved) toast.success("Submission approved");
                                         await loadSubmissions();
                                       } catch (e) {
-                                        console.warn("Approve failed:", e);
+                                        log.warn("Submission approve failed", {
+                                          submissionId: sub.id,
+                                        });
                                         toast.error("Could not approve");
                                       }
                                     }}

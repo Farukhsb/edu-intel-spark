@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { env } from "@/lib/env";
+import { log } from "@/lib/logger";
 import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 import type { AcademicGradeBreakdownItem } from "@/types/academic";
 import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
@@ -149,7 +150,10 @@ const ExplainGrade = () => {
           if (g.ai_score == null && g.final_score == null) return [];
           const breakdownResult = safeParseGradeBreakdown(g.ai_breakdown);
           if (!breakdownResult.success) {
-            console.error("Invalid grade breakdown payload received for ExplainGrade", breakdownResult.error);
+            log.error("Invalid grade breakdown payload received for ExplainGrade", breakdownResult.error, {
+              gradeId: g.id,
+              submissionId: g.submission_id,
+            });
             return [];
           }
 
@@ -159,7 +163,9 @@ const ExplainGrade = () => {
           const breakdown: ExplainGradeBreakdownItem[] = breakdownResult.data;
           const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
           if (totalMaxRaw === 0 && import.meta.env.DEV) {
-            console.warn("AI breakdown has no max scores; using fallback totalMax = 1");
+            log.warn("AI breakdown has no max scores; using fallback totalMax = 1", {
+              gradeId: g.id,
+            });
           }
           const totalMax = totalMaxRaw > 0 ? totalMaxRaw : 1;
 
@@ -213,7 +219,7 @@ const ExplainGrade = () => {
       setSubmissions(options);
       if (options.length > 0) setSelectedId(options[0].gradeId);
     } catch (err) {
-      console.error("Failed to fetch grades:", err);
+      log.error("Failed to fetch grades", err);
     }
     setLoading(false);
   };
@@ -314,7 +320,7 @@ const ExplainGrade = () => {
         }
       }
     } catch (e) {
-      console.error(e);
+      log.error("Failed to get AI response", e);
       toast.error("Failed to get AI response");
     } finally {
       setIsLoading(false);
