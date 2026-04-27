@@ -113,6 +113,8 @@ These choices make the system suitable for academic contexts where transparency,
 
 My contribution has been both product-facing and technical. I developed the platform from an initial prototype into a controlled full-stack application by making decisions across frontend structure, backend integration, workflow design, database-backed state, AI function boundaries, deployment, and documentation.
 
+The project began as a rapid AI-assisted prototype, but I later moved it into a GitHub-controlled full-stack codebase and took responsibility for the architecture, Supabase backend, authentication, Edge Functions, AI workflow, testing, CI, documentation, and deployment decisions.
+
 This included:
 
 - designing the student-support and intervention model
