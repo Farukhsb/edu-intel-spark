@@ -8,6 +8,7 @@ import {
   logDocumentExtractionResult,
 } from "../_shared/document-extraction.ts";
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
+import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import {
   assessExtractionQuality,
   computeBaselineDeviation,
@@ -715,6 +716,18 @@ serve(async (req) => {
 
   try {
     const startedAt = Date.now();
+    const { user } = await requireLecturer(req);
+    const rateLimit = applyRateLimit(req, {
+      scope: "check-plagiarism",
+      limit: 5,
+      windowMs: 60_000,
+      userId: user.id,
+    });
+    if (!rateLimit.allowed) {
+      console.warn("Rate limit exceeded", { function: "check-plagiarism", identifierType: rateLimit.identifierType });
+      return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
+    }
+
     const body = await req.json().catch(() => null);
     const rawBody = body && typeof body === "object" ? body as Record<string, unknown> : null;
     const normalizedSubmissionIds = Array.isArray(rawBody?.submissionIds)
@@ -756,7 +769,6 @@ serve(async (req) => {
     }
 
     const integrityModel = getModel("OPENAI_INTEGRITY_MODEL", "gpt-5.4-mini");
-    const { user } = await requireLecturer(req);
     const requestedAssignmentId = parsedRequest.data.assignmentId ?? null;
     const requestedSubmissionIds = parsedRequest.data.submissionIds ?? (parsedRequest.data.submissionId ? [parsedRequest.data.submissionId] : []);
 

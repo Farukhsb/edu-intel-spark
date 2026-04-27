@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import type { CommunicationMessage } from "@/lib/communications";
+import { log } from "@/lib/logger";
+import { safeParseExplanationResponse } from "@/lib/schemas/aiResponses";
 import {
   CartesianGrid,
   Line,
@@ -333,7 +335,9 @@ const ImprovementPlan = () => {
 
       setResources(nextResources);
     } catch (error) {
-      console.error("Failed to fetch improvement plan:", error);
+      log.error("Failed to fetch improvement plan", error, {
+        studentId: user.id,
+      });
       toast.error("Could not load your improvement plan.");
     }
     setLoading(false);
@@ -377,7 +381,10 @@ const ImprovementPlan = () => {
     );
 
     if (error) {
-      console.error("Failed to save improvement task progress:", error);
+      log.error("Failed to save improvement task progress", error, {
+        studentId: user.id,
+        taskId,
+      });
       setPlan(previousPlan);
       latestPlanRef.current = previousPlan;
       toast.error("Could not save task progress.");
@@ -388,7 +395,7 @@ const ImprovementPlan = () => {
     if (plan.length === 0) return;
     setGenerating(true);
     try {
-      await supabase.functions.invoke("explain-grade", {
+      const { data, error } = await supabase.functions.invoke("explain-grade", {
         body: {
           messages: [
             {
@@ -404,6 +411,17 @@ const ImprovementPlan = () => {
           gradeContext: { plan },
         },
       });
+      if (error) throw error;
+
+      const parsed = safeParseExplanationResponse(data);
+      if (!parsed.success) {
+        log.error("Invalid explanation payload received for ImprovementPlan", undefined, {
+          moduleCount: plan.length,
+        });
+        toast.error("Failed to refresh recommendations. Existing plan kept.");
+        setGenerating(false);
+        return;
+      }
 
       setResources((current) =>
         current.map((resource, index) => ({
@@ -412,7 +430,10 @@ const ImprovementPlan = () => {
         }))
       );
       toast.success("Recommendations refreshed");
-    } catch {
+    } catch (error) {
+      log.error("Failed to refresh recommendations", error, {
+        moduleCount: plan.length,
+      });
       toast.error("Failed to refresh recommendations. Existing plan kept.");
     }
     setGenerating(false);

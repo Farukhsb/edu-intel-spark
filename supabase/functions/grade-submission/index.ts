@@ -8,6 +8,7 @@ import {
   extractSubmissionDocument,
 } from "../_shared/document-extraction.ts";
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
+import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import { classifyAssignmentType, type AssignmentType } from "../_shared/text-analysis.ts";
 
 const CONFIDENCE_THRESHOLD = 0.7;
@@ -1390,6 +1391,18 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const { user } = await requireLecturer(req);
+    const rateLimit = applyRateLimit(req, {
+      scope: "grade-submission",
+      limit: 5,
+      windowMs: 60_000,
+      userId: user.id,
+    });
+    if (!rateLimit.allowed) {
+      console.warn("Rate limit exceeded", { function: "grade-submission", identifierType: rateLimit.identifierType });
+      return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
+    }
+
     const body = await req.json().catch(() => null);
     const rawBody = body && typeof body === "object" ? body as Record<string, unknown> : null;
     const normalizedSubmissionIds = Array.isArray(rawBody?.submissionIds)
@@ -1440,7 +1453,6 @@ serve(async (req) => {
           ? "Forced re-grade requested."
           : "Grading input changed.";
 
-    const { user } = await requireLecturer(req);
     const requestedAssignmentId = assignmentId ?? null;
     const requestedSubmissionIds = submissionIds ?? (submissionId ? [submissionId] : []);
 

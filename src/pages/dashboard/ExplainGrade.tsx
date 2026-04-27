@@ -9,6 +9,10 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { env } from "@/lib/env";
+import { log } from "@/lib/logger";
+import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
+import type { AcademicGradeBreakdownItem } from "@/types/academic";
 import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
 
 interface ExplainGradeBreakdown {
@@ -24,6 +28,7 @@ interface SubmissionRow {
   assignment_id: string | null;
   student_name: string | null;
   file_name: string | null;
+  status?: string | null;
 }
 
 interface GradeRow {
@@ -40,16 +45,13 @@ interface AssignmentRow {
   title: string;
 }
 
-type ExplainGradeBreakdownItem = SharedGradeBreakdown & {
-  name?: string;
-  maxScore?: number;
-};
+type ExplainGradeBreakdownItem = AcademicGradeBreakdownItem & SharedGradeBreakdown;
 
 export const getBreakdownMaxScore = (item: ExplainGradeBreakdownItem) => item.max_score ?? item.maxScore ?? 0;
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
+const CHAT_URL = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
 
 const getBand = (pct: number) => {
   if (pct >= 70) return "1st";
@@ -122,12 +124,13 @@ const ExplainGrade = () => {
     try {
       // RLS ensures students only see their own submissions/grades
       const { data: subs } = await supabase.from("submissions").select("*");
-      const releasedSubs = ((subs || []) as SubmissionRow[]).filter((submission) => submission.status === "released");
+      const submissionRows = (subs ?? []) as SubmissionRow[];
+      const releasedSubs = submissionRows.filter((submission) => submission.status === "released");
       const subIds = releasedSubs.map(s => s.id);
       const { data: grades } = subIds.length > 0
         ? await supabase.from("grades").select("*").in("submission_id", subIds)
         : { data: [] as GradeRow[] };
-      const assignmentIds = [...new Set((subs || []).map(s => s.assignment_id))];
+      const assignmentIds = [...new Set(submissionRows.map((submission) => submission.assignment_id))];
       const { data: assignments } = assignmentIds.length > 0
         ? await supabase.from("assignments").select("*").in("id", assignmentIds)
         : { data: [] as AssignmentRow[] };
@@ -143,18 +146,26 @@ const ExplainGrade = () => {
       const assignMap = Object.fromEntries(safeAssignments.map(a => [a.id, a]));
 
       const options: SubmissionOption[] = grades
-        .filter(g => (g.ai_score != null || g.final_score != null) && g.ai_breakdown)
-        .map(g => {
+        .flatMap(g => {
+          if (g.ai_score == null && g.final_score == null) return [];
+          const breakdownResult = safeParseGradeBreakdown(g.ai_breakdown);
+          if (!breakdownResult.success) {
+            log.error("Invalid grade breakdown payload received for ExplainGrade", breakdownResult.error, {
+              gradeId: g.id,
+              submissionId: g.submission_id,
+            });
+            return [];
+          }
+
           const sub = subMap[g.submission_id];
           const assignment = sub ? assignMap[sub.assignment_id] : null;
           const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
-          const rawBreakdown = g.ai_breakdown;
-          const breakdown = Array.isArray(rawBreakdown)
-            ? (rawBreakdown as ExplainGradeBreakdownItem[])
-            : [];
+          const breakdown: ExplainGradeBreakdownItem[] = breakdownResult.data;
           const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
           if (totalMaxRaw === 0 && import.meta.env.DEV) {
-            console.warn("AI breakdown has no max scores; using fallback totalMax = 1");
+            log.warn("AI breakdown has no max scores; using fallback totalMax = 1", {
+              gradeId: g.id,
+            });
           }
           const totalMax = totalMaxRaw > 0 ? totalMaxRaw : 1;
 
@@ -190,7 +201,7 @@ const ExplainGrade = () => {
             ? `${assignment.module_code || ""} ${assignment.title}`.trim()
             : sub?.student_name || sub?.file_name || g.submission_id;
 
-          return {
+          return [{
             gradeId: g.id,
             submissionId: g.submission_id,
             label,
@@ -202,13 +213,13 @@ const ExplainGrade = () => {
               components,
               improvementAreas,
             },
-          };
+          }];
         });
 
       setSubmissions(options);
       if (options.length > 0) setSelectedId(options[0].gradeId);
     } catch (err) {
-      console.error("Failed to fetch grades:", err);
+      log.error("Failed to fetch grades", err);
     }
     setLoading(false);
   };
@@ -309,7 +320,7 @@ const ExplainGrade = () => {
         }
       }
     } catch (e) {
-      console.error(e);
+      log.error("Failed to get AI response", e);
       toast.error("Failed to get AI response");
     } finally {
       setIsLoading(false);

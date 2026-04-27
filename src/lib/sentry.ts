@@ -1,10 +1,8 @@
 import * as Sentry from "@sentry/react";
+import { env } from "@/lib/env";
 
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
-const appEnvironment =
-  (import.meta.env.VITE_APP_ENV as string | undefined) ||
-  import.meta.env.MODE ||
-  "development";
+const sentryDsn = env.VITE_SENTRY_DSN;
+const appEnvironment = env.VITE_APP_ENV;
 
 export function initSentry() {
   if (!sentryDsn) {

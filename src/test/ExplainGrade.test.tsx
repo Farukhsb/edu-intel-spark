@@ -307,6 +307,51 @@ describe("ExplainGrade", () => {
     expect(screen.queryByText(/approved/i)).not.toBeInTheDocument();
   });
 
+  it("renders valid breakdown data that uses maxScore without crashing", async () => {
+    setupSupabase({
+      grades: [
+        {
+          id: "grade-1",
+          submission_id: "submission-1",
+          final_score: 74,
+          ai_breakdown: [
+            { name: "Argument", score: 18, maxScore: 25 },
+            { name: "Evidence", score: 19, maxScore: 25 },
+          ],
+        },
+      ],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
+    expect(screen.getByText(/Argument \(50%\)/i)).toBeInTheDocument();
+  });
+
+  it("drops invalid breakdown data and shows a safe empty state", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    setupSupabase({
+      grades: [
+        {
+          id: "grade-1",
+          submission_id: "submission-1",
+          final_score: 74,
+          ai_breakdown: [
+            { criterion: "Argument", score: 18, max_score: 25 },
+            { score: 19, max_score: 25 },
+          ],
+        },
+      ],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText(/No graded submissions found/i)).toBeInTheDocument();
+    expect(screen.queryByText("Grade Breakdown")).not.toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+
   it("renders a safe fallback state if the request fails", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     setupSupabase({

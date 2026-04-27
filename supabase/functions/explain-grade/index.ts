@@ -3,6 +3,7 @@ import { z } from "https://esm.sh/zod@3.23.8";
 import { jsonError, requireUser } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
+import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 const ExplainGradeRequestSchema = z.object({
   submissionId: z.string().uuid().optional(),
@@ -32,7 +33,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    await requireUser(req);
+    const { user } = await requireUser(req);
+    const rateLimit = applyRateLimit(req, {
+      scope: "explain-grade",
+      limit: 12,
+      windowMs: 60_000,
+      userId: user.id,
+    });
+    if (!rateLimit.allowed) {
+      console.warn("Rate limit exceeded", { function: "explain-grade", identifierType: rateLimit.identifierType });
+      return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
+    }
     const body = await req.json().catch(() => null);
     const payload = body && typeof body === "object" ? body as Record<string, unknown> : null;
     const rawMessages = Array.isArray(payload?.messages) ? payload.messages.filter(isExplainGradeMessage) : [];

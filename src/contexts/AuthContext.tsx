@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { posthog } from "@/lib/posthog";
 import { clearE2EAuthState, createE2EUser, readE2EAuthState } from "@/lib/e2eAuth";
 import { getPasswordResetRedirectUrl } from "@/lib/authUrls";
+import { env } from "@/lib/env";
 import { parseAppRole, type AppRole, type PublicSignupRole } from "@/lib/roles";
 import type { User } from "@supabase/supabase-js";
 
@@ -254,7 +255,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: getPasswordResetRedirectUrl({
         origin: window.location.origin,
-        configuredAppUrl: import.meta.env.VITE_APP_URL,
+        configuredAppUrl: env.VITE_APP_URL,
       }),
     });
     if (error) throw error;

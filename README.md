@@ -216,6 +216,20 @@ Moderation is additive to grading, not a replacement for it. The platform suppor
 - final agreed score recording
 - audit history for grade changes and moderation decisions
 
+## Trust, Safety, And Governance Controls
+
+GradeAI treats academic workflow safety as a product requirement, not just a user-interface concern.
+
+Current safeguards include:
+- student-facing grade explanations only use released submissions
+- provisional or approved-but-unreleased grading data is not shown to students
+- external examiner export workflows exclude draft and unreleased records
+- student profile views include data-boundary tests to reduce the risk of showing another student’s information
+- application-level error boundaries show safe fallback messages rather than raw runtime error details
+- network and API failure paths are tested so failed requests do not leave users with misleading or stale academic data
+
+These controls are designed to keep lecturer judgement, student visibility, moderation, and external review aligned with the assessment lifecycle.
+
 ## Cohort Analytics
 
 The analytics layer includes:
@@ -261,6 +275,10 @@ GradeAI is not presented as a finished institution-wide platform. It is a workin
 
 Production-readiness work currently includes:
 - privacy-safe Sentry error monitoring and alerting for frontend failures
+- automated test coverage for lecturer overview, student explanation, student profile, external examiner export, error boundary handling, and network/API failure states
+- student visibility controls that restrict student-facing grade explanations to released submissions
+- governed export filtering for external examiner workflows
+- safe application fallback behaviour that avoids exposing raw runtime error details to users
 - test coverage targets focused on high-risk academic workflows
 - a plain-English security model covering roles, RLS assumptions, data handling, AI safety, logging, and rollout risks
 - a staged rollout plan that avoids claiming institutional scale too early
@@ -333,6 +351,12 @@ Run unit and integration tests:
 npm run test
 ```
 
+Run coverage reporting:
+
+```bash
+npm run test:coverage
+```
+
 Run a production build check:
 
 ```bash
@@ -345,6 +369,14 @@ Run Playwright browser tests:
 npx playwright install
 npm run test:e2e
 ```
+
+Current automated coverage includes:
+- lecturer overview dashboard states
+- student-facing grade explanation and released-only visibility
+- student profile, support signals, intervention history, and route-mismatch protection
+- external examiner export preview, download path, and governed-record filtering
+- application error boundary fallback behaviour
+- network/API failure paths with safe fallback behaviour
 
 Current browser-level coverage includes:
 - lecturer review -> approve -> release
@@ -440,6 +472,10 @@ A few areas of the platform were tightened recently to make the product more rel
 
 - production-readiness documentation was added for security, testing, rollout planning, and monitoring
 - privacy-safe Sentry monitoring and alerting were configured for frontend error visibility
+- automated coverage was expanded across lecturer overview, student grade explanation, student profile, external examiner export, error boundary handling, and network failure paths
+- student-facing grade explanations were tightened so they only use released submissions
+- external examiner export filtering was tightened so draft or unreleased records are excluded from governance workflows
+- the application error boundary was updated so users see safe fallback messaging rather than raw runtime errors
 - the product positioning was clarified around early student support and retention, with AI marking framed as one component of a wider intervention workflow
 - the documentation now highlights the full action chain from assessment evidence to support signal, explanation, recommended action, and intervention follow-up
 - moderation permissions were aligned between local and hosted policy state, and the moderation workflow was rechecked against the current migration chain
@@ -462,6 +498,9 @@ The strongest areas are:
 - lecturer oversight and explainability
 - moderation and audit direction
 - integrity pipeline improvements
+- student visibility controls around released feedback
+- governed external examiner export filtering
+- safe error-boundary and network-failure fallback behaviour
 - early support and student intervention design
 - growing automated coverage around critical flows
 - live verification of core deployed workflows
@@ -470,4 +509,7 @@ The strongest areas are:
 The main work still worth doing is operational hardening:
 - more live-environment verification
 - broader permissions and RLS validation after migration changes
+- stricter TypeScript coverage and reduced `any` usage
+- API/AI response validation using schemas such as Zod
+- structured logging for production debugging and audit trails
 - continued extraction of heavy page logic into smaller domain services

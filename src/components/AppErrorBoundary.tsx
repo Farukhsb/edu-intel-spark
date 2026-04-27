@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { log } from "@/lib/logger";
 
 type Props = {
   children: React.ReactNode;
@@ -27,7 +28,10 @@ export class AppErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("Unhandled route error:", error, errorInfo);
+    log.error("Unhandled route error", error, {
+      componentStack: errorInfo.componentStack,
+      boundary: "AppErrorBoundary",
+    });
   }
 
   componentDidUpdate(prevProps: Props) {
