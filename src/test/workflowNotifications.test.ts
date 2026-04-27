@@ -25,6 +25,7 @@ import {
   buildSubmissionReceivedNotification,
   getVisibleCommunicationMessages,
   markCommunicationMessageRead,
+  markCommunicationMessageUnread,
 } from "@/lib/communications";
 
 beforeEach(() => {
@@ -192,5 +193,35 @@ describe("workflow notifications", () => {
     });
     expect(dispatchedEvents).toContain("gradeai:communications-updated");
     dispatchSpy.mockRestore();
+  });
+
+  it("marks a notification as unread when toggled back", async () => {
+    updateSelectMock.mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: "message-1",
+          created_at: "2026-04-27T10:00:00.000Z",
+          read: false,
+          category: "ai-grading-ready",
+          recipient_name: "Lecturer",
+          recipient_email: null,
+          recipient_id: "lecturer-1",
+          subject: "AI grading ready",
+          body: "AI grading is ready for Algorithms Essay",
+          related_student_id: null,
+          related_assignment_id: "assignment-1",
+        },
+        error: null,
+      }),
+    });
+
+    const updated = await markCommunicationMessageUnread("message-1");
+
+    expect(updateMock).toHaveBeenCalledWith({ read: false });
+    expect(updated).toMatchObject({
+      id: "message-1",
+      read: false,
+      subject: "AI grading ready",
+    });
   });
 });

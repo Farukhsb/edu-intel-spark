@@ -195,16 +195,25 @@ export const queueCommunicationMessage = async (
 };
 
 export const markCommunicationMessageRead = async (id: string) => {
+  return updateCommunicationMessageReadState(id, true);
+};
+
+export const markCommunicationMessageUnread = async (id: string) => {
+  return updateCommunicationMessageReadState(id, false);
+};
+
+const updateCommunicationMessageReadState = async (id: string, read: boolean) => {
   const { data, error } = await supabase
     .from("communication_messages")
-    .update({ read: true })
+    .update({ read })
     .eq("id", id)
     .select(COMMUNICATION_MESSAGE_SELECT)
     .single();
 
   if (error || !data) {
-    log.error("Failed to mark communication message read", error, {
+    log.error("Failed to update communication message read state", error, {
       communicationMessageId: id,
+      read,
       ...toSafeSupabaseErrorContext(error),
     });
     return null;

@@ -16,6 +16,7 @@ import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/role
 import {
   loadVisibleCommunicationMessages,
   markCommunicationMessageRead,
+  markCommunicationMessageUnread,
   type CommunicationMessage,
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
@@ -201,6 +202,23 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   }, [profile?.email, profile?.id, user?.email, user?.id]);
 
   const unreadCount = notifications.filter((notification) => !notification.read).length;
+
+  const toggleNotificationReadState = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    notification: CommunicationMessage,
+  ) => {
+    event.stopPropagation();
+
+    const updatedNotification = notification.read
+      ? await markCommunicationMessageUnread(notification.id)
+      : await markCommunicationMessageRead(notification.id);
+
+    if (updatedNotification) {
+      setNotifications((current) =>
+        current.map((item) => (item.id === updatedNotification.id ? updatedNotification : item)),
+      );
+    }
+  };
 
   const openNotification = async (notification: CommunicationMessage) => {
     setShowNotifications(false);
@@ -495,15 +513,18 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                 ) : (
                   <div className="max-h-80 overflow-y-auto p-2">
                     {notifications.map((notification) => (
-                      <button
+                      <div
                         key={notification.id}
-                        type="button"
-                        onClick={() => void openNotification(notification)}
                         className={cn(
-                          "block w-full rounded-xl p-3 text-left text-xs hover:bg-muted/40",
+                          "rounded-xl text-left text-xs",
                           notification.read ? "opacity-75" : "bg-muted/25",
                         )}
                       >
+                        <button
+                          type="button"
+                          onClick={() => void openNotification(notification)}
+                          className="block w-full rounded-xl p-3 text-left text-xs hover:bg-muted/40"
+                        >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-2">
                             {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
@@ -515,7 +536,17 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                         </div>
                         <p className="mt-1 text-muted-foreground">{notification.recipientName}</p>
                         <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>
-                      </button>
+                        </button>
+                        <div className="flex justify-end px-3 pb-3">
+                          <button
+                            type="button"
+                            onClick={(event) => void toggleNotificationReadState(event, notification)}
+                            className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                          >
+                            {notification.read ? "Mark unread" : "Mark read"}
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
