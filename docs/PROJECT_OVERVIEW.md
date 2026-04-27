@@ -17,6 +17,14 @@ GradeAI takes a workflow-first approach. Instead of treating AI output as a fina
 
 The goal is to support academic judgement, not replace it.
 
+## Project Origin And Technical Ownership
+
+GradeAI began as a rapid prototype while I was experimenting with AI-assisted development tools. I initially used Lovable to test the product concept quickly and explore whether an AI-assisted academic workflow could be useful for lecturers.
+
+As the idea developed, I recognised the limitations of relying on a generated prototype. I moved the project into a GitHub-controlled full-stack codebase and took responsibility for the architecture, implementation, database model, authentication, Supabase integration, Edge Functions, AI workflow, testing, documentation, CI pipeline, and deployment process.
+
+That transition was important because GradeAI needed to become more than a visual prototype. It needed clear role boundaries, secure data access, human-in-the-loop review, AI response validation, academic integrity safeguards, and a controlled release workflow.
+
 ## Risk Controls And Trust Safeguards
 
 The system includes several controls to reduce the risk of unreliable or misleading AI output.
