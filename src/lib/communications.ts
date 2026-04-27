@@ -41,10 +41,55 @@ interface CommunicationMessageRow {
   related_assignment_id: string | null;
 }
 
+type SupabaseLikeError = {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+};
+
+const COMMUNICATION_MESSAGE_SELECT =
+  "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
+
+const LEGACY_COMMUNICATION_MESSAGE_SELECT =
+  "id, created_at, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
+
+const toSafeSupabaseErrorContext = (error: SupabaseLikeError | null | undefined) => ({
+  errorCode: error?.code ?? null,
+  errorMessage: error?.message ?? null,
+  errorDetails: error?.details ?? null,
+  errorHint: error?.hint ?? null,
+});
+
+const isMissingReadColumnError = (error: SupabaseLikeError | null | undefined) => {
+  const text = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return error?.code === "42703" && text.includes("read");
+};
+
 const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessage => ({
   id: message.id,
   createdAt: message.created_at,
   read: Boolean(message.read),
+  category: message.category,
+  recipientName: message.recipient_name,
+  recipientEmail: message.recipient_email,
+  recipientId: message.recipient_id || undefined,
+  subject: message.subject,
+  body: message.body,
+  relatedStudentId: message.related_student_id || undefined,
+  relatedAssignmentId: message.related_assignment_id || undefined,
+});
+
+const normalizeLegacyMessage = (
+  message: Omit<CommunicationMessageRow, "read">,
+): CommunicationMessage => ({
+  id: message.id,
+  createdAt: message.created_at,
+  read: false,
   category: message.category,
   recipientName: message.recipient_name,
   recipientEmail: message.recipient_email,
@@ -83,10 +128,52 @@ export const queueCommunicationMessage = async (
       related_student_id: message.relatedStudentId ?? null,
       related_assignment_id: message.relatedAssignmentId ?? null,
     })
-    .select(
-      "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
-    )
+    .select(COMMUNICATION_MESSAGE_SELECT)
     .single();
+
+  if (isMissingReadColumnError(error)) {
+    log.warn("Communication messages read column missing; retrying legacy notification insert", {
+      category: message.category,
+      recipientId: message.recipientId ?? null,
+      ...toSafeSupabaseErrorContext(error),
+    });
+
+    const legacyResult = await supabase
+      .from("communication_messages")
+      .insert({
+        sender_id: userId,
+        category: message.category,
+        recipient_name: message.recipientName,
+        recipient_email: message.recipientEmail,
+        recipient_id: message.recipientId ?? null,
+        subject: message.subject,
+        body: message.body,
+        related_student_id: message.relatedStudentId ?? null,
+        related_assignment_id: message.relatedAssignmentId ?? null,
+      })
+      .select(LEGACY_COMMUNICATION_MESSAGE_SELECT)
+      .single();
+
+    if (!legacyResult.error && legacyResult.data) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("gradeai:communications-updated"));
+      }
+
+      return normalizeLegacyMessage(
+        legacyResult.data as Omit<CommunicationMessageRow, "read">,
+      );
+    }
+
+    log.error("Failed to save communication message after legacy retry", legacyResult.error, {
+      category: message.category,
+      recipientId: message.recipientId ?? null,
+      hasRecipientEmail: Boolean(message.recipientEmail),
+      relatedAssignmentId: message.relatedAssignmentId ?? null,
+      relatedStudentId: message.relatedStudentId ?? null,
+      ...toSafeSupabaseErrorContext(legacyResult.error),
+    });
+    return null;
+  }
 
   if (error || !data) {
     log.error("Failed to save communication message", error, {
@@ -95,6 +182,7 @@ export const queueCommunicationMessage = async (
       hasRecipientEmail: Boolean(message.recipientEmail),
       relatedAssignmentId: message.relatedAssignmentId ?? null,
       relatedStudentId: message.relatedStudentId ?? null,
+      ...toSafeSupabaseErrorContext(error),
     });
     return null;
   }
@@ -111,14 +199,13 @@ export const markCommunicationMessageRead = async (id: string) => {
     .from("communication_messages")
     .update({ read: true })
     .eq("id", id)
-    .select(
-      "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
-    )
+    .select(COMMUNICATION_MESSAGE_SELECT)
     .single();
 
   if (error || !data) {
     log.error("Failed to mark communication message read", error, {
       communicationMessageId: id,
+      ...toSafeSupabaseErrorContext(error),
     });
     return null;
   }
@@ -246,14 +333,36 @@ export const loadVisibleCommunicationMessages = async (options: {
 }) => {
   const { data, error } = await supabase
     .from("communication_messages")
-    .select(
-      "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id"
-    )
+    .select(COMMUNICATION_MESSAGE_SELECT)
     .order("created_at", { ascending: false })
     .limit(50);
 
+  if (isMissingReadColumnError(error)) {
+    const legacyResult = await supabase
+      .from("communication_messages")
+      .select(LEGACY_COMMUNICATION_MESSAGE_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (legacyResult.error) {
+      log.error("Failed to load communication messages after legacy retry", legacyResult.error, {
+        ...toSafeSupabaseErrorContext(legacyResult.error),
+      });
+      return [];
+    }
+
+    return getVisibleCommunicationMessages(
+      (((legacyResult.data || []) as Array<Omit<CommunicationMessageRow, "read">>).map(
+        normalizeLegacyMessage,
+      )),
+      options,
+    ).slice(0, 6);
+  }
+
   if (error) {
-    log.error("Failed to load communication messages", error);
+    log.error("Failed to load communication messages", error, {
+      ...toSafeSupabaseErrorContext(error),
+    });
     return [];
   }
 
