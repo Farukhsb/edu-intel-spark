@@ -231,6 +231,49 @@ describe("workflow notifications", () => {
     });
   });
 
+  it("clears a notification with a compatibility retry when the read column is missing", async () => {
+    updateSelectMock
+      .mockReturnValueOnce({
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: {
+            code: "42703",
+            message: 'column "read" does not exist',
+            details: null,
+            hint: null,
+          },
+        }),
+      })
+      .mockReturnValueOnce({
+        single: vi.fn().mockResolvedValue({
+          data: {
+            id: "message-1",
+            created_at: "2026-04-27T10:00:00.000Z",
+            cleared: true,
+            category: "ai-grading-ready",
+            recipient_name: "Lecturer",
+            recipient_email: null,
+            recipient_id: "lecturer-1",
+            subject: "AI grading ready",
+            body: "AI grading is ready for Algorithms Essay",
+            related_student_id: null,
+            related_assignment_id: "assignment-1",
+          },
+          error: null,
+        }),
+      });
+
+    const updated = await clearCommunicationMessage("message-1");
+
+    expect(updateMock).toHaveBeenCalledWith({ cleared: true });
+    expect(updated).toMatchObject({
+      id: "message-1",
+      cleared: true,
+      read: false,
+      subject: "AI grading ready",
+    });
+  });
+
   it("hides cleared notifications from the visible bell list", () => {
     const visible = getVisibleCommunicationMessages(
       [

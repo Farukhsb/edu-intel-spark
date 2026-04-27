@@ -46,6 +46,10 @@ interface CommunicationMessageRow {
   related_assignment_id: string | null;
 }
 
+type CommunicationMessageLegacyRow = Omit<CommunicationMessageRow, "read" | "cleared">;
+type CommunicationMessageClearedOnlyRow = Omit<CommunicationMessageRow, "read">;
+type CommunicationMessageReadOnlyRow = Omit<CommunicationMessageRow, "cleared">;
+
 type SupabaseLikeError = {
   code?: string | null;
   message?: string | null;
@@ -55,6 +59,12 @@ type SupabaseLikeError = {
 
 const COMMUNICATION_MESSAGE_SELECT =
   "id, created_at, cleared, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
+
+const COMMUNICATION_MESSAGE_CLEARED_ONLY_SELECT =
+  "id, created_at, cleared, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
+
+const COMMUNICATION_MESSAGE_READ_ONLY_SELECT =
+  "id, created_at, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
 
 const LEGACY_COMMUNICATION_MESSAGE_SELECT =
   "id, created_at, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
@@ -66,13 +76,21 @@ const toSafeSupabaseErrorContext = (error: SupabaseLikeError | null | undefined)
   errorHint: error?.hint ?? null,
 });
 
-const isMissingNotificationStateColumnError = (error: SupabaseLikeError | null | undefined) => {
+const getNotificationStateColumnAvailability = (error: SupabaseLikeError | null | undefined) => {
   const text = [error?.message, error?.details, error?.hint]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 
-  return error?.code === "42703" && (text.includes("read") || text.includes("cleared"));
+  return {
+    missingRead: error?.code === "42703" && text.includes("read"),
+    missingCleared: error?.code === "42703" && text.includes("cleared"),
+  };
+};
+
+const isMissingNotificationStateColumnError = (error: SupabaseLikeError | null | undefined) => {
+  const { missingRead, missingCleared } = getNotificationStateColumnAvailability(error);
+  return missingRead || missingCleared;
 };
 
 const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessage => ({
@@ -91,12 +109,46 @@ const normalizeMessage = (message: CommunicationMessageRow): CommunicationMessag
 });
 
 const normalizeLegacyMessage = (
-  message: Omit<CommunicationMessageRow, "read" | "cleared">,
+  message: CommunicationMessageLegacyRow,
 ): CommunicationMessage => ({
   id: message.id,
   createdAt: message.created_at,
   cleared: false,
   read: false,
+  category: message.category,
+  recipientName: message.recipient_name,
+  recipientEmail: message.recipient_email,
+  recipientId: message.recipient_id || undefined,
+  subject: message.subject,
+  body: message.body,
+  relatedStudentId: message.related_student_id || undefined,
+  relatedAssignmentId: message.related_assignment_id || undefined,
+});
+
+const normalizeClearedOnlyMessage = (
+  message: CommunicationMessageClearedOnlyRow,
+): CommunicationMessage => ({
+  id: message.id,
+  createdAt: message.created_at,
+  cleared: Boolean(message.cleared),
+  read: false,
+  category: message.category,
+  recipientName: message.recipient_name,
+  recipientEmail: message.recipient_email,
+  recipientId: message.recipient_id || undefined,
+  subject: message.subject,
+  body: message.body,
+  relatedStudentId: message.related_student_id || undefined,
+  relatedAssignmentId: message.related_assignment_id || undefined,
+});
+
+const normalizeReadOnlyMessage = (
+  message: CommunicationMessageReadOnlyRow,
+): CommunicationMessage => ({
+  id: message.id,
+  createdAt: message.created_at,
+  cleared: false,
+  read: Boolean(message.read),
   category: message.category,
   recipientName: message.recipient_name,
   recipientEmail: message.recipient_email,
@@ -167,7 +219,7 @@ export const queueCommunicationMessage = async (
       }
 
       return normalizeLegacyMessage(
-        legacyResult.data as Omit<CommunicationMessageRow, "read" | "cleared">,
+        legacyResult.data as CommunicationMessageLegacyRow,
       );
     }
 
@@ -213,6 +265,35 @@ export const clearCommunicationMessage = async (id: string) => {
     .select(COMMUNICATION_MESSAGE_SELECT)
     .single();
 
+  if (isMissingNotificationStateColumnError(error)) {
+    const { missingRead, missingCleared } = getNotificationStateColumnAvailability(error);
+
+    if (missingRead && !missingCleared) {
+      const fallbackResult = await supabase
+        .from("communication_messages")
+        .update({ cleared: true })
+        .eq("id", id)
+        .select(COMMUNICATION_MESSAGE_CLEARED_ONLY_SELECT)
+        .single();
+
+      if (!fallbackResult.error && fallbackResult.data) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("gradeai:communications-updated"));
+        }
+
+        return normalizeClearedOnlyMessage(
+          fallbackResult.data as CommunicationMessageClearedOnlyRow,
+        );
+      }
+
+      log.error("Failed to clear communication message after compatibility retry", fallbackResult.error, {
+        communicationMessageId: id,
+        ...toSafeSupabaseErrorContext(fallbackResult.error),
+      });
+      return null;
+    }
+  }
+
   if (error || !data) {
     log.error("Failed to clear communication message", error, {
       communicationMessageId: id,
@@ -235,6 +316,36 @@ const updateCommunicationMessageReadState = async (id: string, read: boolean) =>
     .eq("id", id)
     .select(COMMUNICATION_MESSAGE_SELECT)
     .single();
+
+  if (isMissingNotificationStateColumnError(error)) {
+    const { missingRead, missingCleared } = getNotificationStateColumnAvailability(error);
+
+    if (missingCleared && !missingRead) {
+      const fallbackResult = await supabase
+        .from("communication_messages")
+        .update({ read })
+        .eq("id", id)
+        .select(COMMUNICATION_MESSAGE_READ_ONLY_SELECT)
+        .single();
+
+      if (!fallbackResult.error && fallbackResult.data) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("gradeai:communications-updated"));
+        }
+
+        return normalizeReadOnlyMessage(
+          fallbackResult.data as CommunicationMessageReadOnlyRow,
+        );
+      }
+
+      log.error("Failed to update communication message read state after compatibility retry", fallbackResult.error, {
+        communicationMessageId: id,
+        read,
+        ...toSafeSupabaseErrorContext(fallbackResult.error),
+      });
+      return null;
+    }
+  }
 
   if (error || !data) {
     log.error("Failed to update communication message read state", error, {
@@ -377,6 +488,52 @@ export const loadVisibleCommunicationMessages = async (options: {
     .limit(50);
 
   if (isMissingNotificationStateColumnError(error)) {
+    const { missingRead, missingCleared } = getNotificationStateColumnAvailability(error);
+
+    if (missingRead && !missingCleared) {
+      const clearedOnlyResult = await supabase
+        .from("communication_messages")
+        .select(COMMUNICATION_MESSAGE_CLEARED_ONLY_SELECT)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (clearedOnlyResult.error) {
+        log.error("Failed to load communication messages after cleared-only retry", clearedOnlyResult.error, {
+          ...toSafeSupabaseErrorContext(clearedOnlyResult.error),
+        });
+        return [];
+      }
+
+      return getVisibleCommunicationMessages(
+        ((clearedOnlyResult.data || []) as CommunicationMessageClearedOnlyRow[]).map(
+          normalizeClearedOnlyMessage,
+        ),
+        options,
+      ).slice(0, 6);
+    }
+
+    if (missingCleared && !missingRead) {
+      const readOnlyResult = await supabase
+        .from("communication_messages")
+        .select(COMMUNICATION_MESSAGE_READ_ONLY_SELECT)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (readOnlyResult.error) {
+        log.error("Failed to load communication messages after read-only retry", readOnlyResult.error, {
+          ...toSafeSupabaseErrorContext(readOnlyResult.error),
+        });
+        return [];
+      }
+
+      return getVisibleCommunicationMessages(
+        ((readOnlyResult.data || []) as CommunicationMessageReadOnlyRow[]).map(
+          normalizeReadOnlyMessage,
+        ),
+        options,
+      ).slice(0, 6);
+    }
+
     const legacyResult = await supabase
       .from("communication_messages")
       .select(LEGACY_COMMUNICATION_MESSAGE_SELECT)
@@ -391,9 +548,9 @@ export const loadVisibleCommunicationMessages = async (options: {
     }
 
     return getVisibleCommunicationMessages(
-      (((legacyResult.data || []) as Array<Omit<CommunicationMessageRow, "read" | "cleared">>).map(
+      ((legacyResult.data || []) as CommunicationMessageLegacyRow[]).map(
         normalizeLegacyMessage,
-      )),
+      ),
       options,
     ).slice(0, 6);
   }
