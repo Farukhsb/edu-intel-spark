@@ -16,6 +16,8 @@ The system breaks assessment and support into structured steps:
 - risk indicators and intervention tracking
 - student improvement support after feedback is released
 
+This repository uses GitHub Actions CI to run automated checks before changes are merged.
+
 Live deployment:
 - `https://gradeai.pages.dev`
 
