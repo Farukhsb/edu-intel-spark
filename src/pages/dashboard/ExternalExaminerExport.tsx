@@ -51,6 +51,8 @@ interface GradeRow {
   reviewed_by: string | null;
 }
 
+const EXPORTABLE_STATUSES = new Set(["moderated", "approved", "released"]);
+
 const getClassification = (score: number | null): string => {
   if (score == null) return "—";
   if (score >= 70) return "1st";
@@ -101,7 +103,9 @@ const ExternalExaminerExport = () => {
         const assignmentMap: Record<string, AssignmentRow> = {};
         (assignmentsRaw || []).forEach(d => { assignmentMap[d.id] = d; });
 
-        const data: ExportData[] = (subsRaw || []).map(d => {
+        const data: ExportData[] = (subsRaw || [])
+          .filter((submission) => EXPORTABLE_STATUSES.has(submission.status || ""))
+          .map(d => {
           const grade = gradeMap[d.id] || {};
           const assignment = assignmentMap[d.assignment_id] || {};
           const finalScore = grade.final_score ?? grade.lecturer_score ?? grade.ai_score ?? null;
