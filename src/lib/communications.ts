@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getE2EAuthenticatedUserId } from "@/lib/e2eAuth";
 import { log } from "@/lib/logger";
+import { z } from "zod";
 
 export type CommunicationCategory =
   | "feedback-summary"
@@ -443,24 +444,43 @@ export const buildAssignmentPublishedNotification = (input: {
 
 type WorkflowEmailCategory = "assignment-published" | "submission-received" | "grade-released";
 
-type WorkflowEmailRequest =
-  | {
-      category: "assignment-published";
-      assignmentId: string;
-    }
-  | {
-      category: "submission-received";
-      assignmentId: string;
-    }
-  | {
-      category: "grade-released";
-      assignmentId: string;
-      submissionId: string;
-    };
+export const WorkflowEmailRequestSchema = z.discriminatedUnion("category", [
+  z.object({
+    category: z.literal("assignment-published"),
+    assignmentId: z.string().uuid(),
+  }),
+  z.object({
+    category: z.literal("submission-received"),
+    assignmentId: z.string().uuid(),
+    submissionId: z.string().uuid(),
+  }),
+  z.object({
+    category: z.literal("grade-released"),
+    assignmentId: z.string().uuid(),
+    submissionId: z.string().uuid(),
+  }),
+]);
+
+export type WorkflowEmailRequest = z.infer<typeof WorkflowEmailRequestSchema>;
 
 export const sendWorkflowNotificationEmail = async (request: WorkflowEmailRequest) => {
+  const parsed = WorkflowEmailRequestSchema.safeParse(request);
+
+  if (!parsed.success) {
+    log.warn("Workflow notification email request was invalid", {
+      category: typeof request === "object" && request ? ("category" in request ? request.category : null) : null,
+      assignmentId:
+        typeof request === "object" && request && "assignmentId" in request && typeof request.assignmentId === "string"
+          ? request.assignmentId
+          : null,
+      hasSubmissionId:
+        typeof request === "object" && request && "submissionId" in request && typeof request.submissionId === "string",
+    });
+    return false;
+  }
+
   const { error } = await supabase.functions.invoke("send-workflow-notification-email", {
-    body: request,
+    body: parsed.data,
   });
 
   if (error) {

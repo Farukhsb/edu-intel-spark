@@ -462,6 +462,7 @@ The current backend uses these Supabase Edge Functions:
 - `check-plagiarism`
 - `explain-grade`
 - `bulk-create-students`
+- `send-workflow-notification-email`
 
 ## Deployment Notes
 
@@ -469,12 +470,30 @@ The current backend uses these Supabase Edge Functions:
 - Backend services run through Supabase
 - Environment variables and Supabase secrets must match the target environment
 - Sentry should be configured through environment variables, not hardcoded in source files
+- workflow email notifications require the `send-workflow-notification-email` Edge Function plus email secrets
 - Edge Functions should be deployed when function code changes:
 
 ```bash
 npx supabase functions deploy grade-submission
 npx supabase functions deploy check-plagiarism
+npx supabase functions deploy send-workflow-notification-email
 ```
+
+For workflow email notifications, the following Supabase secrets are required:
+
+```bash
+EMAIL_NOTIFICATIONS_ENABLED=true
+RESEND_API_KEY=your_resend_api_key
+EMAIL_FROM_ADDRESS="GradeAI <notifications@yourdomain.com>"
+APP_BASE_URL="https://your-app-url"
+```
+
+Current email-backed workflow events are:
+- `assignment-published`
+- `submission-received`
+- `grade-released`
+
+The bell notification remains the primary in-app record. Email delivery is a non-blocking mirror of those safe workflow events.
 
 ## Recent Hardening (April 2026)
 

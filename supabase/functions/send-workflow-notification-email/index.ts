@@ -22,6 +22,7 @@ const RequestSchema = z.discriminatedUnion("category", [
   z.object({
     category: z.literal("submission-received"),
     assignmentId: z.string().uuid(),
+    submissionId: z.string().uuid(),
   }),
   z.object({
     category: z.literal("grade-released"),
@@ -101,6 +102,11 @@ serve(async (req) => {
         });
       }
 
+      console.warn("[workflow-email] assignment-published is using broad student broadcast fallback", {
+        assignmentId: assignment.id,
+        targetingMode: "all_students_fallback",
+      });
+
       const studentsRes = await admin
         .from("profiles")
         .select("id, full_name, email, role")
@@ -140,9 +146,8 @@ serve(async (req) => {
       const submissionRes = await admin
         .from("submissions")
         .select("id, assignment_id, student_id, student_name, student_email, submitted_at")
+        .eq("id", parsed.data.submissionId)
         .eq("assignment_id", assignment.id)
-        .order("submitted_at", { ascending: false })
-        .limit(1)
         .maybeSingle<SubmissionRow>();
 
       if (submissionRes.error || !submissionRes.data) {
