@@ -19,7 +19,7 @@ as $$
     a.max_score
   from public.submissions s
   join public.assignments a
-    on a.id::text = s.assignment_id
+    on a.id::text = s.assignment_id::text
   where s.student_id = auth.uid()
 $$;
 
