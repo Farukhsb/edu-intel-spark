@@ -12,6 +12,16 @@ let missingKeyWarningShown = false;
 const getClient = () => posthogClient;
 
 export const initPostHog = async () => {
+  // Analytics stays disabled by default because GradeAI handles academic assessment data.
+  if (!env.VITE_ANALYTICS_ENABLED) {
+    if (import.meta.env.DEV && !missingKeyWarningShown) {
+      log.info("Analytics disabled; PostHog not initialised.");
+      missingKeyWarningShown = true;
+    }
+    posthogClient = null;
+    return;
+  }
+
   const key = env.VITE_POSTHOG_KEY;
   if (!key) {
     if (import.meta.env.DEV && !missingKeyWarningShown) {
@@ -26,8 +36,10 @@ export const initPostHog = async () => {
   posthog.init(key, {
     api_host: env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
     person_profiles: "identified_only",
-    capture_pageview: true,
-    capture_pageleave: true,
+    autocapture: false,
+    capture_pageview: false,
+    capture_pageleave: false,
+    disable_session_recording: true,
   });
   posthogClient = posthog;
 };
