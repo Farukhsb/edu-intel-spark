@@ -13,6 +13,15 @@ type EmailPayload = {
   text?: string;
 };
 
+export function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function getEnv(name: string, fallback?: string) {
   return Deno?.env.get(name) ?? fallback;
 }
@@ -56,10 +65,10 @@ export async function sendEmail(payload: EmailPayload) {
     }),
   });
 
-  const body = await response.text();
+  await response.text();
 
   if (!response.ok) {
-    throw new Error(`[email] resend error ${response.status}: ${body}`);
+    throw new Error(`[email] resend error ${response.status}`);
   }
 
   console.log("[email] sent", { subject: payload.subject });
@@ -74,18 +83,23 @@ export function formatSubmissionNotificationEmail(params: {
   reviewUrl: string;
 }) {
   const greeting = params.lecturerName ? `Hi ${params.lecturerName},` : "Hello,";
+  const safeGreeting = escapeHtml(greeting);
+  const safeAssignmentTitle = escapeHtml(params.assignmentTitle);
+  const safeStudentName = escapeHtml(params.studentName);
+  const safeSubmittedAt = escapeHtml(params.submittedAt);
+  const safeReviewUrl = escapeHtml(params.reviewUrl);
   return {
     subject: `New submission received for ${params.assignmentTitle}`,
     text: `${greeting}\n\nA new submission has been received for ${params.assignmentTitle}.\nStudent: ${params.studentName}\nSubmitted: ${params.submittedAt}\nReview: ${params.reviewUrl}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
-        <p>${greeting}</p>
-        <p>A new submission has been received for <strong>${params.assignmentTitle}</strong>.</p>
+        <p>${safeGreeting}</p>
+        <p>A new submission has been received for <strong>${safeAssignmentTitle}</strong>.</p>
         <ul>
-          <li><strong>Student:</strong> ${params.studentName}</li>
-          <li><strong>Submitted:</strong> ${params.submittedAt}</li>
+          <li><strong>Student:</strong> ${safeStudentName}</li>
+          <li><strong>Submitted:</strong> ${safeSubmittedAt}</li>
         </ul>
-        <p><a href="${params.reviewUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Review submission</a></p>
+        <p><a href="${safeReviewUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Review submission</a></p>
       </div>
     `,
   };
@@ -99,16 +113,20 @@ export function formatAssignmentPublishedEmail(params: {
 }) {
   const greeting = params.studentName ? `Hi ${params.studentName},` : "Hello,";
   const dueDateText = params.dueDate ? `\nDue date: ${params.dueDate}` : "";
+  const safeGreeting = escapeHtml(greeting);
+  const safeAssignmentTitle = escapeHtml(params.assignmentTitle);
+  const safeDueDate = params.dueDate ? escapeHtml(params.dueDate) : null;
+  const safeAssignmentUrl = escapeHtml(params.assignmentUrl);
 
   return {
     subject: `New assignment published`,
     text: `${greeting}\n\n${params.assignmentTitle} is now available in GradeAI.${dueDateText}\nView assignment: ${params.assignmentUrl}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
-        <p>${greeting}</p>
-        <p><strong>${params.assignmentTitle}</strong> is now available in GradeAI.</p>
-        ${params.dueDate ? `<p><strong>Due date:</strong> ${params.dueDate}</p>` : ""}
-        <p><a href="${params.assignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Open assignment</a></p>
+        <p>${safeGreeting}</p>
+        <p><strong>${safeAssignmentTitle}</strong> is now available in GradeAI.</p>
+        ${safeDueDate ? `<p><strong>Due date:</strong> ${safeDueDate}</p>` : ""}
+        <p><a href="${safeAssignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Open assignment</a></p>
       </div>
     `,
   };
@@ -122,18 +140,21 @@ export function formatGradingCompleteEmail(params: {
   reviewUrl: string;
 }) {
   const greeting = params.lecturerName ? `Hi ${params.lecturerName},` : "Hello,";
+  const safeGreeting = escapeHtml(greeting);
+  const safeAssignmentTitle = escapeHtml(params.assignmentTitle);
+  const safeReviewUrl = escapeHtml(params.reviewUrl);
   return {
     subject: `AI grading complete for ${params.assignmentTitle}`,
     text: `${greeting}\n\nAI grading has finished for ${params.assignmentTitle}.\nGraded successfully: ${params.gradedCount}\nFailed: ${params.failedCount}\nReview: ${params.reviewUrl}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
-        <p>${greeting}</p>
-        <p>AI grading has finished for <strong>${params.assignmentTitle}</strong>.</p>
+        <p>${safeGreeting}</p>
+        <p>AI grading has finished for <strong>${safeAssignmentTitle}</strong>.</p>
         <ul>
           <li><strong>Graded successfully:</strong> ${params.gradedCount}</li>
           <li><strong>Failed:</strong> ${params.failedCount}</li>
         </ul>
-        <p><a href="${params.reviewUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Review results</a></p>
+        <p><a href="${safeReviewUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Review results</a></p>
       </div>
     `,
   };
@@ -145,15 +166,18 @@ export function formatGradeReleasedEmail(params: {
   assignmentUrl: string;
 }) {
   const greeting = params.studentName ? `Hi ${params.studentName},` : "Hello,";
+  const safeGreeting = escapeHtml(greeting);
+  const safeAssignmentTitle = escapeHtml(params.assignmentTitle);
+  const safeAssignmentUrl = escapeHtml(params.assignmentUrl);
 
   return {
     subject: "Feedback released",
     text: `${greeting}\n\nYour feedback for ${params.assignmentTitle} is now available in GradeAI.\nView feedback: ${params.assignmentUrl}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
-        <p>${greeting}</p>
-        <p>Your feedback for <strong>${params.assignmentTitle}</strong> is now available in GradeAI.</p>
-        <p><a href="${params.assignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">View feedback</a></p>
+        <p>${safeGreeting}</p>
+        <p>Your feedback for <strong>${safeAssignmentTitle}</strong> is now available in GradeAI.</p>
+        <p><a href="${safeAssignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">View feedback</a></p>
       </div>
     `,
   };
