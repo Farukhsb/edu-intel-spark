@@ -36,7 +36,7 @@ with check (
       on ac.assignment_id = a.id
     join public.profiles p
       on p.id = auth.uid()
-    where a.id::text = submissions.assignment_id
+    where a.id = submissions.assignment_id
       and a.status = 'published'
       and ac.cohort_id = p.cohort_id
   )
