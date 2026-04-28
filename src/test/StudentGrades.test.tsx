@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
     isDemo: false,
     user: { id: "student-1" },
   },
+  logger: {
+    warn: vi.fn(),
+  },
   supabase: {
     from: vi.fn(),
     rpc: vi.fn(),
@@ -25,6 +28,10 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: mocks.supabase,
+}));
+
+vi.mock("@/lib/logger", () => ({
+  log: mocks.logger,
 }));
 
 vi.mock("lucide-react", () => {
@@ -168,5 +175,11 @@ describe("StudentGrades", () => {
     });
 
     expect(screen.getByText("76/100")).toBeInTheDocument();
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      "Student grade assignment metadata lookup failed",
+      {
+        userId: "student-1",
+      },
+    );
   });
 });
