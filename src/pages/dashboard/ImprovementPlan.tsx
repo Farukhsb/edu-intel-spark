@@ -50,6 +50,14 @@ interface Resource {
   reason: string;
 }
 
+interface AssignmentMetadataRow {
+  submission_id: string;
+  assignment_id: string;
+  title: string | null;
+  module_code: string | null;
+  max_score: number | null;
+}
+
 const DEMO_PLAN: PlanModule[] = [
   {
     module: "CS301 - Data Structures",
@@ -183,17 +191,27 @@ const ImprovementPlan = () => {
       }
 
       const submissionIds = submissions.map((submission) => submission.id);
-      const assignmentIds = [...new Set(submissions.map((submission) => submission.assignment_id))];
 
-      const [{ data: grades }, { data: assignments }] = await Promise.all([
+      const [{ data: grades }, assignmentMetaRes] = await Promise.all([
         supabase.from("grades").select("*").in("submission_id", submissionIds),
-        supabase.from("assignments").select("*").in("id", assignmentIds),
+        supabase.rpc("get_student_grade_assignment_metadata"),
       ]);
 
       const assignmentMap: Record<string, any> = {};
-      (assignments || []).forEach((assignment) => {
-        assignmentMap[assignment.id] = assignment;
-      });
+      if (assignmentMetaRes.error) {
+        log.warn("Improvement plan assignment metadata lookup failed", {
+          studentId: user.id,
+        });
+      } else {
+        ((assignmentMetaRes.data || []) as AssignmentMetadataRow[]).forEach((row) => {
+          assignmentMap[row.assignment_id] = {
+            id: row.assignment_id,
+            title: row.title ?? "Assignment title unavailable",
+            module_code: row.module_code,
+            max_score: row.max_score,
+          };
+        });
+      }
 
       const gradeMap: Record<string, any> = {};
       (grades || []).forEach((grade) => {
@@ -213,12 +231,19 @@ const ImprovementPlan = () => {
       > = {};
 
       submissions.forEach((submission) => {
-        const assignment = assignmentMap[submission.assignment_id];
+        const assignment = assignmentMap[submission.assignment_id] || {
+          id: submission.assignment_id,
+          title: "Assignment title unavailable",
+          module_code: null,
+          max_score: null,
+        };
         const grade = gradeMap[submission.id];
         const score = grade?.final_score ?? grade?.ai_score;
-        if (!assignment || score == null) return;
+        if (score == null) return;
 
-        const moduleKey = [assignment.module_code, assignment.title].filter(Boolean).join(" - ") || assignment.title;
+        const moduleKey =
+          [assignment.module_code, assignment.title].filter(Boolean).join(" - ") ||
+          `Assignment ${String(submission.assignment_id).slice(0, 8)}`;
         if (!moduleBuckets[moduleKey]) {
           moduleBuckets[moduleKey] = {
             scores: [],
