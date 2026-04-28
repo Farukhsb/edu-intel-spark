@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { safeToLocaleDate } from "@/lib/date";
+import { log } from "@/lib/logger";
 
 interface StudentGrade {
   id: string;
@@ -23,6 +24,14 @@ interface StudentGrade {
 interface AssignmentRow {
   id: string;
   title: string;
+  module_code: string | null;
+  max_score: number | null;
+}
+
+interface AssignmentMetadataRow {
+  submission_id: string;
+  assignment_id: string;
+  title: string | null;
   module_code: string | null;
   max_score: number | null;
 }
@@ -59,9 +68,9 @@ const StudentGrades = () => {
     const fetchGrades = async () => {
       try {
         // Fetch only this student's submissions (RLS enforces this server-side too)
-        const [subRes, assignRes] = await Promise.all([
+        const [subRes, assignmentMetaRes] = await Promise.all([
           supabase.from("submissions").select("*").eq("student_id", user.id),
-          supabase.from("assignments").select("*"),
+          supabase.rpc("get_student_grade_assignment_metadata"),
         ]);
 
         const allSubs = (subRes.data || [])
@@ -76,7 +85,20 @@ const StudentGrades = () => {
         const gradeData = gradeRes.data || [];
 
         const assignmentMap: Record<string, AssignmentRow> = {};
-        (assignRes.data || []).forEach(a => { assignmentMap[a.id] = a; });
+        if (assignmentMetaRes.error) {
+          log.warn("Student grade assignment metadata lookup failed", {
+            userId: user.id,
+          });
+        } else {
+          ((assignmentMetaRes.data || []) as AssignmentMetadataRow[]).forEach((row) => {
+            assignmentMap[row.assignment_id] = {
+              id: row.assignment_id,
+              title: row.title ?? "Assignment title unavailable",
+              module_code: row.module_code,
+              max_score: row.max_score,
+            };
+          });
+        }
 
         const gradeMap: Record<string, GradeRow> = {};
         gradeData.forEach(g => { gradeMap[g.submission_id] = g; });
@@ -87,7 +109,7 @@ const StudentGrades = () => {
           const isReleased = s.status === "released";
           return {
             id: s.id,
-            assignmentTitle: a?.title || "Unknown",
+            assignmentTitle: a?.title || "Assignment title unavailable",
             moduleCode: a?.module_code || null,
             score: isReleased ? (g?.final_score ?? g?.ai_score ?? null) : null,
             maxScore: a?.max_score || 100,
@@ -111,7 +133,9 @@ const StudentGrades = () => {
           });
         }
       } catch (err) {
-        console.error("Failed to fetch student grades:", err);
+        log.error("Failed to fetch student grades", err, {
+          userId: user.id,
+        });
       }
       setLoading(false);
     };

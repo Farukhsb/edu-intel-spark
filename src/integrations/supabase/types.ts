@@ -890,11 +890,11 @@ export type Database = {
           user_id: string
         }[]
       }
-      apply_recommendation_action: {
-        Args: {
-          p_action_type: string
-          p_payload?: Json
-          p_recommendation_id: string
+        apply_recommendation_action: {
+          Args: {
+            p_action_type: string
+            p_payload?: Json
+            p_recommendation_id: string
         }
         Returns: {
           assignment_id: string | null
@@ -919,12 +919,22 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
         }
+        get_student_grade_assignment_metadata: {
+          Args: never
+          Returns: {
+            assignment_id: string
+            max_score: number
+            module_code: string | null
+            submission_id: string
+            title: string | null
+          }[]
+        }
+        has_role: {
+          Args: {
+            _role: Database["public"]["Enums"]["app_role"]
+            _user_id: string
+          }
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
