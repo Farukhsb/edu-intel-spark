@@ -558,17 +558,21 @@ const AssignmentDetail = () => {
     setUploadProgress(0);
     try {
       const uploaded = await uploadFile(file, user.id);
-      const { error } = await supabase.from("submissions").insert({
-        assignment_id: assignment.id,
-        student_id: user.id,
-        file_url: uploaded.fileUrl,
-        file_name: uploaded.fileName,
-        file_type: uploaded.fileType,
-        uploaded_by: user.id,
-        status: "submitted" as const,
-        student_name: profile?.full_name ?? null,
-        student_email: user.email ?? null,
-      });
+      const { data: insertedSubmission, error } = await supabase
+        .from("submissions")
+        .insert({
+          assignment_id: assignment.id,
+          student_id: user.id,
+          file_url: uploaded.fileUrl,
+          file_name: uploaded.fileName,
+          file_type: uploaded.fileType,
+          uploaded_by: user.id,
+          status: "submitted" as const,
+          student_name: profile?.full_name ?? null,
+          student_email: user.email ?? null,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
       await persistWorkflowNotification(
         buildSubmissionReceivedNotification({
@@ -582,14 +586,18 @@ const AssignmentDetail = () => {
           workflow: "submission",
         },
       );
-      void sendWorkflowNotificationEmail({
-        category: "submission-received",
-        assignmentId: assignment.id,
-      }).catch(() => {
-        log.warn("Submission notification email failed", {
+      if (insertedSubmission?.id) {
+        void sendWorkflowNotificationEmail({
+          category: "submission-received",
           assignmentId: assignment.id,
+          submissionId: insertedSubmission.id,
+        }).catch(() => {
+          log.warn("Submission notification email failed", {
+            assignmentId: assignment.id,
+            submissionId: insertedSubmission.id,
+          });
         });
-      });
+      }
       toast.success("Submission uploaded successfully");
       await loadSubmissions();
     } catch (error: unknown) {

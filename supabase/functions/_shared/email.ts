@@ -1,3 +1,11 @@
+declare const Deno:
+  | {
+      env: {
+        get(name: string): string | undefined;
+      };
+    }
+  | undefined;
+
 type EmailPayload = {
   to: string;
   subject: string;
@@ -6,7 +14,7 @@ type EmailPayload = {
 };
 
 function getEnv(name: string, fallback?: string) {
-  return Deno.env.get(name) ?? fallback;
+  return Deno?.env.get(name) ?? fallback;
 }
 
 function notificationsEnabled() {
@@ -19,7 +27,9 @@ export function getAppBaseUrl() {
 
 export async function sendEmail(payload: EmailPayload) {
   if (!notificationsEnabled()) {
-    console.log("[email] notifications disabled, skipping send", { to: payload.to, subject: payload.subject });
+    console.log("[email] notifications disabled, skipping send", {
+      subject: payload.subject,
+    });
     return { skipped: true };
   }
 
@@ -52,7 +62,7 @@ export async function sendEmail(payload: EmailPayload) {
     throw new Error(`[email] resend error ${response.status}: ${body}`);
   }
 
-  console.log("[email] sent", { to: payload.to, subject: payload.subject, response: body });
+  console.log("[email] sent", { subject: payload.subject });
   return { success: true };
 }
 

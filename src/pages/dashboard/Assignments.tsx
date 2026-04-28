@@ -58,6 +58,35 @@ interface StudentNotificationProfile {
   role: string | null;
 }
 
+const buildAssignmentPublishedNotificationRows = (input: {
+  senderId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  students: StudentNotificationProfile[];
+}) => {
+  return input.students.map((student) => {
+    const draft = buildAssignmentPublishedNotification({
+      studentName: student.full_name || student.email || "Student",
+      studentEmail: student.email,
+      studentId: student.id,
+      assignmentId: input.assignmentId,
+      assignmentTitle: input.assignmentTitle,
+    });
+
+    return {
+      sender_id: input.senderId,
+      category: draft.category,
+      recipient_name: draft.recipientName,
+      recipient_email: draft.recipientEmail,
+      recipient_id: draft.recipientId ?? null,
+      subject: draft.subject,
+      body: draft.body,
+      related_student_id: draft.relatedStudentId ?? null,
+      related_assignment_id: draft.relatedAssignmentId ?? null,
+    };
+  });
+};
+
 const statusVariant = (status: string) => {
   if (status === "published") return "default";
   if (status === "draft") return "outline";
@@ -209,6 +238,13 @@ const Assignments = () => {
 
       if (user?.id && assignmentToPublish) {
         try {
+          // Assignments currently do not persist cohort or department targeting in the DB.
+          // Until that exists, publish notifications are a temporary broad student broadcast.
+          log.warn("Assignment publish notifications are using broad student broadcast", {
+            assignmentId: id,
+            targetingMode: "all_students_fallback",
+          });
+
           const { data: studentProfiles, error: studentProfilesError } = await supabase
             .from("profiles")
             .select("id, full_name, email, role")
@@ -219,26 +255,11 @@ const Assignments = () => {
               assignmentId: id,
             });
           } else {
-            const rows = ((studentProfiles || []) as StudentNotificationProfile[]).map((student) => {
-              const draft = buildAssignmentPublishedNotification({
-                studentName: student.full_name || student.email || "Student",
-                studentEmail: student.email,
-                studentId: student.id,
-                assignmentId: id,
-                assignmentTitle: assignmentToPublish.title,
-              });
-
-              return {
-                sender_id: user.id,
-                category: draft.category,
-                recipient_name: draft.recipientName,
-                recipient_email: draft.recipientEmail,
-                recipient_id: draft.recipientId ?? null,
-                subject: draft.subject,
-                body: draft.body,
-                related_student_id: draft.relatedStudentId ?? null,
-                related_assignment_id: draft.relatedAssignmentId ?? null,
-              };
+            const rows = buildAssignmentPublishedNotificationRows({
+              senderId: user.id,
+              assignmentId: id,
+              assignmentTitle: assignmentToPublish.title,
+              students: (studentProfiles || []) as StudentNotificationProfile[],
             });
 
             if (rows.length > 0) {
