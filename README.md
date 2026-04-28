@@ -8,8 +8,6 @@ The platform is built around a simple principle: AI can help prepare evidence, f
 
 GradeAI is not intended to be a black-box auto-grading tool. It is designed to make assessment workflows easier to review, easier to moderate, and easier to connect to student support.
 
-- Repository: `https://github.com/Farukhsb/edu-intel-spark`
-
 ## Why This Exists
 
 Struggling students are often identified too late. The warning signs may already be there: missed submissions, falling marks, repeated weaknesses against rubric criteria, poor completion patterns, or low engagement. In many institutions, those signals sit across different systems and are only reviewed after a student has already failed, disengaged, or withdrawn.
