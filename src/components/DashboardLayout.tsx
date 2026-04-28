@@ -236,12 +236,16 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         return;
       }
 
-      if (notification.relatedAssignmentId) {
-        navigate(`/dashboard/assignments/${notification.relatedAssignmentId}`);
+      if (
+        notification.category === "feedback-summary" ||
+        notification.category === "grade-released" ||
+        notification.category === "assignment-published"
+      ) {
+        navigate("/dashboard/assignments");
         return;
       }
 
-      if (notification.category === "feedback-summary" || notification.category === "grade-released") {
+      if (notification.relatedAssignmentId) {
         navigate("/dashboard/assignments");
         return;
       }
