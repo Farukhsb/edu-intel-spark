@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { jsonError, requireUser } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { logError, logWarn } from "../_shared/log.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
@@ -41,7 +42,7 @@ serve(async (req) => {
       userId: user.id,
     });
     if (!rateLimit.allowed) {
-      console.warn("Rate limit exceeded", { function: "explain-grade", identifierType: rateLimit.identifierType });
+      logWarn("Rate limit exceeded", { function: "explain-grade", identifierType: rateLimit.identifierType });
       return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
     }
     const body = await req.json().catch(() => null);
@@ -108,8 +109,8 @@ Guidelines:
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const t = await response.text();
-      console.error("OpenAI error:", response.status, t);
+      await response.text();
+      logError("OpenAI error", undefined, { function: "explain-grade", status: response.status });
       return new Response(JSON.stringify({ error: "AI service temporarily unavailable. Please try again." }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -119,7 +120,7 @@ Guidelines:
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
-    console.error("explain-grade error:", e);
+    logError("explain-grade error", e);
     return jsonError(e, corsHeaders);
   }
 });

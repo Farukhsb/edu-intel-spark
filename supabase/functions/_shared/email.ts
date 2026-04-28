@@ -13,6 +13,8 @@ type EmailPayload = {
   text?: string;
 };
 
+import { logInfo, logWarn } from "./log.ts";
+
 export function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -36,7 +38,7 @@ export function getAppBaseUrl() {
 
 export async function sendEmail(payload: EmailPayload) {
   if (!notificationsEnabled()) {
-    console.log("[email] notifications disabled, skipping send", {
+    logInfo("[email] notifications disabled, skipping send", {
       subject: payload.subject,
     });
     return { skipped: true };
@@ -46,7 +48,7 @@ export async function sendEmail(payload: EmailPayload) {
   const from = getEnv("EMAIL_FROM_ADDRESS", "GradeAI <notifications@gradeai.app>");
 
   if (!apiKey) {
-    console.warn("[email] RESEND_API_KEY missing, skipping send");
+    logWarn("[email] RESEND_API_KEY missing, skipping send");
     return { skipped: true };
   }
 
@@ -71,7 +73,7 @@ export async function sendEmail(payload: EmailPayload) {
     throw new Error(`[email] resend error ${response.status}`);
   }
 
-  console.log("[email] sent", { subject: payload.subject });
+  logInfo("[email] sent", { subject: payload.subject });
   return { success: true };
 }
 

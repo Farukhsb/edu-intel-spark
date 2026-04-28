@@ -6,6 +6,7 @@ import {
   requireUser,
 } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { logWarn } from "../_shared/log.ts";
 import {
   formatAssignmentPublishedEmail,
   formatGradeReleasedEmail,
@@ -141,7 +142,7 @@ serve(async (req) => {
       );
 
       if (cohortIds.length === 0 && departmentIds.length === 0) {
-        console.warn("[workflow-email] assignment-published skipped because no targeting is stored", {
+        logWarn("[workflow-email] assignment-published skipped because no targeting is stored", {
           assignmentId: assignment.id,
         });
         return jsonSuccess(corsHeaders, { success: true, skipped: true, reason: "targeting_missing" });

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
   logDocumentExtractionResult,
@@ -1399,7 +1400,7 @@ serve(async (req) => {
       userId: user.id,
     });
     if (!rateLimit.allowed) {
-      console.warn("Rate limit exceeded", { function: "grade-submission", identifierType: rateLimit.identifierType });
+      logWarn("Rate limit exceeded", { function: "grade-submission", identifierType: rateLimit.identifierType });
       return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
     }
 
@@ -1657,7 +1658,7 @@ serve(async (req) => {
               extraction: extractionMetadata,
             } as Record<string, unknown>,
           };
-          console.log("grade-submission cache", {
+          logInfo("grade-submission cache", {
             cache_hit: true,
             grading_input_hash: gradingInputHash,
             force_regenerate: forceRegenerate,
@@ -1688,7 +1689,7 @@ serve(async (req) => {
           });
           continue;
         }
-        console.log("grade-submission cache", {
+        logInfo("grade-submission cache", {
             cache_hit: false,
             grading_input_hash: gradingInputHash,
             force_regenerate: forceRegenerate,
@@ -1702,7 +1703,7 @@ serve(async (req) => {
 
         const matchingGeneratedResult = generatedResultsByFingerprint.get(gradingInputHash);
         if (matchingGeneratedResult) {
-          console.log("grade-submission cache", {
+          logInfo("grade-submission cache", {
             cache_hit: true,
             grading_input_hash: gradingInputHash,
             force_regenerate: forceRegenerate,
@@ -1759,7 +1760,7 @@ serve(async (req) => {
           matchingClusterHash === gradingInputHash &&
           matchingClusterPromptVersion === GRADING_PROMPT_VERSION
         ) {
-          console.log("grade-submission cache", {
+          logInfo("grade-submission cache", {
             cache_hit: true,
             grading_input_hash: gradingInputHash,
             force_regenerate: forceRegenerate,
@@ -1858,7 +1859,7 @@ Return valid JSON only.`;
         const previousAiScore = existingGrade?.ai_score != null ? Number(existingGrade.ai_score) : null;
         const passCandidates: GradingCandidate[] = [];
         for (let passIndex = 0; passIndex < GRADING_PASSES; passIndex++) {
-          console.log("grade-submission ai-call", {
+          logInfo("grade-submission ai-call", {
             cache_hit: false,
             grading_input_hash: gradingInputHash,
             force_regenerate: forceRegenerate,
@@ -2324,7 +2325,7 @@ Return corrected JSON only.`;
             extraction: extractionMetadata,
           },
         });
-        console.log("grade-submission generated", {
+        logInfo("grade-submission generated", {
           submissionId: sub.id,
           gradingInputHash,
           promptVersion: GRADING_PROMPT_VERSION,
@@ -2332,7 +2333,9 @@ Return corrected JSON only.`;
           recalibrationApplied,
         });
       } catch (gradeErr) {
-        console.error("Grading error for", sub.id, gradeErr);
+        logError("Grading error for submission", gradeErr, {
+          submissionId: sub.id,
+        });
         results.push({
           submissionId: sub.id,
           error: gradeErr instanceof Error ? gradeErr.message : String(gradeErr),
@@ -2345,7 +2348,7 @@ Return corrected JSON only.`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("grade-submission error:", e);
+    logError("grade-submission error", e);
     return jsonError(e, corsHeaders);
   }
 });

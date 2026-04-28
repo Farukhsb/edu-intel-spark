@@ -4,6 +4,7 @@ import {
   extractDocumentText,
   type DocumentExtractionResult,
 } from "./document-extraction-core.ts";
+import { logInfo, logWarn } from "./log.ts";
 
 export { DOCUMENT_EXTRACTION_ERROR_MESSAGE } from "./document-extraction-core.ts";
 
@@ -39,9 +40,9 @@ export function logDocumentExtractionResult(context: string, result: DocumentExt
   };
 
   if (result.success) {
-    console.log(`${context} extraction`, payload);
+    logInfo(`${context} extraction`, payload);
     return;
   }
 
-  console.warn(`${context} extraction failed`, payload);
+  logWarn(`${context} extraction failed`, payload);
 }

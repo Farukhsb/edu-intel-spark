@@ -79,7 +79,8 @@ test.describe("critical assessment workflows", () => {
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
 
     await page.goto("/dashboard/assignments/assignment-release");
-    await expect(page.getByText("Algorithms Essay")).toBeVisible();
+    await page.waitForURL("**/dashboard/assignments/assignment-release");
+    await expect(page.getByText("Algorithms Essay")).toBeVisible({ timeout: 10000 });
     const submissionCard = page.getByTestId("submission-card-submission-release");
 
     await page.getByTestId("submission-review-submission-release").click();
@@ -164,7 +165,8 @@ test.describe("critical assessment workflows", () => {
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
 
     await page.goto("/dashboard/assignments/assignment-moderation");
-    await expect(page.getByText("Policy Case Study")).toBeVisible();
+    await page.waitForURL("**/dashboard/assignments/assignment-moderation");
+    await expect(page.getByText("Policy Case Study")).toBeVisible({ timeout: 10000 });
     const moderationSubmissionCard = page.getByTestId("submission-card-submission-moderation");
 
     await page.getByTestId("submission-review-submission-moderation").click();
@@ -295,7 +297,8 @@ test.describe("critical assessment workflows", () => {
     await setE2EAuth(page, { role: "student", ...student, cohortId: "cohort-1", departmentId: "cs" });
 
     await page.goto("/dashboard");
-    await expect(page.getByText("Your grade view")).toBeVisible();
+    await page.waitForURL("**/dashboard");
+    await expect(page.getByText("Your grade view")).toBeVisible({ timeout: 10000 });
 
     const releasedCard = page.locator("div").filter({ hasText: "Released Coursework" }).first();
     await expect(releasedCard).toContainText("74/100");

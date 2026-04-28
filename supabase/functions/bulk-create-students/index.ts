@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { logError } from "../_shared/log.ts";
 
 type StudentInput = {
   name: string;
@@ -103,7 +104,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("bulk-create-students error:", error);
+    logError("bulk-create-students error", error);
     return jsonError(error, corsHeaders);
   }
 });

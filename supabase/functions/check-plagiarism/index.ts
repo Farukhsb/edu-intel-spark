@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
   extractSubmissionDocument,
@@ -573,7 +574,9 @@ async function createIntegrityResponseWithRetry(body: Record<string, unknown>) {
       return await createResponse(body);
     } catch (error) {
       lastError = error;
-      console.warn(`check-plagiarism OpenAI attempt ${attempt} failed:`, error);
+      logWarn("check-plagiarism OpenAI attempt failed", {
+        attempt,
+      });
       if (attempt < OPENAI_RETRY_ATTEMPTS) {
         await sleep(250 * attempt);
       }
@@ -724,7 +727,7 @@ serve(async (req) => {
       userId: user.id,
     });
     if (!rateLimit.allowed) {
-      console.warn("Rate limit exceeded", { function: "check-plagiarism", identifierType: rateLimit.identifierType });
+      logWarn("Rate limit exceeded", { function: "check-plagiarism", identifierType: rateLimit.identifierType });
       return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
     }
 
@@ -835,7 +838,9 @@ serve(async (req) => {
 
     if (profileRowsError) {
       if (isRecoverablePersistenceError(profileRowsError)) {
-        console.warn("student_writing_profiles unavailable, continuing without baseline persistence:", profileRowsError);
+        logWarn("student_writing_profiles unavailable, continuing without baseline persistence", {
+          function: "check-plagiarism",
+        });
       } else {
         throw profileRowsError;
       }
@@ -1138,7 +1143,7 @@ Only flag real concerns. Return valid JSON only.`,
       }
     } catch (aiError) {
       warnings.push("AI similarity analysis was temporarily unavailable; returning baseline and persistence-safe results only.");
-      console.error("check-plagiarism AI analysis failed after retries:", aiError);
+      logError("check-plagiarism AI analysis failed after retries", aiError);
     }
 
     const similarityBySubmission = new Map<string, number>();
@@ -1437,7 +1442,9 @@ Only flag real concerns. Return valid JSON only.`,
 
     if (reviewsError && !isRecoverablePersistenceError(reviewsError)) throw reviewsError;
     if (reviewsError) {
-      console.warn("academic_integrity_reviews unavailable, continuing without persisted reviews:", reviewsError);
+      logWarn("academic_integrity_reviews unavailable, continuing without persisted reviews", {
+        function: "check-plagiarism",
+      });
     }
 
     const existingReviewMap = new Map(
@@ -1505,7 +1512,9 @@ Only flag real concerns. Return valid JSON only.`,
         .upsert(reviewUpserts, { onConflict: "submission_id,lecturer_id" });
       if (persistError && !isRecoverablePersistenceError(persistError)) throw persistError;
       if (persistError) {
-        console.warn("Failed to persist academic integrity reviews, returning analysis without persistence:", persistError);
+        logWarn("Failed to persist academic integrity reviews, returning analysis without persistence", {
+          function: "check-plagiarism",
+        });
       }
     }
 
@@ -1517,7 +1526,9 @@ Only flag real concerns. Return valid JSON only.`,
         throw profileError;
       }
       if (profileError) {
-        console.error("Failed to update writing profiles:", profileError);
+        logError("Failed to update writing profiles", profileError, {
+          function: "check-plagiarism",
+        });
       }
     }
 
@@ -1534,7 +1545,7 @@ Only flag real concerns. Return valid JSON only.`,
         ? `${summary} ${thresholdCrossingFlags.length} submission(s) crossed one or more integrity risk thresholds.`
         : `${summary} No submissions crossed the current integrity thresholds.`;
 
-    console.log("check-plagiarism completed", {
+    logInfo("check-plagiarism completed", {
       assignmentId: requestedAssignmentId,
       submissionCount: submissions.length,
       flags: thresholdCrossingFlags.length,
@@ -1546,7 +1557,7 @@ Only flag real concerns. Return valid JSON only.`,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("check-plagiarism error:", e);
+    logError("check-plagiarism error", e);
     return jsonError(e, corsHeaders);
   }
 });
