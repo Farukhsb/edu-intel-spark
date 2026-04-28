@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowRight, Award, Building2, Download, Loader2, Users }
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { log } from "@/lib/logger";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code";
 const SUBMISSION_FIELDS = "id, assignment_id";
@@ -200,7 +201,7 @@ const InstitutionalInsights = () => {
           { metric: "Assessment Completion Rate", value: completionRate, target: 90, status: getMetricStatus(completionRate, 90) },
         ]);
       } catch (error) {
-        console.error("Failed to fetch institutional data:", error);
+        log.error("Failed to fetch institutional data", error);
       } finally {
         setLoading(false);
       }

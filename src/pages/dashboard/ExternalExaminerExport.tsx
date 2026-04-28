@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
+import { log } from "@/lib/logger";
 import type {
   ExternalExaminerAssignmentRow,
   ExternalExaminerExportRow,
@@ -111,7 +112,7 @@ const ExternalExaminerExport = () => {
 
         setExportData(data);
       } catch (err) {
-        console.error(err);
+        log.error("Failed to generate external examiner export", err);
       }
       setLoading(false);
     };

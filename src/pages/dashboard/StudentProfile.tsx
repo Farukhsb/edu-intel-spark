@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
 import { safeFormatDate } from "@/lib/date";
 import { queueCommunicationMessage } from "@/lib/communications";
+import { log } from "@/lib/logger";
 import { toast } from "sonner";
 import {
   buildManualInterventionPayload,
@@ -221,7 +222,9 @@ const StudentProfile = () => {
             .maybeSingle();
 
           if (profileError) {
-            console.error("Failed to resolve student profile:", profileError);
+            log.error("Failed to resolve student profile", profileError, {
+              studentId: decodedStudentId,
+            });
           } else {
             resolvedStudentRecordId = profileData?.id ?? null;
           }
@@ -300,7 +303,9 @@ const StudentProfile = () => {
           chart,
         });
       } catch (error) {
-        console.error("Failed to load student profile:", error);
+        log.error("Failed to load student profile", error, {
+          studentId: decodedStudentId,
+        });
         setStudent(null);
       }
 
@@ -333,7 +338,9 @@ const StudentProfile = () => {
       const { data, error } = await fetchStudentInterventions(supabase, user.id, resolvedStudentRecordId);
 
       if (error) {
-        console.error("Failed to load interventions:", error);
+        log.error("Failed to load interventions", error, {
+          studentId: decodedStudentId,
+        });
         toast.error(getInterventionErrorText(error) || "Could not load intervention history");
         return;
       }
@@ -392,7 +399,9 @@ const StudentProfile = () => {
     const { data, error } = await insertManualIntervention(supabase, payload);
 
     if (error) {
-      console.error("Failed to save intervention:", error);
+      log.error("Failed to save intervention", error, {
+        studentId: decodedStudentId,
+      });
       toast.error(
         getInterventionErrorText(error) ||
           `Could not save intervention (type: ${safeInterventionType}, status: ${safeInterventionStatus})`

@@ -20,6 +20,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 import { safeToLocaleDate } from "@/lib/date";
+import { log } from "@/lib/logger";
 
 const ASSIGNMENT_FIELDS = "id, title, max_score";
 const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, file_name, status, submitted_at";
@@ -307,7 +308,9 @@ const LecturerOverview = () => {
       });
       setRecent(recentSubs);
     } catch (error) {
-      console.error("Dashboard fetch error:", error);
+      log.error("Lecturer overview fetch failed", error, {
+        userId: user.id,
+      });
     }
 
     setLoading(false);

@@ -239,7 +239,9 @@ const StudentGrades = () => {
                   <Button variant="outline" size="sm" className="mt-1" onClick={async () => {
                     const { data, error } = await supabase.storage.from("submissions").createSignedUrl(g.fileUrl!, 3600);
                     if (error) {
-                      console.error("Failed to create signed URL:", error);
+                      log.error("Failed to create student submission download URL", error, {
+                        submissionId: g.id,
+                      });
                       return;
                     }
                     if (data?.signedUrl) window.open(data.signedUrl, "_blank");

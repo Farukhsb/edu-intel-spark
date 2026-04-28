@@ -24,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { safeFormatDate } from "@/lib/date";
+import { log } from "@/lib/logger";
 import {
   evaluateModerationSignals,
   formatSubmissionStatus,
@@ -78,7 +79,7 @@ const ModerationDashboard = () => {
         )
       );
     } catch (error) {
-      console.error("Failed to load moderation cases:", error);
+      log.error("Failed to load moderation cases", error);
       toast.error("Moderation cases could not be loaded right now. Refresh the page or try again in a moment.");
     }
     setLoading(false);
@@ -136,7 +137,9 @@ const ModerationDashboard = () => {
     );
 
     if (error) {
-      console.warn("Failed to write moderation audit entry:", error);
+      log.warn("Failed to write moderation audit entry", {
+        caseId: item.moderationCase.id,
+      });
     }
   };
 
@@ -162,7 +165,10 @@ const ModerationDashboard = () => {
       .eq("id", item.moderationCase.id);
 
     if (error) {
-      console.error("Failed to assign moderator:", error);
+      log.error("Failed to assign moderator", error, {
+        caseId,
+        moderatorId,
+      });
       toast.error("The moderator was not assigned. Try again, and check your access if this keeps happening.");
       setSaving(false);
       return;
@@ -273,7 +279,10 @@ const ModerationDashboard = () => {
       setSelectedCaseId(null);
       await fetchCases();
     } catch (error) {
-      console.error("Failed to save moderation action:", error);
+      log.error("Failed to save moderation action", error, {
+        caseId: selectedCaseId,
+        action,
+      });
       toast.error("The moderation action was not saved. Try again, and if it keeps failing check that you still have access to this case.");
     }
     setSaving(false);

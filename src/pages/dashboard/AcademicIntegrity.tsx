@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { safeFormatDate } from "@/lib/date";
+import { log } from "@/lib/logger";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   type IntegrityDecision,
@@ -136,7 +137,7 @@ const AcademicIntegrity = () => {
         setDecisionDrafts(drafts.decisionDrafts);
         setNoteDrafts(drafts.noteDrafts);
       } catch (error) {
-        console.error("Failed to fetch integrity data:", error);
+        log.error("Failed to fetch integrity data", error);
         toast.error("Could not load academic integrity cases.");
       }
       setLoading(false);
@@ -176,7 +177,9 @@ const AcademicIntegrity = () => {
     setSavingId(null);
 
     if (error) {
-      console.error("Failed to save academic integrity review:", error);
+      log.error("Failed to save academic integrity review", error, {
+        submissionId: item.submissionId,
+      });
       toast.error("Could not save integrity review.");
       return;
     }
@@ -525,7 +528,7 @@ const AcademicIntegrity = () => {
     </div>
     );
   } catch (error) {
-    console.error("Academic integrity page render failed:", error);
+    log.error("Academic integrity page render failed", error);
     return (
       <Card>
         <CardContent className="p-6 text-sm text-muted-foreground">

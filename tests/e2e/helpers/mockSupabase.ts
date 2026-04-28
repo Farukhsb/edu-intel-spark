@@ -9,6 +9,8 @@ type Row = Record<string, any>;
 
 type TableState = {
   assignments: Row[];
+  assignment_cohorts: Row[];
+  assignment_departments: Row[];
   submissions: Row[];
   grades: Row[];
   moderation_cases: Row[];
@@ -134,6 +136,18 @@ const handlePatch = async (route: Route, state: MockSupabaseState, table: keyof 
   await fulfillJson(route, maybeObjectResponse(route, clone(updatedRows)));
 };
 
+const handleDelete = async (route: Route, state: MockSupabaseState, table: keyof TableState, url: URL) => {
+  const removedRows: Row[] = [];
+
+  state.tables[table] = state.tables[table].filter((row) => {
+    if (!matchesFilters(row, url)) return true;
+    removedRows.push(row);
+    return false;
+  });
+
+  await fulfillJson(route, maybeObjectResponse(route, clone(removedRows)));
+};
+
 const handlePost = async (route: Route, state: MockSupabaseState, table: keyof TableState, url: URL) => {
   const payload = JSON.parse(route.request().postData() || "{}");
   const rows = Array.isArray(payload) ? payload : [payload];
@@ -204,7 +218,56 @@ const handleRpc = async (route: Route, state: MockSupabaseState) => {
   await fulfillJson(route, { error: "Unknown rpc route" }, 404);
 };
 
+const handleFunctionInvoke = async (route: Route, state: MockSupabaseState) => {
+  const url = new URL(route.request().url());
+
+  if (url.pathname.endsWith("/functions/v1/bulk-create-students")) {
+    const payload = JSON.parse(route.request().postData() || "{}");
+    const students = Array.isArray(payload?.students) ? payload.students : [];
+
+    const results = students.map((student: Row, index: number) => {
+      const profileId = `student-created-${index + 1}`;
+      const email = String(student.email || "");
+      const profile = {
+        id: profileId,
+        full_name: student.name ?? null,
+        email,
+        role: "student",
+        avatar_url: null,
+        cohort_id: student.cohort_id ?? null,
+        department_id: student.department_id ?? null,
+      };
+
+      const existingIndex = state.tables.profiles.findIndex((candidate) => candidate.email === email);
+      if (existingIndex >= 0) {
+        state.tables.profiles[existingIndex] = {
+          ...state.tables.profiles[existingIndex],
+          ...profile,
+        };
+      } else {
+        state.tables.profiles.push(profile);
+      }
+
+      return {
+        name: student.name,
+        email,
+        password: `TempPass!${index + 1}`,
+        success: true,
+      };
+    });
+
+    await fulfillJson(route, { results });
+    return;
+  }
+
+  await fulfillJson(route, { error: "Unhandled function mock" }, 404);
+};
+
 export const installSupabaseMocks = async (page: Page, state: MockSupabaseState) => {
+  await page.route(/.*\/functions\/v1\/.*/, async (route) => {
+    await handleFunctionInvoke(route, state);
+  });
+
   await page.route(/.*\/rest\/v1\/.*/, async (route) => {
     const url = new URL(route.request().url());
     const table = url.pathname.split("/").pop() as keyof TableState;
@@ -224,6 +287,11 @@ export const installSupabaseMocks = async (page: Page, state: MockSupabaseState)
       return;
     }
 
+    if (route.request().method() === "DELETE") {
+      await handleDelete(route, state, table, url);
+      return;
+    }
+
     if (route.request().method() === "POST") {
       await handlePost(route, state, table, url);
       return;
@@ -240,6 +308,8 @@ export const installSupabaseMocks = async (page: Page, state: MockSupabaseState)
 export const createMockSupabaseState = (overrides: Partial<TableState>): MockSupabaseState => ({
   tables: {
     assignments: [],
+    assignment_cohorts: [],
+    assignment_departments: [],
     submissions: [],
     grades: [],
     moderation_cases: [],

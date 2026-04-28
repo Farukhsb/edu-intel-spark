@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import { log } from "@/lib/logger";
 
 interface ParsedStudent {
   rowNumber: number;
@@ -259,7 +260,10 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
       uploadResults = data?.results || [];
     } catch (err: unknown) {
       const message = await formatBulkCreateError(err, functionResponse);
-      console.error("Bulk student upload failed:", err);
+      log.error("Bulk student upload failed", err, {
+        functionName: BULK_CREATE_FUNCTION,
+        attemptedCount: valid.length,
+      });
       toast.error(message);
       setUploading(false);
       return;

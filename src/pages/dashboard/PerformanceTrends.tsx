@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type AtRiskStudent, computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
+import { log } from "@/lib/logger";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code";
 const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, submitted_at";
@@ -187,7 +188,7 @@ const PerformanceTrends = () => {
 
         setAtRiskStudents(risks);
       } catch (error) {
-        console.error("Failed to fetch performance data:", error);
+        log.error("Failed to fetch performance data", error);
       }
 
       setLoading(false);

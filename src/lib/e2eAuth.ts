@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { log } from "@/lib/logger";
 import { parseAppRole, type AppRole } from "@/lib/roles";
 
 export const E2E_AUTH_STORAGE_KEY = "gradeai:e2e-auth";
@@ -60,7 +61,10 @@ export const readE2EAuthState = (): E2EAuthState | null => {
       },
     };
   } catch (error) {
-    console.warn("Failed to parse local e2e auth state:", error);
+    log.warn("Failed to parse local e2e auth state", {
+      host: window.location.hostname,
+      errorName: error instanceof Error ? error.name : "unknown",
+    });
     return null;
   }
 };

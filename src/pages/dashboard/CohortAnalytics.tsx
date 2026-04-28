@@ -34,6 +34,7 @@ import {
 } from "@/lib/recommendationPersistence";
 import { buildRecommendationInterventionRows, insertRecommendationInterventions } from "@/lib/interventions";
 import { parseStoredReviewPayload } from "@/lib/integrityReviews";
+import { log } from "@/lib/logger";
 import { toast } from "sonner";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code, created_at, max_score";
@@ -450,7 +451,7 @@ const CohortAnalytics = () => {
         setRecommendations(mergedRecommendations);
         setStudentDirectory(directory);
       } catch (error) {
-        console.error("Failed to fetch cohort analytics:", error);
+        log.error("Failed to fetch cohort analytics", error);
         toast.error("Could not load cohort analytics.");
       }
 
@@ -511,7 +512,9 @@ const CohortAnalytics = () => {
           nextStatus: "reviewed",
         });
       } catch (error) {
-        console.error("Failed to persist review action:", error);
+        log.error("Failed to persist review action", error, {
+          studentId,
+        });
         toast.error("Could not save recommendation review.");
         setActingId(null);
         return;
@@ -533,7 +536,9 @@ const CohortAnalytics = () => {
           nextStatus: "dismissed",
         });
       } catch (error) {
-        console.error("Failed to persist dismiss action:", error);
+        log.error("Failed to persist dismiss action", error, {
+          studentId,
+        });
         toast.error("Could not dismiss recommendation.");
         setActingId(null);
         return;
@@ -576,7 +581,9 @@ const CohortAnalytics = () => {
       if (interventionRows.length > 0) {
         const { error } = await insertRecommendationInterventions(supabase, interventionRows);
         if (error) {
-          console.error("Failed to create intervention rows:", error);
+          log.error("Failed to create intervention rows", error, {
+            targetCount: selectedStudentIds.length,
+          });
           toast.error("Could not create interventions.");
           setActingId(null);
           return;
@@ -593,7 +600,7 @@ const CohortAnalytics = () => {
           nextStatus: "actioned",
         });
       } catch (error) {
-        console.error("Failed to persist intervention action:", error);
+        log.error("Failed to persist intervention action", error);
         toast.error("Intervention was created, but recommendation status could not be updated.");
         setActingId(null);
         return;

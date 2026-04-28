@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { log } from "@/lib/logger";
 import {
   deriveAccreditationMetrics,
   deriveProgrammeReports,
@@ -87,7 +88,7 @@ const AccreditationDashboard = () => {
         setFeedbackTurnaround(derived.feedbackTurnaround);
         setLoadError(false);
       } catch (err) {
-        console.error("Failed to fetch accreditation data:", err);
+        log.error("Failed to fetch accreditation data", err);
         setQaaMetrics([]);
         setNssMetrics([]);
         setTefIndicators([]);
@@ -464,7 +465,7 @@ const AccreditationDashboard = () => {
     </div>
     );
   } catch (error) {
-    console.error("Accreditation dashboard render failed:", error);
+    log.error("Accreditation dashboard render failed", error);
     return (
       <Card>
         <CardContent className="p-6 text-sm text-muted-foreground">
@@ -503,7 +504,11 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
             grades: gradesRaw || [],
           })
         );
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        log.error("Failed to export programme report", err, {
+          programmeId: programme.id,
+        });
+      }
       setLoading(false);
     };
 

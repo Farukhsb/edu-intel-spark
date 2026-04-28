@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { log } from "@/lib/logger";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code";
 const GRADE_FIELDS = "submission_id, ai_score, final_score, ai_breakdown";
@@ -122,7 +123,7 @@ const LearningOutcomes = () => {
           });
         setTrajectories(trajs);
       } catch (err) {
-        console.error("Learning outcomes fetch error:", err);
+        log.error("Learning outcomes fetch error", err);
       }
       setLoading(false);
     };

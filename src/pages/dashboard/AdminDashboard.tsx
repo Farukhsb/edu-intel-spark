@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { safeFormatDate } from "@/lib/date";
+import { log } from "@/lib/logger";
 import { ArrowRight, FileOutput, Loader2, Settings, Shield, Upload, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -738,7 +739,9 @@ const AdminDashboard = () => {
         .limit(25);
 
       if (auditError) {
-        console.warn("Admin audit log is unavailable:", auditError);
+        log.warn("Admin audit log is unavailable", {
+          view: "audit",
+        });
         setAuditRows([]);
       } else {
         const auditLogRows = (auditData || []).map((row) => {
@@ -762,7 +765,9 @@ const AdminDashboard = () => {
         setAuditRows(auditLogRows);
       }
     } catch (error) {
-      console.error("Failed to load admin dashboard:", error);
+      log.error("Failed to load admin dashboard", error, {
+        view: activeView,
+      });
       toast.error("Admin dashboard data could not be loaded right now.");
     }
 
@@ -817,7 +822,10 @@ const AdminDashboard = () => {
       setPendingRoleChange(null);
       await loadAdminDashboard({ silent: true });
     } catch (error) {
-      console.error("Failed to update user role:", error);
+      log.error("Failed to update user role", error, {
+        targetUserId: pendingRoleChange.userId,
+        nextRole: pendingRoleChange.nextRole,
+      });
       toast.error(error instanceof Error ? error.message : "Role change could not be completed.");
     }
     setChangingUserId(null);

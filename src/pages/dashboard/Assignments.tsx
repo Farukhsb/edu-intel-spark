@@ -194,7 +194,10 @@ const Assignments = () => {
 
     const { data, error } = await query;
     if (error) {
-      console.error("Assignments query error:", error);
+      log.error("Assignments query failed", error, {
+        role,
+        userId: user.id,
+      });
       toast.error("Failed to load assignments");
       setLoading(false);
       return;
