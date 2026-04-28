@@ -505,9 +505,8 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
           })
         );
       } catch (err) {
-        log.error("Failed to export programme report", err, {
-          programmeId: programme.id,
-        });
+        log.error("Failed to load programme report data", err);
+        setProgrammes([]);
       }
       setLoading(false);
     };

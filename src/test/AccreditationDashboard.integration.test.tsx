@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSupabaseMock } from "@/test/helpers/mockSupabaseClient";
@@ -70,13 +70,13 @@ describe("AccreditationDashboard integration", () => {
       },
     });
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading."
-        )
-      ).toBeInTheDocument();
-    });
+    expect(
+      await screen.findByText(
+        "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading.",
+        {},
+        { timeout: 10000 },
+      )
+    ).toBeInTheDocument();
   });
 
   it("shows an explicit load error state when accreditation queries fail", async () => {
@@ -222,9 +222,7 @@ describe("AccreditationDashboard integration", () => {
       ],
     });
 
-    await waitFor(() => {
-      expect(screen.getByText("Overall Compliance")).toBeInTheDocument();
-    });
+    expect(await screen.findByText("Overall Compliance", {}, { timeout: 10000 })).toBeInTheDocument();
 
     expect(screen.getByText("Top Findings")).toBeInTheDocument();
     expect(screen.getByText("QAA Quality Standards")).toBeInTheDocument();
