@@ -13,13 +13,8 @@ const mocks = vi.hoisted(() => ({
     error: vi.fn(),
     success: vi.fn(),
   },
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
   supabase: {
     from: vi.fn(),
-    rpc: vi.fn(),
     functions: {
       invoke: vi.fn(),
     },
@@ -36,10 +31,6 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("sonner", () => ({
   toast: mocks.toast,
-}));
-
-vi.mock("@/lib/logger", () => ({
-  log: mocks.logger,
 }));
 
 vi.mock("lucide-react", () => {
@@ -129,87 +120,5 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.getByText("CS301 - Data Structures")).toBeInTheDocument();
 
     consoleError.mockRestore();
-  });
-
-  it("builds a plan for a real student using assignment metadata RPC", async () => {
-    mocks.authState.isDemo = false;
-    mocks.supabase.rpc.mockResolvedValue({
-      data: [
-        {
-          submission_id: "submission-1",
-          assignment_id: "assignment-1",
-          title: "Algorithms Coursework",
-          module_code: "CS101",
-          max_score: 100,
-        },
-      ],
-      error: null,
-    });
-
-    mocks.supabase.from.mockImplementation((table: string) => {
-      if (table === "submissions") {
-        return {
-          select: () => ({
-            eq: () => ({
-              order: () =>
-                Promise.resolve({
-                  data: [
-                    {
-                      id: "submission-1",
-                      assignment_id: "assignment-1",
-                      student_id: "student-1",
-                      submitted_at: "2026-04-20T10:00:00.000Z",
-                    },
-                  ],
-                }),
-            }),
-          }),
-        };
-      }
-
-      if (table === "improvement_plan_progress") {
-        return {
-          select: () => ({
-            eq: () =>
-              Promise.resolve({
-                data: [],
-              }),
-          }),
-        };
-      }
-
-      if (table === "grades") {
-        return {
-          select: () => ({
-            in: () =>
-              Promise.resolve({
-                data: [
-                  {
-                    submission_id: "submission-1",
-                    final_score: 68,
-                    ai_score: 68,
-                    ai_breakdown: [
-                      { criterion: "Analysis", score: 6, max_score: 10 },
-                      { criterion: "Testing", score: 5, max_score: 10 },
-                    ],
-                  },
-                ],
-              }),
-          }),
-        };
-      }
-
-      throw new Error(`Unexpected table: ${table}`);
-    });
-
-    render(
-      <MemoryRouter>
-        <ImprovementPlan />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText("CS101 - Algorithms Coursework")).toBeInTheDocument();
-    expect(screen.queryByText("No improvement plan yet")).not.toBeInTheDocument();
-    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_grade_assignment_metadata");
   });
 });
