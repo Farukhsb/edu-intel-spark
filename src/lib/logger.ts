@@ -36,6 +36,19 @@ const sanitizeContext = (context?: SafeContext): SafeContext => {
   );
 };
 
+const toSafeErrorName = (error: unknown) => {
+  if (!(error instanceof Error)) return "UnknownError";
+
+  const normalizedName = error.name?.trim();
+  return normalizedName || "Error";
+};
+
+const toSafeError = (error: unknown, fallbackMessage: string) => {
+  const safeError = new Error(fallbackMessage);
+  safeError.name = toSafeErrorName(error);
+  return safeError;
+};
+
 const writeConsole = (
   level: "debug" | "info" | "warn" | "error",
   message: string,
@@ -75,8 +88,10 @@ export const log = {
   },
   error(message: string, error?: unknown, context?: SafeContext) {
     const safeContext = sanitizeContext(context);
-    captureAppError(error ?? new Error(message), {
+    const safeError = toSafeError(error, message);
+    captureAppError(safeError, {
       message,
+      errorName: safeError.name,
       ...safeContext,
     });
     writeConsole("error", message, safeContext, error);
@@ -85,4 +100,6 @@ export const log = {
 
 export const loggerInternals = {
   sanitizeContext,
+  toSafeError,
+  toSafeErrorName,
 };

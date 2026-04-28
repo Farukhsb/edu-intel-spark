@@ -56,11 +56,47 @@ describe("logger", () => {
       submissions: ["s1", "s2"],
     });
 
-    expect(sentryMock.captureAppError).toHaveBeenCalledWith(error, {
+    expect(sentryMock.captureAppError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Error",
+        message: "failed to fetch",
+      }),
+      {
       message: "failed to fetch",
+      errorName: "Error",
       assignmentId: "assignment-1",
       feedback: "[REDACTED]",
       submissions: "[REDACTED]",
+      },
+    );
+  });
+
+  it("reports a synthesized safe error instead of the raw thrown error", async () => {
+    vi.stubEnv("VITE_APP_ENV", "production");
+
+    const { log } = await import("@/lib/logger");
+    const error = new Error("Student essay text: Macbeth response from a3dullahifaruk@gmail.com");
+    error.name = "AcademicContentError";
+
+    log.error("Failed to process assignment workflow", error, {
+      prompt: "private prompt",
+      assignmentId: "assignment-2",
+    });
+
+    const [reportedError, reportedContext] = sentryMock.captureAppError.mock.calls[0];
+
+    expect(reportedError).toBeInstanceOf(Error);
+    expect(reportedError).not.toBe(error);
+    expect((reportedError as Error).name).toBe("AcademicContentError");
+    expect((reportedError as Error).message).toBe("Failed to process assignment workflow");
+    expect((reportedError as Error).message).not.toContain("Macbeth");
+    expect((reportedError as Error).message).not.toContain("a3dullahifaruk@gmail.com");
+
+    expect(reportedContext).toEqual({
+      message: "Failed to process assignment workflow",
+      errorName: "AcademicContentError",
+      prompt: "[REDACTED]",
+      assignmentId: "assignment-2",
     });
   });
 });
