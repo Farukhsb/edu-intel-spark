@@ -48,6 +48,7 @@ interface Assignment {
   status: "draft" | "published" | "closed";
   created_at: string;
   rubric: RubricCriterion[] | null;
+  target_cohorts: string[];
 }
 
 interface StudentNotificationProfile {
@@ -105,6 +106,7 @@ const Assignments = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Assignment["status"]>("all");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -116,6 +118,40 @@ const Assignments = () => {
   const [dueDate, setDueDate] = useState("");
   const [rubric, setRubric] = useState<RubricCriterion[]>([]);
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
+
+  const resetAssignmentForm = () => {
+    setEditingAssignmentId(null);
+    setTitle("");
+    setDescription("");
+    setModuleCode("");
+    setMaxScore("100");
+    setDueDate("");
+    setRubric([]);
+    setSelectedCohorts([]);
+  };
+
+  const openCreateDialog = () => {
+    resetAssignmentForm();
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (assignment: Assignment) => {
+    setEditingAssignmentId(assignment.id);
+    setTitle(assignment.title);
+    setDescription(assignment.description ?? "");
+    setModuleCode(assignment.module_code ?? "");
+    setMaxScore(String(assignment.max_score));
+    setDueDate(
+      assignment.due_date
+        ? new Date(new Date(assignment.due_date).getTime() - new Date(assignment.due_date).getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16)
+        : "",
+    );
+    setRubric(assignment.rubric ?? []);
+    setSelectedCohorts(assignment.target_cohorts);
+    setDialogOpen(true);
+  };
 
   const fetchAssignments = async () => {
     if (isDemo) {
@@ -145,6 +181,22 @@ const Assignments = () => {
       return;
     }
 
+    const assignmentIds = (data || []).map((assignment) => assignment.id);
+    const { data: assignmentCohorts } =
+      role === "lecturer" && assignmentIds.length > 0
+        ? await supabase
+            .from("assignment_cohorts")
+            .select("assignment_id, cohort_id")
+            .in("assignment_id", assignmentIds)
+        : { data: [] };
+
+    const cohortMap = new Map<string, string[]>();
+    for (const row of assignmentCohorts || []) {
+      const existing = cohortMap.get(row.assignment_id) ?? [];
+      existing.push(row.cohort_id);
+      cohortMap.set(row.assignment_id, existing);
+    }
+
     const mapped: Assignment[] = (data || []).map((a) => ({
       id: a.id,
       title: a.title,
@@ -155,6 +207,7 @@ const Assignments = () => {
       status: a.status,
       created_at: a.created_at,
       rubric: a.rubric as unknown as RubricCriterion[] | null,
+      target_cohorts: cohortMap.get(a.id) ?? [],
     }));
 
     setAssignments(mapped);
@@ -194,52 +247,78 @@ const Assignments = () => {
 
   const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
-  const handleCreate = async () => {
+  const upsertAssignmentCohorts = async (assignmentId: string, cohortIds: string[]) => {
+    const { error: deleteError } = await supabase
+      .from("assignment_cohorts")
+      .delete()
+      .eq("assignment_id", assignmentId);
+
+    if (deleteError) throw deleteError;
+
+    if (cohortIds.length === 0) {
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from("assignment_cohorts")
+      .insert(
+        cohortIds.map((cohortId) => ({
+          assignment_id: assignmentId,
+          cohort_id: cohortId,
+        })),
+      );
+
+    if (insertError) throw insertError;
+  };
+
+  const handleSaveAssignment = async () => {
     if (!title.trim() || !user) { toast.error("Title is required"); return; }
     setCreating(true);
     try {
-      const { data: assignmentRow, error } = await supabase
-        .from("assignments")
-        .insert([{
-          title: title.trim(),
-          description: description.trim() || null,
-          module_code: moduleCode.trim() || null,
-          max_score: Number(maxScore) || 100,
-          due_date: dueDate || null,
-          lecturer_id: user.id,
-          status: "draft" as const,
-          rubric: rubric.length > 0 ? rubric : null,
-        }])
-        .select("id")
-        .single();
+      if (editingAssignmentId) {
+        const { error } = await supabase
+          .from("assignments")
+          .update({
+            title: title.trim(),
+            description: description.trim() || null,
+            module_code: moduleCode.trim() || null,
+            max_score: Number(maxScore) || 100,
+            due_date: dueDate || null,
+            rubric: rubric.length > 0 ? rubric : null,
+          })
+          .eq("id", editingAssignmentId);
 
-      if (error || !assignmentRow) throw error ?? new Error("Assignment creation failed");
+        if (error) throw error;
 
-      if (selectedCohorts.length > 0) {
-        const { error: targetError } = await supabase
-          .from("assignment_cohorts")
-          .insert(
-            selectedCohorts.map((cohortId) => ({
-              assignment_id: assignmentRow.id,
-              cohort_id: cohortId,
-            })),
-          );
+        await upsertAssignmentCohorts(editingAssignmentId, selectedCohorts);
+        toast.success("Assignment updated");
+      } else {
+        const { data: assignmentRow, error } = await supabase
+          .from("assignments")
+          .insert([{
+            title: title.trim(),
+            description: description.trim() || null,
+            module_code: moduleCode.trim() || null,
+            max_score: Number(maxScore) || 100,
+            due_date: dueDate || null,
+            lecturer_id: user.id,
+            status: "draft" as const,
+            rubric: rubric.length > 0 ? rubric : null,
+          }])
+          .select("id")
+          .single();
 
-        if (targetError) throw targetError;
+        if (error || !assignmentRow) throw error ?? new Error("Assignment creation failed");
+
+        await upsertAssignmentCohorts(assignmentRow.id, selectedCohorts);
+        toast.success("Assignment created");
       }
 
-      toast.success("Assignment created");
-      setTitle("");
-      setDescription("");
-      setModuleCode("");
-      setMaxScore("100");
-      setDueDate("");
-      setRubric([]);
-      setSelectedCohorts([]);
+      resetAssignmentForm();
       setDialogOpen(false);
       fetchAssignments();
     } catch {
-      toast.error("Failed to create assignment");
+      toast.error(editingAssignmentId ? "Failed to update assignment" : "Failed to create assignment");
     }
     setCreating(false);
   };
@@ -380,14 +459,24 @@ const Assignments = () => {
           </p>
         </div>
         {role === "lecturer" && !isDemo && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) resetAssignmentForm();
+            }}
+          >
             <DialogTrigger asChild>
-              <Button><Plus className="mr-2 h-4 w-4" />New Assignment</Button>
+              <Button onClick={openCreateDialog}><Plus className="mr-2 h-4 w-4" />New Assignment</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create Assignment</DialogTitle>
-                <DialogDescription>Set up the brief now, then publish when you are ready to accept submissions.</DialogDescription>
+                <DialogTitle>{editingAssignmentId ? "Edit Assignment" : "Create Assignment"}</DialogTitle>
+                <DialogDescription>
+                  {editingAssignmentId
+                    ? "Update the brief and cohort targeting before the next publish or release step."
+                    : "Set up the brief now, then publish when you are ready to accept submissions."}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="rounded-lg border bg-muted/30 p-4 text-sm">
@@ -436,8 +525,10 @@ const Assignments = () => {
                   </div>
                 </div>
                 <RubricBuilder rubric={rubric} onChange={setRubric} maxScore={Number(maxScore) || 100} />
-                <Button onClick={handleCreate} disabled={creating} className="w-full">
-                  {creating ? "Creating..." : "Create Draft Assignment"}
+                <Button onClick={handleSaveAssignment} disabled={creating} className="w-full">
+                  {creating
+                    ? (editingAssignmentId ? "Saving..." : "Creating...")
+                    : (editingAssignmentId ? "Save Assignment Changes" : "Create Draft Assignment")}
                 </Button>
               </div>
             </DialogContent>
@@ -591,6 +682,20 @@ const Assignments = () => {
 
                       {assignment.description && <p className="text-sm text-muted-foreground line-clamp-2">{assignment.description}</p>}
 
+                      {assignment.target_cohorts.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {assignment.target_cohorts.map((cohortId) => {
+                            const cohortLabel =
+                              COHORTS.find((cohort) => cohort.value === cohortId)?.label ?? cohortId;
+                            return (
+                              <Badge key={`${assignment.id}-${cohortId}`} variant="outline" className="text-xs">
+                                {cohortLabel}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       {role === "lecturer" && (
                         <div className="rounded-lg border bg-muted/30 p-3">
                           <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -612,6 +717,11 @@ const Assignments = () => {
                     </div>
 
                     <div className="flex gap-2 self-start">
+                      {role === "lecturer" && !isDemo && (
+                        <Button size="sm" variant="outline" onClick={() => openEditDialog(assignment)}>
+                          Edit
+                        </Button>
+                      )}
                       {role === "lecturer" && assignment.status === "draft" && !isDemo && (
                         <Button size="sm" onClick={() => handlePublish(assignment.id)}>Publish</Button>
                       )}
