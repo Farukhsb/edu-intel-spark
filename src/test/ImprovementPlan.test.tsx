@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -80,39 +80,21 @@ describe("ImprovementPlan explanation validation", () => {
     vi.clearAllMocks();
   });
 
-  it("accepts a valid explanation payload and keeps the refresh action safe", async () => {
-    mocks.supabase.functions.invoke.mockResolvedValue({
-      data: {
-        explanation: "Focus on complexity analysis and testing.",
-        next_steps: ["Review Big-O notes", "Add edge-case tests"],
-        confidence: 0.79,
-      },
-      error: null,
-    });
-
+  it("renders suggested focus areas without a misleading refresh action", () => {
     render(
       <MemoryRouter>
         <ImprovementPlan />
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
-
-    await waitFor(() => {
-      expect(mocks.toast.success).toHaveBeenCalledWith("Recommendations refreshed");
-    });
+    expect(screen.getByRole("heading", { name: "Suggested Focus Areas" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
+    expect(mocks.supabase.functions.invoke).not.toHaveBeenCalled();
     expect(mocks.toast.error).not.toHaveBeenCalled();
   });
 
-  it("shows a safe fallback when the explanation payload is invalid", async () => {
+  it("keeps the demo focus section visible without invoking AI refresh", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.supabase.functions.invoke.mockResolvedValue({
-      data: {
-        explanation: 123,
-        next_steps: "Rewrite paragraph one",
-      },
-      error: null,
-    });
 
     render(
       <MemoryRouter>
@@ -120,11 +102,9 @@ describe("ImprovementPlan explanation validation", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
-
-    await waitFor(() => {
-      expect(mocks.toast.error).toHaveBeenCalledWith("Failed to refresh recommendations. Existing plan kept.");
-    });
+    expect(screen.getByText("Big-O Reasoning Worksheet")).toBeInTheDocument();
+    expect(screen.getByText("Derived from repeated weakness in complexity analysis.")).toBeInTheDocument();
+    expect(mocks.supabase.functions.invoke).not.toHaveBeenCalled();
     expect(mocks.toast.success).not.toHaveBeenCalled();
     expect(screen.getByText("CS301 - Data Structures")).toBeInTheDocument();
 
