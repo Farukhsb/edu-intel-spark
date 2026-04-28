@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BookOpen, Bell, CheckCircle2, Circle, Loader2, RefreshCw, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { BookOpen, Bell, CheckCircle2, Circle, Loader2, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -48,6 +48,14 @@ interface Resource {
   duration: string;
   relevance: number;
   reason: string;
+}
+
+interface AssignmentMetadataRow {
+  submission_id: string;
+  assignment_id: string;
+  title: string | null;
+  module_code: string | null;
+  max_score: number | null;
 }
 
 const DEMO_PLAN: PlanModule[] = [
@@ -106,21 +114,21 @@ const DEMO_RESOURCES: Resource[] = [
     type: "Guide",
     duration: "15 min",
     relevance: 94,
-    reason: "Targets repeated weakness in complexity analysis.",
+    reason: "Derived from repeated weakness in complexity analysis.",
   },
   {
     title: "Dynamic Programming Pattern Drills",
     type: "Exercises",
     duration: "40 min",
     relevance: 90,
-    reason: "Improves structure before the next algorithm submission.",
+    reason: "Derived from weaker performance in dynamic programming structure.",
   },
   {
     title: "Testing Edge Cases in Python",
     type: "Article",
     duration: "12 min",
     relevance: 84,
-    reason: "Helps strengthen low-scoring test coverage work.",
+    reason: "Derived from lower-scoring test coverage work.",
   },
 ];
 
@@ -149,7 +157,6 @@ const ImprovementPlan = () => {
   const [plan, setPlan] = useState<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const [resources, setResources] = useState<Resource[]>(isDemo ? DEMO_RESOURCES : []);
   const [loading, setLoading] = useState(!isDemo);
-  const [generating, setGenerating] = useState(false);
   const latestPlanRef = useRef<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const notification = (location.state as { notification?: CommunicationMessage } | null)?.notification;
 
@@ -183,17 +190,27 @@ const ImprovementPlan = () => {
       }
 
       const submissionIds = submissions.map((submission) => submission.id);
-      const assignmentIds = [...new Set(submissions.map((submission) => submission.assignment_id))];
 
-      const [{ data: grades }, { data: assignments }] = await Promise.all([
+      const [{ data: grades }, assignmentMetaRes] = await Promise.all([
         supabase.from("grades").select("*").in("submission_id", submissionIds),
-        supabase.from("assignments").select("*").in("id", assignmentIds),
+        supabase.rpc("get_student_grade_assignment_metadata"),
       ]);
 
       const assignmentMap: Record<string, any> = {};
-      (assignments || []).forEach((assignment) => {
-        assignmentMap[assignment.id] = assignment;
-      });
+      if (assignmentMetaRes.error) {
+        log.warn("Improvement plan assignment metadata lookup failed", {
+          studentId: user.id,
+        });
+      } else {
+        ((assignmentMetaRes.data || []) as AssignmentMetadataRow[]).forEach((row) => {
+          assignmentMap[row.assignment_id] = {
+            id: row.assignment_id,
+            title: row.title ?? "Assignment title unavailable",
+            module_code: row.module_code,
+            max_score: row.max_score,
+          };
+        });
+      }
 
       const gradeMap: Record<string, any> = {};
       (grades || []).forEach((grade) => {
@@ -213,12 +230,19 @@ const ImprovementPlan = () => {
       > = {};
 
       submissions.forEach((submission) => {
-        const assignment = assignmentMap[submission.assignment_id];
+        const assignment = assignmentMap[submission.assignment_id] || {
+          id: submission.assignment_id,
+          title: "Assignment title unavailable",
+          module_code: null,
+          max_score: null,
+        };
         const grade = gradeMap[submission.id];
         const score = grade?.final_score ?? grade?.ai_score;
-        if (!assignment || score == null) return;
+        if (score == null) return;
 
-        const moduleKey = [assignment.module_code, assignment.title].filter(Boolean).join(" - ") || assignment.title;
+        const moduleKey =
+          [assignment.module_code, assignment.title].filter(Boolean).join(" - ") ||
+          `Assignment ${String(submission.assignment_id).slice(0, 8)}`;
         if (!moduleBuckets[moduleKey]) {
           moduleBuckets[moduleKey] = {
             scores: [],
@@ -389,54 +413,6 @@ const ImprovementPlan = () => {
       latestPlanRef.current = previousPlan;
       toast.error("Could not save task progress.");
     }
-  };
-
-  const generateAIRecommendations = async () => {
-    if (plan.length === 0) return;
-    setGenerating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("explain-grade", {
-        body: {
-          messages: [
-            {
-              role: "user",
-              content: `Give concise next-step study actions for these modules:\n${plan
-                .map(
-                  (module) =>
-                    `${module.module}: current ${module.currentGrade}%, target ${module.targetGrade}%, weaknesses: ${module.weaknesses.join(", ")}`
-                )
-                .join("\n")}`,
-            },
-          ],
-          gradeContext: { plan },
-        },
-      });
-      if (error) throw error;
-
-      const parsed = safeParseExplanationResponse(data);
-      if (!parsed.success) {
-        log.error("Invalid explanation payload received for ImprovementPlan", undefined, {
-          moduleCount: plan.length,
-        });
-        toast.error("Failed to refresh recommendations. Existing plan kept.");
-        setGenerating(false);
-        return;
-      }
-
-      setResources((current) =>
-        current.map((resource, index) => ({
-          ...resource,
-          relevance: Math.max(70, resource.relevance - index + 2),
-        }))
-      );
-      toast.success("Recommendations refreshed");
-    } catch (error) {
-      log.error("Failed to refresh recommendations", error, {
-        moduleCount: plan.length,
-      });
-      toast.error("Failed to refresh recommendations. Existing plan kept.");
-    }
-    setGenerating(false);
   };
 
   const overallTasks = useMemo(() => {
@@ -675,17 +651,11 @@ const ImprovementPlan = () => {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">Recommended Resources</CardTitle>
-            </div>
-            <Button variant="outline" size="sm" onClick={generateAIRecommendations} disabled={generating}>
-              {generating ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}
-              Refresh
-            </Button>
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">Suggested Focus Areas</CardTitle>
           </div>
-          <CardDescription>Resources matched to your weakest criteria and next submission priorities</CardDescription>
+          <CardDescription>Derived from your weakest criteria and next submission priorities</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {resources.map((resource) => (
@@ -697,7 +667,7 @@ const ImprovementPlan = () => {
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">{resource.reason}</p>
               </div>
-              <Badge variant="outline">{resource.relevance}% match</Badge>
+              <Badge variant="outline">{resource.relevance}% derived fit</Badge>
             </div>
           ))}
         </CardContent>

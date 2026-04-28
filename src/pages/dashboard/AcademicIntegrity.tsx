@@ -58,6 +58,8 @@ const decisionOptions: IntegrityDecision[] = [
   "misconduct-concern",
 ];
 
+type IntegrityQueueFilter = "pending" | "investigate" | "resolved";
+
 const AcademicIntegrity = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -68,6 +70,7 @@ const AcademicIntegrity = () => {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [decisionDrafts, setDecisionDrafts] = useState<Record<string, IntegrityDecision>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [queueFilter, setQueueFilter] = useState<IntegrityQueueFilter>("pending");
 
   useEffect(() => {
     if (!user) return;
@@ -200,6 +203,37 @@ const AcademicIntegrity = () => {
   };
 
   const totals = useMemo(() => buildIntegrityTotals(flagged), [flagged]);
+  const filteredCases = useMemo(() => {
+    if (queueFilter === "pending") {
+      return flagged.filter((item) => item.decision === "pending");
+    }
+
+    if (queueFilter === "investigate") {
+      return flagged.filter((item) => item.decision === "investigate");
+    }
+
+    return flagged.filter(
+      (item) => item.decision === "clear" || item.decision === "misconduct-concern"
+    );
+  }, [flagged, queueFilter]);
+
+  const queueCounts = useMemo(
+    () => ({
+      pending: flagged.filter((item) => item.decision === "pending").length,
+      investigate: flagged.filter((item) => item.decision === "investigate").length,
+      resolved: flagged.filter(
+        (item) => item.decision === "clear" || item.decision === "misconduct-concern"
+      ).length,
+    }),
+    [flagged]
+  );
+
+  const queueEmptyMessage =
+    queueFilter === "pending"
+      ? "No pending integrity decisions right now."
+      : queueFilter === "investigate"
+        ? "No active investigations right now."
+        : "No resolved integrity cases yet.";
 
   if (loading) {
     return (
@@ -266,12 +300,49 @@ const AcademicIntegrity = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={queueFilter === "pending" ? "default" : "outline"}
+              onClick={() => setQueueFilter("pending")}
+            >
+              Needs Review
+              <Badge variant="secondary" className="ml-2">
+                {queueCounts.pending}
+              </Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={queueFilter === "investigate" ? "default" : "outline"}
+              onClick={() => setQueueFilter("investigate")}
+            >
+              Active Investigations
+              <Badge variant="secondary" className="ml-2">
+                {queueCounts.investigate}
+              </Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={queueFilter === "resolved" ? "default" : "outline"}
+              onClick={() => setQueueFilter("resolved")}
+            >
+              Resolved
+              <Badge variant="secondary" className="ml-2">
+                {queueCounts.resolved}
+              </Badge>
+            </Button>
+          </div>
+
           {flagged.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No persisted integrity cases found yet. Run a plagiarism check on an assignment to populate the queue.
             </p>
+          ) : filteredCases.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {queueEmptyMessage}
+            </p>
           ) : (
-            flagged.map((item) => {
+            filteredCases.map((item) => {
               const expanded = expandedId === item.submissionId;
 
               return (
