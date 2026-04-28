@@ -18,7 +18,6 @@ export function getCorsHeaders(req: Request): Record<string, string> | null {
   if (!origin) {
     return {
       ...BASE_CORS_HEADERS,
-      "Access-Control-Allow-Origin": "*",
     };
   }
 

@@ -1906,7 +1906,7 @@ Re-evaluate the rubric faithfully. If the evidence supports only a fail-range sc
         if (passCandidates.length === 0) throw new Error("Failed to parse AI response");
 
         const sortedPassCandidates = [...passCandidates].sort((a, b) => a.normalized.total - b.normalized.total);
-        let selectedCandidate = sortedPassCandidates[Math.floor(sortedPassCandidates.length / 2)];
+        const selectedCandidate = sortedPassCandidates[Math.floor(sortedPassCandidates.length / 2)];
         const originalAiScoreBeforeValidation =
           selectedCandidate.modelScore ??
           normalizeOverallScore(
@@ -1922,7 +1922,7 @@ Re-evaluate the rubric faithfully. If the evidence supports only a fail-range sc
         );
         let scoreAdjusted = selectedCandidate.scoreAdjusted;
         let positiveFeedbackLowScoreMismatch = selectedCandidate.positiveFeedbackLowScoreMismatch;
-        let stabilityNotes: string[] = [];
+        const stabilityNotes: string[] = [];
 
         const passScores = sortedPassCandidates.map((candidate) => candidate.normalized.total);
         const passSpread =
@@ -2062,7 +2062,7 @@ Return corrected JSON only.`;
               evidenceText: single.evidence_from_submission,
               submissionText: blindedText,
               maxScore: assignment.max_score,
-              extractionSuccess: Boolean(extractionMetadata.extraction_success),
+          extractionSuccess: extractionMetadata.extraction_success === true,
               extractedTextLength: Number(extractionMetadata.extracted_text_length || 0),
               integrityRiskHigh,
             });
@@ -2090,7 +2090,7 @@ Return corrected JSON only.`;
           !fairnessRecalibrationApplied &&
           evidenceCoverage &&
           normalized.breakdown.length === 1 &&
-          !Boolean(mathAnalysis?.solver_signals.length) &&
+          !(mathAnalysis?.solver_signals.length) &&
           !relevanceBlocksFairness
         ) {
           let coverageTarget: number | null = null;

@@ -48,8 +48,21 @@ function looksLikeBinaryText(text: string) {
   if (!trimmed) return false;
   if (trimmed.startsWith("PK")) return true;
 
-  const controlChars = trimmed.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || [];
-  return controlChars.length > Math.max(8, Math.floor(trimmed.length * 0.05));
+  let controlChars = 0;
+  for (const character of trimmed) {
+    const code = character.charCodeAt(0);
+    const isControlChar =
+      (code >= 0x00 && code <= 0x08) ||
+      code === 0x0b ||
+      code === 0x0c ||
+      (code >= 0x0e && code <= 0x1f);
+
+    if (isControlChar) {
+      controlChars++;
+    }
+  }
+
+  return controlChars > Math.max(8, Math.floor(trimmed.length * 0.05));
 }
 
 export function detectDocumentType(fileName: string | null | undefined, mimeType: string | null | undefined): SupportedDocumentType {
