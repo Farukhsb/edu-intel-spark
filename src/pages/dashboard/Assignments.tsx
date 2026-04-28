@@ -15,7 +15,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, FileText, Calendar, BookOpen, Loader2, Search, Clock3, CheckCircle2, Archive } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { Plus, FileText, Calendar, BookOpen, Loader2, Search, Clock3, CheckCircle2, Archive, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
@@ -101,6 +103,16 @@ const statusIcon = (status: Assignment["status"]) => {
   if (status === "published") return CheckCircle2;
   if (status === "closed") return Archive;
   return Clock3;
+};
+
+const summarizeSelection = (
+  selected: string[],
+  labelForValue: (value: string) => string,
+  emptyLabel: string,
+) => {
+  if (selected.length === 0) return emptyLabel;
+  if (selected.length <= 2) return selected.map(labelForValue).join(", ");
+  return `${selected.length} selected`;
 };
 
 const Assignments = () => {
@@ -478,6 +490,32 @@ const Assignments = () => {
     }
   };
 
+  const handleSetAssignmentStatus = async (
+    assignmentId: string,
+    nextStatus: Assignment["status"],
+    successMessage: string,
+    failureMessage: string,
+  ) => {
+    if (isDemo) {
+      toast.info("Assignment status changes are disabled in demo mode");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("assignments")
+        .update({ status: nextStatus })
+        .eq("id", assignmentId);
+
+      if (error) throw error;
+
+      toast.success(successMessage);
+      fetchAssignments();
+    } catch {
+      toast.error(failureMessage);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   const view = searchParams.get("view");
@@ -488,7 +526,10 @@ const Assignments = () => {
       .filter(Boolean)
       .some((value) => value!.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesStatus = statusFilter === "all" || assignment.status === statusFilter;
+    const matchesStatus =
+      statusFilter === "all"
+        ? (role === "lecturer" ? assignment.status !== "closed" : true)
+        : assignment.status === statusFilter;
     const reviewCount = submissionStats[assignment.id]?.needsReview ?? 0;
     const matchesQueue = !isPendingReviewView || reviewCount > 0;
     return matchesSearch && matchesStatus && matchesQueue;
@@ -585,28 +626,86 @@ const Assignments = () => {
                   <p className="text-xs text-muted-foreground">
                     Published assignment notifications only go to cohorts linked here.
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {COHORTS.map((cohort) => (
-                      <label key={cohort.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <Checkbox checked={selectedCohorts.includes(cohort.value)} onCheckedChange={() => toggleCohort(cohort.value)} />
-                        {cohort.label}
-                      </label>
-                    ))}
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full justify-between font-normal"
+                      >
+                        <span className="truncate text-left">
+                          {summarizeSelection(
+                            selectedCohorts,
+                            (value) => COHORTS.find((cohort) => cohort.value === value)?.label ?? value,
+                            "Select target cohorts",
+                          )}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-3" align="start">
+                      <div className="space-y-2">
+                        {COHORTS.map((cohort) => (
+                          <label
+                            key={cohort.value}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer hover:bg-muted",
+                              selectedCohorts.includes(cohort.value) && "bg-muted",
+                            )}
+                          >
+                            <Checkbox
+                              checked={selectedCohorts.includes(cohort.value)}
+                              onCheckedChange={() => toggleCohort(cohort.value)}
+                            />
+                            {cohort.label}
+                          </label>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-2">
                   <Label>Target Departments (optional)</Label>
                   <p className="text-xs text-muted-foreground">
                     If set, published assignment visibility is also restricted to these departments.
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {DEPARTMENTS.map((department) => (
-                      <label key={department} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <Checkbox checked={selectedDepartments.includes(department)} onCheckedChange={() => toggleDepartment(department)} />
-                        {department}
-                      </label>
-                    ))}
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full justify-between font-normal"
+                      >
+                        <span className="truncate text-left">
+                          {summarizeSelection(
+                            selectedDepartments,
+                            (value) => value,
+                            "Select target departments",
+                          )}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-3" align="start">
+                      <div className="max-h-64 space-y-2 overflow-y-auto">
+                        {DEPARTMENTS.map((department) => (
+                          <label
+                            key={department}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer hover:bg-muted",
+                              selectedDepartments.includes(department) && "bg-muted",
+                            )}
+                          >
+                            <Checkbox
+                              checked={selectedDepartments.includes(department)}
+                              onCheckedChange={() => toggleDepartment(department)}
+                            />
+                            {department}
+                          </label>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <RubricBuilder rubric={rubric} onChange={setRubric} maxScore={Number(maxScore) || 100} />
                 <Button onClick={handleSaveAssignment} disabled={creating} className="w-full">
@@ -688,10 +787,10 @@ const Assignments = () => {
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="all">{role === "lecturer" ? "Active statuses" : "All statuses"}</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
+              <SelectItem value="closed">{role === "lecturer" ? "Archived" : "Closed"}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -818,6 +917,34 @@ const Assignments = () => {
                       )}
                       {role === "lecturer" && assignment.status === "draft" && !isDemo && (
                         <Button size="sm" onClick={() => handlePublish(assignment.id)}>Publish</Button>
+                      )}
+                      {role === "lecturer" && assignment.status !== "closed" && !isDemo && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSetAssignmentStatus(
+                            assignment.id,
+                            "closed",
+                            "Assignment archived",
+                            "Failed to archive assignment",
+                          )}
+                        >
+                          Archive
+                        </Button>
+                      )}
+                      {role === "lecturer" && assignment.status === "closed" && !isDemo && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSetAssignmentStatus(
+                            assignment.id,
+                            "draft",
+                            "Assignment restored to draft",
+                            "Failed to restore assignment",
+                          )}
+                        >
+                          Restore
+                        </Button>
                       )}
                       <Button size="sm" variant="outline" asChild>
                         <Link to={`/dashboard/assignments/${assignment.id}`}>
