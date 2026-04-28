@@ -31,6 +31,7 @@ import {
   isStudentGradeVisible,
 } from "@/lib/assessmentWorkflow";
 
+const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
   { value: "100", label: "Level 100" },
   { value: "200", label: "Level 200" },
@@ -49,10 +50,13 @@ interface Assignment {
   created_at: string;
   rubric: RubricCriterion[] | null;
   target_cohorts: string[];
+  target_departments: string[];
 }
 
 interface StudentNotificationProfile {
   id: string;
+  cohort_id: string | null;
+  department_id: string | null;
   full_name: string | null;
   email: string | null;
   role: string | null;
@@ -118,6 +122,7 @@ const Assignments = () => {
   const [dueDate, setDueDate] = useState("");
   const [rubric, setRubric] = useState<RubricCriterion[]>([]);
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
   const resetAssignmentForm = () => {
     setEditingAssignmentId(null);
@@ -128,6 +133,7 @@ const Assignments = () => {
     setDueDate("");
     setRubric([]);
     setSelectedCohorts([]);
+    setSelectedDepartments([]);
   };
 
   const openCreateDialog = () => {
@@ -150,6 +156,7 @@ const Assignments = () => {
     );
     setRubric(assignment.rubric ?? []);
     setSelectedCohorts(assignment.target_cohorts);
+    setSelectedDepartments(assignment.target_departments);
     setDialogOpen(true);
   };
 
@@ -189,12 +196,25 @@ const Assignments = () => {
             .select("assignment_id, cohort_id")
             .in("assignment_id", assignmentIds)
         : { data: [] };
+    const { data: assignmentDepartments } =
+      role === "lecturer" && assignmentIds.length > 0
+        ? await supabase
+            .from("assignment_departments")
+            .select("assignment_id, department_id")
+            .in("assignment_id", assignmentIds)
+        : { data: [] };
 
     const cohortMap = new Map<string, string[]>();
     for (const row of assignmentCohorts || []) {
       const existing = cohortMap.get(row.assignment_id) ?? [];
       existing.push(row.cohort_id);
       cohortMap.set(row.assignment_id, existing);
+    }
+    const departmentMap = new Map<string, string[]>();
+    for (const row of assignmentDepartments || []) {
+      const existing = departmentMap.get(row.assignment_id) ?? [];
+      existing.push(row.department_id);
+      departmentMap.set(row.assignment_id, existing);
     }
 
     const mapped: Assignment[] = (data || []).map((a) => ({
@@ -208,6 +228,7 @@ const Assignments = () => {
       created_at: a.created_at,
       rubric: a.rubric as unknown as RubricCriterion[] | null,
       target_cohorts: cohortMap.get(a.id) ?? [],
+      target_departments: departmentMap.get(a.id) ?? [],
     }));
 
     setAssignments(mapped);
@@ -246,6 +267,7 @@ const Assignments = () => {
   }, [searchParams]);
 
   const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  const toggleDepartment = (val: string) => setSelectedDepartments(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
   const upsertAssignmentCohorts = async (assignmentId: string, cohortIds: string[]) => {
     const { error: deleteError } = await supabase
@@ -265,6 +287,30 @@ const Assignments = () => {
         cohortIds.map((cohortId) => ({
           assignment_id: assignmentId,
           cohort_id: cohortId,
+        })),
+      );
+
+    if (insertError) throw insertError;
+  };
+
+  const upsertAssignmentDepartments = async (assignmentId: string, departmentIds: string[]) => {
+    const { error: deleteError } = await supabase
+      .from("assignment_departments")
+      .delete()
+      .eq("assignment_id", assignmentId);
+
+    if (deleteError) throw deleteError;
+
+    if (departmentIds.length === 0) {
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from("assignment_departments")
+      .insert(
+        departmentIds.map((departmentId) => ({
+          assignment_id: assignmentId,
+          department_id: departmentId,
         })),
       );
 
@@ -291,6 +337,7 @@ const Assignments = () => {
         if (error) throw error;
 
         await upsertAssignmentCohorts(editingAssignmentId, selectedCohorts);
+        await upsertAssignmentDepartments(editingAssignmentId, selectedDepartments);
         toast.success("Assignment updated");
       } else {
         const { data: assignmentRow, error } = await supabase
@@ -310,7 +357,10 @@ const Assignments = () => {
 
         if (error || !assignmentRow) throw error ?? new Error("Assignment creation failed");
 
-        await upsertAssignmentCohorts(assignmentRow.id, selectedCohorts);
+        await Promise.all([
+          upsertAssignmentCohorts(assignmentRow.id, selectedCohorts),
+          upsertAssignmentDepartments(assignmentRow.id, selectedDepartments),
+        ]);
         toast.success("Assignment created");
       }
 
@@ -335,9 +385,18 @@ const Assignments = () => {
           .from("assignment_cohorts")
           .select("cohort_id")
           .eq("assignment_id", id);
+        const { data: assignmentDepartmentTargets, error: assignmentDepartmentTargetsError } = await supabase
+          .from("assignment_departments")
+          .select("department_id")
+          .eq("assignment_id", id);
 
         if (assignmentTargetsError) {
           log.warn("Assignment publish target cohort lookup failed", {
+            assignmentId: id,
+          });
+        }
+        if (assignmentDepartmentTargetsError) {
+          log.warn("Assignment publish target department lookup failed", {
             assignmentId: id,
           });
         }
@@ -345,18 +404,29 @@ const Assignments = () => {
         const cohortIds = Array.from(
           new Set((assignmentTargets || []).map((target) => target.cohort_id).filter(Boolean)),
         );
+        const departmentIds = Array.from(
+          new Set((assignmentDepartmentTargets || []).map((target) => target.department_id).filter(Boolean)),
+        );
 
-        if (cohortIds.length === 0) {
-          log.warn("Assignment publish notifications skipped because no cohort targeting is stored", {
+        if (cohortIds.length === 0 && departmentIds.length === 0) {
+          log.warn("Assignment publish notifications skipped because no targeting is stored", {
             assignmentId: id,
           });
         } else {
           try {
-            const { data: studentProfiles, error: studentProfilesError } = await supabase
+            let studentProfilesQuery = supabase
               .from("profiles")
-              .select("id, full_name, email, role")
-              .eq("role", "student")
-              .in("cohort_id", cohortIds);
+              .select("id, full_name, email, role, cohort_id, department_id")
+              .eq("role", "student");
+
+            if (cohortIds.length > 0) {
+              studentProfilesQuery = studentProfilesQuery.in("cohort_id", cohortIds);
+            }
+            if (departmentIds.length > 0) {
+              studentProfilesQuery = studentProfilesQuery.in("department_id", departmentIds);
+            }
+
+            const { data: studentProfiles, error: studentProfilesError } = await studentProfilesQuery;
 
             if (studentProfilesError) {
               log.warn("Assignment publish bell notification load failed", {
@@ -520,6 +590,20 @@ const Assignments = () => {
                       <label key={cohort.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
                         <Checkbox checked={selectedCohorts.includes(cohort.value)} onCheckedChange={() => toggleCohort(cohort.value)} />
                         {cohort.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Target Departments (optional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    If set, published assignment visibility is also restricted to these departments.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {DEPARTMENTS.map((department) => (
+                      <label key={department} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox checked={selectedDepartments.includes(department)} onCheckedChange={() => toggleDepartment(department)} />
+                        {department}
                       </label>
                     ))}
                   </div>
@@ -693,6 +777,16 @@ const Assignments = () => {
                               </Badge>
                             );
                           })}
+                        </div>
+                      )}
+
+                      {assignment.target_departments.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {assignment.target_departments.map((departmentId) => (
+                            <Badge key={`${assignment.id}-${departmentId}`} variant="outline" className="text-xs">
+                              {departmentId}
+                            </Badge>
+                          ))}
                         </div>
                       )}
 

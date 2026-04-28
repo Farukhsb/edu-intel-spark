@@ -210,6 +210,32 @@ export type Database = {
           },
         ]
       }
+      assignment_departments: {
+        Row: {
+          assignment_id: string
+          created_at: string
+          department_id: string
+        }
+        Insert: {
+          assignment_id: string
+          created_at?: string
+          department_id: string
+        }
+        Update: {
+          assignment_id?: string
+          created_at?: string
+          department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_departments_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communication_messages: {
         Row: {
           body: string
