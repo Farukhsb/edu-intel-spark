@@ -8,7 +8,6 @@ The platform is built around a simple principle: AI can help prepare evidence, f
 
 GradeAI is not intended to be a black-box auto-grading tool. It is designed to make assessment workflows easier to review, easier to moderate, and easier to connect to student support.
 
-- Live deployment: `https://gradeai.pages.dev`
 - Repository: `https://github.com/Farukhsb/edu-intel-spark`
 
 ## Why This Exists
