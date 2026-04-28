@@ -31,7 +31,6 @@ import {
   isStudentGradeVisible,
 } from "@/lib/assessmentWorkflow";
 
-const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
   { value: "100", label: "Level 100" },
   { value: "200", label: "Level 200" },
@@ -117,7 +116,6 @@ const Assignments = () => {
   const [dueDate, setDueDate] = useState("");
   const [rubric, setRubric] = useState<RubricCriterion[]>([]);
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
   const fetchAssignments = async () => {
     if (isDemo) {
@@ -195,23 +193,41 @@ const Assignments = () => {
   }, [searchParams]);
 
   const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
-  const toggleDepartment = (val: string) => setSelectedDepartments(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
   const handleCreate = async () => {
     if (!title.trim() || !user) { toast.error("Title is required"); return; }
     setCreating(true);
     try {
-      const { error } = await supabase.from("assignments").insert([{
-        title: title.trim(),
-        description: description.trim() || null,
-        module_code: moduleCode.trim() || null,
-        max_score: Number(maxScore) || 100,
-        due_date: dueDate || null,
-        lecturer_id: user.id,
-        status: "draft" as const,
-        rubric: rubric.length > 0 ? rubric : null,
-      }]);
-      if (error) throw error;
+      const { data: assignmentRow, error } = await supabase
+        .from("assignments")
+        .insert([{
+          title: title.trim(),
+          description: description.trim() || null,
+          module_code: moduleCode.trim() || null,
+          max_score: Number(maxScore) || 100,
+          due_date: dueDate || null,
+          lecturer_id: user.id,
+          status: "draft" as const,
+          rubric: rubric.length > 0 ? rubric : null,
+        }])
+        .select("id")
+        .single();
+
+      if (error || !assignmentRow) throw error ?? new Error("Assignment creation failed");
+
+      if (selectedCohorts.length > 0) {
+        const { error: targetError } = await supabase
+          .from("assignment_cohorts")
+          .insert(
+            selectedCohorts.map((cohortId) => ({
+              assignment_id: assignmentRow.id,
+              cohort_id: cohortId,
+            })),
+          );
+
+        if (targetError) throw targetError;
+      }
+
       toast.success("Assignment created");
       setTitle("");
       setDescription("");
@@ -220,7 +236,6 @@ const Assignments = () => {
       setDueDate("");
       setRubric([]);
       setSelectedCohorts([]);
-      setSelectedDepartments([]);
       setDialogOpen(false);
       fetchAssignments();
     } catch {
@@ -237,59 +252,74 @@ const Assignments = () => {
       if (error) throw error;
 
       if (user?.id && assignmentToPublish) {
-        try {
-          // Assignments currently do not persist cohort or department targeting in the DB.
-          // Until that exists, publish notifications are a temporary broad student broadcast.
-          log.warn("Assignment publish notifications are using broad student broadcast", {
-            assignmentId: id,
-            targetingMode: "all_students_fallback",
-          });
+        const { data: assignmentTargets, error: assignmentTargetsError } = await supabase
+          .from("assignment_cohorts")
+          .select("cohort_id")
+          .eq("assignment_id", id);
 
-          const { data: studentProfiles, error: studentProfilesError } = await supabase
-            .from("profiles")
-            .select("id, full_name, email, role")
-            .eq("role", "student");
-
-          if (studentProfilesError) {
-            log.warn("Assignment publish bell notification load failed", {
-              assignmentId: id,
-            });
-          } else {
-            const rows = buildAssignmentPublishedNotificationRows({
-              senderId: user.id,
-              assignmentId: id,
-              assignmentTitle: assignmentToPublish.title,
-              students: (studentProfiles || []) as StudentNotificationProfile[],
-            });
-
-            if (rows.length > 0) {
-              const { error: notificationError } = await supabase
-                .from("communication_messages")
-                .insert(rows);
-
-              if (notificationError) {
-                log.warn("Assignment publish bell notifications did not persist", {
-                  assignmentId: id,
-                });
-              } else if (typeof window !== "undefined") {
-                window.dispatchEvent(new Event("gradeai:communications-updated"));
-              }
-            }
-          }
-        } catch (notificationError) {
-          log.warn("Assignment publish bell notifications failed", {
+        if (assignmentTargetsError) {
+          log.warn("Assignment publish target cohort lookup failed", {
             assignmentId: id,
           });
         }
 
-        void sendWorkflowNotificationEmail({
-          category: "assignment-published",
-          assignmentId: id,
-        }).catch(() => {
-          log.warn("Assignment publish notification email failed", {
+        const cohortIds = Array.from(
+          new Set((assignmentTargets || []).map((target) => target.cohort_id).filter(Boolean)),
+        );
+
+        if (cohortIds.length === 0) {
+          log.warn("Assignment publish notifications skipped because no cohort targeting is stored", {
             assignmentId: id,
           });
-        });
+        } else {
+          try {
+            const { data: studentProfiles, error: studentProfilesError } = await supabase
+              .from("profiles")
+              .select("id, full_name, email, role")
+              .eq("role", "student")
+              .in("cohort_id", cohortIds);
+
+            if (studentProfilesError) {
+              log.warn("Assignment publish bell notification load failed", {
+                assignmentId: id,
+              });
+            } else {
+              const rows = buildAssignmentPublishedNotificationRows({
+                senderId: user.id,
+                assignmentId: id,
+                assignmentTitle: assignmentToPublish.title,
+                students: (studentProfiles || []) as StudentNotificationProfile[],
+              });
+
+              if (rows.length > 0) {
+                const { error: notificationError } = await supabase
+                  .from("communication_messages")
+                  .insert(rows);
+
+                if (notificationError) {
+                  log.warn("Assignment publish bell notifications did not persist", {
+                    assignmentId: id,
+                  });
+                } else if (typeof window !== "undefined") {
+                  window.dispatchEvent(new Event("gradeai:communications-updated"));
+                }
+              }
+            }
+          } catch {
+            log.warn("Assignment publish bell notifications failed", {
+              assignmentId: id,
+            });
+          }
+
+          void sendWorkflowNotificationEmail({
+            category: "assignment-published",
+            assignmentId: id,
+          }).catch(() => {
+            log.warn("Assignment publish notification email failed", {
+              assignmentId: id,
+            });
+          });
+        }
       }
 
       toast.success("Assignment published - students can now submit");
@@ -393,6 +423,9 @@ const Assignments = () => {
 
                 <div className="space-y-2">
                   <Label>Target Cohorts (optional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Published assignment notifications only go to cohorts linked here.
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {COHORTS.map((cohort) => (
                       <label key={cohort.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -402,18 +435,6 @@ const Assignments = () => {
                     ))}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Target Departments (optional)</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {DEPARTMENTS.map((department) => (
-                      <label key={department} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <Checkbox checked={selectedDepartments.includes(department)} onCheckedChange={() => toggleDepartment(department)} />
-                        {department}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
                 <RubricBuilder rubric={rubric} onChange={setRubric} maxScore={Number(maxScore) || 100} />
                 <Button onClick={handleCreate} disabled={creating} className="w-full">
                   {creating ? "Creating..." : "Create Draft Assignment"}

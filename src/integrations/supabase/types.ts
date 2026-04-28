@@ -184,6 +184,32 @@ export type Database = {
         }
         Relationships: []
       }
+      assignment_cohorts: {
+        Row: {
+          assignment_id: string
+          cohort_id: string
+          created_at: string
+        }
+        Insert: {
+          assignment_id: string
+          cohort_id: string
+          created_at?: string
+        }
+        Update: {
+          assignment_id?: string
+          cohort_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_cohorts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communication_messages: {
         Row: {
           body: string
