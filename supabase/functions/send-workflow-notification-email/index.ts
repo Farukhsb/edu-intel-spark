@@ -38,11 +38,21 @@ type AssignmentRow = {
   due_date: string | null;
 };
 
+type AssignmentCohortRow = {
+  cohort_id: string;
+};
+
+type AssignmentDepartmentRow = {
+  department_id: string;
+};
+
 type ProfileRow = {
   id: string;
+  department_id?: string | null;
   full_name: string | null;
   email: string | null;
   role: string | null;
+  cohort_id?: string | null;
 };
 
 type SubmissionRow = {
@@ -102,15 +112,54 @@ serve(async (req) => {
         });
       }
 
-      console.warn("[workflow-email] assignment-published is using broad student broadcast fallback", {
-        assignmentId: assignment.id,
-        targetingMode: "all_students_fallback",
-      });
+      const assignmentCohortsRes = await admin
+        .from("assignment_cohorts")
+        .select("cohort_id")
+        .eq("assignment_id", assignment.id);
+      const assignmentDepartmentsRes = await admin
+        .from("assignment_departments")
+        .select("department_id")
+        .eq("assignment_id", assignment.id);
 
-      const studentsRes = await admin
+      if (assignmentCohortsRes.error || assignmentDepartmentsRes.error) {
+        throw assignmentCohortsRes.error ?? assignmentDepartmentsRes.error;
+      }
+
+      const cohortIds = Array.from(
+        new Set(
+          ((assignmentCohortsRes.data || []) as AssignmentCohortRow[])
+            .map((row) => row.cohort_id)
+            .filter(Boolean),
+        ),
+      );
+      const departmentIds = Array.from(
+        new Set(
+          ((assignmentDepartmentsRes.data || []) as AssignmentDepartmentRow[])
+            .map((row) => row.department_id)
+            .filter(Boolean),
+        ),
+      );
+
+      if (cohortIds.length === 0 && departmentIds.length === 0) {
+        console.warn("[workflow-email] assignment-published skipped because no targeting is stored", {
+          assignmentId: assignment.id,
+        });
+        return jsonSuccess(corsHeaders, { success: true, skipped: true, reason: "targeting_missing" });
+      }
+
+      let studentsQuery = admin
         .from("profiles")
-        .select("id, full_name, email, role")
+        .select("id, full_name, email, role, cohort_id, department_id")
         .eq("role", "student");
+
+      if (cohortIds.length > 0) {
+        studentsQuery = studentsQuery.in("cohort_id", cohortIds);
+      }
+      if (departmentIds.length > 0) {
+        studentsQuery = studentsQuery.in("department_id", departmentIds);
+      }
+
+      const studentsRes = await studentsQuery;
 
       if (studentsRes.error) {
         throw studentsRes.error;

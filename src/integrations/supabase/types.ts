@@ -184,6 +184,58 @@ export type Database = {
         }
         Relationships: []
       }
+      assignment_cohorts: {
+        Row: {
+          assignment_id: string
+          cohort_id: string
+          created_at: string
+        }
+        Insert: {
+          assignment_id: string
+          cohort_id: string
+          created_at?: string
+        }
+        Update: {
+          assignment_id?: string
+          cohort_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_cohorts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assignment_departments: {
+        Row: {
+          assignment_id: string
+          created_at: string
+          department_id: string
+        }
+        Insert: {
+          assignment_id: string
+          created_at?: string
+          department_id: string
+        }
+        Update: {
+          assignment_id?: string
+          created_at?: string
+          department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_departments_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communication_messages: {
         Row: {
           body: string
@@ -838,11 +890,11 @@ export type Database = {
           user_id: string
         }[]
       }
-      apply_recommendation_action: {
-        Args: {
-          p_action_type: string
-          p_payload?: Json
-          p_recommendation_id: string
+        apply_recommendation_action: {
+          Args: {
+            p_action_type: string
+            p_payload?: Json
+            p_recommendation_id: string
         }
         Returns: {
           assignment_id: string | null
@@ -867,12 +919,22 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
         }
+        get_student_grade_assignment_metadata: {
+          Args: never
+          Returns: {
+            assignment_id: string
+            max_score: number
+            module_code: string | null
+            submission_id: string
+            title: string | null
+          }[]
+        }
+        has_role: {
+          Args: {
+            _role: Database["public"]["Enums"]["app_role"]
+            _user_id: string
+          }
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }

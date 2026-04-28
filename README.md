@@ -265,6 +265,8 @@ npm run dev
 
 If you pull schema or workflow-notification changes, apply the latest Supabase migrations before testing related features locally.
 
+If you have pulled the newer assignment-targeting work, apply the latest assignment migrations before testing assignment visibility, publishing, or student grades. The recent changes add persisted cohort and department targeting, lecturer archive behaviour, and a student-grade metadata RPC. If those migrations are only partially applied, you can end up with missing assignment titles, broken assignment loading, or visibility rules that look inconsistent.
+
 ## Testing
 
 Run lint:

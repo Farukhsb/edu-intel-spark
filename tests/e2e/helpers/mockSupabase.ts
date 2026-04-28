@@ -178,6 +178,24 @@ const handleRpc = async (route: Route, state: MockSupabaseState) => {
     return;
   }
 
+  if (route.request().url().includes("/rpc/get_student_grade_assignment_metadata")) {
+    const rows = state.tables.submissions.flatMap((submission) => {
+      const assignment = state.tables.assignments.find((candidate) => candidate.id === submission.assignment_id);
+      if (!assignment) return [];
+
+      return [{
+        submission_id: submission.id,
+        assignment_id: assignment.id,
+        title: assignment.title ?? null,
+        module_code: assignment.module_code ?? null,
+        max_score: assignment.max_score ?? null,
+      }];
+    });
+
+    await fulfillJson(route, clone(rows));
+    return;
+  }
+
   if (route.request().url().includes("/rpc/")) {
     await fulfillJson(route, { error: "Unhandled rpc mock" }, 400);
     return;
