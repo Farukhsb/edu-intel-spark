@@ -133,7 +133,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         department_id: data.department_id ?? null,
       });
       setProfileError(null);
-      posthog.identify(userId, { email });
+      posthog.identify(userId);
     } else {
       setProfile(null);
       setProfileError("Profile not found");

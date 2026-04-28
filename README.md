@@ -253,6 +253,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY="your_publishable_key"
 VITE_SUPABASE_URL="https://your_project_ref.supabase.co"
 VITE_SENTRY_DSN="your_sentry_dsn"
 VITE_APP_ENV="development"
+VITE_ANALYTICS_ENABLED="false"
 ```
 
 Do not commit local environment files.
@@ -320,7 +321,32 @@ Or run the relevant SQL migrations in the Supabase SQL Editor.
 
 High-trust workflows depend on the database layer, not just the UI. That includes RLS policies, recommendation action RPCs, moderation tables, audit logging triggers, integrity review constraints, and in-app workflow notifications.
 
-### Migration history note
+That also includes the in-app workflow notifications. The existing `communication_messages` table now carries bell state such as:
+- workflow notification categories
+- `read`
+- `cleared`
+- update policies that let the right user mark a notification as read or clear it without deleting history
+
+Recent assignment visibility work also depends on a small chain of related migrations. They should be applied together rather than one by one in isolation:
+- `20260428103000_add_assignment_cohort_targeting.sql`
+- `20260428113000_restrict_student_assignment_access_to_targeted_cohorts.sql`
+- `20260428123000_add_assignment_department_targeting.sql`
+- `20260428143000_fix_assignment_targeting_rls_recursion.sql`
+- `20260428150000_add_student_grade_assignment_metadata_rpc.sql`
+- `20260428153000_fix_student_grade_metadata_rpc_assignment_id_cast.sql`
+
+These migrations do three connected things:
+- persist assignment cohort and department targeting
+- enforce student assignment visibility and submission access through targeting-aware RLS
+- provide the safe student-grade assignment metadata lookup used by `StudentGrades`
+
+If you only apply part of that chain, the app may still build, but assignment pages can fail to load or student grade cards can fall back to `Assignment title unavailable`.
+
+If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
+
+Current high-cost Edge Function rate limiting is process-local and in-memory. That is acceptable for prototype use and controlled pilot testing, but it is not distributed production-grade protection yet. Wider rollout should move high-cost AI rate limiting into a persistent/shared store or complement it with provider-level controls.
+
+## Migration History Note
 
 This project contains two legacy short-form migration versions in Supabase metadata:
 
@@ -373,4 +399,95 @@ Current email-backed workflow events are:
 - `submission-received`
 - `grade-released`
 
-The bell notification remains the primary in-app record. Email delivery is a non-blocking mirror of selected workflow events.
+The bell notification remains the primary in-app record. Email delivery is a non-blocking mirror of those safe workflow events.
+
+Analytics is disabled by default. If you explicitly enable PostHog for a controlled test, keep it privacy-minimised and avoid sending academic content, names, or email addresses.
+
+## Assignment Targeting
+
+Assignments can now be targeted to:
+- one or more cohorts
+- one or more departments
+
+Student access is intentionally strict:
+- students only see published assignments that match the stored targeting rules
+- if both cohort and department targeting are set, the student must match both
+- if an assignment has no stored cohort or department target, students do not see it by default
+
+This is deliberate. The app no longer guesses assignment visibility from UI state alone.
+
+## Lecturer Assignment Management
+
+The lecturer assignment page now treats `closed` as an archive state:
+- active assignments stay in the default view
+- archived assignments are still searchable and recoverable
+- restore sends an archived assignment back to `draft`
+
+This keeps old assignments available without leaving them in the lecturer’s face every time they open the page.
+
+## Student Grade Titles
+
+Student grade cards now resolve assignment titles through a student-scoped metadata RPC instead of broad assignment reads.
+
+That means:
+- released grades can still be shown safely
+- students do not regain broad access to all assignments
+- if assignment metadata is genuinely unavailable, the UI falls back safely instead of crashing
+
+## Recent Hardening (April 2026)
+
+- AI response validation using Zod
+- Rate limiting for high-cost Edge Functions
+- Environment variable validation
+- Structured logging with sanitisation
+- Error boundary and network failure handling
+- Persisted in-app workflow notifications with bell clearing
+- Expanded test coverage across critical workflows
+
+## Recent Improvements
+
+A few areas of the platform were tightened recently to make the product more reliable in day-to-day use.
+
+- production-readiness documentation was added for security, testing, rollout planning, and monitoring
+- privacy-safe Sentry monitoring and alerting were configured for frontend error visibility
+- automated coverage was expanded across lecturer overview, student grade explanation, student profile, external examiner export, error boundary handling, and network failure paths
+- student-facing grade explanations were tightened so they only use released submissions
+- external examiner export filtering was tightened so draft or unreleased records are excluded from governance workflows
+- the application error boundary was updated so users see safe fallback messaging rather than raw runtime errors
+- the product positioning was clarified around early student support and retention, with AI marking framed as one component of a wider intervention workflow
+- the documentation now highlights the full action chain from assessment evidence to support signal, explanation, recommended action, and intervention follow-up
+- moderation permissions were aligned between local and hosted policy state, and the moderation workflow was rechecked against the current migration chain
+- moderation UI coverage now includes nullable fallback cases, so missing linked submission data is handled explicitly and tested
+- route-level lazy loading was improved to reduce the main frontend bundle
+- export and chart-heavy vendor buckets were split more conservatively, so those libraries load closer to the routes and actions that use them
+- React Router future flags were enabled early to reduce upgrade warnings and keep the app closer to upcoming router behaviour
+- the role model was tightened so admin is part of the real schema, generated types were brought back in line, and public signup no longer trusts admin role input
+- the admin area now includes read-only oversight views for users, assignments, submissions, reporting, and system-level navigation without forcing admin through lecturer-heavy pages
+- performance trend wording was softened so student support signals are presented as lecturer review prompts rather than automated judgements
+
+## Current State
+
+This project is best described as a fast-moving integrated prototype with hardened core workflows. It is no longer just a UI demo, but it is also not pretending to be a finished institutional platform.
+
+The strongest areas are:
+- early student support and intervention tracking
+- explainable support signals and recommended actions
+- coherent assessment workflow design
+- lecturer oversight and explainability
+- moderation and audit direction
+- integrity pipeline improvements
+- student visibility controls around released feedback
+- governed external examiner export filtering
+- safe error-boundary and network-failure fallback behaviour
+- early support and student intervention design
+- growing automated coverage around critical flows
+- live verification of core deployed workflows
+- production-readiness planning through monitoring, security, testing, and rollout documentation
+
+The main work still worth doing is operational hardening:
+- more live-environment verification
+- broader permissions and RLS validation after migration changes
+- stricter TypeScript coverage and reduced `any` usage
+- API/AI response validation using schemas such as Zod
+- structured logging for production debugging and audit trails
+- continued extraction of heavy page logic into smaller domain services

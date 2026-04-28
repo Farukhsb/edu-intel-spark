@@ -68,6 +68,7 @@ describe("environment validation", () => {
     });
 
     expect(parsed.VITE_APP_ENV).toBe("development");
+    expect(parsed.VITE_ANALYTICS_ENABLED).toBe(false);
   });
 
   it('normalizes app environment "test" to development', () => {
@@ -86,5 +87,20 @@ describe("environment validation", () => {
         VITE_APP_ENV: "qa",
       }),
     ).toThrow(/VITE_APP_ENV/);
+  });
+
+  it("defaults analytics to disabled when the flag is missing", () => {
+    const parsed = parseEnv(baseEnv);
+
+    expect(parsed.VITE_ANALYTICS_ENABLED).toBe(false);
+  });
+
+  it("enables analytics only when the flag is explicitly true", () => {
+    const parsed = parseEnv({
+      ...baseEnv,
+      VITE_ANALYTICS_ENABLED: "true",
+    });
+
+    expect(parsed.VITE_ANALYTICS_ENABLED).toBe(true);
   });
 });

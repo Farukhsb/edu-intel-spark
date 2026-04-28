@@ -2,6 +2,9 @@ import { z } from "zod";
 
 const optionalUrl = z.union([z.string().url(), z.literal(""), z.undefined()]).transform((value) => value || undefined);
 const optionalString = z.union([z.string().min(1), z.literal(""), z.undefined()]).transform((value) => value || undefined);
+const optionalBooleanFlag = z
+  .union([z.literal("true"), z.literal("false"), z.literal(""), z.undefined()])
+  .transform((value) => value === "true");
 
 const EnvSchema = z.object({
   VITE_SUPABASE_URL: z.string().url(),
@@ -11,6 +14,7 @@ const EnvSchema = z.object({
   VITE_APP_URL: optionalUrl,
   VITE_POSTHOG_KEY: optionalString,
   VITE_POSTHOG_HOST: optionalUrl,
+  VITE_ANALYTICS_ENABLED: optionalBooleanFlag,
   VITE_SUPABASE_PROJECT_ID: optionalString,
 });
 

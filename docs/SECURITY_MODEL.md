@@ -41,6 +41,14 @@ Moderators can review work that has been sent for moderation. Their access shoul
 
 Admins have broader oversight, but admin access should still be treated carefully. Admin views should support operational oversight and reporting rather than bypassing academic judgement unnecessarily.
 
+In the current app, admin role changes are intentionally narrow:
+
+- the UI only supports `student` and `lecturer` transitions
+- admin users cannot promote someone to `admin` from the UI
+- role changes require explicit confirmation
+- backend role changes write to `admin_audit_log`
+- admin assignment and submission views remain read-only oversight surfaces
+
 ## Access Control
 
 Access control in GradeAI is handled through a combination of:
