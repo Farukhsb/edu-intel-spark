@@ -202,6 +202,8 @@ The limiter uses the authenticated user ID where available. If that is not avail
 
 The response does not expose internal implementation details. Logging is intentionally minimal and avoids student content, submissions, grades, private feedback, prompts, and document text.
 
+The current limiter is process-local and in-memory. That is acceptable for prototype use and controlled testing, but it is not full distributed production protection yet. Wider rollout should move those high-cost limits into a persistent/shared store or combine them with provider-level controls.
+
 ## Environment Configuration Rules
 
 GradeAI validates frontend environment configuration explicitly rather than assuming required values exist.
