@@ -347,6 +347,8 @@ npm run dev
 
 If you have pulled recent workflow-notification changes, apply the latest Supabase migrations before testing the notification bell locally. The bell now depends on database support as well as frontend code.
 
+If you have pulled the newer assignment-targeting work, apply the latest assignment migrations before testing assignment visibility, publishing, or student grades. The recent changes add persisted cohort and department targeting, lecturer archive behaviour, and a student-grade metadata RPC. If those migrations are only partially applied, you can end up with missing assignment titles, broken assignment loading, or visibility rules that look inconsistent.
+
 ## Testing
 
 Run unit and integration tests:
@@ -421,6 +423,21 @@ That also includes the in-app workflow notifications. The existing `communicatio
 - `cleared`
 - update policies that let the right user mark a notification as read or clear it without deleting history
 
+Recent assignment visibility work also depends on a small chain of related migrations. They should be applied together rather than one by one in isolation:
+- `20260428103000_add_assignment_cohort_targeting.sql`
+- `20260428113000_restrict_student_assignment_access_to_targeted_cohorts.sql`
+- `20260428123000_add_assignment_department_targeting.sql`
+- `20260428143000_fix_assignment_targeting_rls_recursion.sql`
+- `20260428150000_add_student_grade_assignment_metadata_rpc.sql`
+- `20260428153000_fix_student_grade_metadata_rpc_assignment_id_cast.sql`
+
+These migrations do three connected things:
+- persist assignment cohort and department targeting
+- enforce student assignment visibility and submission access through targeting-aware RLS
+- provide the safe student-grade assignment metadata lookup used by `StudentGrades`
+
+If you only apply part of that chain, the app may still build, but assignment pages can fail to load or student grade cards can fall back to `Assignment title unavailable`.
+
 If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
 ## Migration History Note
@@ -494,6 +511,37 @@ Current email-backed workflow events are:
 - `grade-released`
 
 The bell notification remains the primary in-app record. Email delivery is a non-blocking mirror of those safe workflow events.
+
+## Assignment Targeting
+
+Assignments can now be targeted to:
+- one or more cohorts
+- one or more departments
+
+Student access is intentionally strict:
+- students only see published assignments that match the stored targeting rules
+- if both cohort and department targeting are set, the student must match both
+- if an assignment has no stored cohort or department target, students do not see it by default
+
+This is deliberate. The app no longer guesses assignment visibility from UI state alone.
+
+## Lecturer Assignment Management
+
+The lecturer assignment page now treats `closed` as an archive state:
+- active assignments stay in the default view
+- archived assignments are still searchable and recoverable
+- restore sends an archived assignment back to `draft`
+
+This keeps old assignments available without leaving them in the lecturer’s face every time they open the page.
+
+## Student Grade Titles
+
+Student grade cards now resolve assignment titles through a student-scoped metadata RPC instead of broad assignment reads.
+
+That means:
+- released grades can still be shown safely
+- students do not regain broad access to all assignments
+- if assignment metadata is genuinely unavailable, the UI falls back safely instead of crashing
 
 ## Recent Hardening (April 2026)
 
