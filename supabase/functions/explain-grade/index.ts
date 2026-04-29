@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { jsonError, requireUser } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logWarn } from "../_shared/log.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
@@ -32,6 +33,8 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const methodError = requirePostMethod(req, corsHeaders);
+  if (methodError) return methodError;
 
   try {
     const { user } = await requireUser(req);
