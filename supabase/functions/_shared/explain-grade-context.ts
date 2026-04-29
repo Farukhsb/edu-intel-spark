@@ -39,6 +39,53 @@ const defaultCreateAccessError: CreateAccessError = (status, message) => {
   return error;
 };
 
+type BreakdownRow = {
+  criterion?: string | null;
+  name?: string | null;
+  score?: number | null;
+  max_score?: number | null;
+  maxScore?: number | null;
+};
+
+function toFiniteNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function buildCriterionInsights(breakdown: unknown) {
+  if (!Array.isArray(breakdown)) return [];
+
+  return breakdown
+    .filter((row): row is BreakdownRow => Boolean(row) && typeof row === "object")
+    .map((row) => {
+      const criterion = typeof row.criterion === "string"
+        ? row.criterion.trim()
+        : typeof row.name === "string"
+          ? row.name.trim()
+          : "";
+      const score = toFiniteNumber(row.score) ?? 0;
+      const maxScore = toFiniteNumber(row.max_score ?? row.maxScore) ?? 0;
+      const earnedPercentage = maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(1)) : 0;
+      const lostPoints = maxScore > 0 ? Number((maxScore - score).toFixed(2)) : 0;
+      const lostPercentage = maxScore > 0 ? Number((((maxScore - score) / maxScore) * 100).toFixed(1)) : 0;
+
+      return {
+        criterion: criterion || "Unknown",
+        score,
+        maxScore,
+        earnedPercentage,
+        lostPoints,
+        lostPercentage,
+      };
+    })
+    .sort((left, right) => {
+      if (right.lostPercentage !== left.lostPercentage) {
+        return right.lostPercentage - left.lostPercentage;
+      }
+      return right.lostPoints - left.lostPoints;
+    });
+}
+
 export function buildReleasedGradeContext(
   rows: ReleasedGradeContextRows,
   userId: string,
@@ -78,6 +125,7 @@ export function buildReleasedGradeContext(
     maxScore: assignment?.max_score ?? null,
     feedback: grade.ai_feedback ?? "",
     breakdown: Array.isArray(grade.ai_breakdown) ? grade.ai_breakdown : [],
+    criterionInsights: buildCriterionInsights(grade.ai_breakdown),
     gradingConfidence: grade.grading_confidence ?? null,
   };
 }
