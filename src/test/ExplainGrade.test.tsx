@@ -200,6 +200,7 @@ describe("ExplainGrade", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     mocks.authState.isDemo = false;
     mocks.authState.user = { id: "student-1" };
   });
@@ -388,5 +389,41 @@ describe("ExplainGrade", () => {
     expect(screen.queryByText("Grade Breakdown")).not.toBeInTheDocument();
 
     consoleError.mockRestore();
+  });
+
+  it("sends submissionId and messages without browser gradeContext", async () => {
+    setupSupabase();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                'data: {"choices":[{"delta":{"content":"Use the released feedback."}}]}\n\ndata: [DONE]\n\n',
+              ),
+            );
+            controller.close();
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Ask about your grade..."), {
+      target: { value: "How can I improve?" },
+    });
+    fireEvent.click(screen.getAllByRole("button").at(-1)!);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+
+    expect(requestBody.submissionId).toBe("submission-1");
+    expect(requestBody.messages.at(-1)).toEqual({ role: "user", content: "How can I improve?" });
+    expect(requestBody.gradeContext).toBeUndefined();
+    expect(JSON.stringify(requestBody)).not.toContain("Argument");
   });
 });

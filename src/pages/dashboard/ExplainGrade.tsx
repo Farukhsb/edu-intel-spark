@@ -334,8 +334,8 @@ const ExplainGrade = () => {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
+          submissionId: selected.submissionId,
           messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
-          gradeContext: gradeBreakdown,
         }),
       });
 
