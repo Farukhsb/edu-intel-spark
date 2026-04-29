@@ -32,6 +32,7 @@ import {
   isReviewQueueStatus,
   isStudentGradeVisible,
 } from "@/lib/assessmentWorkflow";
+import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
 import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
 const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
@@ -139,9 +140,11 @@ const Assignments = () => {
   const [rubric, setRubric] = useState<RubricCriterion[]>([]);
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("none");
 
   const resetAssignmentForm = () => {
     setEditingAssignmentId(null);
+    setSelectedTemplateId("none");
     setTitle("");
     setDescription("");
     setModuleCode("");
@@ -159,6 +162,7 @@ const Assignments = () => {
 
   const openEditDialog = (assignment: Assignment) => {
     setEditingAssignmentId(assignment.id);
+    setSelectedTemplateId("none");
     setTitle(assignment.title);
     setDescription(assignment.description ?? "");
     setModuleCode(assignment.module_code ?? "");
@@ -287,6 +291,43 @@ const Assignments = () => {
 
   const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const toggleDepartment = (val: string) => setSelectedDepartments(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+
+  const applyStarterTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (templateId === "none") {
+      if (!editingAssignmentId) {
+        setTitle("");
+        setDescription("");
+        setModuleCode("");
+        setMaxScore("100");
+        setDueDate("");
+        setRubric([]);
+        setSelectedCohorts([]);
+        setSelectedDepartments([]);
+      }
+      return;
+    }
+
+    const template = STARTER_ASSIGNMENT_TEMPLATES.find((entry) => entry.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    setTitle(template.template.title);
+    setDescription(template.template.description ?? "");
+    setModuleCode(template.template.moduleCode ?? "");
+    setMaxScore(String(template.template.maxScore));
+    setDueDate(
+      template.template.dueDate
+        ? new Date(new Date(template.template.dueDate).getTime() - new Date(template.template.dueDate).getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16)
+        : "",
+    );
+    setRubric(template.template.rubric);
+    setSelectedCohorts(template.template.targetCohorts);
+    setSelectedDepartments(template.template.targetDepartments);
+  };
 
   const upsertAssignmentCohorts = async (assignmentId: string, cohortIds: string[]) => {
     const { error: deleteError } = await supabase
@@ -561,7 +602,7 @@ const Assignments = () => {
         <Card className="border-warning bg-warning/5">
           <CardContent className="flex items-center gap-2 p-3">
             <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo assignment data</span>
+            <span className="text-sm text-muted-foreground">Demo Mode — synthetic sample data</span>
           </CardContent>
         </Card>
       )}
@@ -596,6 +637,27 @@ const Assignments = () => {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
+                {!editingAssignmentId && (
+                  <div className="space-y-2">
+                    <Label htmlFor="starterTemplate">Use sample assignment</Label>
+                    <Select value={selectedTemplateId} onValueChange={applyStarterTemplate}>
+                      <SelectTrigger id="starterTemplate">
+                        <SelectValue placeholder="Start from a reusable sample" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Start from blank</SelectItem>
+                        {STARTER_ASSIGNMENT_TEMPLATES.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Loads a starter brief and rubric into this form only. Nothing is saved or published until you review and create the draft.
+                    </p>
+                  </div>
+                )}
                 <div className="rounded-lg border bg-muted/30 p-4 text-sm">
                   <p className="font-medium">What happens next</p>
                   <ul className="mt-2 space-y-1 text-muted-foreground">
@@ -735,9 +797,9 @@ const Assignments = () => {
               </p>
             </div>
             <div>
-              <p className="text-sm font-medium">Set the rubric</p>
+              <p className="text-sm font-medium">Reusable assignment sets</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Open the sorting algorithms demo assignment to inspect a complete five-criterion rubric and the exact brief the AI grader receives.
+                Open the reviewer-ready set to inspect a complete brief, full rubric, AI-facing grading context, and synthetic workflow evidence.
               </p>
             </div>
             <div>
@@ -878,6 +940,9 @@ const Assignments = () => {
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {assignment.status}
                         </Badge>
+                        {isDemo && (
+                          <Badge variant="outline" className="text-xs">Assignment set</Badge>
+                        )}
                         {(assignment.rubric?.length ?? 0) > 0 && (
                           <Badge variant="outline" className="text-xs">{assignment.rubric?.length ?? 0} criteria</Badge>
                         )}

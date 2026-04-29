@@ -88,6 +88,7 @@ import {
   DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES,
   DEMO_ASSIGNMENT_SUBMISSIONS,
   getDemoAssignmentById,
+  getDemoAssignmentSetById,
 } from "@/pages/dashboard/demoAssignments";
 
 type SubmissionStatus =
@@ -318,6 +319,7 @@ const AssignmentDetail = () => {
   const [statusFilter, setStatusFilter] = useState<"all" | SubmissionStatus>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
+  const demoAssignmentSet = isDemo && id ? getDemoAssignmentSetById(id) : null;
 
   useEffect(() => {
     if (!id || (!user && !isDemo)) return;
@@ -1558,7 +1560,20 @@ Please review the feedback in the platform and let me know if you would like to 
         <Card className="border-warning bg-warning/5 shadow-sm">
           <CardContent className="flex items-center gap-2 p-3">
             <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo assignment workflow data</span>
+            <span className="text-sm text-muted-foreground">Demo Mode — synthetic sample data</span>
+          </CardContent>
+        </Card>
+      )}
+      {isDemo && demoAssignmentSet && (
+        <Card className="border-primary/20 bg-background shadow-sm">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="text-sm font-medium">{demoAssignmentSet.name}</p>
+              <p className="text-xs text-muted-foreground">{demoAssignmentSet.reviewerSummary}</p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {demoAssignmentSet.label}
+            </Badge>
           </CardContent>
         </Card>
       )}

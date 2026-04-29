@@ -63,7 +63,8 @@ describe("AssignmentDetail demo data isolation", () => {
     );
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
-    expect(screen.getByText("Viewing demo assignment workflow data")).toBeInTheDocument();
+    expect(screen.getByText("Demo Mode — synthetic sample data")).toBeInTheDocument();
+    expect(screen.getByText("Algorithms Report Workflow")).toBeInTheDocument();
     expect(screen.getByText("Workflow Actions")).toBeInTheDocument();
     expect(screen.getByText("Rubric")).toBeInTheDocument();
     expect(screen.getByText("Integrity Flags")).toBeInTheDocument();

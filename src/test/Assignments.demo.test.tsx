@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
 import Assignments from "@/pages/dashboard/Assignments";
 import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
@@ -52,9 +53,16 @@ describe("Assignments demo data isolation", () => {
     );
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
-    expect(screen.getByText("Viewing demo assignment data")).toBeInTheDocument();
+    expect(screen.getByText("Demo Mode — synthetic sample data")).toBeInTheDocument();
     expect(screen.getByText("Create assignment")).toBeInTheDocument();
     expect(screen.getByText("Review marking and integrity")).toBeInTheDocument();
+    expect(screen.getByText("Reusable assignment sets")).toBeInTheDocument();
+    expect(screen.getAllByText("Assignment set").length).toBeGreaterThan(0);
     expect(mocks.supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("exposes reusable starter templates in code for later lecturer prefills", () => {
+    expect(STARTER_ASSIGNMENT_TEMPLATES.length).toBeGreaterThan(0);
+    expect(STARTER_ASSIGNMENT_TEMPLATES[0].template.rubric.length).toBeGreaterThan(0);
   });
 });
