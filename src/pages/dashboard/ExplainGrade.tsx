@@ -34,6 +34,8 @@ interface SubmissionRow {
   student_name: string | null;
   file_name: string | null;
   status?: string | null;
+  released_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface GradeRow {
@@ -84,9 +86,46 @@ interface SubmissionOption {
   gradeId: string;
   submissionId: string;
   label: string;
+  secondaryLabel: string | null;
   totalGrade: number;
   breakdown: ExplainGradeBreakdown;
 }
+
+const formatReleasedDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+};
+
+export const buildGradeSelectorLabels = ({
+  assignmentTitle,
+  fileName,
+  releasedAt,
+  score,
+}: {
+  assignmentTitle?: string | null;
+  fileName?: string | null;
+  releasedAt?: string | null;
+  score: number;
+}) => {
+  const title = assignmentTitle?.trim();
+  const file = fileName?.trim();
+  const primaryBase = title || file || "Released grade";
+  const releasedDate = formatReleasedDate(releasedAt);
+  const secondaryParts = [file, releasedDate ? `Released ${releasedDate}` : null].filter(Boolean);
+
+  return {
+    label: `${primaryBase} — ${score}%`,
+    assessment: primaryBase,
+    secondaryLabel: secondaryParts.length > 0 ? secondaryParts.join(" · ") : null,
+  };
+};
 
 const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
   .flat()
@@ -132,18 +171,21 @@ const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_ASSIGNME
         };
       });
 
-    const label = assignment
-      ? `${assignment.module_code || ""} ${assignment.title}`.trim()
-      : submission.file_name;
+    const labels = buildGradeSelectorLabels({
+      assignmentTitle: assignment?.title,
+      fileName: submission.file_name,
+      score: totalGrade,
+    });
 
     return [
       {
         gradeId: grade.id,
         submissionId: submission.id,
-        label,
+        label: labels.label,
+        secondaryLabel: labels.secondaryLabel,
         totalGrade,
         breakdown: {
-          assessment: label,
+          assessment: labels.assessment,
           totalGrade,
           band: getBand(totalGrade),
           components,
@@ -273,17 +315,21 @@ const ExplainGrade = () => {
               };
             });
 
-          const label = assignment
-            ? `${assignment.module_code || ""} ${assignment.title}`.trim()
-            : sub?.student_name || sub?.file_name || g.submission_id;
+          const labels = buildGradeSelectorLabels({
+            assignmentTitle: assignment?.title,
+            fileName: sub?.file_name,
+            releasedAt: sub?.released_at ?? sub?.updated_at,
+            score: totalGrade,
+          });
 
           return [{
             gradeId: g.id,
             submissionId: g.submission_id,
-            label,
+            label: labels.label,
+            secondaryLabel: labels.secondaryLabel,
             totalGrade,
             breakdown: {
-              assessment: label,
+              assessment: labels.assessment,
               totalGrade,
               band: getBand(totalGrade),
               components,
@@ -435,8 +481,13 @@ const ExplainGrade = () => {
           <SelectTrigger className="w-full"><SelectValue placeholder="Select a submission" /></SelectTrigger>
           <SelectContent>
             {submissions.map(s => (
-              <SelectItem key={s.gradeId} value={s.gradeId}>
-                {s.label} — {s.totalGrade}%
+              <SelectItem key={s.gradeId} value={s.gradeId} textValue={s.label}>
+                <span className="flex flex-col">
+                  <span>{s.label}</span>
+                  {s.secondaryLabel && (
+                    <span className="text-xs text-muted-foreground">{s.secondaryLabel}</span>
+                  )}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>

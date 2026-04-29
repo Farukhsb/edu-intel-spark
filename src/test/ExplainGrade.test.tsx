@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import ExplainGrade, { getBreakdownMaxScore } from "@/pages/dashboard/ExplainGrade";
+import ExplainGrade, { buildGradeSelectorLabels, getBreakdownMaxScore } from "@/pages/dashboard/ExplainGrade";
 
 const mocks = vi.hoisted(() => ({
   authState: {
@@ -58,6 +58,8 @@ type SubmissionRow = {
   student_name?: string | null;
   file_name?: string | null;
   status?: string | null;
+  released_at?: string | null;
+  updated_at?: string | null;
 };
 
 type GradeRow = {
@@ -220,7 +222,7 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
-    expect(screen.getByText("ENG101 Critical Essay")).toBeInTheDocument();
+    expect(screen.getByText("Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("74%")).toBeInTheDocument();
   });
 
@@ -232,7 +234,7 @@ describe("ExplainGrade", () => {
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "EDU401 Evaluating the Role of Artificial Intelligence in University Assessment and Student Support",
+        "Evaluating the Role of Artificial Intelligence in University Assessment and Student Support",
       ),
     ).toBeInTheDocument();
 
@@ -312,10 +314,107 @@ describe("ExplainGrade", () => {
 
     renderExplainGrade();
 
-    expect(await screen.findByText("ENG101 Critical Essay")).toBeInTheDocument();
+    expect(await screen.findByText("Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("How to Improve")).toBeInTheDocument();
     expect(screen.getByText("Specific guidance to raise your grade band")).toBeInTheDocument();
     expect(screen.queryByText("Draft Essay")).not.toBeInTheDocument();
+  });
+
+  it("builds grade selector labels without using the student name", () => {
+    expect(
+      buildGradeSelectorLabels({
+        assignmentTitle: "Data Structures Assignment",
+        fileName: "Nkechi Onwumere CV.docx",
+        releasedAt: "2026-04-29T10:00:00.000Z",
+        score: 67,
+      }),
+    ).toEqual({
+      label: "Data Structures Assignment — 67%",
+      assessment: "Data Structures Assignment",
+      secondaryLabel: "Nkechi Onwumere CV.docx · Released 29 Apr 2026",
+    });
+
+    expect(
+      buildGradeSelectorLabels({
+        assignmentTitle: null,
+        fileName: "fallback-report.pdf",
+        score: 58,
+      }),
+    ).toMatchObject({
+      label: "fallback-report.pdf — 58%",
+      assessment: "fallback-report.pdf",
+    });
+
+    expect(
+      buildGradeSelectorLabels({
+        assignmentTitle: "",
+        fileName: null,
+        score: 41,
+      }),
+    ).toMatchObject({
+      label: "Released grade — 41%",
+      assessment: "Released grade",
+    });
+  });
+
+  it("uses assignment title and score as the rendered grade selector main label", async () => {
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_name: "abdullahi faruk",
+          file_name: "Nkechi Onwumere CV.docx",
+          status: "released",
+          updated_at: "2026-04-29T10:00:00.000Z",
+        },
+        {
+          id: "submission-2",
+          assignment_id: null,
+          student_name: "Other Student",
+          file_name: "fallback-report.pdf",
+          status: "released",
+          updated_at: "2026-04-28T10:00:00.000Z",
+        },
+        {
+          id: "submission-3",
+          assignment_id: null,
+          student_name: "Hidden Student",
+          file_name: null,
+          status: "released",
+        },
+      ],
+      grades: [
+        {
+          id: "grade-1",
+          submission_id: "submission-1",
+          final_score: 67,
+          ai_breakdown: [{ criterion: "Correctness", score: 17, max_score: 25 }],
+        },
+        {
+          id: "grade-2",
+          submission_id: "submission-2",
+          final_score: 58,
+          ai_breakdown: [{ criterion: "Analysis", score: 15, max_score: 25 }],
+        },
+        {
+          id: "grade-3",
+          submission_id: "submission-3",
+          final_score: 41,
+          ai_breakdown: [{ criterion: "Evidence", score: 10, max_score: 25 }],
+        },
+      ],
+      assignments: [{ id: "assignment-1", module_code: "CS201", title: "Data Structures Assignment" }],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Data Structures Assignment")).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment — 67%");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx · Released 29 Apr 2026");
+    expect(screen.queryByText(/abdullahi faruk/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Other Student/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Hidden Student/i)).not.toBeInTheDocument();
   });
 
   it("shows safe student guidance without exposing provisional or unreleased grading data", async () => {
