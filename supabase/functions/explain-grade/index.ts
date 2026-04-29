@@ -1,15 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
-import { jsonError, requireUser } from "../_shared/auth.ts";
+import { createAdminClient, HttpError, jsonError, requireUser } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { buildReleasedGradeContext } from "../_shared/explain-grade-context.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logWarn } from "../_shared/log.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 const ExplainGradeRequestSchema = z.object({
-  submissionId: z.string().uuid().optional(),
-  submissionIds: z.array(z.string().uuid()).max(50).optional(),
+  submissionId: z.string().uuid(),
   message: z.string().min(1).max(2000),
 });
 
@@ -55,9 +55,6 @@ serve(async (req) => {
 
     const parsed = ExplainGradeRequestSchema.safeParse({
       submissionId: typeof payload?.submissionId === "string" ? payload.submissionId : undefined,
-      submissionIds: Array.isArray(payload?.submissionIds)
-        ? payload.submissionIds.filter((value): value is string => typeof value === "string")
-        : undefined,
       message: typeof payload?.message === "string" ? payload.message : latestUserMessage?.content,
     });
 
@@ -74,11 +71,49 @@ serve(async (req) => {
       );
     }
 
-    const { submissionId, submissionIds, message } = parsed.data;
+    const { submissionId, message } = parsed.data;
     const messages = rawMessages.length > 0
       ? rawMessages
       : [{ role: "user", content: message } satisfies ExplainGradeMessage];
-    const gradeContext = payload?.gradeContext;
+    const admin = createAdminClient();
+    const { data: submission, error: submissionError } = await admin
+      .from("submissions")
+      .select("id, assignment_id, student_id, student_name, student_email, file_name, status")
+      .eq("id", submissionId)
+      .maybeSingle();
+
+    if (submissionError) {
+      throw new Error("Failed to load submission");
+    }
+
+    const { data: grade, error: gradeError } = await admin
+      .from("grades")
+      .select("id, submission_id, ai_score, final_score, ai_feedback, ai_breakdown, grading_confidence")
+      .eq("submission_id", submissionId)
+      .maybeSingle();
+
+    if (gradeError) {
+      throw new Error("Failed to load released grade");
+    }
+
+    const assignmentId = typeof submission?.assignment_id === "string" ? submission.assignment_id : null;
+    const { data: assignment, error: assignmentError } = assignmentId
+      ? await admin
+          .from("assignments")
+          .select("id, title, module_code, max_score")
+          .eq("id", assignmentId)
+          .maybeSingle()
+      : { data: null, error: null };
+
+    if (assignmentError) {
+      throw new Error("Failed to load assignment context");
+    }
+
+    const gradeContext = buildReleasedGradeContext(
+      { submission, grade, assignment },
+      user.id,
+      (status, errorMessage) => new HttpError(status, errorMessage),
+    );
     const chatModel = getModel("OPENAI_CHAT_MODEL", "gpt-5.4-mini");
 
     const systemPrompt = `You are GradeAI, a supportive academic grade assistant for university students. You use the Socratic method to help students reflect on their work and understand their grades.
