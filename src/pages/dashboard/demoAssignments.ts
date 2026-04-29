@@ -99,6 +99,8 @@ export const DEMO_ASSIGNMENTS: DemoAssignmentRecord[] = SYNTHETIC_ASSIGNMENT_SET
   target_departments: set.template.targetDepartments,
 }));
 
+const PRIMARY_DEMO_ASSIGNMENT_ID = SYNTHETIC_ASSIGNMENT_SETS[0]?.id ?? "";
+
 export const DEMO_STUDENT_ASSIGNMENTS: DemoAssignmentRecord[] = DEMO_ASSIGNMENTS.map((assignment) => ({
   ...assignment,
   status: "published",
@@ -123,10 +125,10 @@ export const DEMO_ASSIGNMENT_SUBMISSIONS: Record<string, DemoAssignmentSubmissio
 );
 
 const releasedStudentExample =
-  DEMO_ASSIGNMENT_SUBMISSIONS["algorithms-report"]?.find((submission) => submission.status === "released") ?? null;
+  DEMO_ASSIGNMENT_SUBMISSIONS[PRIMARY_DEMO_ASSIGNMENT_ID]?.find((submission) => submission.status === "released") ?? null;
 
 export const DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS: Record<string, DemoAssignmentSubmissionRecord[]> = {
-  "algorithms-report": releasedStudentExample
+  [PRIMARY_DEMO_ASSIGNMENT_ID]: releasedStudentExample
     ? [
         {
           ...releasedStudentExample,
@@ -136,6 +138,7 @@ export const DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS: Record<string, DemoAssignmentS
         },
       ]
     : [],
+  "algorithms-report": [],
   "database-normalisation": [],
   "network-security": [
     {

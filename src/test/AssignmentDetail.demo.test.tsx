@@ -64,7 +64,7 @@ describe("AssignmentDetail demo data isolation", () => {
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
     expect(screen.getByText("Demo Mode — synthetic sample data")).toBeInTheDocument();
-    expect(screen.getByText("Algorithms Report Workflow")).toBeInTheDocument();
+    expect(screen.getByText("AI in Higher Education Essay Workflow")).toBeInTheDocument();
     expect(screen.getByText("Workflow Actions")).toBeInTheDocument();
     expect(screen.getByText("Rubric")).toBeInTheDocument();
     expect(screen.getByText("Integrity Flags")).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe("AssignmentDetail demo data isolation", () => {
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
     expect(screen.getByText("Open file")).toBeInTheDocument();
-    expect(screen.getByText("Very strong work with clear methodology, accurate analysis, and well-supported conclusions. To push further, narrow the recommendation to a more concrete deployment scenario.")).toBeInTheDocument();
+    expect(screen.getByText("An excellent critical analysis of AI in higher education. The essay is clear, balanced, and well-argued, and it makes a persuasive case that AI should be used to support academic judgement rather than replace it. To improve further, add one slightly more developed institutional governance example.")).toBeInTheDocument();
     expect(screen.queryByText("Daniel Okafor")).not.toBeInTheDocument();
     expect(screen.queryByText("Integrity Flags")).not.toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();

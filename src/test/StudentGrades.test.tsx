@@ -192,10 +192,14 @@ describe("StudentGrades", () => {
     render(<StudentGrades />);
 
     await waitFor(() => {
-      expect(screen.getByText("Comparative Analysis of Sorting Algorithm Performance")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Evaluating the Role of Artificial Intelligence in University Assessment and Student Support",
+        ),
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("81/100")).toBeInTheDocument();
+    expect(screen.getByText("84/100")).toBeInTheDocument();
     expect(screen.getByText("Network Security Incident Reflection")).toBeInTheDocument();
     expect(screen.getByText("submitted")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();

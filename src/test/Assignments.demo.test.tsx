@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
+import { STARTER_ASSIGNMENT_TEMPLATES, SYNTHETIC_ASSIGNMENT_SETS } from "@/data/assignmentSets";
 import Assignments from "@/pages/dashboard/Assignments";
 import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
@@ -87,6 +87,25 @@ describe("Assignments demo data isolation", () => {
   it("exposes reusable starter templates in code for later lecturer prefills", () => {
     expect(STARTER_ASSIGNMENT_TEMPLATES.length).toBeGreaterThan(0);
     expect(STARTER_ASSIGNMENT_TEMPLATES[0].template.rubric.length).toBeGreaterThan(0);
+  });
+
+  it("uses the AI in higher education essay as the first demo assignment set", () => {
+    const firstSet = SYNTHETIC_ASSIGNMENT_SETS[0];
+    const rubricTotal = firstSet.template.rubric.reduce((sum, criterion) => sum + criterion.weight, 0);
+
+    expect(firstSet.template.title).toBe(
+      "Evaluating the Role of Artificial Intelligence in University Assessment and Student Support",
+    );
+    expect(firstSet.label).toBe("Essay / Critical Analysis example");
+    expect(firstSet.template.moduleCode).toBe("EDU401");
+    expect(firstSet.template.rubric.map((criterion) => criterion.criterion)).toEqual([
+      "Understanding of AI in Higher Education",
+      "Critical Analysis and Evaluation",
+      "Use of Evidence and Examples",
+      "Structure, Clarity, and Academic Writing",
+      "Conclusion and Judgement",
+    ]);
+    expect(rubricTotal).toBe(100);
   });
 
   it("shows a student-scoped synthetic assignment list in demo mode", async () => {
