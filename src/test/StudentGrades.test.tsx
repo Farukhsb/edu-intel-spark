@@ -143,6 +143,8 @@ const setupSupabase = ({
 describe("StudentGrades", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.authState.isDemo = false;
+    mocks.authState.user = { id: "student-1" };
   });
 
   afterEach(() => {
@@ -181,5 +183,22 @@ describe("StudentGrades", () => {
         userId: "student-1",
       },
     );
+  });
+
+  it("uses shared synthetic assignment-set data in demo mode", async () => {
+    mocks.authState.isDemo = true;
+    mocks.authState.user = null;
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Comparative Analysis of Sorting Algorithm Performance")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("81/100")).toBeInTheDocument();
+    expect(screen.getByText("Network Security Incident Reflection")).toBeInTheDocument();
+    expect(screen.getByText("submitted")).toBeInTheDocument();
+    expect(mocks.supabase.from).not.toHaveBeenCalled();
+    expect(mocks.supabase.rpc).not.toHaveBeenCalled();
   });
 });

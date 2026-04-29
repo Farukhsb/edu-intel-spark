@@ -78,6 +78,10 @@ export interface DemoAssignmentGradeRecord {
   final_feedback: string | null;
 }
 
+export const DEMO_STUDENT_ID = "demo-student";
+export const DEMO_STUDENT_EMAIL = "student@gradeai.com";
+export const DEMO_STUDENT_NAME = "Demo Student";
+
 export const DEMO_ASSIGNMENTS: DemoAssignmentRecord[] = SYNTHETIC_ASSIGNMENT_SETS.map((set) => ({
   id: set.id,
   title: set.template.title,
@@ -93,6 +97,11 @@ export const DEMO_ASSIGNMENTS: DemoAssignmentRecord[] = SYNTHETIC_ASSIGNMENT_SET
   departments: [],
   target_cohorts: set.template.targetCohorts,
   target_departments: set.template.targetDepartments,
+}));
+
+export const DEMO_STUDENT_ASSIGNMENTS: DemoAssignmentRecord[] = DEMO_ASSIGNMENTS.map((assignment) => ({
+  ...assignment,
+  status: "published",
 }));
 
 export const DEMO_ASSIGNMENT_SUBMISSIONS: Record<string, DemoAssignmentSubmissionRecord[]> = Object.fromEntries(
@@ -112,6 +121,38 @@ export const DEMO_ASSIGNMENT_SUBMISSIONS: Record<string, DemoAssignmentSubmissio
     })),
   ]),
 );
+
+const releasedStudentExample =
+  DEMO_ASSIGNMENT_SUBMISSIONS["algorithms-report"]?.find((submission) => submission.status === "released") ?? null;
+
+export const DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS: Record<string, DemoAssignmentSubmissionRecord[]> = {
+  "algorithms-report": releasedStudentExample
+    ? [
+        {
+          ...releasedStudentExample,
+          student_id: DEMO_STUDENT_ID,
+          student_name: DEMO_STUDENT_NAME,
+          student_email: DEMO_STUDENT_EMAIL,
+        },
+      ]
+    : [],
+  "database-normalisation": [],
+  "network-security": [
+    {
+      id: "demo-student-submission-network-security",
+      assignment_id: "network-security",
+      student_id: DEMO_STUDENT_ID,
+      student_name: DEMO_STUDENT_NAME,
+      student_email: DEMO_STUDENT_EMAIL,
+      file_name: "incident-reflection-demo-student.docx",
+      file_type:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      file_url: "https://example.edu/demo/incident-reflection-demo-student.docx",
+      status: "submitted",
+      submitted_at: "2026-04-18T09:10:00.000Z",
+    },
+  ],
+};
 
 export const DEMO_ASSIGNMENT_GRADES: Record<string, DemoAssignmentGradeRecord> = Object.fromEntries(
   SYNTHETIC_ASSIGNMENT_SETS.flatMap((set) =>
@@ -155,6 +196,16 @@ export const DEMO_ASSIGNMENT_GRADES: Record<string, DemoAssignmentGradeRecord> =
         } satisfies DemoAssignmentGradeRecord,
       ]),
   ),
+);
+
+export const DEMO_STUDENT_ASSIGNMENT_GRADES: Record<string, DemoAssignmentGradeRecord> = Object.fromEntries(
+  Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
+    .flat()
+    .map((submission) => {
+      const grade = DEMO_ASSIGNMENT_GRADES[submission.id];
+      return grade ? ([submission.id, grade] as const) : null;
+    })
+    .filter((entry): entry is readonly [string, DemoAssignmentGradeRecord] => entry !== null),
 );
 
 export const DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES: Record<string, string> = Object.fromEntries(

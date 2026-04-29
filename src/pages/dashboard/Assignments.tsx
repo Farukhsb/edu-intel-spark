@@ -33,7 +33,7 @@ import {
   isStudentGradeVisible,
 } from "@/lib/assessmentWorkflow";
 import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
-import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
+import { DEMO_ASSIGNMENTS, DEMO_STUDENT_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
 const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
@@ -203,7 +203,8 @@ const Assignments = () => {
 
   const fetchAssignments = async () => {
     if (isDemo) {
-      setAssignments((DEMO_ASSIGNMENTS ?? []).map(normalizeAssignment));
+      const demoAssignments = role === "student" ? DEMO_STUDENT_ASSIGNMENTS : DEMO_ASSIGNMENTS;
+      setAssignments((demoAssignments ?? []).map(normalizeAssignment));
       setSubmissionStats({});
       setLoading(false);
       return;

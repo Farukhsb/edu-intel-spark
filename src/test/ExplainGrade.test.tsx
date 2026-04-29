@@ -229,14 +229,14 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
-    expect(screen.getByText("CS301 Assignment 1 - Data Structures")).toBeInTheDocument();
+    expect(screen.getByText("CS301 Comparative Analysis of Sorting Algorithm Performance")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("Ask about your grade..."), {
       target: { value: "Why did I get this grade?" },
     });
     fireEvent.click(screen.getAllByRole("button").at(-1)!);
 
-    expect(await screen.findByText(/You received \*\*72% \(2:1\)\*\*/i)).toBeInTheDocument();
+    expect(await screen.findByText(/You received \*\*81% \(1st\)\*\*/i)).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
     expect(mocks.supabase.auth.getSession).not.toHaveBeenCalled();
   });

@@ -62,8 +62,13 @@ test.describe("assignment management workflows", () => {
 
     await page.getByRole("button", { name: "Save Assignment Changes" }).click();
     await expect(page.getByRole("heading", { name: "Edit Assignment" })).not.toBeVisible();
-    await expect(page.getByText("Level 200")).toBeVisible();
-    await expect(page.getByText("Biology")).toBeVisible();
+    const assignmentCard = page
+      .locator("div")
+      .filter({ has: page.getByText("Targeted Coursework") })
+      .filter({ has: page.getByRole("button", { name: "Edit" }) })
+      .first();
+    await expect(assignmentCard.getByText("Level 200")).toBeVisible();
+    await expect(assignmentCard.getByText("Biology")).toBeVisible();
 
     expect(
       state.tables.assignment_cohorts

@@ -87,6 +87,9 @@ import {
   DEMO_ASSIGNMENT_INTEGRITY_FLAGS,
   DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES,
   DEMO_ASSIGNMENT_SUBMISSIONS,
+  DEMO_STUDENT_ASSIGNMENTS,
+  DEMO_STUDENT_ASSIGNMENT_GRADES,
+  DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
   getDemoAssignmentById,
   getDemoAssignmentSetById,
 } from "@/pages/dashboard/demoAssignments";
@@ -328,7 +331,10 @@ const AssignmentDetail = () => {
       setLoading(true);
 
       if (isDemo) {
-        const demoAssignment = getDemoAssignmentById(id);
+        const demoAssignment =
+          role === "student"
+            ? DEMO_STUDENT_ASSIGNMENTS.find((assignmentRecord) => assignmentRecord.id === id) ?? null
+            : getDemoAssignmentById(id);
         if (demoAssignment) {
           setAssignment({
             id: demoAssignment.id,
@@ -468,11 +474,16 @@ const AssignmentDetail = () => {
   const loadSubmissions = async () => {
     if (!id) return;
     if (isDemo) {
-      const demoSubmissions = DEMO_ASSIGNMENT_SUBMISSIONS[id] ?? [];
+      const demoSubmissions =
+        role === "student"
+          ? DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS[id] ?? []
+          : DEMO_ASSIGNMENT_SUBMISSIONS[id] ?? [];
+      const gradeSource =
+        role === "student" ? DEMO_STUDENT_ASSIGNMENT_GRADES : DEMO_ASSIGNMENT_GRADES;
       const demoGrades = Object.fromEntries(
         demoSubmissions
           .map((submission) => {
-            const grade = DEMO_ASSIGNMENT_GRADES[submission.id];
+            const grade = gradeSource[submission.id];
             if (!grade) return null;
 
             return [
@@ -500,8 +511,8 @@ const AssignmentDetail = () => {
       setGrades(demoGrades);
       setIntegrityReviews({});
       setModerationCases({});
-      setPlagiarismFlags(DEMO_ASSIGNMENT_INTEGRITY_FLAGS[id] ?? []);
-      setPlagiarismSummary(DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES[id] ?? "");
+      setPlagiarismFlags(role === "student" ? [] : DEMO_ASSIGNMENT_INTEGRITY_FLAGS[id] ?? []);
+      setPlagiarismSummary(role === "student" ? "" : DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES[id] ?? "");
       return;
     }
     const { data } = await supabase
@@ -1498,8 +1509,8 @@ Please review the feedback in the platform and let me know if you would like to 
   );
 
   const isLecturer = role === "lecturer";
-  const currentUserId = user?.id ?? null;
-  const currentUserEmail = user?.email ?? null;
+  const currentUserId = user?.id ?? (isDemo ? profile?.id ?? null : null);
+  const currentUserEmail = user?.email ?? (isDemo ? profile?.email ?? null : null);
   const hasExistingSubmission =
     !isLecturer &&
     submissions.some(
@@ -1564,7 +1575,7 @@ Please review the feedback in the platform and let me know if you would like to 
           </CardContent>
         </Card>
       )}
-      {isDemo && demoAssignmentSet && (
+      {isDemo && demoAssignmentSet && isLecturer && (
         <Card className="border-primary/20 bg-background shadow-sm">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div>

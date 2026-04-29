@@ -88,4 +88,21 @@ describe("Assignments demo data isolation", () => {
     expect(STARTER_ASSIGNMENT_TEMPLATES.length).toBeGreaterThan(0);
     expect(STARTER_ASSIGNMENT_TEMPLATES[0].template.rubric.length).toBeGreaterThan(0);
   });
+
+  it("shows a student-scoped synthetic assignment list in demo mode", async () => {
+    mocks.authState.role = "student";
+    mocks.authState.user = { id: "demo-student", email: "student@gradeai.com" };
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Assignments />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("My Assignments")).toBeInTheDocument();
+    expect(screen.getAllByText("Open Assignment").length).toBeGreaterThan(0);
+    expect(screen.getByText("Published")).toBeInTheDocument();
+    expect(screen.queryByText("Create assignment")).not.toBeInTheDocument();
+    expect(mocks.supabase.from).not.toHaveBeenCalled();
+  });
 });

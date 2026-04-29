@@ -14,6 +14,11 @@ import { log } from "@/lib/logger";
 import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 import type { AcademicGradeBreakdownItem } from "@/types/academic";
 import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
+import {
+  DEMO_STUDENT_ASSIGNMENTS,
+  DEMO_STUDENT_ASSIGNMENT_GRADES,
+  DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
+} from "@/pages/dashboard/demoAssignments";
 
 interface ExplainGradeBreakdown {
   assessment: string;
@@ -83,15 +88,70 @@ interface SubmissionOption {
   breakdown: ExplainGradeBreakdown;
 }
 
-const DEMO_SUBMISSIONS: SubmissionOption[] = [
-  {
-    gradeId: "demo-g1", submissionId: "demo-s1", label: "CS301 Assignment 1 - Data Structures", totalGrade: 72,
-    breakdown: { assessment: "CS301 Assignment 1 - Data Structures", totalGrade: 72, band: "2:1",
-      components: [{ name: "Correctness", weight: 25, score: 72, maxScore: 100 }, { name: "Code Quality", weight: 25, score: 80, maxScore: 100 }, { name: "Documentation", weight: 25, score: 64, maxScore: 100 }, { name: "Testing", weight: 25, score: 72, maxScore: 100 }],
-      improvementAreas: [{ area: "Documentation", currentBand: "2:1", nextBand: "1st", pointsNeeded: 6, tips: ["Add clearer inline comments", "Include complexity analysis", "Improve README structure"] }],
-    },
-  },
-];
+const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
+  .flat()
+  .flatMap((submission) => {
+    if (submission.status !== "released") return [];
+    const assignment = DEMO_STUDENT_ASSIGNMENTS.find((entry) => entry.id === submission.assignment_id);
+    const grade = DEMO_STUDENT_ASSIGNMENT_GRADES[submission.id];
+    const breakdown = safeParseGradeBreakdown(grade?.ai_breakdown ?? []);
+    if (!grade || !breakdown.success) return [];
+
+    const totalGrade = Number(grade.final_score ?? grade.ai_score ?? 0);
+    const totalMaxRaw = breakdown.data.reduce(
+      (sum, item: ExplainGradeBreakdownItem) => sum + getBreakdownMaxScore(item),
+      0,
+    );
+    const totalMax = totalMaxRaw > 0 ? totalMaxRaw : 1;
+
+    const components = breakdown.data.map((item: ExplainGradeBreakdownItem) => ({
+      name: item.criterion || item.name || "Unknown",
+      weight: Math.round((getBreakdownMaxScore(item) / totalMax) * 100),
+      score: Math.round(((item.score ?? 0) / Math.max(getBreakdownMaxScore(item), 1)) * 100),
+      maxScore: 100,
+    }));
+
+    const improvementAreas = components
+      .filter((component) => component.score < 70)
+      .sort((left, right) => left.score - right.score)
+      .slice(0, 3)
+      .map((component) => {
+        const band = getBand(component.score);
+        const next = getNextBand(band);
+        const threshold = getNextBandThreshold(band);
+        return {
+          area: component.name,
+          currentBand: band,
+          nextBand: next,
+          pointsNeeded: Math.max(threshold - component.score, 0),
+          tips: [
+            `Focus on strengthening your ${component.name.toLowerCase()} skills`,
+            `Review the rubric criteria for ${component.name}`,
+            "Use the released lecturer feedback to revise the next submission",
+          ],
+        };
+      });
+
+    const label = assignment
+      ? `${assignment.module_code || ""} ${assignment.title}`.trim()
+      : submission.file_name;
+
+    return [
+      {
+        gradeId: grade.id,
+        submissionId: submission.id,
+        label,
+        totalGrade,
+        breakdown: {
+          assessment: label,
+          totalGrade,
+          band: getBand(totalGrade),
+          components,
+          improvementAreas,
+        },
+      },
+    ];
+  });
 
 const buildDemoGradeResponse = (question: string, breakdown: ExplainGradeBreakdown) => {
   const weakestArea = breakdown.improvementAreas[0];
@@ -112,7 +172,7 @@ const buildDemoGradeResponse = (question: string, breakdown: ExplainGradeBreakdo
 const ExplainGrade = () => {
   const { isDemo } = useAuth();
   const [submissions, setSubmissions] = useState<SubmissionOption[]>(isDemo ? DEMO_SUBMISSIONS : []);
-  const [selectedId, setSelectedId] = useState<string>(isDemo ? "demo-g1" : "");
+  const [selectedId, setSelectedId] = useState<string>(isDemo ? (DEMO_SUBMISSIONS[0]?.gradeId ?? "") : "");
   const [loading, setLoading] = useState(!isDemo);
   const [expandedArea, setExpandedArea] = useState<number | null>(0);
   const [messages, setMessages] = useState<ChatMsg[]>([

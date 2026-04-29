@@ -73,4 +73,32 @@ describe("AssignmentDetail demo data isolation", () => {
     expect(mocks.supabase.from).not.toHaveBeenCalled();
     expect(mocks.supabase.storage.from).not.toHaveBeenCalled();
   });
+
+  it("shows only the synthetic student view in demo student mode", async () => {
+    mocks.authState.role = "student";
+    mocks.authState.user = { id: "demo-student", email: "student@gradeai.com" };
+    mocks.authState.profile = {
+      id: "demo-student",
+      email: "student@gradeai.com",
+      role: "student",
+    };
+
+    render(
+      <MemoryRouter
+        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
+    expect(screen.getByText("Open file")).toBeInTheDocument();
+    expect(screen.getByText("Very strong work with clear methodology, accurate analysis, and well-supported conclusions. To push further, narrow the recommendation to a more concrete deployment scenario.")).toBeInTheDocument();
+    expect(screen.queryByText("Daniel Okafor")).not.toBeInTheDocument();
+    expect(screen.queryByText("Integrity Flags")).not.toBeInTheDocument();
+    expect(mocks.supabase.from).not.toHaveBeenCalled();
+  });
 });

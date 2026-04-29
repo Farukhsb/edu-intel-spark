@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { safeToLocaleDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import {
+  DEMO_STUDENT_ASSIGNMENTS,
+  DEMO_STUDENT_ASSIGNMENT_GRADES,
+  DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
+} from "@/pages/dashboard/demoAssignments";
 
 interface StudentGrade {
   id: string;
@@ -45,11 +50,27 @@ interface GradeRow {
   ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
 }
 
-const DEMO_GRADES: StudentGrade[] = [
-  { id: "demo-1", assignmentTitle: "Assignment 1 - Data Structures", moduleCode: "CS301", score: 72, maxScore: 100, feedback: "Good understanding of binary trees. Consider edge cases in your traversal implementation.", status: "released", submittedAt: new Date(Date.now() - 7 * 86400000).toISOString(), breakdown: [{ criterion: "Correctness", score: 18, max_score: 25 }, { criterion: "Code Quality", score: 20, max_score: 25 }, { criterion: "Documentation", score: 16, max_score: 25 }, { criterion: "Testing", score: 18, max_score: 25 }], fileUrl: null },
-  { id: "demo-2", assignmentTitle: "Assignment 2 - Algorithms", moduleCode: "CS205", score: 65, maxScore: 100, feedback: "Solid attempt at dynamic programming. Review time complexity analysis.", status: "released", submittedAt: new Date(Date.now() - 14 * 86400000).toISOString(), breakdown: [{ criterion: "Algorithm Design", score: 16, max_score: 25 }, { criterion: "Efficiency", score: 14, max_score: 25 }, { criterion: "Analysis", score: 17, max_score: 25 }, { criterion: "Presentation", score: 18, max_score: 25 }], fileUrl: null },
-  { id: "demo-3", assignmentTitle: "Midterm Essay", moduleCode: "CS301", score: null, maxScore: 100, feedback: null, status: "submitted", submittedAt: new Date(Date.now() - 2 * 86400000).toISOString(), breakdown: null, fileUrl: null },
-];
+const DEMO_GRADES: StudentGrade[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
+  .flat()
+  .map((submission) => {
+    const assignment = DEMO_STUDENT_ASSIGNMENTS.find((entry) => entry.id === submission.assignment_id);
+    const grade = DEMO_STUDENT_ASSIGNMENT_GRADES[submission.id];
+    const isReleased = submission.status === "released";
+
+    return {
+      id: submission.id,
+      assignmentTitle: assignment?.title ?? "Assignment title unavailable",
+      moduleCode: assignment?.module_code ?? null,
+      score: isReleased ? (grade?.final_score ?? grade?.ai_score ?? null) : null,
+      maxScore: assignment?.max_score ?? 100,
+      feedback: isReleased ? (grade?.final_feedback ?? grade?.ai_feedback ?? null) : null,
+      status: submission.status,
+      submittedAt: submission.submitted_at,
+      breakdown: isReleased ? (grade?.ai_breakdown ?? null) : null,
+      fileUrl: submission.file_url ?? null,
+    };
+  })
+  .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime());
 
 const StudentGrades = () => {
   const { user, isDemo } = useAuth();
@@ -59,28 +80,36 @@ const StudentGrades = () => {
 
   useEffect(() => {
     if (isDemo) {
-      const scores = DEMO_GRADES.filter(g => g.score != null).map(g => g.score!);
-      setStats({ avg: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10, count: scores.length, highest: Math.max(...scores), lowest: Math.min(...scores) });
+      const scores = DEMO_GRADES.filter((grade) => grade.score != null).map((grade) => grade.score!);
+      setStats({
+        avg: Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10,
+        count: scores.length,
+        highest: Math.max(...scores),
+        lowest: Math.min(...scores),
+      });
       return;
     }
-    if (!user) { setLoading(false); return; }
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const fetchGrades = async () => {
       try {
-        // Fetch only this student's submissions (RLS enforces this server-side too)
         const [subRes, assignmentMetaRes] = await Promise.all([
           supabase.from("submissions").select("*").eq("student_id", user.id),
           supabase.rpc("get_student_grade_assignment_metadata"),
         ]);
 
-        const allSubs = (subRes.data || [])
-          .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+        const allSubs = (subRes.data || []).sort(
+          (left, right) => new Date(right.submitted_at).getTime() - new Date(left.submitted_at).getTime(),
+        );
 
-        // Fetch grades only for the student's submissions
-        const subIds = allSubs.map(s => s.id);
-        const gradeRes = subIds.length > 0
-          ? await supabase.from("grades").select("*").in("submission_id", subIds)
-          : { data: [] };
+        const subIds = allSubs.map((submission) => submission.id);
+        const gradeRes =
+          subIds.length > 0
+            ? await supabase.from("grades").select("*").in("submission_id", subIds)
+            : { data: [] };
 
         const gradeData = gradeRes.data || [];
 
@@ -101,32 +130,36 @@ const StudentGrades = () => {
         }
 
         const gradeMap: Record<string, GradeRow> = {};
-        gradeData.forEach(g => { gradeMap[g.submission_id] = g; });
+        gradeData.forEach((grade) => {
+          gradeMap[grade.submission_id] = grade;
+        });
 
-        const studentGrades: StudentGrade[] = allSubs.map(s => {
-          const a = assignmentMap[s.assignment_id];
-          const g = gradeMap[s.id];
-          const isReleased = s.status === "released";
+        const studentGrades: StudentGrade[] = allSubs.map((submission) => {
+          const assignment = assignmentMap[submission.assignment_id];
+          const grade = gradeMap[submission.id];
+          const isReleased = submission.status === "released";
           return {
-            id: s.id,
-            assignmentTitle: a?.title || "Assignment title unavailable",
-            moduleCode: a?.module_code || null,
-            score: isReleased ? (g?.final_score ?? g?.ai_score ?? null) : null,
-            maxScore: a?.max_score || 100,
-            feedback: isReleased ? (g?.final_feedback ?? g?.ai_feedback ?? null) : null,
-            status: s.status,
-            submittedAt: s.submitted_at,
-            breakdown: isReleased ? (g?.ai_breakdown || null) : null,
-            fileUrl: s.file_url || null,
+            id: submission.id,
+            assignmentTitle: assignment?.title || "Assignment title unavailable",
+            moduleCode: assignment?.module_code || null,
+            score: isReleased ? (grade?.final_score ?? grade?.ai_score ?? null) : null,
+            maxScore: assignment?.max_score || 100,
+            feedback: isReleased ? (grade?.final_feedback ?? grade?.ai_feedback ?? null) : null,
+            status: submission.status,
+            submittedAt: submission.submitted_at,
+            breakdown: isReleased ? (grade?.ai_breakdown || null) : null,
+            fileUrl: submission.file_url || null,
           };
         });
 
         setGrades(studentGrades);
 
-        const releasedScores = studentGrades.filter(g => g.score != null).map(g => g.score!);
+        const releasedScores = studentGrades.filter((grade) => grade.score != null).map((grade) => grade.score!);
         if (releasedScores.length > 0) {
           setStats({
-            avg: Math.round((releasedScores.reduce((a, b) => a + b, 0) / releasedScores.length) * 10) / 10,
+            avg: Math.round(
+              (releasedScores.reduce((total, score) => total + score, 0) / releasedScores.length) * 10,
+            ) / 10,
             count: releasedScores.length,
             highest: Math.max(...releasedScores),
             lowest: Math.min(...releasedScores),
@@ -140,17 +173,19 @@ const StudentGrades = () => {
       setLoading(false);
     };
 
-    fetchGrades();
+    void fetchGrades();
   }, [user, isDemo]);
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-12">
-      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-  const releasedGrades = grades.filter(g => g.score != null);
-  const pendingGrades = grades.filter(g => g.score == null);
+  const releasedGrades = grades.filter((grade) => grade.score != null);
+  const pendingGrades = grades.filter((grade) => grade.score == null);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -166,86 +201,121 @@ const StudentGrades = () => {
       </Card>
 
       {releasedGrades.length > 0 && (
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-          <Card><CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold font-display">{stats.avg}</p>
-            <p className="text-xs text-muted-foreground">Average Score</p>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold font-display">{stats.count}</p>
-            <p className="text-xs text-muted-foreground">Graded</p>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold font-display text-success">{stats.highest}</p>
-            <p className="text-xs text-muted-foreground">Highest</p>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold font-display text-destructive">{stats.lowest}</p>
-            <p className="text-xs text-muted-foreground">Lowest</p>
-          </CardContent></Card>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-3xl font-bold font-display">{stats.avg}</p>
+              <p className="text-xs text-muted-foreground">Average Score</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-3xl font-bold font-display">{stats.count}</p>
+              <p className="text-xs text-muted-foreground">Graded</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-3xl font-bold font-display text-success">{stats.highest}</p>
+              <p className="text-xs text-muted-foreground">Highest</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-3xl font-bold font-display text-destructive">{stats.lowest}</p>
+              <p className="text-xs text-muted-foreground">Lowest</p>
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {grades.length === 0 ? (
-        <Card><CardContent className="py-12 text-center">
-          <p className="font-medium">No submissions yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Head to Assignments to submit your work.</p>
-        </CardContent></Card>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="font-medium">No submissions yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Head to Assignments to submit your work.</p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
-          {grades.map(g => (
-            <Card key={g.id}>
-              <CardContent className="p-4 space-y-3">
+          {grades.map((grade) => (
+            <Card key={grade.id}>
+              <CardContent className="space-y-3 p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium">{g.assignmentTitle}</p>
+                    <p className="text-sm font-medium">{grade.assignmentTitle}</p>
                     <p className="text-xs text-muted-foreground">
-                      {g.moduleCode && `${g.moduleCode} · `}
-                      {safeToLocaleDate(g.submittedAt)}
+                      {grade.moduleCode && `${grade.moduleCode} - `}
+                      {safeToLocaleDate(grade.submittedAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {g.score != null ? (
+                    {grade.score != null ? (
                       <>
-                        <span className="text-xl font-bold font-display">{g.score}/{g.maxScore}</span>
-                        <Badge variant={g.score >= g.maxScore * 0.7 ? "default" : g.score >= g.maxScore * 0.5 ? "secondary" : "destructive"}>
-                          {Math.round((g.score / g.maxScore) * 100)}%
+                        <span className="text-xl font-bold font-display">
+                          {grade.score}/{grade.maxScore}
+                        </span>
+                        <Badge
+                          variant={
+                            grade.score >= grade.maxScore * 0.7
+                              ? "default"
+                              : grade.score >= grade.maxScore * 0.5
+                                ? "secondary"
+                                : "destructive"
+                          }
+                        >
+                          {Math.round((grade.score / grade.maxScore) * 100)}%
                         </Badge>
                       </>
                     ) : (
-                      <Badge variant="outline" className="capitalize">{g.status.replace(/_/g, " ")}</Badge>
+                      <Badge variant="outline" className="capitalize">
+                        {grade.status.replace(/_/g, " ")}
+                      </Badge>
                     )}
                   </div>
                 </div>
-                {g.score != null && (
+                {grade.score != null && (
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
-                      className={`h-full rounded-full ${g.score >= g.maxScore * 0.7 ? "bg-success" : g.score >= g.maxScore * 0.5 ? "bg-primary" : "bg-destructive"}`}
-                      style={{ width: `${(g.score / g.maxScore) * 100}%` }}
+                      className={`h-full rounded-full ${
+                        grade.score >= grade.maxScore * 0.7
+                          ? "bg-success"
+                          : grade.score >= grade.maxScore * 0.5
+                            ? "bg-primary"
+                            : "bg-destructive"
+                      }`}
+                      style={{ width: `${(grade.score / grade.maxScore) * 100}%` }}
                     />
                   </div>
                 )}
-                {g.breakdown && Array.isArray(g.breakdown) && g.breakdown.length > 0 && (
+                {grade.breakdown && Array.isArray(grade.breakdown) && grade.breakdown.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {g.breakdown.map((b, i: number) => (
-                      <span key={i} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">
-                        {b.criterion}: {b.score}/{b.max_score}
+                    {grade.breakdown.map((breakdownItem, index) => (
+                      <span key={index} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                        {breakdownItem.criterion}: {breakdownItem.score}/{breakdownItem.max_score}
                       </span>
                     ))}
                   </div>
                 )}
-                {g.feedback && <p className="text-sm text-muted-foreground">{g.feedback}</p>}
-                {g.fileUrl && g.score != null && (
-                  <Button variant="outline" size="sm" className="mt-1" onClick={async () => {
-                    const { data, error } = await supabase.storage.from("submissions").createSignedUrl(g.fileUrl!, 3600);
-                    if (error) {
-                      log.error("Failed to create student submission download URL", error, {
-                        submissionId: g.id,
-                      });
-                      return;
-                    }
-                    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
-                  }}>
+                {grade.feedback && <p className="text-sm text-muted-foreground">{grade.feedback}</p>}
+                {grade.fileUrl && grade.score != null && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-1"
+                    onClick={async () => {
+                      const { data, error } = await supabase.storage
+                        .from("submissions")
+                        .createSignedUrl(grade.fileUrl!, 3600);
+                      if (error) {
+                        log.error("Failed to create student submission download URL", error, {
+                          submissionId: grade.id,
+                        });
+                        return;
+                      }
+                      if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                    }}
+                  >
                     <Download className="mr-1.5 h-3.5 w-3.5" /> Download Submission
                   </Button>
                 )}
