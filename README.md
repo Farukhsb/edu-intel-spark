@@ -94,6 +94,26 @@ For student support, GradeAI turns assessment activity into early-warning contex
 
 ![AI grade explanation](docs/screenshots/ai-grade-explanation.jpg)
 
+## Demo Mode
+
+GradeAI includes a synthetic demo mode for reviewer walkthroughs and product evaluation.
+
+Demo mode:
+
+- uses fabricated assignments, rubrics, submissions, grades, integrity examples, and feedback
+- does not rely on live academic records for demo assignment-set workflows
+- keeps demo assignment, submission, grading, and feedback paths isolated from real Supabase academic data
+
+Reusable synthetic assignment sets are used to demonstrate:
+
+- assignment briefs
+- rubric setup
+- AI-facing grading context
+- sample feedback and marking outputs
+- integrity and moderation workflow examples
+
+For real lecturers, sample assignment templates can prefill the assignment form, but they do not auto-create submissions, grades, integrity cases, or moderation records.
+
 ## Key Product Areas
 
 ### Lecturer workspace
@@ -421,7 +441,7 @@ The lecturer assignment page now treats `closed` as an archive state:
 - archived assignments are still searchable and recoverable
 - restore sends an archived assignment back to `draft`
 
-This keeps old assignments available without leaving them in the lecturer’s face every time they open the page.
+This keeps old assignments available without leaving them in the lecturer's face every time they open the page.
 
 ## Student Grade Titles
 
