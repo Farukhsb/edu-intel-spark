@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
 import type { CommunicationMessage } from "@/lib/communications";
 import { log } from "@/lib/logger";
-import { safeParseExplanationResponse } from "@/lib/schemas/aiResponses";
+import { safeParseExplanationResponse, safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 import {
   CartesianGrid,
   Line,
@@ -40,14 +40,31 @@ interface PlanModule {
   nextSubmissionFocus: string[];
   tasks: ImprovementTask[];
   chart: Array<{ assessment: string; score: number }>;
+  weakCriteria: Array<{
+    criterion: string;
+    average: number;
+    attempts: number;
+    feedback?: string;
+  }>;
 }
 
 interface Resource {
-  title: string;
-  type: string;
+  priority: number;
+  heading: string;
   duration: string;
-  relevance: number;
-  reason: string;
+  estimatedLift: string;
+  module: string;
+  criterion: string;
+  priorityLabel: string;
+  priorityScore: number;
+  issue: string;
+  actionItems: string[];
+  evidenceOfImprovement: string;
+}
+
+interface ParsedCriterionFeedback {
+  criterion: string;
+  feedback: string;
 }
 
 interface AssignmentMetadataRow {
@@ -76,6 +93,10 @@ const DEMO_PLAN: PlanModule[] = [
       { id: "demo-ds-2", task: "Write 5 extra edge-case tests", area: "Test Coverage", done: false },
       { id: "demo-ds-3", task: "Review lecturer feedback before next lab", area: "Feedback", done: true },
     ],
+    weakCriteria: [
+      { criterion: "Complexity Analysis", average: 54, attempts: 3 },
+      { criterion: "Test Coverage", average: 58, attempts: 2 },
+    ],
     chart: [
       { assessment: "A1", score: 54 },
       { assessment: "Quiz", score: 58 },
@@ -99,6 +120,10 @@ const DEMO_PLAN: PlanModule[] = [
       { id: "demo-algo-1", task: "Solve 3 dynamic programming exercises", area: "Dynamic Programming Structure", done: false },
       { id: "demo-algo-2", task: "Create a complexity comparison sheet", area: "Efficiency", done: true },
     ],
+    weakCriteria: [
+      { criterion: "Dynamic Programming Structure", average: 59, attempts: 3 },
+      { criterion: "Efficiency", average: 63, attempts: 2 },
+    ],
     chart: [
       { assessment: "A1", score: 71 },
       { assessment: "Midterm", score: 68 },
@@ -108,29 +133,299 @@ const DEMO_PLAN: PlanModule[] = [
   },
 ];
 
-const DEMO_RESOURCES: Resource[] = [
-  {
-    title: "Big-O Reasoning Worksheet",
-    type: "Guide",
-    duration: "15 min",
-    relevance: 94,
-    reason: "Derived from repeated weakness in complexity analysis.",
-  },
-  {
-    title: "Dynamic Programming Pattern Drills",
-    type: "Exercises",
-    duration: "40 min",
-    relevance: 90,
-    reason: "Derived from weaker performance in dynamic programming structure.",
-  },
-  {
-    title: "Testing Edge Cases in Python",
-    type: "Article",
-    duration: "12 min",
-    relevance: 84,
-    reason: "Derived from lower-scoring test coverage work.",
-  },
-];
+const normalizeCriterionLabel = (criterion: string) => {
+  const trimmed = criterion.trim();
+  if (/^criterion\s+\d+$/i.test(trimmed)) {
+    return trimmed.replace(/^criterion/i, "Rubric Criterion");
+  }
+
+  return trimmed;
+};
+
+const buildFocusHeading = (module: string, criterion: string) => {
+  const normalized = normalizeCriterionLabel(criterion);
+  const moduleCode = module.split(" - ")[0]?.trim();
+  if (moduleCode && /^[A-Z]{2,}\d{2,}$/i.test(moduleCode)) {
+    return `${moduleCode}: ${normalized}`;
+  }
+
+  return normalized;
+};
+
+const normalizeFeedbackText = (value: string) =>
+  value
+    .replace(/\s+/g, " ")
+    .replace(/\[[^\]]+\]/g, "")
+    .trim();
+
+const buildCriterionFeedbackMap = (grade: { ai_feedback?: string; ai_breakdown?: unknown[] } | null | undefined) => {
+  const feedbackMap: Record<string, string[]> = {};
+  const pushFeedback = (criterion: string, feedback: string | null | undefined) => {
+    if (!feedback) return;
+
+    const normalizedCriterion = normalizeCriterionLabel(criterion);
+    const normalizedFeedback = normalizeFeedbackText(feedback);
+    if (!normalizedCriterion || !normalizedFeedback) return;
+
+    if (!feedbackMap[normalizedCriterion]) {
+      feedbackMap[normalizedCriterion] = [];
+    }
+
+    if (!feedbackMap[normalizedCriterion].includes(normalizedFeedback)) {
+      feedbackMap[normalizedCriterion].push(normalizedFeedback);
+    }
+  };
+
+  const parsedBreakdown = safeParseGradeBreakdown(grade?.ai_breakdown ?? []);
+  if (parsedBreakdown.success) {
+    parsedBreakdown.data.forEach((item) => {
+      pushFeedback(item.criterion, item.feedback ?? item.comment);
+    });
+  }
+
+  const parsedExplanation = safeParseExplanationResponse(grade?.ai_feedback);
+  if (parsedExplanation.success) {
+    parsedExplanation.data.criteria?.forEach((item) => {
+      pushFeedback(item.name, item.feedback);
+    });
+  }
+
+  return feedbackMap;
+};
+
+const buildFeedbackLedIssue = (criterion: string, feedback: string | undefined, module: string) => {
+  if (!feedback) return buildIssue(criterion, module);
+
+  const firstSentence = normalizeFeedbackText(feedback).split(/(?<=[.!?])\s+/)[0]?.trim();
+  return firstSentence || buildIssue(criterion, module);
+};
+
+const buildActionItems = (criterion: string, feedback?: string) => {
+  const normalized = criterion.toLowerCase();
+  const normalizedFeedback = (feedback ?? "").toLowerCase();
+
+  if (
+    normalizedFeedback.includes("descriptive") ||
+    normalizedFeedback.includes("not evaluative") ||
+    normalizedFeedback.includes("does not clearly evaluate")
+  ) {
+    return [
+      "compare at least two viewpoints rather than describing only one position",
+      "include one concrete example or case that shows the issue in practice",
+      "end the section with a clear judgement so your position is explicit",
+    ];
+  }
+
+  if (
+    normalizedFeedback.includes("no visible test") ||
+    normalizedFeedback.includes("visible testing") ||
+    normalizedFeedback.includes("output evidence")
+  ) {
+    return [
+      "add operation outputs or screenshots that show the program working",
+      "include at least one edge case alongside the normal path",
+      "show the final traversal, sorted output, or resulting state so correctness is visible",
+    ];
+  }
+
+  if (
+    normalizedFeedback.includes("supports claims weakly") ||
+    normalizedFeedback.includes("evidence supports") ||
+    normalizedFeedback.includes("textual support")
+  ) {
+    return [
+      "add 2 stronger quotes or examples",
+      "explain exactly what each quote proves rather than leaving it implicit",
+      "link each piece of evidence directly back to the claim it supports",
+    ];
+  }
+
+  if (normalized.includes("complexity")) {
+    return [
+      "rewrite the time and space complexity for each major function",
+      "separate average-case from worst-case behaviour",
+      "justify each complexity claim against the actual data structure behaviour",
+    ];
+  }
+
+  if (normalized.includes("test")) {
+    return [
+      "add operation outputs",
+      "include at least one edge case",
+      "show the final traversal or end-state so correctness is visible",
+    ];
+  }
+
+  if (normalized.includes("evidence")) {
+    return [
+      "add 2 stronger quotes or examples",
+      "explain exactly what each quote proves",
+      "link each piece of evidence directly back to the claim it supports",
+    ];
+  }
+
+  if (normalized.includes("analysis") || normalized.includes("comparison")) {
+    return [
+      "include two viewpoints or options being compared",
+      "use at least one academic source or supporting concept",
+      "finish with a clear judgement, not just description",
+    ];
+  }
+
+  if (normalized.includes("dynamic programming")) {
+    return [
+      "state the recurrence relation before coding",
+      "show one worked example of the subproblems combining",
+      "explain why the chosen state representation is correct",
+    ];
+  }
+
+  if (normalized.includes("report") || normalized.includes("quality") || normalized.includes("overall")) {
+    return [
+      "use the rubric as a final checklist",
+      "make sure every required section includes visible evidence",
+      "end with a clear conclusion or judgement rather than stopping at description",
+    ];
+  }
+
+  return [
+    `review the rubric wording for ${normalizeCriterionLabel(criterion)}`,
+    "rewrite one weaker section so the intended reasoning is explicit",
+    "add a visible example or explanation the marker can directly verify",
+  ];
+};
+
+const buildIssue = (criterion: string, module: string) => {
+  const normalized = criterion.toLowerCase();
+
+  if (normalized.includes("complexity")) {
+    return "Your complexity explanation is still too general, especially when average-case and worst-case behaviour need to be separated clearly.";
+  }
+
+  if (normalized.includes("test")) {
+    return "The submission does not give the marker enough visible test evidence to verify that the implementation is correct in practice.";
+  }
+
+  if (normalized.includes("evidence")) {
+    return "Your evidence supports the argument too weakly because the examples are not doing enough explicit analytical work.";
+  }
+
+  if (normalized.includes("analysis") || normalized.includes("comparison")) {
+    return "This section reads as descriptive rather than evaluative, so the marker cannot clearly see comparison, judgement, or critical weighting.";
+  }
+
+  if (normalized.includes("dynamic programming")) {
+    return "The solution structure is not fully visible, so the marker cannot clearly follow how the recurrence and subproblems produce the final answer.";
+  }
+
+  if (normalized.includes("report") || normalized.includes("quality") || normalized.includes("overall")) {
+    return `The overall submission quality in ${module} is being held back by missing visible evidence, explanation, or final polish.`;
+  }
+
+  return `${normalizeCriterionLabel(criterion)} is lower than your stronger areas because the intended evidence or reasoning is not yet visible enough to the marker.`;
+};
+
+const buildEvidenceOfImprovement = (criterion: string, feedback?: string) => {
+  const normalized = criterion.toLowerCase();
+  const normalizedFeedback = (feedback ?? "").toLowerCase();
+
+  if (
+    normalizedFeedback.includes("descriptive") ||
+    normalizedFeedback.includes("not evaluative") ||
+    normalizedFeedback.includes("does not clearly evaluate")
+  ) {
+    return "The marker can clearly see evaluation rather than description and can identify your final position.";
+  }
+
+  if (
+    normalizedFeedback.includes("no visible test") ||
+    normalizedFeedback.includes("visible testing") ||
+    normalizedFeedback.includes("output evidence")
+  ) {
+    return "The marker can verify correctness directly from visible outputs, edge-case evidence, and the final program state.";
+  }
+
+  if (
+    normalizedFeedback.includes("supports claims weakly") ||
+    normalizedFeedback.includes("evidence supports") ||
+    normalizedFeedback.includes("textual support")
+  ) {
+    return "Each claim is backed by explicit textual or source-based support rather than unsupported assertion.";
+  }
+
+  if (normalized.includes("complexity")) {
+    return "Marker can clearly see that each complexity claim is justified and that the higher-risk cases have been evaluated properly.";
+  }
+
+  if (normalized.includes("test")) {
+    return "Marker can verify correctness directly from visible outputs, an edge case, and the final state of the program.";
+  }
+
+  if (normalized.includes("evidence")) {
+    return "Each claim is backed by explicit textual or source-based support, not just assertion.";
+  }
+
+  if (normalized.includes("analysis") || normalized.includes("comparison")) {
+    return "Marker can clearly see comparison, evaluation, and a defended final judgement rather than description alone.";
+  }
+
+  if (normalized.includes("dynamic programming")) {
+    return "Marker can follow the recurrence, the worked example, and the logic connecting subproblems to the final answer.";
+  }
+
+  if (normalized.includes("report") || normalized.includes("quality") || normalized.includes("overall")) {
+    return "Marker can clearly see that every required section contains evidence, explanation, and a complete final response.";
+  }
+
+  return "Marker can directly see the missing reasoning or evidence that was previously only implied.";
+};
+
+const buildEstimatedLift = (average: number) => {
+  if (average >= 60) return "+3 to +5 marks";
+  if (average >= 50) return "+5 to +8 marks";
+  return "+8 to +12 marks";
+};
+
+const buildPriorityLabel = (average: number, trend: PlanModule["trend"]) => {
+  if (trend === "down" && average < 60) return "High impact, quick win";
+  if (trend === "down") return "Needs attention";
+  if (average >= 60) return "Quick win";
+  return "High impact";
+};
+
+const buildResourceRecommendations = (modules: PlanModule[]): Resource[] =>
+  modules
+    .flatMap((module) =>
+      module.weakCriteria.slice(0, 2).map((criterion, index) => {
+        const estimatedLift = buildEstimatedLift(criterion.average);
+        const priorityScore =
+          (100 - criterion.average) +
+          (module.trend === "down" ? 10 : module.trend === "steady" ? 5 : 2) +
+          Math.min(criterion.attempts * 3, 9);
+
+        return {
+          priority: index + 1,
+          heading: buildFocusHeading(module.module, criterion.criterion),
+          duration: criterion.average >= 60 ? "12 min" : criterion.average >= 50 ? "15 min" : "20 min",
+          estimatedLift,
+          module: module.module,
+          criterion: normalizeCriterionLabel(criterion.criterion),
+          issue: buildFeedbackLedIssue(criterion.criterion, criterion.feedback, module.module),
+          actionItems: buildActionItems(criterion.criterion, criterion.feedback),
+          evidenceOfImprovement: buildEvidenceOfImprovement(criterion.criterion, criterion.feedback),
+          priorityLabel: buildPriorityLabel(criterion.average, module.trend),
+          priorityScore,
+        } satisfies Resource;
+      })
+    )
+    .sort((left, right) => right.priorityScore - left.priorityScore)
+    .slice(0, 3)
+    .map((resource, index) => ({
+      ...resource,
+      priority: index + 1,
+    }));
+
+const DEMO_RESOURCES: Resource[] = buildResourceRecommendations(DEMO_PLAN);
 
 const InlineProgressBar = ({
   value,
@@ -157,6 +452,8 @@ const ImprovementPlan = () => {
   const [plan, setPlan] = useState<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const [resources, setResources] = useState<Resource[]>(isDemo ? DEMO_RESOURCES : []);
   const [loading, setLoading] = useState(!isDemo);
+  const [expandedCompletedModules, setExpandedCompletedModules] = useState<Record<string, boolean>>({});
+  const [expandedCompletedCards, setExpandedCompletedCards] = useState<Record<string, boolean>>({});
   const latestPlanRef = useRef<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const notification = (location.state as { notification?: CommunicationMessage } | null)?.notification;
 
@@ -226,6 +523,7 @@ const ImprovementPlan = () => {
           scores: number[];
           chart: Array<{ assessment: string; score: number }>;
           criterionScores: Record<string, number[]>;
+          criterionFeedback: Record<string, string[]>;
         }
       > = {};
 
@@ -248,6 +546,7 @@ const ImprovementPlan = () => {
             scores: [],
             chart: [],
             criterionScores: {},
+            criterionFeedback: {},
           };
         }
 
@@ -257,15 +556,30 @@ const ImprovementPlan = () => {
           score,
         });
 
-        const breakdown = Array.isArray(grade?.ai_breakdown) ? grade.ai_breakdown : [];
-        breakdown.forEach((item: any) => {
-          const criterion = item.criterion || item.name || "Unknown";
-          const maxScore = item.max_score ?? item.maxScore ?? 10;
-          const percent = maxScore > 0 ? Math.round(((item.score ?? 0) / maxScore) * 100) : 0;
-          if (!moduleBuckets[moduleKey].criterionScores[criterion]) {
-            moduleBuckets[moduleKey].criterionScores[criterion] = [];
+        const breakdown = safeParseGradeBreakdown(grade?.ai_breakdown ?? []);
+        if (breakdown.success) {
+          breakdown.data.forEach((item) => {
+            const criterion = normalizeCriterionLabel(item.criterion || item.name || "Unknown");
+            const maxScore = item.max_score ?? item.maxScore ?? 10;
+            const percent = maxScore > 0 ? Math.round(((item.score ?? 0) / maxScore) * 100) : 0;
+            if (!moduleBuckets[moduleKey].criterionScores[criterion]) {
+              moduleBuckets[moduleKey].criterionScores[criterion] = [];
+            }
+            moduleBuckets[moduleKey].criterionScores[criterion].push(percent);
+          });
+        }
+
+        const criterionFeedbackMap = buildCriterionFeedbackMap(grade);
+        Object.entries(criterionFeedbackMap).forEach(([criterion, snippets]) => {
+          if (!moduleBuckets[moduleKey].criterionFeedback[criterion]) {
+            moduleBuckets[moduleKey].criterionFeedback[criterion] = [];
           }
-          moduleBuckets[moduleKey].criterionScores[criterion].push(percent);
+
+          snippets.forEach((snippet) => {
+            if (!moduleBuckets[moduleKey].criterionFeedback[criterion].includes(snippet)) {
+              moduleBuckets[moduleKey].criterionFeedback[criterion].push(snippet);
+            }
+          });
         });
       });
 
@@ -292,6 +606,16 @@ const ImprovementPlan = () => {
           .sort((left, right) => left.average - right.average)
           .slice(0, 3)
           .map((criterion) => criterion.criterion);
+        const weakCriteria = criterionAverages
+          .filter((criterion) => criterion.average < 70)
+          .sort((left, right) => left.average - right.average)
+          .slice(0, 3)
+          .map((criterion) => ({
+            criterion: criterion.criterion,
+            average: criterion.average,
+            attempts: bucket.criterionScores[criterion.criterion]?.length ?? 1,
+            feedback: bucket.criterionFeedback[criterion.criterion]?.[0],
+          }));
 
         const nextSubmissionFocus =
           weaknesses.length > 0
@@ -334,6 +658,7 @@ const ImprovementPlan = () => {
           weaknesses,
           nextSubmissionFocus,
           tasks,
+          weakCriteria,
           chart: bucket.chart,
         };
       });
@@ -342,20 +667,7 @@ const ImprovementPlan = () => {
       setPlan(nextPlan);
       latestPlanRef.current = nextPlan;
 
-      const nextResources: Resource[] = nextPlan
-        .flatMap((module) =>
-          module.weaknesses.slice(0, 2).map((weakness, index) => ({
-            title:
-              index === 0
-                ? `${weakness} revision pack`
-                : `${weakness} practice set`,
-            type: index === 0 ? "Guide" : "Exercises",
-            duration: index === 0 ? "15 min" : "30 min",
-            relevance: Math.max(75, 95 - index * 8),
-            reason: `${weakness} is currently one of your lowest-scoring criteria in ${module.module}.`,
-          }))
-        )
-        .slice(0, 6);
+      const nextResources = buildResourceRecommendations(nextPlan);
 
       setResources(nextResources);
     } catch (error) {
@@ -424,6 +736,20 @@ const ImprovementPlan = () => {
       progress: allTasks.length > 0 ? Math.round((completed / allTasks.length) * 100) : 0,
     };
   }, [plan]);
+
+  const toggleCompletedSection = (moduleName: string) => {
+    setExpandedCompletedModules((current) => ({
+      ...current,
+      [moduleName]: !current[moduleName],
+    }));
+  };
+
+  const toggleCompletedCard = (moduleName: string) => {
+    setExpandedCompletedCards((current) => ({
+      ...current,
+      [moduleName]: !current[moduleName],
+    }));
+  };
 
   if (loading) {
     return (
@@ -517,7 +843,37 @@ const ImprovementPlan = () => {
 
       {plan.map((module) => {
         const completed = module.tasks.filter((task) => task.done).length;
+        const openTasks = module.tasks.filter((task) => !task.done);
+        const completedTasks = module.tasks.filter((task) => task.done);
         const progress = module.tasks.length > 0 ? (completed / module.tasks.length) * 100 : 0;
+        const isCompletedSectionExpanded = expandedCompletedModules[module.module] ?? false;
+        const isFullyCompleted = module.tasks.length > 0 && openTasks.length === 0;
+        const isCompletedCardExpanded = expandedCompletedCards[module.module] ?? false;
+
+        if (isFullyCompleted && !isCompletedCardExpanded) {
+          return (
+            <Card key={module.module}>
+              <CardContent className="flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed module plan</p>
+                  <p className="text-base font-semibold">{module.module}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Current {module.currentGrade}% | Target {module.targetGrade}% | {completed}/{module.tasks.length} tasks completed
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline" className="border-primary/20 text-primary">
+                    <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                    Completed
+                  </Badge>
+                  <Button type="button" variant="outline" size="sm" onClick={() => toggleCompletedCard(module.module)}>
+                    Show completed plan
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
 
         return (
           <Card key={module.module}>
@@ -526,7 +882,7 @@ const ImprovementPlan = () => {
                 <div>
                   <CardTitle className="text-base">{module.module}</CardTitle>
                   <CardDescription>
-                    Current {module.currentGrade}% • Target {module.targetGrade}% •{" "}
+                    Current {module.currentGrade}% | Target {module.targetGrade}% |{" "}
                     {module.trend === "up" ? "improving" : module.trend === "down" ? "declining" : "steady"} trend
                   </CardDescription>
                 </div>
@@ -631,7 +987,7 @@ const ImprovementPlan = () => {
               <div className="rounded-lg border p-4">
                 <p className="text-sm font-medium">Track your improvement tasks</p>
                 <div className="mt-4 space-y-3">
-                  {module.tasks.map((task) => (
+                  {openTasks.length > 0 ? openTasks.map((task) => (
                     <div key={task.id} className="flex items-start gap-3">
                       <Checkbox checked={task.done} onCheckedChange={() => toggleTask(module.module, task.id)} />
                       <div className="space-y-1">
@@ -641,8 +997,47 @@ const ImprovementPlan = () => {
                         <p className="text-xs text-muted-foreground">{task.area}</p>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+                      All current tasks are completed for this module.
+                    </div>
+                  )}
                 </div>
+
+                {completedTasks.length > 0 && (
+                  <div className="mt-4 border-t pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto px-0 text-sm text-muted-foreground hover:text-foreground"
+                        onClick={() => toggleCompletedSection(module.module)}
+                      >
+                        {isCompletedSectionExpanded ? "Hide completed tasks" : `Show completed tasks (${completedTasks.length})`}
+                      </Button>
+                      {isFullyCompleted && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => toggleCompletedCard(module.module)}>
+                          Collapse module
+                        </Button>
+                      )}
+                    </div>
+                    {isCompletedSectionExpanded && (
+                      <div className="mt-3 space-y-3">
+                        {completedTasks.map((task) => (
+                          <div key={task.id} className="flex items-start gap-3">
+                            <Checkbox checked={task.done} onCheckedChange={() => toggleTask(module.module, task.id)} />
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground line-through">
+                                {task.task}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{task.area}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -653,21 +1048,46 @@ const ImprovementPlan = () => {
         <CardHeader>
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Suggested Focus Areas</CardTitle>
+            <CardTitle className="text-base">Best Next Moves</CardTitle>
           </div>
-          <CardDescription>Derived from your weakest criteria and next submission priorities</CardDescription>
+          <CardDescription>Prioritised from your weakest repeated criteria so you know what to fix first before the next submission</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {resources.map((resource) => (
-            <div key={`${resource.title}-${resource.reason}`} className="flex items-start justify-between gap-4 rounded-lg border p-4">
-              <div>
-                <p className="text-sm font-medium">{resource.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {resource.type} • {resource.duration}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">{resource.reason}</p>
+            <div key={`${resource.heading}-${resource.module}`} className="rounded-lg border p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold">
+                    Priority {resource.priority} - {resource.heading}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-muted-foreground">{resource.priorityLabel}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {resource.estimatedLift} | ~{resource.duration}
+                  </p>
+                </div>
+                <Badge variant="outline">{resource.module}</Badge>
               </div>
-              <Badge variant="outline">{resource.relevance}% derived fit</Badge>
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Issue</p>
+                  <p className="mt-1 text-sm">{resource.issue}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Action</p>
+                  <div className="mt-2 space-y-2">
+                    {resource.actionItems.map((item) => (
+                      <div key={item} className="flex items-start gap-2 text-sm">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Evidence of improvement</p>
+                  <p className="mt-1 text-sm">{resource.evidenceOfImprovement}</p>
+                </div>
+              </div>
             </div>
           ))}
         </CardContent>
