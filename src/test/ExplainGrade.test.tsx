@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -221,6 +221,24 @@ describe("ExplainGrade", () => {
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
     expect(screen.getByText("ENG101 Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("74%")).toBeInTheDocument();
+  });
+
+  it("uses synthetic demo data and answers without Supabase session access in demo mode", async () => {
+    mocks.authState.isDemo = true;
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
+    expect(screen.getByText("CS301 Assignment 1 - Data Structures")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Ask about your grade..."), {
+      target: { value: "Why did I get this grade?" },
+    });
+    fireEvent.click(screen.getAllByRole("button").at(-1)!);
+
+    expect(await screen.findByText(/You received \*\*72% \(2:1\)\*\*/i)).toBeInTheDocument();
+    expect(mocks.supabase.from).not.toHaveBeenCalled();
+    expect(mocks.supabase.auth.getSession).not.toHaveBeenCalled();
   });
 
   it("shows a loading state while explanation data is pending", () => {

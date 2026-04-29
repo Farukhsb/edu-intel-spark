@@ -24,6 +24,107 @@ const EMPTY_GRADE_DIST = [
   { band: "Fail (<40%)", count: 0, percentage: 0, fill: "hsl(0, 72%, 55%)" },
 ];
 
+type DemoAssessmentTrend = {
+  module: string;
+  name: string;
+  avgGrade: number;
+  participation: number;
+};
+
+type DemoTrajectory = StudentTrajectory & {
+  module: string;
+};
+
+const DEMO_ASSESSMENT_TRENDS: DemoAssessmentTrend[] = [
+  { module: "CS301", name: "Sorting Report Draft", avgGrade: 68, participation: 94 },
+  { module: "CS301", name: "Algorithm Benchmark Reflection", avgGrade: 63, participation: 91 },
+  { module: "CS220", name: "Normalisation Case Study", avgGrade: 57, participation: 89 },
+  { module: "CS220", name: "Schema Redesign Memo", avgGrade: 61, participation: 86 },
+];
+
+const DEMO_GRADE_SCORES: Array<{ module: string; score: number }> = [
+  { module: "CS301", score: 81 },
+  { module: "CS301", score: 76 },
+  { module: "CS301", score: 74 },
+  { module: "CS301", score: 69 },
+  { module: "CS301", score: 66 },
+  { module: "CS301", score: 58 },
+  { module: "CS301", score: 45 },
+  { module: "CS301", score: 34 },
+  { module: "CS220", score: 72 },
+  { module: "CS220", score: 64 },
+  { module: "CS220", score: 59 },
+  { module: "CS220", score: 56 },
+  { module: "CS220", score: 48 },
+  { module: "CS220", score: 41 },
+  { module: "CS220", score: 38 },
+  { module: "CS220", score: 29 },
+];
+
+const DEMO_TRAJECTORIES: DemoTrajectory[] = [
+  {
+    module: "CS301",
+    name: "Mariam Okeke",
+    email: "mariam.okeke@example.edu",
+    studentId: "demo-risk-1",
+    scores: [
+      { score: 49, date: "2026-01-20T09:00:00.000Z", assignmentTitle: "Sorting Lab Checkpoint" },
+      { score: 37, date: "2026-02-18T09:00:00.000Z", assignmentTitle: "Algorithm Reflection" },
+      { score: 26, date: "2026-03-22T09:00:00.000Z", assignmentTitle: "Benchmark Planning Memo" },
+    ],
+  },
+  {
+    module: "CS301",
+    name: "Oliver Grant",
+    email: "oliver.grant@example.edu",
+    studentId: "demo-risk-2",
+    scores: [
+      { score: 62, date: "2026-01-20T09:00:00.000Z", assignmentTitle: "Sorting Lab Checkpoint" },
+      { score: 48, date: "2026-02-18T09:00:00.000Z", assignmentTitle: "Algorithm Reflection" },
+      { score: 34, date: "2026-03-22T09:00:00.000Z", assignmentTitle: "Benchmark Planning Memo" },
+    ],
+  },
+  {
+    module: "CS220",
+    name: "Fatima Bello",
+    email: "fatima.bello@example.edu",
+    studentId: "demo-risk-3",
+    scores: [
+      { score: 71, date: "2026-01-16T09:00:00.000Z", assignmentTitle: "ER Model Exercise" },
+      { score: 55, date: "2026-02-14T09:00:00.000Z", assignmentTitle: "Functional Dependency Quiz" },
+      { score: 38, date: "2026-03-12T09:00:00.000Z", assignmentTitle: "Normalisation Case Study" },
+    ],
+  },
+  {
+    module: "CS220",
+    name: "Samuel Hart",
+    email: "samuel.hart@example.edu",
+    studentId: "demo-risk-4",
+    scores: [
+      { score: 52, date: "2026-01-16T09:00:00.000Z", assignmentTitle: "ER Model Exercise" },
+      { score: 47, date: "2026-02-14T09:00:00.000Z", assignmentTitle: "Functional Dependency Quiz" },
+      { score: 43, date: "2026-03-12T09:00:00.000Z", assignmentTitle: "Normalisation Case Study" },
+    ],
+  },
+];
+
+const buildGradeDistribution = (scores: number[]) => {
+  const total = scores.length || 1;
+  const distribution = [
+    { band: "1st (70-100%)", count: scores.filter((score) => score >= 70).length, percentage: 0, fill: "hsl(152, 56%, 45%)" },
+    { band: "2:1 (60-69%)", count: scores.filter((score) => score >= 60 && score < 70).length, percentage: 0, fill: "hsl(205, 80%, 55%)" },
+    { band: "2:2 (50-59%)", count: scores.filter((score) => score >= 50 && score < 60).length, percentage: 0, fill: "hsl(38, 92%, 60%)" },
+    { band: "3rd (40-49%)", count: scores.filter((score) => score >= 40 && score < 50).length, percentage: 0, fill: "hsl(280, 55%, 55%)" },
+    { band: "Fail (<40%)", count: scores.filter((score) => score < 40).length, percentage: 0, fill: "hsl(0, 72%, 55%)" },
+  ];
+
+  distribution.forEach((entry) => {
+    entry.percentage = Math.round((entry.count / total) * 100);
+  });
+
+  return distribution;
+};
+
 const PerformanceTrends = () => {
   const { user, isDemo } = useAuth();
   const { toast } = useToast();
@@ -43,6 +144,30 @@ const PerformanceTrends = () => {
 
   useEffect(() => {
     if (isDemo) {
+      const demoModules = Array.from(new Set(DEMO_ASSESSMENT_TRENDS.map((entry) => entry.module)));
+      const filteredTrends =
+        moduleFilter === "all"
+          ? DEMO_ASSESSMENT_TRENDS
+          : DEMO_ASSESSMENT_TRENDS.filter((entry) => entry.module === moduleFilter);
+      const filteredScores = DEMO_GRADE_SCORES
+        .filter((entry) => moduleFilter === "all" || entry.module === moduleFilter)
+        .map((entry) => entry.score);
+      const filteredStudents = DEMO_TRAJECTORIES
+        .filter((student) => moduleFilter === "all" || student.module === moduleFilter)
+        .map(computeRisk)
+        .filter((student): student is AtRiskStudent => student !== null)
+        .sort((left, right) => right.riskScore - left.riskScore);
+
+      setModules(demoModules);
+      setAssessmentTrends(
+        filteredTrends.map(({ name, avgGrade, participation }) => ({
+          name,
+          avgGrade,
+          participation,
+        })),
+      );
+      setGradeDist(buildGradeDistribution(filteredScores));
+      setAtRiskStudents(filteredStudents);
       setLoading(false);
       return;
     }

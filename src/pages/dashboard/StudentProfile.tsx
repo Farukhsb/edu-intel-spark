@@ -445,6 +445,11 @@ ${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}
   };
 
   const queueAtRiskAlert = async () => {
+    if (isDemo) {
+      toast.success("Demo at-risk alert queued.");
+      return;
+    }
+
     if (!student || !resolvedStudentRecordId) {
       toast.error("Student record is not linked, so the alert cannot be saved correctly yet");
       return;
@@ -476,6 +481,11 @@ Please reply to arrange a short meeting so we can agree the most useful support 
   };
 
   const queueFollowUpReminder = async () => {
+    if (isDemo) {
+      toast.success("Demo follow-up reminder queued.");
+      return;
+    }
+
     if (!student || !resolvedStudentRecordId) {
       toast.error("Student record is not linked, so the reminder cannot be saved correctly yet");
       return;

@@ -21,6 +21,65 @@ import {
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
 
+const DEMO_LECTURER_NOTIFICATIONS: CommunicationMessage[] = [
+  {
+    id: "demo-notice-1",
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: false,
+    category: "submission-received",
+    recipientName: "Dr. Demo Lecturer",
+    recipientEmail: "demo@gradeai.com",
+    recipientId: "demo-lecturer",
+    subject: "New synthetic submission received",
+    body: "Amina Hassan submitted Strategic Policy Brief: Housing Affordability Interventions.",
+    relatedAssignmentId: "demo-assignment-policy-brief",
+  },
+  {
+    id: "demo-notice-2",
+    createdAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: true,
+    category: "integrity-check-ready",
+    recipientName: "Dr. Demo Lecturer",
+    recipientEmail: "demo@gradeai.com",
+    recipientId: "demo-lecturer",
+    subject: "Synthetic integrity review ready",
+    body: "The demo integrity evidence pack is ready for review on the policy brief assignment.",
+    relatedAssignmentId: "demo-assignment-policy-brief",
+  },
+];
+
+const DEMO_STUDENT_NOTIFICATIONS: CommunicationMessage[] = [
+  {
+    id: "demo-student-notice-1",
+    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: false,
+    category: "grade-released",
+    recipientName: "Demo Student",
+    recipientEmail: "student@gradeai.com",
+    recipientId: "demo-student",
+    subject: "Feedback released",
+    body: "Your feedback for CS301 Assignment 1 - Data Structures is now available in the demo workspace.",
+    relatedAssignmentId: "demo-assignment-1",
+    relatedStudentId: "demo-student",
+  },
+  {
+    id: "demo-student-notice-2",
+    createdAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: true,
+    category: "intervention-follow-up",
+    recipientName: "Demo Student",
+    recipientEmail: "student@gradeai.com",
+    recipientId: "demo-student",
+    subject: "Study plan reminder",
+    body: "Review the complexity-analysis tasks in your improvement plan before the next submission window.",
+    relatedStudentId: "demo-student",
+  },
+];
+
 const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
 const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 
@@ -175,6 +234,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   useEffect(() => {
     const syncNotifications = async () => {
+      if (isDemo) {
+        const demoNotifications = isStudentRole(profile?.role)
+          ? DEMO_STUDENT_NOTIFICATIONS
+          : DEMO_LECTURER_NOTIFICATIONS;
+        setNotifications(demoNotifications);
+        return;
+      }
+
       const visibleMessages = await loadVisibleCommunicationMessages({
         userId: user?.id ?? profile?.id ?? null,
         email: profile?.email ?? user?.email ?? null,
@@ -199,7 +266,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         window.removeEventListener("focus", handleFocus);
       };
     }
-  }, [profile?.email, profile?.id, user?.email, user?.id]);
+  }, [isDemo, profile?.email, profile?.id, profile?.role, user?.email, user?.id]);
 
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
@@ -208,6 +275,11 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     notification: CommunicationMessage,
   ) => {
     event.stopPropagation();
+
+    if (isDemo) {
+      setNotifications((current) => current.filter((item) => item.id !== notification.id));
+      return;
+    }
 
     const clearedNotification = await clearCommunicationMessage(notification.id);
 
@@ -219,7 +291,11 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const openNotification = async (notification: CommunicationMessage) => {
     setShowNotifications(false);
 
-    if (!notification.read) {
+    if (isDemo) {
+      setNotifications((current) =>
+        current.map((item) => (item.id === notification.id ? { ...item, read: true } : item)),
+      );
+    } else if (!notification.read) {
       const updatedNotification = await markCommunicationMessageRead(notification.id);
       if (updatedNotification) {
         setNotifications((current) =>

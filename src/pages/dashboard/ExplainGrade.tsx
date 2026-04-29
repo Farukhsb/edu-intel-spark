@@ -93,6 +93,22 @@ const DEMO_SUBMISSIONS: SubmissionOption[] = [
   },
 ];
 
+const buildDemoGradeResponse = (question: string, breakdown: ExplainGradeBreakdown) => {
+  const weakestArea = breakdown.improvementAreas[0];
+  const strongestArea = [...breakdown.components].sort((left, right) => right.score - left.score)[0];
+  const normalizedQuestion = question.toLowerCase();
+
+  if (normalizedQuestion.includes("why") && normalizedQuestion.includes("grade")) {
+    return `You received **${breakdown.totalGrade}% (${breakdown.band})** because your strongest performance was in **${strongestArea?.name || "your best-scoring criterion"}**, while the main drag on your mark was **${weakestArea?.area || "the weakest rubric area"}**. The demo breakdown shows a solid overall submission with a clearer route to improvement in one weaker criterion rather than broad underperformance.`;
+  }
+
+  if (normalizedQuestion.includes("improve") || normalizedQuestion.includes("raise")) {
+    return `The fastest route upward is **${weakestArea?.area || "the weakest rubric area"}**. In this demo submission, you need roughly **${weakestArea?.pointsNeeded ?? 0} more points** there to move closer to **${weakestArea?.nextBand || "the next band"}**. Focus on:\n\n- ${weakestArea?.tips[0] || "Tightening criterion-specific evidence"}\n- ${weakestArea?.tips[1] || "Matching the rubric language more directly"}\n- ${weakestArea?.tips[2] || "Using the lecturer feedback to revise your approach"}`
+  }
+
+  return `For this demo submission, the key message is:\n\n- Overall result: **${breakdown.totalGrade}% (${breakdown.band})**\n- Strongest area: **${strongestArea?.name || "Top criterion"}** at **${strongestArea?.score ?? 0}%**\n- Main improvement area: **${weakestArea?.area || "Weakest criterion"}**\n\nAsk why the mark landed in this band, or ask how to improve the weakest area, and I’ll answer using the synthetic demo breakdown.`;
+};
+
 const ExplainGrade = () => {
   const { isDemo } = useAuth();
   const [submissions, setSubmissions] = useState<SubmissionOption[]>(isDemo ? DEMO_SUBMISSIONS : []);
@@ -233,6 +249,15 @@ const ExplainGrade = () => {
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setInputValue("");
+
+    if (isDemo) {
+      setMessages([
+        ...updatedMessages,
+        { role: "assistant", content: buildDemoGradeResponse(userMsg.content, gradeBreakdown) },
+      ]);
+      return;
+    }
+
     setIsLoading(true);
 
     let assistantSoFar = "";

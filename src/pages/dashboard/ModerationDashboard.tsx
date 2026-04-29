@@ -48,8 +48,153 @@ type Profile = Tables<"profiles">;
 
 const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
 
+const DEMO_LECTURERS = [
+  {
+    id: "demo-lecturer",
+    full_name: "Dr. Demo Lecturer",
+    email: "demo@gradeai.com",
+    role: "lecturer",
+  },
+  {
+    id: "demo-moderator",
+    full_name: "Prof. Maya Chen",
+    email: "maya.chen@demo.gradeai.test",
+    role: "lecturer",
+  },
+] as unknown as Profile[];
+
+const DEMO_MODERATION_CASES = [
+  {
+    moderationCase: {
+      id: "demo-moderation-case-1",
+      submission_id: "demo-submission-1",
+      assignment_id: "demo-assignment-policy-brief",
+      grade_id: "demo-grade-1",
+      lecturer_id: "demo-lecturer",
+      first_marker_id: "demo-lecturer",
+      moderator_id: "demo-moderator",
+      status: "moderation_pending",
+      trigger_flags: ["score_variance", "boundary_score"],
+      trigger_summary: "AI and lecturer scores diverged near a classification boundary.",
+      confidence_score: 0.64,
+      integrity_risk_score: 18,
+      ai_score_snapshot: 68,
+      first_marker_score: 71,
+      moderator_score: null,
+      final_agreed_score: null,
+      final_agreed_feedback: null,
+      moderated_at: null,
+      approved_at: null,
+    },
+    submission: {
+      id: "demo-submission-1",
+      student_name: "Amina Hassan",
+      student_email: "amina.hassan@demo.gradeai.test",
+      submitted_at: "2026-04-11T09:00:00.000Z",
+      status: "moderation_pending",
+    },
+    grade: {
+      id: "demo-grade-1",
+      ai_score: 68,
+      ai_feedback: "Strong evidence use, but the policy implementation section needs tighter evaluation.",
+      lecturer_score: 71,
+      lecturer_feedback: "Very good policy analysis with room to sharpen feasibility costing.",
+      final_score: null,
+      final_feedback: null,
+      grading_confidence: 0.64,
+      grading_metadata: null,
+      ai_breakdown: null,
+    },
+    assignment: {
+      id: "demo-assignment-policy-brief",
+      title: "Strategic Policy Brief: Housing Affordability Interventions",
+      max_score: 100,
+    },
+    firstMarker: DEMO_LECTURERS[0],
+    moderator: DEMO_LECTURERS[1],
+    integrityReview: null,
+    reviews: [],
+    auditLog: [],
+  },
+  {
+    moderationCase: {
+      id: "demo-moderation-case-2",
+      submission_id: "demo-submission-2",
+      assignment_id: "demo-assignment-ethics-review",
+      grade_id: "demo-grade-2",
+      lecturer_id: "demo-lecturer",
+      first_marker_id: "demo-lecturer",
+      moderator_id: "demo-moderator",
+      status: "moderated",
+      trigger_flags: ["integrity_risk"],
+      trigger_summary: "Moderation retained because the integrity review required an independent second look.",
+      confidence_score: 0.78,
+      integrity_risk_score: 61,
+      ai_score_snapshot: 61,
+      first_marker_score: 63,
+      moderator_score: 62,
+      final_agreed_score: 62,
+      final_agreed_feedback: "A solid upper-second response with clear ethics coverage and moderate scope for deeper critical analysis.",
+      moderated_at: "2026-04-16T10:00:00.000Z",
+      approved_at: null,
+    },
+    submission: {
+      id: "demo-submission-2",
+      student_name: "Daniel Reed",
+      student_email: "daniel.reed@demo.gradeai.test",
+      submitted_at: "2026-04-09T14:30:00.000Z",
+      status: "moderated",
+    },
+    grade: {
+      id: "demo-grade-2",
+      ai_score: 61,
+      ai_feedback: "Competent ethical analysis with limited depth on participant safeguarding.",
+      lecturer_score: 63,
+      lecturer_feedback: "Clear structure and secure knowledge, though the withdrawal procedure discussion could be stronger.",
+      final_score: 62,
+      final_feedback: "A secure upper-second piece with a clear line of argument and moderate room for deeper evaluative detail.",
+      grading_confidence: 0.78,
+      grading_metadata: null,
+      ai_breakdown: null,
+    },
+    assignment: {
+      id: "demo-assignment-ethics-review",
+      title: "Research Ethics Review Memo",
+      max_score: 100,
+    },
+    firstMarker: DEMO_LECTURERS[0],
+    moderator: DEMO_LECTURERS[1],
+    integrityReview: {
+      decision: "investigate",
+      lecturer_note: "Reviewed in demo moderation flow due to concentrated overlap in cited methods language.",
+      updated_at: "2026-04-15T09:30:00.000Z",
+    },
+    reviews: [
+      {
+        id: "demo-review-1",
+        moderation_case_id: "demo-moderation-case-2",
+        submission_id: "demo-submission-2",
+        reviewer_role: "moderator",
+        action: "agree",
+        proposed_score: 62,
+        proposed_feedback: "A secure upper-second piece with a clear line of argument and moderate room for deeper evaluative detail.",
+        notes: "Moderator agreed a slight downward adjustment from the first marker after reviewing the evidence.",
+        created_at: "2026-04-16T10:00:00.000Z",
+      },
+    ],
+    auditLog: [
+      {
+        id: "demo-audit-1",
+        event_type: "moderation_agree",
+        reason: "Demo moderation audit entry",
+        created_at: "2026-04-16T10:00:00.000Z",
+      },
+    ],
+  },
+] as unknown as ModerationCaseView[];
+
 const ModerationDashboard = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, isDemo } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cases, setCases] = useState<ModerationCaseView[]>([]);
@@ -66,6 +211,18 @@ const ModerationDashboard = () => {
   );
 
   const fetchCases = async () => {
+    if (isDemo) {
+      setLecturers(DEMO_LECTURERS);
+      setCases(DEMO_MODERATION_CASES);
+      setModeratorDrafts(
+        Object.fromEntries(
+          DEMO_MODERATION_CASES.map((item) => [item.moderationCase.id, item.moderationCase.moderator_id || "unassigned"]),
+        ),
+      );
+      setLoading(false);
+      return;
+    }
+
     if (!user) return;
 
     setLoading(true);
@@ -87,7 +244,7 @@ const ModerationDashboard = () => {
 
   useEffect(() => {
     void fetchCases();
-  }, [user?.id]);
+  }, [isDemo, user?.id]);
 
   useEffect(() => {
     if (!selectedCase) return;
@@ -144,6 +301,30 @@ const ModerationDashboard = () => {
   };
 
   const assignModerator = async (item: ModerationCaseView) => {
+    if (isDemo) {
+      const moderatorId = moderatorDrafts[item.moderationCase.id];
+      setCases((current) =>
+        current.map((entry) =>
+          entry.moderationCase.id === item.moderationCase.id
+            ? {
+                ...entry,
+                moderationCase: {
+                  ...entry.moderationCase,
+                  moderator_id: moderatorId,
+                  status: "moderation_in_progress",
+                },
+                moderator: DEMO_LECTURERS.find((lecturer) => lecturer.id === moderatorId) || entry.moderator,
+                submission: entry.submission
+                  ? { ...entry.submission, status: "moderation_in_progress" }
+                  : entry.submission,
+              }
+            : entry,
+        ),
+      );
+      toast.success("Demo moderator assigned.");
+      return;
+    }
+
     if (!item.submission) {
       toast.error("This case is missing its linked submission details, so moderator assignment cannot continue.");
       return;
@@ -193,6 +374,99 @@ const ModerationDashboard = () => {
   };
 
   const saveAction = async (action: ModerationAction) => {
+    if (isDemo) {
+      if (!selectedCase) return;
+
+      const nextSubmissionStatus =
+        action === "approve"
+          ? "approved"
+          : action === "return"
+            ? "first_review"
+            : action === "escalate"
+              ? "escalated"
+              : "moderated";
+
+      setCases((current) =>
+        current.map((entry) => {
+          if (entry.moderationCase.id !== selectedCase.moderationCase.id) return entry;
+
+          const nextReview =
+            action === "approve"
+              ? entry.reviews
+              : [
+                  {
+                    id: `demo-review-${Date.now()}`,
+                    moderation_case_id: entry.moderationCase.id,
+                    submission_id: entry.moderationCase.submission_id,
+                    reviewer_role: entry.moderationCase.lecturer_id === user?.id ? "lecturer" : "moderator",
+                    action,
+                    proposed_score: scoreDraft === "" ? entry.moderationCase.final_agreed_score ?? entry.grade?.lecturer_score ?? entry.grade?.ai_score ?? null : Number(scoreDraft),
+                    proposed_feedback: feedbackDraft || entry.moderationCase.final_agreed_feedback || entry.grade?.lecturer_feedback || entry.grade?.ai_feedback || null,
+                    notes: noteDraft || null,
+                    created_at: new Date().toISOString(),
+                  } as any,
+                  ...entry.reviews,
+                ];
+
+          return {
+            ...entry,
+            moderationCase: {
+              ...entry.moderationCase,
+              status:
+                action === "approve"
+                  ? entry.moderationCase.status
+                  : action === "return"
+                    ? "first_review"
+                    : action === "escalate"
+                      ? "escalated"
+                      : "moderated",
+              final_agreed_score:
+                action === "return"
+                  ? entry.moderationCase.final_agreed_score
+                  : scoreDraft === ""
+                    ? entry.moderationCase.final_agreed_score ?? entry.grade?.lecturer_score ?? entry.grade?.ai_score ?? null
+                    : Number(scoreDraft),
+              final_agreed_feedback:
+                action === "return"
+                  ? entry.moderationCase.final_agreed_feedback
+                  : feedbackDraft || entry.moderationCase.final_agreed_feedback || entry.grade?.lecturer_feedback || entry.grade?.ai_feedback || null,
+              moderator_score:
+                action === "return"
+                  ? entry.moderationCase.moderator_score
+                  : scoreDraft === ""
+                    ? entry.moderationCase.moderator_score ?? entry.grade?.lecturer_score ?? entry.grade?.ai_score ?? null
+                    : Number(scoreDraft),
+              moderated_at:
+                action === "agree" || action === "adjust" ? new Date().toISOString() : entry.moderationCase.moderated_at,
+              approved_at: action === "approve" ? new Date().toISOString() : entry.moderationCase.approved_at,
+            },
+            submission: entry.submission ? { ...entry.submission, status: nextSubmissionStatus } : entry.submission,
+            grade:
+              action === "approve" && entry.grade
+                ? {
+                    ...entry.grade,
+                    final_score: scoreDraft === "" ? entry.grade.final_score ?? entry.grade.lecturer_score ?? entry.grade.ai_score ?? null : Number(scoreDraft),
+                    final_feedback: feedbackDraft || entry.grade.final_feedback || entry.grade.lecturer_feedback || entry.grade.ai_feedback || null,
+                  }
+                : entry.grade,
+            reviews: nextReview,
+            auditLog: [
+              {
+                id: `demo-audit-${Date.now()}`,
+                event_type: `moderation_${action}`,
+                reason: noteDraft || `Demo moderation action recorded: ${action}.`,
+                created_at: new Date().toISOString(),
+              } as any,
+              ...entry.auditLog,
+            ],
+          };
+        }),
+      );
+      toast.success(`${actionLabel(action)} saved in demo mode.`);
+      setSelectedCaseId(null);
+      return;
+    }
+
     if (!selectedCase || !user) return;
     if (!selectedCase.submission) {
       toast.error("This case is missing its linked submission details, so moderation actions are unavailable.");

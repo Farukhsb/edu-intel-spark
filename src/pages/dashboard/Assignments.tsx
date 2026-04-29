@@ -178,16 +178,8 @@ const Assignments = () => {
 
   const fetchAssignments = async () => {
     if (isDemo) {
-      setAssignments(
-        DEMO_ASSIGNMENTS.map((assignment) => ({
-          ...assignment,
-          rubric: assignment.rubric ?? [],
-          cohorts: assignment.cohorts ?? [],
-          departments: assignment.departments ?? [],
-          target_cohorts: assignment.target_cohorts ?? [],
-          target_departments: assignment.target_departments ?? [],
-        })),
-      );
+      setAssignments(DEMO_ASSIGNMENTS);
+      setSubmissionStats({});
       setLoading(false);
       return;
     }
@@ -732,6 +724,31 @@ const Assignments = () => {
           </Dialog>
         )}
       </div>
+
+      {isDemo && role === "lecturer" && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+            <div>
+              <p className="text-sm font-medium">Create assignment</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The live lecturer flow starts with a draft brief, due date, cohort targeting, and optional department scoping.
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Set the rubric</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Open the sorting algorithms demo assignment to inspect a complete five-criterion rubric and the exact brief the AI grader receives.
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Review marking and integrity</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Open Workflow to see synthetic submissions, an integrity flag example, AI marking output, moderation-ready work, and released feedback.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card><CardContent className="p-4">

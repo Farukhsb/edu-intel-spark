@@ -84,6 +84,8 @@ import {
 } from "@/types/academic";
 import {
   DEMO_ASSIGNMENT_GRADES,
+  DEMO_ASSIGNMENT_INTEGRITY_FLAGS,
+  DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES,
   DEMO_ASSIGNMENT_SUBMISSIONS,
   getDemoAssignmentById,
 } from "@/pages/dashboard/demoAssignments";
@@ -342,6 +344,8 @@ const AssignmentDetail = () => {
           setSubmissions([]);
           setGrades({});
         }
+        setPlagiarismFlags(DEMO_ASSIGNMENT_INTEGRITY_FLAGS[id] ?? []);
+        setPlagiarismSummary(DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES[id] ?? "");
         setLoading(false);
         return;
       }
@@ -374,6 +378,8 @@ const AssignmentDetail = () => {
         setSubmissions([]);
         setGrades({});
       }
+      setPlagiarismFlags([]);
+      setPlagiarismSummary("");
 
       setLoading(false);
     };
@@ -492,6 +498,8 @@ const AssignmentDetail = () => {
       setGrades(demoGrades);
       setIntegrityReviews({});
       setModerationCases({});
+      setPlagiarismFlags(DEMO_ASSIGNMENT_INTEGRITY_FLAGS[id] ?? []);
+      setPlagiarismSummary(DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES[id] ?? "");
       return;
     }
     const { data } = await supabase
@@ -1554,6 +1562,30 @@ Please review the feedback in the platform and let me know if you would like to 
           </CardContent>
         </Card>
       )}
+      {isDemo && isLecturer && (
+        <Card className="border-primary/20 bg-primary/5 shadow-sm">
+          <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+            <div>
+              <p className="text-sm font-medium">1. Create and scope</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The Assignments page shows the real draft workflow: brief, due date, cohort targeting, and rubric setup before publish.
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium">2. Review what AI receives</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This synthetic assignment includes the full brief, rubric, sample submissions, and integrity evidence the grader would inspect.
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium">3. Review expected output</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Use the submission list to inspect AI scores, criterion feedback, moderation-ready cases, and a released feedback example.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
@@ -1611,6 +1643,11 @@ Please review the feedback in the platform and let me know if you would like to 
               <CardTitle className="text-base">Workflow Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isDemo && isLecturer && (
+                <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  Action controls stay visible so reviewers can follow the real lecturer workflow. In demo mode they are read-only, and the synthetic submissions below already cover AI grading, moderation, release, and integrity-review examples.
+                </div>
+              )}
               {!isLecturer ? (
                 <>
                   <input ref={fileInputRef} type="file" className="hidden" onChange={handleStudentSubmit} />

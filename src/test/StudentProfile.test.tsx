@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StudentProfile from "@/pages/dashboard/StudentProfile";
@@ -304,6 +304,22 @@ describe("StudentProfile", () => {
 
     expect(await screen.findByText("Sam Student")).toBeInTheDocument();
     expect(screen.getByText("Intervention History")).toBeInTheDocument();
+  });
+
+  it("uses synthetic demo data and does not queue live notifications in demo mode", async () => {
+    mocks.authState.isDemo = true;
+    mocks.authState.user = { id: "demo-lecturer" };
+    mocks.params.studentId = "demo-student";
+
+    renderStudentProfile();
+
+    expect(await screen.findByText("David Lee")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Send at-risk alert/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Send follow-up reminder/i }));
+
+    expect(mocks.queueCommunicationMessage).not.toHaveBeenCalled();
+    expect(mocks.supabase.from).not.toHaveBeenCalled();
   });
 
   it("shows a loading state while student data is pending", () => {

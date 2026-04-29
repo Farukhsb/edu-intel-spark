@@ -223,6 +223,18 @@ describe("ExternalExaminerExport", () => {
     expect(screen.getByText("Sam Student")).toBeInTheDocument();
   });
 
+  it("uses synthetic demo data without querying Supabase in demo mode", async () => {
+    mocks.authState.isDemo = true;
+    setupSupabase();
+
+    render(<ExternalExaminerExport />);
+
+    expect(await screen.findByText("Viewing demo export data")).toBeInTheDocument();
+    expect(screen.getByText("Amina Hassan")).toBeInTheDocument();
+    expect(screen.getByText("Strategic Policy Brief: Housing Affordability Interventions")).toBeInTheDocument();
+    expect(mocks.supabase.from).not.toHaveBeenCalled();
+  });
+
   it("shows a loading state", () => {
     const deferred = createDeferred<{ data: AssignmentRow[] }>();
     setupSupabase({ assignmentsPromise: deferred.promise });
