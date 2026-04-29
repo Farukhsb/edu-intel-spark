@@ -125,6 +125,8 @@ Guidelines:
 - Use the Socratic method: ask guiding questions instead of giving direct answers
 - Instead of "Your essay lacked structure", ask "What do you think was the strongest part of your argument?"
 - Instead of "You lost marks on testing", ask "How did you decide which test cases to include?"
+- When comparing weaknesses across criteria, use percentage lost within each criterion from criterionInsights, not raw points lost
+- When identifying the weakest area, explicitly mention the percentage loss comparison, for example: "Complexity Analysis is your weakest area, where you lost 26.7% of available marks, compared to 16% in Correct Implementation."
 - Help students discover insights about their work through reflection
 - Reference specific components from their grade breakdown
 - Be encouraging and supportive

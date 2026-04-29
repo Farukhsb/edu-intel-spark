@@ -44,6 +44,42 @@ describe("released explain-grade context", () => {
     });
   });
 
+  it("orders criterion insights by percentage lost, not raw points lost", () => {
+    const context = buildReleasedGradeContext(
+      {
+        ...releasedRows,
+        grade: {
+          ...releasedRows.grade,
+          ai_breakdown: [
+            { criterion: "Breadth", score: 21, max_score: 25 },
+            { criterion: "Complexity Analysis", score: 11, max_score: 15 },
+          ],
+        },
+      },
+      "student-1",
+      makeError,
+    );
+
+    expect(context.criterionInsights).toEqual([
+      {
+        criterion: "Complexity Analysis",
+        score: 11,
+        maxScore: 15,
+        earnedPercentage: 73.3,
+        lostPoints: 4,
+        lostPercentage: 26.7,
+      },
+      {
+        criterion: "Breadth",
+        score: 21,
+        maxScore: 25,
+        earnedPercentage: 84,
+        lostPoints: 4,
+        lostPercentage: 16,
+      },
+    ]);
+  });
+
   it("rejects unreleased grades without exposing AI feedback", () => {
     expect(() =>
       buildReleasedGradeContext(
