@@ -69,6 +69,26 @@ interface StudentNotificationProfile {
   role: string | null;
 }
 
+const normalizeAssignment = (
+  assignment: Partial<Assignment> &
+    Pick<Assignment, "id" | "title" | "lecturer_id" | "max_score" | "status" | "created_at">,
+): Assignment => ({
+  id: assignment.id,
+  title: assignment.title,
+  description: assignment.description ?? null,
+  module_code: assignment.module_code ?? null,
+  lecturer_id: assignment.lecturer_id,
+  max_score: assignment.max_score,
+  due_date: assignment.due_date ?? null,
+  status: assignment.status,
+  created_at: assignment.created_at,
+  rubric: assignment.rubric ?? [],
+  cohorts: assignment.cohorts ?? [],
+  departments: assignment.departments ?? [],
+  target_cohorts: assignment.target_cohorts ?? [],
+  target_departments: assignment.target_departments ?? [],
+});
+
 const buildAssignmentPublishedNotificationRows = (input: {
   senderId: string;
   assignmentId: string;
@@ -111,13 +131,14 @@ const statusIcon = (status: Assignment["status"]) => {
 };
 
 const summarizeSelection = (
-  selected: string[],
+  selected: string[] | null | undefined,
   labelForValue: (value: string) => string,
   emptyLabel: string,
 ) => {
-  if (selected.length === 0) return emptyLabel;
-  if (selected.length <= 2) return selected.map(labelForValue).join(", ");
-  return `${selected.length} selected`;
+  const values = selected ?? [];
+  if (values.length === 0) return emptyLabel;
+  if (values.length <= 2) return values.map(labelForValue).join(", ");
+  return `${values.length} selected`;
 };
 
 const Assignments = () => {
@@ -182,7 +203,7 @@ const Assignments = () => {
 
   const fetchAssignments = async () => {
     if (isDemo) {
-      setAssignments(DEMO_ASSIGNMENTS);
+      setAssignments((DEMO_ASSIGNMENTS ?? []).map(normalizeAssignment));
       setSubmissionStats({});
       setLoading(false);
       return;
@@ -237,22 +258,24 @@ const Assignments = () => {
       departmentMap.set(row.assignment_id, existing);
     }
 
-    const mapped: Assignment[] = (data || []).map((a) => ({
-      id: a.id,
-      title: a.title,
-      description: a.description,
-      module_code: a.module_code,
-      lecturer_id: a.lecturer_id,
-      max_score: a.max_score,
-      due_date: a.due_date,
-      status: a.status,
-      created_at: a.created_at,
-      rubric: a.rubric as unknown as RubricCriterion[] | null,
-      cohorts: cohortMap.get(a.id) ?? [],
-      departments: departmentMap.get(a.id) ?? [],
-      target_cohorts: cohortMap.get(a.id) ?? [],
-      target_departments: departmentMap.get(a.id) ?? [],
-    }));
+    const mapped: Assignment[] = (data || []).map((a) =>
+      normalizeAssignment({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        module_code: a.module_code,
+        lecturer_id: a.lecturer_id,
+        max_score: a.max_score,
+        due_date: a.due_date,
+        status: a.status,
+        created_at: a.created_at,
+        rubric: a.rubric as unknown as RubricCriterion[] | null,
+        cohorts: cohortMap.get(a.id) ?? [],
+        departments: departmentMap.get(a.id) ?? [],
+        target_cohorts: cohortMap.get(a.id) ?? [],
+        target_departments: departmentMap.get(a.id) ?? [],
+      }),
+    );
 
     setAssignments(mapped);
 
@@ -324,9 +347,9 @@ const Assignments = () => {
             .slice(0, 16)
         : "",
     );
-    setRubric(template.template.rubric);
-    setSelectedCohorts(template.template.targetCohorts);
-    setSelectedDepartments(template.template.targetDepartments);
+    setRubric(template.template.rubric ?? []);
+    setSelectedCohorts(template.template.targetCohorts ?? []);
+    setSelectedDepartments(template.template.targetDepartments ?? []);
   };
 
   const upsertAssignmentCohorts = async (assignmentId: string, cohortIds: string[]) => {
@@ -569,7 +592,7 @@ const Assignments = () => {
   const view = searchParams.get("view");
   const isPendingReviewView = view === "needs-review";
 
-  const filteredAssignments = assignments.filter((assignment) => {
+  const filteredAssignments = (assignments ?? []).filter((assignment) => {
     const matchesSearch = !searchQuery || [assignment.title, assignment.module_code, assignment.description]
       .filter(Boolean)
       .some((value) => value?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
@@ -588,9 +611,9 @@ const Assignments = () => {
     return (submissionStats[right.id]?.needsReview ?? 0) - (submissionStats[left.id]?.needsReview ?? 0);
   });
 
-  const drafts = assignments.filter(a => a.status === "draft").length;
-  const published = assignments.filter(a => a.status === "published").length;
-  const dueSoon = assignments.filter((assignment) => {
+  const drafts = (assignments ?? []).filter(a => a.status === "draft").length;
+  const published = (assignments ?? []).filter(a => a.status === "published").length;
+  const dueSoon = (assignments ?? []).filter((assignment) => {
     if (!assignment.due_date) return false;
     const diff = new Date(assignment.due_date).getTime() - Date.now();
     return diff > 0 && diff <= 7 * 24 * 60 * 60 * 1000;
@@ -815,7 +838,7 @@ const Assignments = () => {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card><CardContent className="p-4">
           <p className="text-xs text-muted-foreground">Total</p>
-          <p className="text-2xl font-semibold">{assignments.length}</p>
+          <p className="text-2xl font-semibold">{assignments?.length ?? 0}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-xs text-muted-foreground">Published</p>
@@ -889,7 +912,7 @@ const Assignments = () => {
         </CardContent>
       </Card>
 
-      {assignments.length === 0 ? (
+      {(assignments?.length ?? 0) === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <BookOpen className="h-12 w-12 text-muted-foreground/40 mb-3" />
@@ -899,7 +922,7 @@ const Assignments = () => {
             </p>
           </CardContent>
         </Card>
-      ) : sortedAssignments.length === 0 ? (
+      ) : (sortedAssignments?.length ?? 0) === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Search className="h-10 w-10 text-muted-foreground/40 mb-3" />
@@ -924,9 +947,13 @@ const Assignments = () => {
         </Card>
       ) : (
         <div className="space-y-3">
-          {sortedAssignments.map((assignment) => {
+          {(sortedAssignments ?? []).map((rawAssignment) => {
+            const assignment = normalizeAssignment(rawAssignment);
             const stats = submissionStats[assignment.id];
             const StatusIcon = statusIcon(assignment.status);
+            const rubricCriteria = assignment.rubric ?? [];
+            const targetCohorts = assignment.target_cohorts ?? [];
+            const targetDepartments = assignment.target_departments ?? [];
 
             return (
               <Card key={assignment.id} className="hover:shadow-md transition-shadow">
@@ -943,8 +970,8 @@ const Assignments = () => {
                         {isDemo && (
                           <Badge variant="outline" className="text-xs">Assignment set</Badge>
                         )}
-                        {(assignment.rubric?.length ?? 0) > 0 && (
-                          <Badge variant="outline" className="text-xs">{assignment.rubric?.length ?? 0} criteria</Badge>
+                        {(rubricCriteria ?? []).length > 0 && (
+                          <Badge variant="outline" className="text-xs">{(rubricCriteria ?? []).length} criteria</Badge>
                         )}
                       </div>
 
@@ -961,9 +988,9 @@ const Assignments = () => {
 
                       {assignment.description && <p className="text-sm text-muted-foreground line-clamp-2">{assignment.description}</p>}
 
-                      {(assignment.target_cohorts?.length ?? 0) > 0 && (
+                      {(targetCohorts ?? []).length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {(assignment.target_cohorts ?? []).map((cohortId) => {
+                          {(targetCohorts ?? []).map((cohortId) => {
                             const cohortLabel =
                               COHORTS.find((cohort) => cohort.value === cohortId)?.label ?? cohortId;
                             return (
@@ -975,9 +1002,9 @@ const Assignments = () => {
                         </div>
                       )}
 
-                      {(assignment.target_departments?.length ?? 0) > 0 && (
+                      {(targetDepartments ?? []).length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {(assignment.target_departments ?? []).map((departmentId) => (
+                          {(targetDepartments ?? []).map((departmentId) => (
                             <Badge key={`${assignment.id}-${departmentId}`} variant="outline" className="text-xs">
                               {departmentId}
                             </Badge>

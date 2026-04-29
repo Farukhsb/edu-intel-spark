@@ -61,6 +61,29 @@ describe("Assignments demo data isolation", () => {
     expect(mocks.supabase.from).not.toHaveBeenCalled();
   });
 
+  it("normalizes missing demo arrays before rendering assignment cards", async () => {
+    const originalAssignment = DEMO_ASSIGNMENTS[0];
+    DEMO_ASSIGNMENTS[0] = {
+      ...originalAssignment,
+      rubric: undefined as never,
+      target_cohorts: undefined as never,
+      target_departments: undefined as never,
+    };
+
+    try {
+      render(
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Assignments />
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByText(originalAssignment.title)).toBeInTheDocument();
+      expect(mocks.supabase.from).not.toHaveBeenCalled();
+    } finally {
+      DEMO_ASSIGNMENTS[0] = originalAssignment;
+    }
+  });
+
   it("exposes reusable starter templates in code for later lecturer prefills", () => {
     expect(STARTER_ASSIGNMENT_TEMPLATES.length).toBeGreaterThan(0);
     expect(STARTER_ASSIGNMENT_TEMPLATES[0].template.rubric.length).toBeGreaterThan(0);
