@@ -29,6 +29,7 @@ import {
   applyRateLimit,
   resetRateLimitStore,
 } from "../../supabase/functions/_shared/rate-limit";
+import { sanitizeVisibleAiFeedback } from "../../supabase/functions/_shared/visible-feedback";
 
 const readRepoFile = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
@@ -140,10 +141,23 @@ describe("edge function hardening", () => {
     expect(source).toContain("department_id: z.string().trim().min(1)");
   });
 
-  it("does not append fairness adjustment boilerplate to visible AI feedback", () => {
-    const source = readRepoFile("supabase/functions/grade-submission/index.ts");
+  it("removes fairness adjustment boilerplate from visible AI feedback", () => {
+    expect(
+      sanitizeVisibleAiFeedback(
+        "Strong evidence and clear structure.\n\nInitial AI score was inconsistent with feedback. A fairness adjustment was applied.",
+      ),
+    ).toBe("Strong evidence and clear structure.");
 
-    expect(source).not.toContain("Initial AI score was inconsistent with feedback");
-    expect(source).not.toContain("fairness adjustment was applied");
+    expect(
+      sanitizeVisibleAiFeedback(
+        "Detailed analysis.\n\n[Initial AI score was inconsistent with feedback. A fairness adjustment was applied.]",
+      ),
+    ).toBe("Detailed analysis.");
+
+    expect(
+      sanitizeVisibleAiFeedback(
+        "Lecturer review recommended: borderline mark.\n\nInitial AI score was inconsistent with UK marking bands. A fairness recalibration was applied and lecturer review is recommended.",
+      ),
+    ).toBe("Lecturer review recommended: borderline mark.");
   });
 });
