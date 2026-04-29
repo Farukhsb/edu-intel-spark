@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   },
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     auth: {
       getSession: vi.fn(),
     },
@@ -82,6 +83,14 @@ type AssignmentRow = {
   title: string;
 };
 
+type AssignmentMetadataRow = {
+  assignment_id: string;
+  max_score: number | null;
+  module_code: string | null;
+  submission_id: string;
+  title: string | null;
+};
+
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -131,21 +140,39 @@ const defaultAssignments: AssignmentRow[] = [
   },
 ];
 
+const defaultAssignmentMetadata: AssignmentMetadataRow[] = [
+  {
+    assignment_id: "assignment-1",
+    max_score: 100,
+    module_code: "ENG101",
+    submission_id: "submission-1",
+    title: "Critical Essay",
+  },
+];
+
 const setupSupabase = ({
   submissions = defaultSubmissions,
   grades = defaultGrades,
   assignments = defaultAssignments,
+  assignmentMetadata = defaultAssignmentMetadata,
+  assignmentMetadataError = null,
   submissionsPromise,
   submissionsError,
 }: {
   submissions?: SubmissionRow[];
   grades?: GradeRow[];
   assignments?: AssignmentRow[];
+  assignmentMetadata?: AssignmentMetadataRow[];
+  assignmentMetadataError?: { message: string } | null;
   submissionsPromise?: Promise<{ data: SubmissionRow[] }>;
   submissionsError?: Error;
 } = {}) => {
   mocks.supabase.auth.getSession.mockResolvedValue({
     data: { session: { access_token: "test-token" } },
+  });
+  mocks.supabase.rpc.mockResolvedValue({
+    data: assignmentMetadata,
+    error: assignmentMetadataError,
   });
 
   mocks.supabase.from.mockImplementation((table: string) => ({
@@ -404,7 +431,16 @@ describe("ExplainGrade", () => {
           ai_breakdown: [{ criterion: "Evidence", score: 10, max_score: 25 }],
         },
       ],
-      assignments: [{ id: "assignment-1", module_code: "CS201", title: "Data Structures Assignment" }],
+      assignments: [],
+      assignmentMetadata: [
+        {
+          assignment_id: "assignment-1",
+          max_score: 100,
+          module_code: "CS201",
+          submission_id: "submission-1",
+          title: "Data Structures Assignment",
+        },
+      ],
     });
 
     renderExplainGrade();
@@ -412,9 +448,50 @@ describe("ExplainGrade", () => {
     expect(await screen.findByText("Data Structures Assignment")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment — 67%");
     expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx · Released 29 Apr 2026");
+    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_grade_assignment_metadata");
     expect(screen.queryByText(/abdullahi faruk/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Other Student/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Hidden Student/i)).not.toBeInTheDocument();
+  });
+
+  it("falls back to file name when assignment title metadata is unavailable", async () => {
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_name: "Sam Student",
+          file_name: "fallback-report.pdf",
+          status: "released",
+        },
+      ],
+      assignmentMetadata: [],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("fallback-report.pdf")).toBeInTheDocument();
+    expect(screen.queryByText(/Sam Student/i)).not.toBeInTheDocument();
+  });
+
+  it("falls back to Released grade when assignment title and file name are unavailable", async () => {
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_name: "Sam Student",
+          file_name: null,
+          status: "released",
+        },
+      ],
+      assignmentMetadata: [],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Released grade")).toBeInTheDocument();
+    expect(screen.queryByText(/Sam Student/i)).not.toBeInTheDocument();
   });
 
   it("shows safe student guidance without exposing provisional or unreleased grading data", async () => {

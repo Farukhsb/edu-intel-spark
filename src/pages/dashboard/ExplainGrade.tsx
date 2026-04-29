@@ -52,6 +52,14 @@ interface AssignmentRow {
   title: string;
 }
 
+interface AssignmentMetadataRow {
+  assignment_id: string;
+  max_score: number | null;
+  module_code: string | null;
+  submission_id: string;
+  title: string | null;
+}
+
 type ExplainGradeBreakdownItem = AcademicGradeBreakdownItem & SharedGradeBreakdown;
 
 export const getBreakdownMaxScore = (item: ExplainGradeBreakdownItem) => item.max_score ?? item.maxScore ?? 0;
@@ -248,10 +256,7 @@ const ExplainGrade = () => {
       const { data: grades } = subIds.length > 0
         ? await supabase.from("grades").select("*").in("submission_id", subIds)
         : { data: [] as GradeRow[] };
-      const assignmentIds = [...new Set(submissionRows.map((submission) => submission.assignment_id))];
-      const { data: assignments } = assignmentIds.length > 0
-        ? await supabase.from("assignments").select("*").in("id", assignmentIds)
-        : { data: [] as AssignmentRow[] };
+      const assignmentMetaRes = await supabase.rpc("get_student_grade_assignment_metadata");
 
       if (!grades?.length || !releasedSubs.length) {
         setLoading(false);
@@ -259,9 +264,15 @@ const ExplainGrade = () => {
       }
 
       const safeSubs = releasedSubs;
-      const safeAssignments = (assignments ?? []) as AssignmentRow[];
       const subMap = Object.fromEntries(safeSubs.map(s => [s.id, s]));
-      const assignMap = Object.fromEntries(safeAssignments.map(a => [a.id, a]));
+      const assignmentMap: Record<string, AssignmentMetadataRow> = {};
+      if (assignmentMetaRes.error) {
+        log.warn("ExplainGrade assignment metadata lookup failed", assignmentMetaRes.error);
+      } else {
+        ((assignmentMetaRes.data ?? []) as AssignmentMetadataRow[]).forEach((row) => {
+          assignmentMap[row.submission_id] = row;
+        });
+      }
 
       const options: SubmissionOption[] = grades
         .flatMap(g => {
@@ -276,7 +287,7 @@ const ExplainGrade = () => {
           }
 
           const sub = subMap[g.submission_id];
-          const assignment = sub ? assignMap[sub.assignment_id] : null;
+          const assignment = assignmentMap[g.submission_id];
           const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
           const breakdown: ExplainGradeBreakdownItem[] = breakdownResult.data;
           const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
