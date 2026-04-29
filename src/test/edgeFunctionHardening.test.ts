@@ -139,4 +139,11 @@ describe("edge function hardening", () => {
     expect(source).toContain("cohort_id: z.string().trim().min(1)");
     expect(source).toContain("department_id: z.string().trim().min(1)");
   });
+
+  it("does not append fairness adjustment boilerplate to visible AI feedback", () => {
+    const source = readRepoFile("supabase/functions/grade-submission/index.ts");
+
+    expect(source).not.toContain("Initial AI score was inconsistent with feedback");
+    expect(source).not.toContain("fairness adjustment was applied");
+  });
 });

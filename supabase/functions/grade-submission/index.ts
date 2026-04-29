@@ -2218,13 +2218,6 @@ Return corrected JSON only.`;
         if (stabilityNotes.length > 0) {
           feedbackParts.push(stabilityNotes[stabilityNotes.length - 1]);
         }
-        if (recalibrationApplied) {
-          feedbackParts.push(
-            fairnessRecalibrationApplied
-              ? "Initial AI score was inconsistent with UK marking bands. A fairness recalibration was applied and lecturer review is recommended."
-              : "Initial AI score was inconsistent with feedback. A fairness adjustment was applied.",
-          );
-        }
         if (requiresLecturerReview && reviewReasons.length > 0) {
           feedbackParts.push(`Lecturer review recommended: ${Array.from(new Set(reviewReasons)).join("; ")}`);
         }
