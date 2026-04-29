@@ -82,6 +82,11 @@ import {
   type AcademicIntegrityFlag,
   type WorkflowRubricCriterion,
 } from "@/types/academic";
+import {
+  DEMO_ASSIGNMENT_GRADES,
+  DEMO_ASSIGNMENT_SUBMISSIONS,
+  getDemoAssignmentById,
+} from "@/pages/dashboard/demoAssignments";
 
 type SubmissionStatus =
   | "submitted"
@@ -284,7 +289,7 @@ const getErrorMessage = (error: unknown) => (error instanceof Error ? error.mess
 
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { role, user, profile } = useAuth();
+  const { role, user, profile, isDemo } = useAuth();
   const navigate = useNavigate();
 
   const [assignment, setAssignment] = useState<AssignmentDetailAssignment | null>(null);
@@ -313,10 +318,33 @@ const AssignmentDetail = () => {
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!id || !user) return;
+    if (!id || (!user && !isDemo)) return;
 
     const fetchAssignment = async () => {
       setLoading(true);
+
+      if (isDemo) {
+        const demoAssignment = getDemoAssignmentById(id);
+        if (demoAssignment) {
+          setAssignment({
+            id: demoAssignment.id,
+            title: demoAssignment.title,
+            description: demoAssignment.description,
+            module_code: demoAssignment.module_code,
+            max_score: demoAssignment.max_score,
+            due_date: demoAssignment.due_date,
+            status: demoAssignment.status,
+            lecturer_id: demoAssignment.lecturer_id,
+            rubric: toWorkflowRubric(demoAssignment.rubric ?? []),
+          });
+        } else {
+          setAssignment(null);
+          setSubmissions([]);
+          setGrades({});
+        }
+        setLoading(false);
+        return;
+      }
 
       let query = supabase
         .from("assignments")
@@ -350,7 +378,7 @@ const AssignmentDetail = () => {
       setLoading(false);
     };
     void fetchAssignment();
-  }, [id]);
+  }, [id, isDemo, role, user]);
 
   const loadGrades = async (subs: AssignmentDetailSubmission[]) => {
     if (subs.length === 0) {
@@ -431,6 +459,41 @@ const AssignmentDetail = () => {
 
   const loadSubmissions = async () => {
     if (!id) return;
+    if (isDemo) {
+      const demoSubmissions = DEMO_ASSIGNMENT_SUBMISSIONS[id] ?? [];
+      const demoGrades = Object.fromEntries(
+        demoSubmissions
+          .map((submission) => {
+            const grade = DEMO_ASSIGNMENT_GRADES[submission.id];
+            if (!grade) return null;
+
+            return [
+              submission.id,
+              {
+                id: grade.id,
+                submission_id: grade.submission_id,
+                ai_score: grade.ai_score,
+                ai_feedback: grade.ai_feedback,
+                ai_breakdown: toAssignmentDetailBreakdown(grade.ai_breakdown),
+                assignment_type: grade.assignment_type,
+                grading_confidence: grade.grading_confidence,
+                grading_metadata: grade.grading_metadata,
+                lecturer_score: grade.lecturer_score,
+                lecturer_feedback: grade.lecturer_feedback,
+                final_score: grade.final_score,
+                final_feedback: grade.final_feedback,
+              } satisfies Grade,
+            ] as const;
+          })
+          .filter((entry): entry is readonly [string, Grade] => entry !== null),
+      );
+
+      setSubmissions(demoSubmissions);
+      setGrades(demoGrades);
+      setIntegrityReviews({});
+      setModerationCases({});
+      return;
+    }
     const { data } = await supabase
       .from("submissions")
       .select("*")
@@ -509,7 +572,7 @@ const AssignmentDetail = () => {
 
   useEffect(() => {
     void loadSubmissions();
-  }, [id]);
+  }, [id, isDemo]);
 
   const uploadFile = async (file: File, userId: string) => {
     if (!assignment) throw new Error("Missing assignment");
@@ -539,6 +602,11 @@ const AssignmentDetail = () => {
   };
 
   const handleStudentSubmit = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isDemo) {
+      toast.info("Submission upload is disabled in demo mode");
+      e.target.value = "";
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file || !id || !assignment || !user?.id) {
       e.target.value = "";
@@ -614,6 +682,11 @@ const AssignmentDetail = () => {
   };
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isDemo) {
+      toast.info("Bulk upload is disabled in demo mode");
+      e.target.value = "";
+      return;
+    }
     const files = e.target.files;
     if (!files || !assignment || !user?.id) return;
     setUploading(true);
@@ -694,6 +767,10 @@ const AssignmentDetail = () => {
   };
 
   const handleAIGrade = async () => {
+    if (isDemo) {
+      toast.info("AI grading is disabled in demo mode");
+      return;
+    }
     const toGrade = submissions.filter((s) => selected.has(s.id) && REGRADABLE_STATUSES.includes(s.status));
     if (toGrade.length === 0) {
       toast.error("Select submitted or reviewable files to grade");
@@ -816,6 +893,10 @@ const AssignmentDetail = () => {
   };
 
   const handleBulkApprove = async () => {
+    if (isDemo) {
+      toast.info("Approval is disabled in demo mode");
+      return;
+    }
     const toApprove = submissions.filter(
       (s) =>
         selected.has(s.id) &&
@@ -843,6 +924,10 @@ const AssignmentDetail = () => {
   };
 
   const handleReleaseGrades = async () => {
+    if (isDemo) {
+      toast.info("Grade release is disabled in demo mode");
+      return;
+    }
     const toRelease = submissions.filter((s) => selected.has(s.id) && canReleaseStatus(s.status));
     if (toRelease.length === 0) {
       toast.error("Select approved submissions to release");
@@ -861,6 +946,10 @@ const AssignmentDetail = () => {
   };
 
   const handlePlagiarismCheck = async () => {
+    if (isDemo) {
+      toast.info("Integrity checks are disabled in demo mode");
+      return;
+    }
     if (!assignment) return;
     setCheckingPlagiarism(true);
     try {
@@ -1075,6 +1164,10 @@ const AssignmentDetail = () => {
     }).needsModeration;
 
   const approveSubmission = async (submission: AssignmentDetailSubmission) => {
+    if (isDemo) {
+      toast.info("Approval is disabled in demo mode");
+      return false;
+    }
     if (!assignment || !user) return false;
 
     const grade = grades[submission.id];
@@ -1163,6 +1256,10 @@ const AssignmentDetail = () => {
   };
 
   const saveReview = async () => {
+    if (isDemo) {
+      toast.info("Saving review is disabled in demo mode");
+      return;
+    }
     if (!reviewSubmission) return;
     const existingGrade = grades[reviewSubmission.id];
     const previousSubmission = submissions.find((submission) => submission.id === reviewSubmission.id);
@@ -1284,6 +1381,10 @@ const AssignmentDetail = () => {
   };
 
   const queueFeedbackSummary = async (sub: AssignmentDetailSubmission) => {
+    if (isDemo) {
+      toast.info("Feedback summary export is disabled in demo mode");
+      return;
+    }
     const grade = grades[sub.id];
     if (!grade) {
       toast.error("No grade available to summarise");
@@ -1321,6 +1422,10 @@ Please review the feedback in the platform and let me know if you would like to 
   };
 
   const queueGradeReleaseNotification = async (sub: AssignmentDetailSubmission) => {
+    if (isDemo) {
+      toast.info("Release notes are disabled in demo mode");
+      return;
+    }
     if (!assignment) {
       toast.error("Could not save release note");
       return;
@@ -1362,7 +1467,7 @@ Please review the feedback in the platform and let me know if you would like to 
         !searchQuery ||
         [submission.student_name, submission.student_email, submission.file_name]
           .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(searchQuery.toLowerCase()));
+          .some((value) => value?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
       const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -1375,14 +1480,6 @@ Please review the feedback in the platform and let me know if you would like to 
       </div>
     );
 
-  if (!assignment)
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Assignment not found</p>
-        <Button variant="link" onClick={() => navigate("/dashboard/assignments")}>Back to assignments</Button>
-      </div>
-    );
-  if (loading) return <div className="flex items-center justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>;
   if (!assignment) return (
     <div className="text-center py-12">
       <p className="text-muted-foreground">Assignment not found or access denied</p>
@@ -1449,6 +1546,14 @@ Please review the feedback in the platform and let me know if you would like to 
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {isDemo && (
+        <Card className="border-warning bg-warning/5 shadow-sm">
+          <CardContent className="flex items-center gap-2 p-3">
+            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
+            <span className="text-sm text-muted-foreground">Viewing demo assignment workflow data</span>
+          </CardContent>
+        </Card>
+      )}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
@@ -1518,7 +1623,7 @@ Please review the feedback in the platform and let me know if you would like to 
                     </div>
                     <Button
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading || hasExistingSubmission || !currentUserId}
+                      disabled={isDemo || uploading || hasExistingSubmission || !currentUserId}
                       className="w-full sm:w-fit"
                     >
                       {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
@@ -1541,14 +1646,14 @@ Please review the feedback in the platform and let me know if you would like to 
                     onChange={handleBulkUpload}
                   />
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <Button onClick={() => bulkInputRef.current?.click()} disabled={uploading} className="justify-start">
+                    <Button onClick={() => bulkInputRef.current?.click()} disabled={isDemo || uploading} className="justify-start">
                       <Upload className="mr-2 h-4 w-4" />
                       {uploading ? "Uploading..." : "Upload submissions"}
                     </Button>
                     <Button
                       variant="outline"
                       onClick={handlePlagiarismCheck}
-                      disabled={checkingPlagiarism || submissions.length < 1}
+                      disabled={isDemo || checkingPlagiarism || submissions.length < 1}
                       className="justify-start"
                     >
                       {checkingPlagiarism ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
@@ -1557,7 +1662,7 @@ Please review the feedback in the platform and let me know if you would like to 
                     <Button
                       variant="secondary"
                       onClick={handleAIGrade}
-                      disabled={!hasSubmitted || grading || selected.size === 0}
+                      disabled={isDemo || !hasSubmitted || grading || selected.size === 0}
                       className="justify-start"
                     >
                       {grading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
@@ -1566,7 +1671,7 @@ Please review the feedback in the platform and let me know if you would like to 
                     <Button
                       variant="default"
                       onClick={hasApproved ? handleReleaseGrades : handleBulkApprove}
-                      disabled={selected.size === 0 || (!hasApproved && !hasGraded)}
+                      disabled={isDemo || selected.size === 0 || (!hasApproved && !hasGraded)}
                       className="justify-start"
                     >
                       {hasApproved ? <Send className="mr-2 h-4 w-4" /> : <CheckCheck className="mr-2 h-4 w-4" />}
@@ -1745,9 +1850,9 @@ Please review the feedback in the platform and let me know if you would like to 
                                 )}
                               </div>
 
-                              {grade?.ai_breakdown && Array.isArray(grade.ai_breakdown) && grade.ai_breakdown.length > 0 && (
+                              {(grade?.ai_breakdown?.length ?? 0) > 0 && (
                                 <div className="flex flex-wrap gap-1 pt-1">
-                          {grade.ai_breakdown.map((b: AssignmentDetailBreakdown, i: number) => (
+                                  {(grade?.ai_breakdown ?? []).map((b: AssignmentDetailBreakdown, i: number) => (
                             <span key={i} className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
                                       {b.criterion}: {b.score}/{b.max_score}
                                       {typeof b.confidence_score === "number" ? ` • c${Math.round(b.confidence_score * 100)}%` : ""}
@@ -1787,7 +1892,7 @@ Please review the feedback in the platform and let me know if you would like to 
                             {isLecturer && (
                               <div className="flex flex-wrap gap-2 lg:justify-end">
                                 {grade?.ai_score != null && (
-                                  <Button size="sm" variant="ghost" onClick={() => void queueFeedbackSummary(sub)}>
+                                  <Button size="sm" variant="ghost" disabled={isDemo} onClick={() => void queueFeedbackSummary(sub)}>
                                     <Sparkles className="mr-1 h-3 w-3" /> Feedback summary
                                   </Button>
                                 )}
@@ -1806,6 +1911,7 @@ Please review the feedback in the platform and let me know if you would like to 
                                     data-testid={`submission-approve-${sub.id}`}
                                     size="sm"
                                     variant="outline"
+                                    disabled={isDemo}
                                     onClick={async () => {
                                       try {
                                         const approved = await approveSubmission(sub);
@@ -1827,6 +1933,7 @@ Please review the feedback in the platform and let me know if you would like to 
                                     data-testid={`submission-release-${sub.id}`}
                                     size="sm"
                                     variant="default"
+                                    disabled={isDemo}
                                     onClick={async () => {
                                       try {
                                         await supabase
@@ -1848,6 +1955,7 @@ Please review the feedback in the platform and let me know if you would like to 
                                   <Button
                                     size="sm"
                                     variant="outline"
+                                    disabled={isDemo}
                                     onClick={() => void queueGradeReleaseNotification(sub)}
                                   >
                                     <Send className="mr-1 h-3 w-3" /> Send release note
@@ -1867,13 +1975,13 @@ Please review the feedback in the platform and let me know if you would like to 
         </div>
 
         <div className="space-y-6">
-          {assignment.rubric && Array.isArray(assignment.rubric) && assignment.rubric.length > 0 && (
+          {(assignment.rubric?.length ?? 0) > 0 && (
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Rubric</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {assignment.rubric.map((r: WorkflowRubricCriterion, i: number) => (
+                {(assignment.rubric ?? []).map((r: WorkflowRubricCriterion, i: number) => (
                   <div key={i} className="rounded-xl border p-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-medium">{r.criterion}</span>
@@ -1974,11 +2082,11 @@ Please review the feedback in the platform and let me know if you would like to 
                       {grades[reviewSubmission.id].ai_feedback || "N/A"}
                     </p>
                   </div>
-                  {grades[reviewSubmission.id].ai_breakdown && Array.isArray(grades[reviewSubmission.id].ai_breakdown) && (
+                  {(grades[reviewSubmission.id].ai_breakdown?.length ?? 0) > 0 && (
                     <div className="space-y-1 pt-2">
                       <p className="text-xs font-medium text-muted-foreground">Breakdown</p>
                       <div className="max-h-48 space-y-1 overflow-y-auto rounded-md bg-background/80 p-3">
-                        {grades[reviewSubmission.id].ai_breakdown?.map((b, i) => (
+                        {(grades[reviewSubmission.id].ai_breakdown ?? []).map((b, i) => (
                           <div key={i} className="space-y-1 rounded-md border bg-background p-2 text-xs">
                             <div className="flex justify-between gap-3">
                               <span>{b.criterion}</span>
@@ -2024,7 +2132,7 @@ Please review the feedback in the platform and let me know if you would like to 
                 />
               </div>
               <div className="flex gap-2">
-                <Button data-testid="submission-review-save" onClick={saveReview} className="flex-1">Save Review</Button>
+                <Button data-testid="submission-review-save" onClick={saveReview} disabled={isDemo} className="flex-1">Save Review</Button>
                 <Button variant="outline" onClick={() => setReviewOpen(false)} className="flex-1">Cancel</Button>
               </div>
             </div>

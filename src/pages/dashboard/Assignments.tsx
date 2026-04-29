@@ -32,6 +32,7 @@ import {
   isReviewQueueStatus,
   isStudentGradeVisible,
 } from "@/lib/assessmentWorkflow";
+import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
 const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
@@ -46,11 +47,14 @@ interface Assignment {
   title: string;
   description: string | null;
   module_code: string | null;
+  lecturer_id: string;
   max_score: number;
   due_date: string | null;
   status: "draft" | "published" | "closed";
   created_at: string;
   rubric: RubricCriterion[] | null;
+  cohorts: string[];
+  departments: string[];
   target_cohorts: string[];
   target_departments: string[];
 }
@@ -167,18 +171,23 @@ const Assignments = () => {
         : "",
     );
     setRubric(assignment.rubric ?? []);
-    setSelectedCohorts(assignment.target_cohorts);
-    setSelectedDepartments(assignment.target_departments);
+    setSelectedCohorts(assignment.target_cohorts ?? []);
+    setSelectedDepartments(assignment.target_departments ?? []);
     setDialogOpen(true);
   };
 
   const fetchAssignments = async () => {
     if (isDemo) {
-      setAssignments([
-        { id: "demo-1", title: "Assignment 1 - Data Structures", description: "Implement a binary search tree", module_code: "CS301", max_score: 100, due_date: new Date(Date.now() + 7 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null },
-        { id: "demo-2", title: "Algorithms Coursework", description: "Dynamic programming problems", module_code: "CS205", max_score: 80, due_date: new Date(Date.now() + 14 * 86400000).toISOString(), status: "published", created_at: new Date().toISOString(), rubric: null },
-        { id: "demo-3", title: "Lab Report - Sorting", description: "Compare sorting algorithms", module_code: "CS301", max_score: 50, due_date: null, status: "draft", created_at: new Date().toISOString(), rubric: null },
-      ]);
+      setAssignments(
+        DEMO_ASSIGNMENTS.map((assignment) => ({
+          ...assignment,
+          rubric: assignment.rubric ?? [],
+          cohorts: assignment.cohorts ?? [],
+          departments: assignment.departments ?? [],
+          target_cohorts: assignment.target_cohorts ?? [],
+          target_departments: assignment.target_departments ?? [],
+        })),
+      );
       setLoading(false);
       return;
     }
@@ -237,11 +246,14 @@ const Assignments = () => {
       title: a.title,
       description: a.description,
       module_code: a.module_code,
+      lecturer_id: a.lecturer_id,
       max_score: a.max_score,
       due_date: a.due_date,
       status: a.status,
       created_at: a.created_at,
       rubric: a.rubric as unknown as RubricCriterion[] | null,
+      cohorts: cohortMap.get(a.id) ?? [],
+      departments: departmentMap.get(a.id) ?? [],
       target_cohorts: cohortMap.get(a.id) ?? [],
       target_departments: departmentMap.get(a.id) ?? [],
     }));
@@ -527,7 +539,7 @@ const Assignments = () => {
   const filteredAssignments = assignments.filter((assignment) => {
     const matchesSearch = !searchQuery || [assignment.title, assignment.module_code, assignment.description]
       .filter(Boolean)
-      .some((value) => value!.toLowerCase().includes(searchQuery.toLowerCase()));
+      .some((value) => value?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
 
     const matchesStatus =
       statusFilter === "all"
@@ -545,7 +557,6 @@ const Assignments = () => {
 
   const drafts = assignments.filter(a => a.status === "draft").length;
   const published = assignments.filter(a => a.status === "published").length;
-  const closed = assignments.filter(a => a.status === "closed").length;
   const dueSoon = assignments.filter((assignment) => {
     if (!assignment.due_date) return false;
     const diff = new Date(assignment.due_date).getTime() - Date.now();
@@ -850,8 +861,8 @@ const Assignments = () => {
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {assignment.status}
                         </Badge>
-                        {assignment.rubric && Array.isArray(assignment.rubric) && assignment.rubric.length > 0 && (
-                          <Badge variant="outline" className="text-xs">{assignment.rubric.length} criteria</Badge>
+                        {(assignment.rubric?.length ?? 0) > 0 && (
+                          <Badge variant="outline" className="text-xs">{assignment.rubric?.length ?? 0} criteria</Badge>
                         )}
                       </div>
 
@@ -868,9 +879,9 @@ const Assignments = () => {
 
                       {assignment.description && <p className="text-sm text-muted-foreground line-clamp-2">{assignment.description}</p>}
 
-                      {assignment.target_cohorts.length > 0 && (
+                      {(assignment.target_cohorts?.length ?? 0) > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {assignment.target_cohorts.map((cohortId) => {
+                          {(assignment.target_cohorts ?? []).map((cohortId) => {
                             const cohortLabel =
                               COHORTS.find((cohort) => cohort.value === cohortId)?.label ?? cohortId;
                             return (
@@ -882,9 +893,9 @@ const Assignments = () => {
                         </div>
                       )}
 
-                      {assignment.target_departments.length > 0 && (
+                      {(assignment.target_departments?.length ?? 0) > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {assignment.target_departments.map((departmentId) => (
+                          {(assignment.target_departments ?? []).map((departmentId) => (
                             <Badge key={`${assignment.id}-${departmentId}`} variant="outline" className="text-xs">
                               {departmentId}
                             </Badge>
