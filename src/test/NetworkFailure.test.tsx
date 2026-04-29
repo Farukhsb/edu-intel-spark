@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   },
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     auth: {
       getSession: vi.fn(),
     },
@@ -196,6 +197,18 @@ const setupStudentProfileSupabase = () => {
 const setupExplainGradeSupabase = () => {
   mocks.supabase.auth.getSession.mockResolvedValue({
     data: { session: { access_token: "test-token" } },
+  });
+  mocks.supabase.rpc.mockResolvedValue({
+    data: [
+      {
+        assignment_id: "assignment-1",
+        max_score: 100,
+        module_code: "ENG101",
+        submission_id: "submission-1",
+        title: "Critical Essay",
+      },
+    ],
+    error: null,
   });
 
   mocks.supabase.from.mockImplementation((table: string) => ({

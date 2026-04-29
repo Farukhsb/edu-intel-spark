@@ -34,6 +34,8 @@ interface SubmissionRow {
   student_name: string | null;
   file_name: string | null;
   status?: string | null;
+  released_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface GradeRow {
@@ -48,6 +50,14 @@ interface AssignmentRow {
   id: string;
   module_code: string | null;
   title: string;
+}
+
+interface AssignmentMetadataRow {
+  assignment_id: string;
+  max_score: number | null;
+  module_code: string | null;
+  submission_id: string;
+  title: string | null;
 }
 
 type ExplainGradeBreakdownItem = AcademicGradeBreakdownItem & SharedGradeBreakdown;
@@ -84,9 +94,46 @@ interface SubmissionOption {
   gradeId: string;
   submissionId: string;
   label: string;
+  secondaryLabel: string | null;
   totalGrade: number;
   breakdown: ExplainGradeBreakdown;
 }
+
+const formatReleasedDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+};
+
+export const buildGradeSelectorLabels = ({
+  assignmentTitle,
+  fileName,
+  releasedAt,
+  score,
+}: {
+  assignmentTitle?: string | null;
+  fileName?: string | null;
+  releasedAt?: string | null;
+  score: number;
+}) => {
+  const title = assignmentTitle?.trim();
+  const file = fileName?.trim();
+  const primaryBase = title || file || "Released grade";
+  const releasedDate = formatReleasedDate(releasedAt);
+  const secondaryParts = [file, releasedDate ? `Released ${releasedDate}` : null].filter(Boolean);
+
+  return {
+    label: `${primaryBase} — ${score}%`,
+    assessment: primaryBase,
+    secondaryLabel: secondaryParts.length > 0 ? secondaryParts.join(" · ") : null,
+  };
+};
 
 const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
   .flat()
@@ -132,18 +179,21 @@ const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_ASSIGNME
         };
       });
 
-    const label = assignment
-      ? `${assignment.module_code || ""} ${assignment.title}`.trim()
-      : submission.file_name;
+    const labels = buildGradeSelectorLabels({
+      assignmentTitle: assignment?.title,
+      fileName: submission.file_name,
+      score: totalGrade,
+    });
 
     return [
       {
         gradeId: grade.id,
         submissionId: submission.id,
-        label,
+        label: labels.label,
+        secondaryLabel: labels.secondaryLabel,
         totalGrade,
         breakdown: {
-          assessment: label,
+          assessment: labels.assessment,
           totalGrade,
           band: getBand(totalGrade),
           components,
@@ -206,10 +256,7 @@ const ExplainGrade = () => {
       const { data: grades } = subIds.length > 0
         ? await supabase.from("grades").select("*").in("submission_id", subIds)
         : { data: [] as GradeRow[] };
-      const assignmentIds = [...new Set(submissionRows.map((submission) => submission.assignment_id))];
-      const { data: assignments } = assignmentIds.length > 0
-        ? await supabase.from("assignments").select("*").in("id", assignmentIds)
-        : { data: [] as AssignmentRow[] };
+      const assignmentMetaRes = await supabase.rpc("get_student_grade_assignment_metadata");
 
       if (!grades?.length || !releasedSubs.length) {
         setLoading(false);
@@ -217,9 +264,15 @@ const ExplainGrade = () => {
       }
 
       const safeSubs = releasedSubs;
-      const safeAssignments = (assignments ?? []) as AssignmentRow[];
       const subMap = Object.fromEntries(safeSubs.map(s => [s.id, s]));
-      const assignMap = Object.fromEntries(safeAssignments.map(a => [a.id, a]));
+      const assignmentMap: Record<string, AssignmentMetadataRow> = {};
+      if (assignmentMetaRes.error) {
+        log.warn("ExplainGrade assignment metadata lookup failed", assignmentMetaRes.error);
+      } else {
+        ((assignmentMetaRes.data ?? []) as AssignmentMetadataRow[]).forEach((row) => {
+          assignmentMap[row.submission_id] = row;
+        });
+      }
 
       const options: SubmissionOption[] = grades
         .flatMap(g => {
@@ -234,7 +287,7 @@ const ExplainGrade = () => {
           }
 
           const sub = subMap[g.submission_id];
-          const assignment = sub ? assignMap[sub.assignment_id] : null;
+          const assignment = assignmentMap[g.submission_id];
           const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
           const breakdown: ExplainGradeBreakdownItem[] = breakdownResult.data;
           const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
@@ -273,17 +326,21 @@ const ExplainGrade = () => {
               };
             });
 
-          const label = assignment
-            ? `${assignment.module_code || ""} ${assignment.title}`.trim()
-            : sub?.student_name || sub?.file_name || g.submission_id;
+          const labels = buildGradeSelectorLabels({
+            assignmentTitle: assignment?.title,
+            fileName: sub?.file_name,
+            releasedAt: sub?.released_at ?? sub?.updated_at,
+            score: totalGrade,
+          });
 
           return [{
             gradeId: g.id,
             submissionId: g.submission_id,
-            label,
+            label: labels.label,
+            secondaryLabel: labels.secondaryLabel,
             totalGrade,
             breakdown: {
-              assessment: label,
+              assessment: labels.assessment,
               totalGrade,
               band: getBand(totalGrade),
               components,
@@ -334,8 +391,8 @@ const ExplainGrade = () => {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
+          submissionId: selected.submissionId,
           messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
-          gradeContext: gradeBreakdown,
         }),
       });
 
@@ -435,8 +492,13 @@ const ExplainGrade = () => {
           <SelectTrigger className="w-full"><SelectValue placeholder="Select a submission" /></SelectTrigger>
           <SelectContent>
             {submissions.map(s => (
-              <SelectItem key={s.gradeId} value={s.gradeId}>
-                {s.label} — {s.totalGrade}%
+              <SelectItem key={s.gradeId} value={s.gradeId} textValue={s.label}>
+                <span className="flex flex-col">
+                  <span>{s.label}</span>
+                  {s.secondaryLabel && (
+                    <span className="text-xs text-muted-foreground">{s.secondaryLabel}</span>
+                  )}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
