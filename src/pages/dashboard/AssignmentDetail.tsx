@@ -75,6 +75,7 @@ import {
   isStudentGradeVisible,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
+import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
 import { safeParseEdgeAIGradeResponse, safeParseGradeBreakdown, safeParseIntegrityBatchResponse } from "@/lib/schemas/aiResponses";
 import {
   toWorkflowRubric,
@@ -369,7 +370,11 @@ const AssignmentDetail = () => {
 
       const { data } = await query.maybeSingle();
 
-      if (data) {
+      if (data && role === "student" && !isAssignmentVisibleToStudent(data)) {
+        setAssignment(null);
+        setSubmissions([]);
+        setGrades({});
+      } else if (data) {
         setAssignment({
           id: data.id,
           title: data.title,

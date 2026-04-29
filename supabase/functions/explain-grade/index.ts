@@ -6,6 +6,11 @@ import { buildReleasedGradeContext } from "../_shared/explain-grade-context.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logWarn } from "../_shared/log.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
+import {
+  buildExplainGradeSystemPrompt,
+  buildWeaknessRankingResponse,
+  hasWeaknessIntent,
+} from "../_shared/explain-grade-prompt.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 const ExplainGradeRequestSchema = z.object({
@@ -17,6 +22,23 @@ type ExplainGradeMessage = {
   role: "user" | "assistant" | "system";
   content: string;
 };
+
+function createSseResponse(content: string, corsHeaders: HeadersInit) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`),
+      );
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+
+  return new Response(body, {
+    headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+  });
+}
 
 function isExplainGradeMessage(value: unknown): value is ExplainGradeMessage {
   if (!value || typeof value !== "object") return false;
@@ -115,24 +137,14 @@ serve(async (req) => {
       (status, errorMessage) => new HttpError(status, errorMessage),
     );
     const chatModel = getModel("OPENAI_CHAT_MODEL", "gpt-5.4-mini");
-
-    const systemPrompt = `You are GradeAI, a supportive academic grade assistant for university students. You use the Socratic method to help students reflect on their work and understand their grades.
-
-Current grade context:
-${JSON.stringify(gradeContext, null, 2)}
-
-Guidelines:
-- Use the Socratic method: ask guiding questions instead of giving direct answers
-- Instead of "Your essay lacked structure", ask "What do you think was the strongest part of your argument?"
-- Instead of "You lost marks on testing", ask "How did you decide which test cases to include?"
-- When comparing weaknesses across criteria, use percentage lost within each criterion from criterionInsights, not raw points lost
-- When identifying the weakest area, explicitly mention the percentage loss comparison, for example: "Complexity Analysis is your weakest area, where you lost 26.7% of available marks, compared to 16% in Correct Implementation."
-- Help students discover insights about their work through reflection
-- Reference specific components from their grade breakdown
-- Be encouraging and supportive
-- Use markdown formatting for clarity
-- Keep responses focused and under 300 words
-- If asked about topics outside grade explanation, politely redirect`;
+    const latestUserQuestion = [...messages].reverse().find((entry) => entry.role === "user")?.content ?? message;
+    if (hasWeaknessIntent(latestUserQuestion)) {
+      return createSseResponse(
+        buildWeaknessRankingResponse(gradeContext.weakestCriterion, gradeContext.criterionInsights),
+        corsHeaders,
+      );
+    }
+    const systemPrompt = buildExplainGradeSystemPrompt(gradeContext, latestUserQuestion);
 
     const response = await createChatCompletion({
       model: chatModel,

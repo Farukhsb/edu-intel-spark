@@ -2,7 +2,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { buildReleasedGradeContext } from "../../supabase/functions/_shared/explain-grade-context";
+import { buildReleasedGradeContext, buildWeaknessGuidance } from "../../supabase/functions/_shared/explain-grade-context";
+import {
+  buildExplainGradeSystemPrompt,
+  buildWeaknessIntentInstruction,
+  buildWeaknessRankingResponse,
+  hasWeaknessIntent,
+} from "../../supabase/functions/_shared/explain-grade-prompt";
 
 const makeError = (status: number, message: string) => Object.assign(new Error(message), { status });
 
@@ -63,6 +69,7 @@ describe("released explain-grade context", () => {
     expect(context.criterionInsights).toEqual([
       {
         criterion: "Complexity Analysis",
+        name: "Complexity Analysis",
         score: 11,
         maxScore: 15,
         earnedPercentage: 73.3,
@@ -71,6 +78,7 @@ describe("released explain-grade context", () => {
       },
       {
         criterion: "Breadth",
+        name: "Breadth",
         score: 21,
         maxScore: 25,
         earnedPercentage: 84,
@@ -78,6 +86,118 @@ describe("released explain-grade context", () => {
         lostPercentage: 16,
       },
     ]);
+    expect(context.weakestCriterion).toEqual({
+      criterion: "Complexity Analysis",
+      name: "Complexity Analysis",
+      score: 11,
+      maxScore: 15,
+      earnedPercentage: 73.3,
+      lostPoints: 4,
+      lostPercentage: 26.7,
+    });
+  });
+
+  it("builds deterministic weakness guidance from percentage loss", () => {
+    const context = buildReleasedGradeContext(
+      {
+        ...releasedRows,
+        grade: {
+          ...releasedRows.grade,
+          ai_breakdown: [
+            { criterion: "Correct Implementation", score: 21, max_score: 25 },
+            { criterion: "Complexity Analysis", score: 11, max_score: 15 },
+          ],
+        },
+      },
+      "student-1",
+      makeError,
+    );
+
+    expect(buildWeaknessGuidance(context.weakestCriterion, context.criterionInsights)).toBe(
+      "Complexity Analysis is the weakest criterion. The student scored 11/15, meaning they lost 26.7% of available marks. This is higher than the loss in Correct Implementation, where they lost 16%.",
+    );
+  });
+
+  it("builds a deterministic weakness-ranking response", () => {
+    const context = buildReleasedGradeContext(
+      {
+        ...releasedRows,
+        grade: {
+          ...releasedRows.grade,
+          ai_breakdown: [
+            { criterion: "Correct Implementation", score: 21, max_score: 25 },
+            { criterion: "Complexity Analysis", score: 11, max_score: 15 },
+          ],
+        },
+      },
+      "student-1",
+      makeError,
+    );
+
+    expect(buildWeaknessRankingResponse(context.weakestCriterion, context.criterionInsights)).toBe(
+      "Complexity Analysis is your biggest weakness because you scored 11/15 there, which means you lost 26.7% of the available marks. This is higher than Correct Implementation, where you lost 16% of the available marks. This represents the highest proportional loss across all criteria.",
+    );
+  });
+
+  it("builds a prompt that fixes Complexity Analysis as the weakest criterion", () => {
+    const context = buildReleasedGradeContext(
+      {
+        ...releasedRows,
+        grade: {
+          ...releasedRows.grade,
+          ai_breakdown: [
+            { criterion: "Correct Implementation", score: 21, max_score: 25 },
+            { criterion: "Complexity Analysis", score: 11, max_score: 15 },
+          ],
+        },
+      },
+      "student-1",
+      makeError,
+    );
+    const prompt = buildExplainGradeSystemPrompt(context, "Which criterion is my biggest weakness, and why?");
+
+    expect(prompt).toContain("The weakest criterion has already been calculated by the system. It is:");
+    expect(prompt).toContain("Complexity Analysis.");
+    expect(prompt).toContain("Do not recompute the weakest criterion.");
+    expect(prompt).toContain(buildWeaknessIntentInstruction());
+    expect(prompt).toContain(
+      "Complexity Analysis is the weakest criterion. The student scored 11/15, meaning they lost 26.7% of available marks. This is higher than the loss in Correct Implementation, where they lost 16%.",
+    );
+    expect(prompt).toContain("Do not use raw mark loss.");
+    expect(prompt).not.toContain("Always use raw marks");
+  });
+
+  it("detects weakness-ranking intent phrases", () => {
+    expect(hasWeaknessIntent("Which criterion is my biggest weakness?")).toBe(true);
+    expect(hasWeaknessIntent("What should I improve first?")).toBe(true);
+    expect(hasWeaknessIntent("How can I revise this assignment?")).toBe(false);
+  });
+
+  it("exposes weakest criterion with the expected fields", () => {
+    const context = buildReleasedGradeContext(
+      {
+        ...releasedRows,
+        grade: {
+          ...releasedRows.grade,
+          ai_breakdown: [
+            { criterion: "Correct Implementation", score: 21, max_score: 25 },
+            { criterion: "Complexity Analysis", score: 11, max_score: 15 },
+          ],
+        },
+      },
+      "student-1",
+      makeError,
+    );
+
+    expect(context.weakestCriterion).toEqual({
+      criterion: "Complexity Analysis",
+      name: "Complexity Analysis",
+      score: 11,
+      maxScore: 15,
+      earnedPercentage: 73.3,
+      lostPoints: 4,
+      lostPercentage: 26.7,
+    });
   });
 
   it("rejects unreleased grades without exposing AI feedback", () => {
