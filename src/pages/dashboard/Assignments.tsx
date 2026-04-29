@@ -32,6 +32,7 @@ import {
   isReviewQueueStatus,
   isStudentGradeVisible,
 } from "@/lib/assessmentWorkflow";
+import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
 import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
 import { DEMO_ASSIGNMENTS, DEMO_STUDENT_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
@@ -213,9 +214,7 @@ const Assignments = () => {
 
     let query = supabase.from("assignments").select("*").order("created_at", { ascending: false });
 
-    if (role === "student") {
-      query = query.eq("status", "published");
-    } else {
+    if (role !== "student") {
       query = query.eq("lecturer_id", user.id);
     }
 
@@ -259,24 +258,26 @@ const Assignments = () => {
       departmentMap.set(row.assignment_id, existing);
     }
 
-    const mapped: Assignment[] = (data || []).map((a) =>
-      normalizeAssignment({
-        id: a.id,
-        title: a.title,
-        description: a.description,
-        module_code: a.module_code,
-        lecturer_id: a.lecturer_id,
-        max_score: a.max_score,
-        due_date: a.due_date,
-        status: a.status,
-        created_at: a.created_at,
-        rubric: a.rubric as unknown as RubricCriterion[] | null,
-        cohorts: cohortMap.get(a.id) ?? [],
-        departments: departmentMap.get(a.id) ?? [],
-        target_cohorts: cohortMap.get(a.id) ?? [],
-        target_departments: departmentMap.get(a.id) ?? [],
-      }),
-    );
+    const mapped: Assignment[] = (data || [])
+      .map((a) =>
+        normalizeAssignment({
+          id: a.id,
+          title: a.title,
+          description: a.description,
+          module_code: a.module_code,
+          lecturer_id: a.lecturer_id,
+          max_score: a.max_score,
+          due_date: a.due_date,
+          status: a.status,
+          created_at: a.created_at,
+          rubric: a.rubric as unknown as RubricCriterion[] | null,
+          cohorts: cohortMap.get(a.id) ?? [],
+          departments: departmentMap.get(a.id) ?? [],
+          target_cohorts: cohortMap.get(a.id) ?? [],
+          target_departments: departmentMap.get(a.id) ?? [],
+        }),
+      )
+      .filter((assignment) => (role === "student" ? isAssignmentVisibleToStudent(assignment) : true));
 
     setAssignments(mapped);
 

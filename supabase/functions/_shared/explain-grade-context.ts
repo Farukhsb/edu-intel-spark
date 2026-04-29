@@ -47,12 +47,22 @@ type BreakdownRow = {
   maxScore?: number | null;
 };
 
+export type CriterionInsight = {
+  criterion: string;
+  name: string;
+  score: number;
+  maxScore: number;
+  earnedPercentage: number;
+  lostPoints: number;
+  lostPercentage: number;
+};
+
 function toFiniteNumber(value: unknown) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function buildCriterionInsights(breakdown: unknown) {
+export function buildCriterionInsights(breakdown: unknown): CriterionInsight[] {
   if (!Array.isArray(breakdown)) return [];
 
   return breakdown
@@ -71,6 +81,7 @@ function buildCriterionInsights(breakdown: unknown) {
 
       return {
         criterion: criterion || "Unknown",
+        name: criterion || "Unknown",
         score,
         maxScore,
         earnedPercentage,
@@ -84,6 +95,20 @@ function buildCriterionInsights(breakdown: unknown) {
       }
       return right.lostPoints - left.lostPoints;
     });
+}
+
+export function buildWeaknessGuidance(
+  weakestCriterion: CriterionInsight | null,
+  criterionInsights: CriterionInsight[],
+) {
+  if (!weakestCriterion) return "";
+
+  const comparisonCriterion = criterionInsights.find((criterion) => criterion.name !== weakestCriterion.name) ?? null;
+  const comparisonSentence = comparisonCriterion
+    ? ` This is higher than the loss in ${comparisonCriterion.name}, where they lost ${comparisonCriterion.lostPercentage}%.`
+    : "";
+
+  return `${weakestCriterion.name} is the weakest criterion. The student scored ${weakestCriterion.score}/${weakestCriterion.maxScore}, meaning they lost ${weakestCriterion.lostPercentage}% of available marks.${comparisonSentence}`;
 }
 
 export function buildReleasedGradeContext(
@@ -113,6 +138,7 @@ export function buildReleasedGradeContext(
   if (!Number.isFinite(totalGrade)) {
     throw createAccessError(404, "Released grade not found");
   }
+  const criterionInsights = buildCriterionInsights(grade.ai_breakdown);
 
   return {
     submissionId: submission.id,
@@ -125,7 +151,8 @@ export function buildReleasedGradeContext(
     maxScore: assignment?.max_score ?? null,
     feedback: grade.ai_feedback ?? "",
     breakdown: Array.isArray(grade.ai_breakdown) ? grade.ai_breakdown : [],
-    criterionInsights: buildCriterionInsights(grade.ai_breakdown),
+    criterionInsights,
+    weakestCriterion: criterionInsights[0] ?? null,
     gradingConfidence: grade.grading_confidence ?? null,
   };
 }
