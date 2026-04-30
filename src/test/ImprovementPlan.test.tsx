@@ -103,12 +103,7 @@ describe("ImprovementPlan explanation validation", () => {
 
     expect(screen.getByText("Priority 1 - CS205: Dynamic Programming Structure")).toBeInTheDocument();
     expect(screen.getByText("Needs attention")).toBeInTheDocument();
-    expect(screen.getAllByText(/(Good|Strong|High) recovery opportunity \| (short|12 min|15 min|20 min) review/).length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText(
-        /Based on (direct criterion feedback from graded work|repeated low criterion scores with some supporting feedback|limited evidence from current graded work, so this guidance is intentionally broad)\./,
-      ).length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("+5 to +8 marks | ~15 min").length).toBeGreaterThan(0);
     expect(screen.getByText(/The solution structure is not fully visible/i)).toBeInTheDocument();
     expect(screen.getAllByText(/state the recurrence relation before coding/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Marker can follow the recurrence/i)).toBeInTheDocument();
@@ -122,7 +117,11 @@ describe("ImprovementPlan explanation validation", () => {
   });
 
   it("reveals completed tasks only when the completed section is expanded", () => {
-    renderWithRouter(<ImprovementPlan />);
+    render(
+      <MemoryRouter>
+        <ImprovementPlan />
+      </MemoryRouter>,
+    );
 
     expect(screen.queryByText("Review lecturer feedback before next lab")).not.toBeInTheDocument();
 
@@ -253,6 +252,12 @@ describe("ImprovementPlan explanation validation", () => {
                     ai_feedback: null,
                     ai_breakdown: [
                       {
+                        criterion: "Analysis",
+                        score: 6,
+                        max_score: 10,
+                        feedback: "Your discussion of AI in assessment describes concepts but does not clearly evaluate their impact.",
+                      },
+                      {
                         criterion: "Testing",
                         score: 5,
                         max_score: 10,
@@ -292,8 +297,14 @@ describe("ImprovementPlan explanation validation", () => {
     renderWithRouter(<ImprovementPlan />);
 
     expect(await screen.findByRole("heading", { name: "CS101 - Algorithms Coursework" })).toBeInTheDocument();
+    expect(screen.queryByText("No improvement plan yet")).not.toBeInTheDocument();
+    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_grade_assignment_metadata");
     expect(screen.getByText("Priority 1 - CS101: Testing")).toBeInTheDocument();
-    expect(mocks.toast.error).not.toHaveBeenCalled();
+    expect(screen.getByText("+5 to +8 marks | ~15 min")).toBeInTheDocument();
+    expect(screen.getByText("No visible test evidence.")).toBeInTheDocument();
+    expect(screen.getByText(/add operation outputs or screenshots that show the program working/i)).toBeInTheDocument();
+    expect(screen.getByText(/The marker can verify correctness directly from visible outputs/i)).toBeInTheDocument();
+    expect(screen.getAllByText("CS101 - Algorithms Coursework").length).toBeGreaterThan(0);
   });
 
   it("collapses a fully completed real module plan by default", async () => {
@@ -303,26 +314,35 @@ describe("ImprovementPlan explanation validation", () => {
         {
           submission_id: "submission-1",
           assignment_id: "assignment-1",
-          assignment_title: "Testing",
+          title: "Testing",
           module_code: null,
           max_score: 100,
-          file_name: "testing.pdf",
-          file_url: "",
-          submission_status: "released",
-          submitted_at: "2026-04-20T10:00:00.000Z",
-          final_score: 1,
-          ai_score: 1,
-          final_feedback: null,
-          ai_feedback: null,
-          ai_breakdown: [
-            { criterion: "Overall quality", score: 0.1, max_score: 10 },
-          ],
         },
       ],
       error: null,
     });
 
     mocks.supabase.from.mockImplementation((table: string) => {
+      if (table === "submissions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () =>
+                Promise.resolve({
+                  data: [
+                    {
+                      id: "submission-1",
+                      assignment_id: "assignment-1",
+                      student_id: "student-1",
+                      submitted_at: "2026-04-20T10:00:00.000Z",
+                    },
+                  ],
+                }),
+            }),
+          }),
+        };
+      }
+
       if (table === "improvement_plan_progress") {
         return {
           select: () => ({
@@ -334,10 +354,34 @@ describe("ImprovementPlan explanation validation", () => {
         };
       }
 
+      if (table === "grades") {
+        return {
+          select: () => ({
+            in: () =>
+              Promise.resolve({
+                data: [
+                  {
+                    submission_id: "submission-1",
+                    final_score: 1,
+                    ai_score: 1,
+                    ai_breakdown: [
+                      { criterion: "Overall quality", score: 0.1, max_score: 10 },
+                    ],
+                  },
+                ],
+              }),
+          }),
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     });
 
-    renderWithRouter(<ImprovementPlan />);
+    render(
+      <MemoryRouter>
+        <ImprovementPlan />
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByText("Completed module plan")).toBeInTheDocument();
     expect(screen.getAllByText("Testing").length).toBeGreaterThan(0);

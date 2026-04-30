@@ -91,23 +91,6 @@ type AssignmentMetadataRow = {
   title: string | null;
 };
 
-type ProjectionRow = {
-  submission_id: string;
-  assignment_id: string;
-  assignment_title: string | null;
-  module_code: string | null;
-  max_score: number | null;
-  file_name: string | null;
-  file_url: string;
-  submission_status: string;
-  submitted_at: string;
-  final_score: number | null;
-  ai_score: number | null;
-  final_feedback: string | null;
-  ai_feedback: string | null;
-  ai_breakdown: GradeRow["ai_breakdown"];
-};
-
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -173,7 +156,7 @@ const setupSupabase = ({
   assignments = defaultAssignments,
   assignmentMetadata = defaultAssignmentMetadata,
   assignmentMetadataError = null,
-  projectionPromise,
+  submissionsPromise,
   submissionsError,
 }: {
   submissions?: SubmissionRow[];
@@ -181,11 +164,15 @@ const setupSupabase = ({
   assignments?: AssignmentRow[];
   assignmentMetadata?: AssignmentMetadataRow[];
   assignmentMetadataError?: { message: string } | null;
-  projectionPromise?: Promise<{ data: ProjectionRow[]; error?: null }>;
+  submissionsPromise?: Promise<{ data: SubmissionRow[] }>;
   submissionsError?: Error;
 } = {}) => {
   mocks.supabase.auth.getSession.mockResolvedValue({
     data: { session: { access_token: "test-token" } },
+  });
+  mocks.supabase.rpc.mockResolvedValue({
+    data: assignmentMetadata,
+    error: assignmentMetadataError,
   });
 
   const projection: ProjectionRow[] = submissions.map((submission) => {
@@ -382,7 +369,6 @@ describe("ExplainGrade", () => {
     ).toMatchObject({
       label: "fallback-report.pdf — 58%",
       assessment: "fallback-report.pdf",
-      secondaryLabel: null,
     });
 
     expect(
@@ -460,8 +446,8 @@ describe("ExplainGrade", () => {
 
     expect(await screen.findByText("Data Structures Assignment")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment — 67%");
-    expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx");
-    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx · Released 29 Apr 2026");
+    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_grade_assignment_metadata");
     expect(screen.queryByText(/abdullahi faruk/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Other Student/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Hidden Student/i)).not.toBeInTheDocument();
@@ -478,7 +464,6 @@ describe("ExplainGrade", () => {
           status: "released",
         },
       ],
-      assignments: [],
       assignmentMetadata: [],
     });
 
@@ -499,7 +484,6 @@ describe("ExplainGrade", () => {
           status: "released",
         },
       ],
-      assignments: [],
       assignmentMetadata: [],
     });
 

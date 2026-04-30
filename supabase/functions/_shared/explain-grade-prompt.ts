@@ -1,4 +1,4 @@
-import type { CriterionInsight, ExplainGradeEvidenceSummary } from "./explain-grade-context.ts";
+import type { CriterionInsight } from "./explain-grade-context.ts";
 import { buildWeaknessGuidance } from "./explain-grade-context.ts";
 
 const WEAKNESS_INTENT_PATTERNS = [
@@ -13,7 +13,6 @@ const WEAKNESS_INTENT_PATTERNS = [
 type ExplainGradeContext = {
   weakestCriterion: CriterionInsight | null;
   criterionInsights: CriterionInsight[];
-  evidenceSummary: ExplainGradeEvidenceSummary;
 };
 
 export function hasWeaknessIntent(message: string) {
@@ -23,18 +22,6 @@ export function hasWeaknessIntent(message: string) {
 
 export function buildWeaknessIntentInstruction() {
   return "The student is asking for weakness ranking. Answer using weakestCriterion only. Do not use raw mark loss.";
-}
-
-function buildEvidenceGuardrail(evidenceSummary: ExplainGradeEvidenceSummary) {
-  if (evidenceSummary.evidenceQuality === "strong") {
-    return "Evidence quality is strong. You may explain the released grade confidently, but only using facts present in the released context.";
-  }
-
-  if (evidenceSummary.evidenceQuality === "moderate") {
-    return "Evidence quality is moderate. Stay close to explicit released facts and avoid over-specific claims that are not directly supported.";
-  }
-
-  return "Evidence quality is limited. Do not guess. If the released context does not support a specific claim, say that the detail is unavailable from the released evidence.";
 }
 
 export function buildWeaknessRankingResponse(
@@ -68,7 +55,6 @@ This is based on the highest percentage of available marks lost, not raw marks l
 Weakness guidance:
 ${weaknessGuidance}`
     : "";
-  const evidenceGuardrail = buildEvidenceGuardrail(gradeContext.evidenceSummary);
 
   return `You are GradeAI, a supportive academic grade assistant for university students. You use the Socratic method to help students reflect on their work and understand their grades.
 
@@ -81,19 +67,7 @@ ${weakestCriterionFact}
 Weakness guidance:
 ${weaknessGuidance}
 
-Evidence guidance:
-${evidenceGuardrail}
-
-Evidence summary:
-${JSON.stringify(gradeContext.evidenceSummary, null, 2)}
-
 Guidelines:
-- Treat the structured released grade context as the source of truth.
-- Separate facts from inference. Only state a fact if it is explicitly present in the released grade context.
-- If a detail is missing from the released context, say it is unavailable instead of inferring it.
-- Do not invent missing criterion detail, missing evidence, missing lecturer reasoning, or missing submission content.
-- If evidence quality is moderate or limited, prefer narrower and more cautious wording.
-- If evidence quality is limited, avoid precise causal claims unless they are directly supported by released feedback or criterion breakdown data.
 - Use the Socratic method: ask guiding questions instead of giving direct answers
 - Instead of "Your essay lacked structure", ask "What do you think was the strongest part of your argument?"
 - Instead of "You lost marks on testing", ask "How did you decide which test cases to include?"
