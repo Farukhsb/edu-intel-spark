@@ -8,6 +8,7 @@ export interface ImprovementTask {
 }
 
 export type PlanTrend = "up" | "down" | "steady";
+export type GuidanceMode = "future" | "recovery";
 
 export interface WeakCriterionInsight {
   criterion: string;
@@ -20,6 +21,7 @@ export interface PlanModule {
   module: string;
   currentGrade: number;
   targetGrade: number;
+  guidanceMode: GuidanceMode;
   trend: PlanTrend;
   trendDelta: number;
   strengths: string[];
@@ -35,12 +37,17 @@ export interface Resource {
   heading: string;
   duration: string;
   estimatedLift: string;
+  guidanceMode: GuidanceMode;
+  guidanceLabel: string;
   module: string;
   criterion: string;
   priorityLabel: string;
   priorityScore: number;
   evidenceStrength: "strong" | "moderate" | "limited";
   evidenceBasis: string;
+  weakestCriterionSummary: string;
+  feedbackSignal: string;
+  conceptHint: string | null;
   issue: string;
   actionItems: string[];
   evidenceOfImprovement: string;
@@ -81,6 +88,11 @@ const normalizeFeedbackText = (value: string) =>
     .replace(/\[[^\]]+\]/g, "")
     .trim();
 
+const buildGuidanceMode = (score: number): GuidanceMode => (score < 40 ? "recovery" : "future");
+
+const buildGuidanceLabel = (mode: GuidanceMode) =>
+  mode === "recovery" ? "Recovery plan" : "Future improvement plan";
+
 export const normalizeCriterionLabel = (criterion: string) => {
   const trimmed = criterion.trim();
   if (/^criterion\s+\d+$/i.test(trimmed)) {
@@ -97,6 +109,94 @@ export const buildFocusHeading = (module: string, criterion: string) => {
     return `${moduleCode}: ${normalized}`;
   }
 
+  return normalized;
+};
+
+const buildModuleContext = (module: string) => {
+  const [moduleCode, ...titleParts] = module.split(" - ");
+  const title = titleParts.join(" - ").trim();
+
+  if (moduleCode && title) {
+    return {
+      assignmentRef: `${moduleCode} assignment`,
+      moduleRef: `${moduleCode} submission`,
+      title,
+    };
+  }
+
+  return {
+    assignmentRef: "this assignment",
+    moduleRef: "this submission",
+    title: module,
+  };
+};
+
+const CONCEPT_HINT_PATTERNS: Array<{ pattern: RegExp; formatter?: (match: RegExpMatchArray) => string }> = [
+  {
+    pattern: /\bdiscussion of ([A-Za-z][A-Za-z-]*(?: [A-Za-z][A-Za-z-]*){0,3})\b/i,
+    formatter: (match) => match[1],
+  },
+  {
+    pattern: /\bexplanation of ([A-Za-z][A-Za-z-]*(?: [A-Za-z][A-Za-z-]*){0,3})\b/i,
+    formatter: (match) => match[1],
+  },
+  {
+    pattern: /\b(BST [A-Za-z-]+(?: and [A-Za-z-]+){0,2} logic)\b/i,
+  },
+  { pattern: /\b(BST (?:deletion|insertion|traversal|implementation|correctness))\b/i },
+  { pattern: /\b(hash table (?:deletion|insertion|collision handling|lookup|complexity))\b/i },
+  { pattern: /\b(fairness risk|automated grading bias|AI bias in assessment|bias in assessment)\b/i },
+  { pattern: /\b(dynamic programming (?:state representation|recurrence|structure))\b/i },
+  { pattern: /\b(time complexity|space complexity|worst-case behaviour|average-case behaviour)\b/i },
+  { pattern: /\b(sorted traversal|operation outputs|test output|edge case)\b/i },
+  {
+    pattern: /\b([A-Za-z][A-Za-z-]*(?: [A-Za-z][A-Za-z-]*){0,2}) (?:is|are) not (?:shown|visible|demonstrated)\b/i,
+    formatter: (match) => match[1],
+  },
+];
+
+const normalizeConceptHint = (value: string) =>
+  value
+    .replace(/^(the|your)\s+/i, "")
+    .replace(/\s+\b(is|are|was|were)\b$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,;:!?]+$/g, "");
+
+const extractConceptHint = (feedback: string) => {
+  const normalizedFeedback = normalizeFeedbackText(feedback);
+
+  for (const { pattern, formatter } of CONCEPT_HINT_PATTERNS) {
+    const match = normalizedFeedback.match(pattern);
+    if (!match) continue;
+
+    const raw = formatter ? formatter(match) : match[1] ?? match[0];
+    const conceptHint = normalizeConceptHint(raw);
+    if (conceptHint.length >= 4 && conceptHint.length <= 60) {
+      return conceptHint;
+    }
+  }
+
+  return null;
+};
+
+const buildConceptVerb = (conceptLead: string) => {
+  if (conceptLead.includes(" and ")) {
+    return "are";
+  }
+
+  return "is";
+};
+
+const buildConceptPhrase = (conceptHint: string | null, fallback: string) =>
+  conceptHint ? `your ${conceptHint.toLowerCase()}` : fallback;
+
+const buildConceptObjectPhrase = (conceptHint: string | null, fallback: string) =>
+  conceptHint ? conceptHint.toLowerCase() : normalizeCriterionLabel(fallback).toLowerCase();
+
+const buildFeedbackSignal = (feedback: string | undefined) => {
+  const normalized = normalizeFeedbackText(feedback ?? "");
+  if (!normalized) return "No direct feedback snippet available.";
   return normalized;
 };
 
@@ -138,46 +238,113 @@ export const buildCriterionFeedbackMap = (
   return feedbackMap;
 };
 
-const buildIssue = (criterion: string, module: string) => {
+const buildIssue = (criterion: string, module: string, mode: GuidanceMode) => {
   const normalized = criterion.toLowerCase();
+  const timeframe =
+    mode === "recovery"
+      ? "To recover this submission, "
+      : "For future assignments, ";
 
   if (normalized.includes("complexity")) {
-    return "Your complexity explanation is still too general, especially when average-case and worst-case behaviour need to be separated clearly.";
+    return `${timeframe}your complexity explanation needs clearer separation between average-case and worst-case behaviour.`;
   }
 
   if (normalized.includes("test")) {
-    return "The submission does not give the marker enough visible test evidence to verify that the implementation is correct in practice.";
+    return `${timeframe}the marker still cannot see enough visible test evidence to verify that the implementation works in practice.`;
   }
 
   if (normalized.includes("evidence")) {
-    return "Your evidence supports the argument too weakly because the examples are not doing enough explicit analytical work.";
+    return `${timeframe}your evidence needs to do more analytical work so the support for each claim is explicit.`;
   }
 
   if (normalized.includes("analysis") || normalized.includes("comparison")) {
-    return "This section reads as descriptive rather than evaluative, so the marker cannot clearly see comparison, judgement, or critical weighting.";
+    return `${timeframe}this area still reads as descriptive rather than evaluative, so the marker cannot clearly see comparison, judgement, or critical weighting.`;
   }
 
   if (normalized.includes("dynamic programming")) {
-    return "The solution structure is not fully visible, so the marker cannot clearly follow how the recurrence and subproblems produce the final answer.";
+    return `${timeframe}the solution structure is not visible enough for the marker to follow how the recurrence and subproblems produce the final answer.`;
   }
 
   if (normalized.includes("report") || normalized.includes("quality") || normalized.includes("overall")) {
-    return `The overall submission quality in ${module} is being held back by missing visible evidence, explanation, or final polish.`;
+    return `${timeframe}the overall submission quality in ${module} is being held back by missing visible evidence, explanation, or final polish.`;
   }
 
-  return `${normalizeCriterionLabel(criterion)} is lower than your stronger areas because the intended evidence or reasoning is not yet visible enough to the marker.`;
+  return `${timeframe}${normalizeCriterionLabel(criterion)} is weaker than your stronger areas because the intended evidence or reasoning is not yet visible enough to the marker.`;
 };
 
-const buildFeedbackLedIssue = (criterion: string, feedback: string | undefined, module: string) => {
-  if (!feedback) return buildIssue(criterion, module);
+const buildIssueFromFeedback = (
+  criterion: string,
+  feedback: string,
+  module: string,
+  mode: GuidanceMode,
+) => {
+  const normalizedFeedback = normalizeFeedbackText(feedback).toLowerCase();
+  const normalizedCriterion = normalizeCriterionLabel(criterion);
+  const lowerCriterion = normalizedCriterion.toLowerCase();
+  const moduleContext = buildModuleContext(module);
+  const conceptHint = extractConceptHint(feedback);
+  const conceptLead = buildConceptPhrase(conceptHint, lowerCriterion);
+  const conceptVerb = buildConceptVerb(conceptLead);
 
-  const firstSentence = normalizeFeedbackText(feedback).split(/(?<=[.!?])\s+/)[0]?.trim();
-  return firstSentence || buildIssue(criterion, module);
+  if (
+    normalizedFeedback.includes("not shown") ||
+    normalizedFeedback.includes("not visible") ||
+    normalizedFeedback.includes("not demonstrated") ||
+    normalizedFeedback.includes("no visible test")
+  ) {
+    return `In your ${moduleContext.moduleRef}, ${conceptLead} ${conceptVerb} not visibly demonstrated, so the marker could not verify it clearly.`;
+  }
+
+  if (
+    normalizedFeedback.includes("too descriptive") ||
+    normalizedFeedback.includes("lacks evaluation") ||
+    normalizedFeedback.includes("not evaluative") ||
+    normalizedFeedback.includes("does not clearly evaluate")
+  ) {
+    return `In your ${moduleContext.assignmentRef}, ${conceptLead} describes concepts but does not evaluate them clearly enough for the marker to see a defended judgement.`;
+  }
+
+  if (
+    normalizedFeedback.includes("missing evidence") ||
+    normalizedFeedback.includes("no examples") ||
+    normalizedFeedback.includes("supports claims weakly") ||
+    normalizedFeedback.includes("textual support")
+  ) {
+    return `In your ${moduleContext.assignmentRef}, ${conceptLead} is not supported by explicit evidence, so the marker cannot clearly see how each claim is justified.`;
+  }
+
+  if (
+    normalizedFeedback.includes("simplified") ||
+    normalizedFeedback.includes("not precise") ||
+    normalizedFeedback.includes("too simple")
+  ) {
+    return `In your ${moduleContext.assignmentRef}, ${conceptLead} lacks precision, especially in the more exact technical or analytical details the marker expects to see.`;
+  }
+
+  if (mode === "recovery") {
+    return `In your ${moduleContext.moduleRef}, ${lowerCriterion} still needs a clearer fix against the rubric because the marker could not yet see the required reasoning or evidence.`;
+  }
+
+  return `In your ${moduleContext.assignmentRef}, ${lowerCriterion} is still weaker than your stronger areas because the marker could not clearly see the intended reasoning or evidence.`;
 };
 
-const buildActionItems = (criterion: string, feedback?: string) => {
+const buildFeedbackLedIssue = (criterion: string, feedback: string | undefined, module: string, mode: GuidanceMode) => {
+  if (!feedback) return buildIssue(criterion, module, mode);
+  return buildIssueFromFeedback(criterion, feedback, module, mode) || buildIssue(criterion, module, mode);
+};
+
+const buildActionItems = (
+  criterion: string,
+  feedback: string | undefined,
+  mode: GuidanceMode,
+  conceptHint: string | null,
+) => {
   const normalized = criterion.toLowerCase();
   const normalizedFeedback = (feedback ?? "").toLowerCase();
+  const futurePrefix = "For future assignments, ";
+  const recoveryPrefix = "For resubmission, ";
+  const prefix = mode === "recovery" ? recoveryPrefix : futurePrefix;
+  const conceptObject = buildConceptObjectPhrase(conceptHint, criterion);
 
   if (
     normalizedFeedback.includes("descriptive") ||
@@ -185,21 +352,22 @@ const buildActionItems = (criterion: string, feedback?: string) => {
     normalizedFeedback.includes("does not clearly evaluate")
   ) {
     return [
-      "compare at least two viewpoints rather than describing only one position",
-      "include one concrete example or case that shows the issue in practice",
-      "end the section with a clear judgement so your position is explicit",
+      `${prefix}rewrite ${conceptObject} so it compares at least two viewpoints rather than describing only one position`,
+      `${prefix}include one concrete example or case that shows the issue in practice`,
+      `${prefix}end the section with a clear judgement so your position is explicit`,
     ];
   }
 
   if (
     normalizedFeedback.includes("no visible test") ||
     normalizedFeedback.includes("visible testing") ||
-    normalizedFeedback.includes("output evidence")
+    normalizedFeedback.includes("output evidence") ||
+    normalizedFeedback.includes("test output")
   ) {
     return [
-      "add operation outputs or screenshots that show the program working",
-      "include at least one edge case alongside the normal path",
-      "show the final traversal, sorted output, or resulting state so correctness is visible",
+      `${prefix}add operation outputs or screenshots that show ${conceptObject} working`,
+      `${prefix}include at least one edge case alongside the normal path`,
+      `${prefix}show the final traversal, sorted output, or resulting state so correctness is visible`,
     ];
   }
 
@@ -209,85 +377,90 @@ const buildActionItems = (criterion: string, feedback?: string) => {
     normalizedFeedback.includes("textual support")
   ) {
     return [
-      "add 2 stronger quotes or examples",
-      "explain exactly what each quote proves rather than leaving it implicit",
-      "link each piece of evidence directly back to the claim it supports",
+      `${prefix}add 2 stronger quotes or examples that directly support ${conceptObject}`,
+      `${prefix}explain exactly what each quote proves rather than leaving it implicit`,
+      `${prefix}link each piece of evidence directly back to the claim it supports`,
     ];
   }
 
   if (normalized.includes("complexity")) {
     return [
-      "rewrite the time and space complexity for each major function",
-      "separate average-case from worst-case behaviour",
-      "justify each complexity claim against the actual data structure behaviour",
+      `${prefix}rewrite the time and space complexity for ${conceptObject}`,
+      `${prefix}separate average-case from worst-case behaviour`,
+      `${prefix}justify each complexity claim against the actual data structure behaviour`,
     ];
   }
 
   if (normalized.includes("test")) {
     return [
-      "add operation outputs",
-      "include at least one edge case",
-      "show the final traversal or end-state so correctness is visible",
+      `${prefix}add operation outputs that demonstrate ${conceptObject}`,
+      `${prefix}include at least one edge case`,
+      `${prefix}show the final traversal or end-state so correctness is visible`,
     ];
   }
 
   if (normalized.includes("evidence")) {
     return [
-      "add 2 stronger quotes or examples",
-      "explain exactly what each quote proves",
-      "link each piece of evidence directly back to the claim it supports",
+      `${prefix}add 2 stronger quotes or examples for ${conceptObject}`,
+      `${prefix}explain exactly what each quote proves`,
+      `${prefix}link each piece of evidence directly back to the claim it supports`,
     ];
   }
 
   if (normalized.includes("analysis") || normalized.includes("comparison")) {
     return [
-      "include two viewpoints or options being compared",
-      "use at least one academic source or supporting concept",
-      "finish with a clear judgement, not just description",
+      `${prefix}rewrite ${conceptObject} so it includes two viewpoints or options being compared`,
+      `${prefix}use at least one academic source or supporting concept`,
+      `${prefix}finish with a clear judgement, not just description`,
     ];
   }
 
   if (normalized.includes("dynamic programming")) {
     return [
-      "state the recurrence relation before coding",
-      "show one worked example of the subproblems combining",
-      "explain why the chosen state representation is correct",
+      `${prefix}state the recurrence relation for ${conceptObject} before coding`,
+      `${prefix}show one worked example of the subproblems combining`,
+      `${prefix}explain why the chosen state representation is correct`,
     ];
   }
 
   if (normalized.includes("report") || normalized.includes("quality") || normalized.includes("overall")) {
     return [
-      "use the rubric as a final checklist",
-      "make sure every required section includes visible evidence",
-      "end with a clear conclusion or judgement rather than stopping at description",
+      `${prefix}use the rubric as a final checklist`,
+      `${prefix}make sure every required section includes visible evidence`,
+      `${prefix}end with a clear conclusion or judgement rather than stopping at description`,
     ];
   }
 
   return [
-    `review the rubric wording for ${normalizeCriterionLabel(criterion)}`,
-    "rewrite one weaker section so the intended reasoning is explicit",
-    "add a visible example or explanation the marker can directly verify",
+    `${prefix}review the rubric wording for ${normalizeCriterionLabel(criterion)}`,
+    `${prefix}rewrite one weaker section so the intended reasoning is explicit`,
+    `${prefix}add a visible example or explanation the marker can directly verify`,
   ];
 };
 
-const buildEvidenceOfImprovement = (criterion: string, feedback?: string) => {
+const buildEvidenceOfImprovement = (criterion: string, feedback: string | undefined, mode: GuidanceMode) => {
   const normalized = criterion.toLowerCase();
   const normalizedFeedback = (feedback ?? "").toLowerCase();
+  const timeframe =
+    mode === "recovery"
+      ? "This will help the resubmission meet the rubric minimums more clearly."
+      : "This will strengthen the same skill on future assignments.";
 
   if (
     normalizedFeedback.includes("descriptive") ||
     normalizedFeedback.includes("not evaluative") ||
     normalizedFeedback.includes("does not clearly evaluate")
   ) {
-    return "The marker can clearly see evaluation rather than description and can identify your final position.";
+    return `The marker can clearly see evaluation rather than description and can identify your final position. ${timeframe}`;
   }
 
   if (
     normalizedFeedback.includes("no visible test") ||
     normalizedFeedback.includes("visible testing") ||
-    normalizedFeedback.includes("output evidence")
+    normalizedFeedback.includes("output evidence") ||
+    normalizedFeedback.includes("test output")
   ) {
-    return "The marker can verify correctness directly from visible outputs, edge-case evidence, and the final program state.";
+    return `The marker can verify correctness directly from visible outputs, edge-case evidence, and the final program state. ${timeframe}`;
   }
 
   if (
@@ -295,34 +468,80 @@ const buildEvidenceOfImprovement = (criterion: string, feedback?: string) => {
     normalizedFeedback.includes("evidence supports") ||
     normalizedFeedback.includes("textual support")
   ) {
-    return "Each claim is backed by explicit textual or source-based support rather than unsupported assertion.";
+    return `Each claim is backed by explicit textual or source-based support rather than unsupported assertion. ${timeframe}`;
   }
 
   if (normalized.includes("complexity")) {
-    return "Marker can clearly see that each complexity claim is justified and that the higher-risk cases have been evaluated properly.";
+    return `Marker can clearly see that each complexity claim is justified and that the higher-risk cases have been evaluated properly. ${timeframe}`;
   }
 
   if (normalized.includes("test")) {
-    return "Marker can verify correctness directly from visible outputs, an edge case, and the final state of the program.";
+    return `Marker can verify correctness directly from visible outputs, an edge case, and the final state of the program. ${timeframe}`;
   }
 
   if (normalized.includes("evidence")) {
-    return "Each claim is backed by explicit textual or source-based support, not just assertion.";
+    return `Each claim is backed by explicit textual or source-based support, not just assertion. ${timeframe}`;
   }
 
   if (normalized.includes("analysis") || normalized.includes("comparison")) {
-    return "Marker can clearly see comparison, evaluation, and a defended final judgement rather than description alone.";
+    return `Marker can clearly see comparison, evaluation, and a defended final judgement rather than description alone. ${timeframe}`;
   }
 
   if (normalized.includes("dynamic programming")) {
-    return "Marker can follow the recurrence, the worked example, and the logic connecting subproblems to the final answer.";
+    return `Marker can follow the recurrence, the worked example, and the logic connecting subproblems to the final answer. ${timeframe}`;
   }
 
   if (normalized.includes("report") || normalized.includes("quality") || normalized.includes("overall")) {
-    return "Marker can clearly see that every required section contains evidence, explanation, and a complete final response.";
+    return `Marker can clearly see that every required section contains evidence, explanation, and a complete final response. ${timeframe}`;
   }
 
-  return "Marker can directly see the missing reasoning or evidence that was previously only implied.";
+  return `Marker can directly see the missing reasoning or evidence that was previously only implied. ${timeframe}`;
+};
+
+const buildWeakestCriterionSummary = (criterion: WeakCriterionInsight) =>
+  `Weakest criterion: ${normalizeCriterionLabel(criterion.criterion)} (${(100 - criterion.average).toFixed(1).replace(/\.0$/, "")}% loss)`;
+
+const buildNextSubmissionFocus = (
+  criterion: string,
+  feedback: string | undefined,
+  mode: GuidanceMode,
+) => {
+  const normalizedFeedback = (feedback ?? "").toLowerCase();
+  const normalizedCriterion = normalizeCriterionLabel(criterion);
+
+  if (
+    normalizedFeedback.includes("descriptive") ||
+    normalizedFeedback.includes("not evaluative") ||
+    normalizedFeedback.includes("does not clearly evaluate")
+  ) {
+    return mode === "recovery"
+      ? `Recover ${normalizedCriterion.toLowerCase()} by turning description into evaluation with comparison, evidence, and a final judgement.`
+      : `Strengthen ${normalizedCriterion.toLowerCase()} next time by turning description into evaluation with comparison, evidence, and a final judgement.`;
+  }
+
+  if (
+    normalizedFeedback.includes("no visible test") ||
+    normalizedFeedback.includes("visible testing") ||
+    normalizedFeedback.includes("output evidence")
+  ) {
+    return mode === "recovery"
+      ? `Recover ${normalizedCriterion.toLowerCase()} by adding visible outputs, an edge case, and a final program state the marker can verify.`
+      : `Improve ${normalizedCriterion.toLowerCase()} next time by adding visible outputs, an edge case, and a final program state the marker can verify.`;
+  }
+
+  if (
+    normalizedFeedback.includes("supports claims weakly") ||
+    normalizedFeedback.includes("evidence supports") ||
+    normalizedFeedback.includes("textual support")
+  ) {
+    return mode === "recovery"
+      ? `Recover ${normalizedCriterion.toLowerCase()} by adding stronger evidence and explaining exactly what each example proves.`
+      : `Improve ${normalizedCriterion.toLowerCase()} next time by adding stronger evidence and explaining exactly what each example proves.`;
+  }
+
+  return mode === "recovery"
+    ? `Recover ${normalizedCriterion.toLowerCase()} by making the intended reasoning and evidence more explicit against the rubric.`
+    : `Improve ${normalizedCriterion.toLowerCase()} next time by making the intended reasoning and evidence more explicit against the rubric.`;
 };
 
 const buildEstimatedLift = (average: number) => {
@@ -381,6 +600,8 @@ export const buildResourceRecommendations = (modules: PlanModule[]): Resource[] 
       module.weakCriteria.slice(0, 2).map((criterion, index) => {
         const estimatedLift = buildEstimatedLift(criterion.average);
         const evidenceStrength = buildEvidenceStrength(criterion);
+        const guidanceMode = module.guidanceMode ?? buildGuidanceMode(module.currentGrade);
+        const conceptHint = criterion.feedback ? extractConceptHint(criterion.feedback) : null;
         const priorityScore =
           (100 - criterion.average) +
           (module.trend === "down" ? 10 : module.trend === "steady" ? 5 : 2) +
@@ -391,11 +612,16 @@ export const buildResourceRecommendations = (modules: PlanModule[]): Resource[] 
           heading: buildFocusHeading(module.module, criterion.criterion),
           duration: buildDuration(criterion),
           estimatedLift,
+          guidanceMode,
+          guidanceLabel: buildGuidanceLabel(guidanceMode),
           module: module.module,
           criterion: normalizeCriterionLabel(criterion.criterion),
-          issue: buildFeedbackLedIssue(criterion.criterion, criterion.feedback, module.module),
-          actionItems: buildActionItems(criterion.criterion, criterion.feedback),
-          evidenceOfImprovement: buildEvidenceOfImprovement(criterion.criterion, criterion.feedback),
+          weakestCriterionSummary: buildWeakestCriterionSummary(criterion),
+          feedbackSignal: buildFeedbackSignal(criterion.feedback),
+          conceptHint,
+          issue: buildFeedbackLedIssue(criterion.criterion, criterion.feedback, module.module, guidanceMode),
+          actionItems: buildActionItems(criterion.criterion, criterion.feedback, guidanceMode, conceptHint),
+          evidenceOfImprovement: buildEvidenceOfImprovement(criterion.criterion, criterion.feedback, guidanceMode),
           priorityLabel: buildPriorityLabel(criterion.average, module.trend),
           priorityScore,
           evidenceStrength,
@@ -496,6 +722,7 @@ export const buildPlanModules = ({
   return Object.entries(moduleBuckets)
     .map(([module, bucket]) => {
       const currentGrade = Math.round(bucket.scores.reduce((sum, score) => sum + score, 0) / bucket.scores.length);
+      const guidanceMode = buildGuidanceMode(currentGrade);
       const firstScore = bucket.scores[0] ?? currentGrade;
       const lastScore = bucket.scores[bucket.scores.length - 1] ?? currentGrade;
       const trendDelta = lastScore - firstScore;
@@ -531,7 +758,9 @@ export const buildPlanModules = ({
 
       const nextSubmissionFocus =
         weaknesses.length > 0
-          ? weaknesses.map((weakness) => `Improve ${weakness.toLowerCase()} before the next submission.`)
+          ? weakCriteria.slice(0, 2).map((criterion) =>
+              buildNextSubmissionFocus(criterion.criterion, criterion.feedback, guidanceMode),
+            )
           : ["Maintain your strongest criteria and keep your explanation clear."];
 
       const tasks = (
@@ -564,6 +793,7 @@ export const buildPlanModules = ({
         module,
         currentGrade,
         targetGrade: Math.max(currentGrade + 8, 70),
+        guidanceMode,
         trend,
         trendDelta,
         strengths,
