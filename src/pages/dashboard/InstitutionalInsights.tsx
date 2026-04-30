@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowRight, Award, Building2, Download, Loader2, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Award, Building2, Download, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { log } from "@/lib/logger";
+import {
+  DashboardDemoBanner,
+  DashboardEmptyState,
+  DashboardLoadingState,
+} from "@/components/dashboard/PageStates";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code";
 const SUBMISSION_FIELDS = "id, assignment_id";
@@ -40,13 +45,6 @@ const EMPTY_ACCREDITATION: AccreditationMetric[] = [
   { metric: "Average Score", value: 0, target: 60, status: "below" },
   { metric: "Assessment Completion Rate", value: 0, target: 90, status: "below" },
 ];
-
-const EmptyState = ({ title, description }: { title: string; description: string }) => (
-  <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-    <p className="font-medium text-foreground">{title}</p>
-    <p className="mt-1">{description}</p>
-  </div>
-);
 
 const getMetricStatus = (value: number, target: number): AccreditationMetric["status"] => {
   if (value >= target) return "met";
@@ -211,11 +209,7 @@ const InstitutionalInsights = () => {
   }, [isDemo, user?.id]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardLoadingState />;
   }
 
   const weakestDepartment = [...departmentStats].sort((left, right) => left.passRate - right.passRate)[0];
@@ -258,20 +252,14 @@ const InstitutionalInsights = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && (
-        <Card className="border-warning bg-warning/5">
-          <CardContent className="flex items-center gap-2 p-3">
-            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo institutional data</span>
-          </CardContent>
-        </Card>
+        <DashboardDemoBanner label="Viewing demo institutional data" />
       )}
 
       {!isDemo && !hasRealData && (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            This page auto-populates after you create assignments, upload submissions, and complete grading.
-          </CardContent>
-        </Card>
+        <DashboardEmptyState
+          title="No institutional data yet"
+          description="This page auto-populates after you create assignments, upload submissions, and complete grading."
+        />
       )}
 
       <div className="flex items-center justify-end">
@@ -374,8 +362,8 @@ const InstitutionalInsights = () => {
           <CardDescription>Cross-department comparison from your live marking data</CardDescription>
         </CardHeader>
         <CardContent>
-          {departmentStats.length === 0 && !isDemo ? (
-            <EmptyState
+            {departmentStats.length === 0 && !isDemo ? (
+            <DashboardEmptyState
               title="No department performance data yet"
               description="Module-level comparisons appear here once graded submissions exist in the system."
             />
@@ -415,7 +403,7 @@ const InstitutionalInsights = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {lowPerforming.length === 0 && !isDemo ? (
-              <EmptyState
+              <DashboardEmptyState
                 title="No low-performing assessments yet"
                 description="This view fills in after submissions have been graded and score patterns can be compared."
               />
@@ -446,7 +434,7 @@ const InstitutionalInsights = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {!isDemo && !hasRealData ? (
-              <EmptyState
+              <DashboardEmptyState
                 title="No accreditation metrics yet"
                 description="Compliance indicators appear here once assignments, submissions, and grading data start building up."
               />

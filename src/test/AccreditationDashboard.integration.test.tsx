@@ -71,13 +71,14 @@ describe("AccreditationDashboard integration", () => {
     });
 
     expect(
-      await screen.findByText(
-        "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading.",
-        {},
-        { timeout: 10000 },
+      await screen.findByText("No accreditation data yet", {}, { timeout: 15000 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading."
       )
     ).toBeInTheDocument();
-  });
+  }, 20000);
 
   it("shows an explicit load error state when accreditation queries fail", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

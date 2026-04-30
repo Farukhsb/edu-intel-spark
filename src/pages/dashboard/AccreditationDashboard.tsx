@@ -5,13 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Award, CheckCircle, AlertTriangle, XCircle, Clock, FileText,
-  Download, BarChart3, Shield, Users, Loader2, BookOpen,
+  Download, BarChart3, Shield, Users, BookOpen,
   ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { log } from "@/lib/logger";
+import {
+  DashboardDemoBanner,
+  DashboardEmptyState,
+  DashboardLoadingState,
+} from "@/components/dashboard/PageStates";
 import {
   deriveAccreditationMetrics,
   deriveProgrammeReports,
@@ -299,28 +304,24 @@ const AccreditationDashboard = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  if (loading) return <DashboardLoadingState />;
 
   try {
     return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && (
-        <Card className="border-warning bg-warning/5">
-          <CardContent className="flex items-center gap-2 p-3">
-            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo accreditation data</span>
-          </CardContent>
-        </Card>
+        <DashboardDemoBanner label="Viewing demo accreditation data" />
       )}
 
       {!isDemo && qaaMetrics.length === 0 && (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            {loadError
+        <DashboardEmptyState
+          title={loadError ? "Accreditation data unavailable" : "No accreditation data yet"}
+          description={
+            loadError
               ? "Accreditation metrics could not be loaded right now. Try again later."
-              : "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading."}
-          </CardContent>
-        </Card>
+              : "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading."
+          }
+        />
       )}
 
       {/* Summary Cards */}
@@ -677,7 +678,7 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  if (loading) return <DashboardLoadingState />;
 
   return (
     <Card>
@@ -725,7 +726,10 @@ const ProgrammeReports = ({ isDemo }: { isDemo: boolean }) => {
             </div>
           ))}
           {programmes.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-8">No programme data available yet. Create assignments with module codes to generate reports.</p>
+            <DashboardEmptyState
+              title="No programme data available yet"
+              description="Create assignments with module codes to generate reports."
+            />
           )}
         </div>
       </CardContent>

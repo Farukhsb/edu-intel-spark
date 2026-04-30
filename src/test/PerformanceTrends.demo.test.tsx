@@ -29,6 +29,20 @@ vi.mock("@/hooks/use-toast", () => ({
   }),
 }));
 
+vi.mock("recharts", () => ({
+  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  LineChart: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  BarChart: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  CartesianGrid: () => <div />,
+  XAxis: () => <div />,
+  YAxis: () => <div />,
+  Tooltip: () => <div />,
+  Legend: () => <div />,
+  Line: () => <div />,
+  Bar: () => <div />,
+  Cell: () => <div />,
+}));
+
 describe("PerformanceTrends demo mode", () => {
   beforeEach(() => {
     mocks.authState.isDemo = true;

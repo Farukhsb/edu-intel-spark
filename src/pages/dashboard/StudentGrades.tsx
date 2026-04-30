@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { safeToLocaleDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
   DEMO_STUDENT_ASSIGNMENT_GRADES,
@@ -24,30 +25,6 @@ interface StudentGrade {
   submittedAt: string;
   breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
   fileUrl: string | null;
-}
-
-interface AssignmentRow {
-  id: string;
-  title: string;
-  module_code: string | null;
-  max_score: number | null;
-}
-
-interface AssignmentMetadataRow {
-  submission_id: string;
-  assignment_id: string;
-  title: string | null;
-  module_code: string | null;
-  max_score: number | null;
-}
-
-interface GradeRow {
-  submission_id: string;
-  final_score: number | null;
-  ai_score: number | null;
-  final_feedback: string | null;
-  ai_feedback: string | null;
-  ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
 }
 
 const DEMO_GRADES: StudentGrade[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
@@ -96,59 +73,24 @@ const StudentGrades = () => {
 
     const fetchGrades = async () => {
       try {
-        const [subRes, assignmentMetaRes] = await Promise.all([
-          supabase.from("submissions").select("*").eq("student_id", user.id),
-          supabase.rpc("get_student_grade_assignment_metadata"),
-        ]);
-
-        const allSubs = (subRes.data || []).sort(
-          (left, right) => new Date(right.submitted_at).getTime() - new Date(left.submitted_at).getTime(),
-        );
-
-        const subIds = allSubs.map((submission) => submission.id);
-        const gradeRes =
-          subIds.length > 0
-            ? await supabase.from("grades").select("*").in("submission_id", subIds)
-            : { data: [] };
-
-        const gradeData = gradeRes.data || [];
-
-        const assignmentMap: Record<string, AssignmentRow> = {};
-        if (assignmentMetaRes.error) {
-          log.warn("Student grade assignment metadata lookup failed", {
-            userId: user.id,
-          });
-        } else {
-          ((assignmentMetaRes.data || []) as AssignmentMetadataRow[]).forEach((row) => {
-            assignmentMap[row.assignment_id] = {
-              id: row.assignment_id,
-              title: row.title ?? "Assignment title unavailable",
-              module_code: row.module_code,
-              max_score: row.max_score,
-            };
-          });
+        const projectionRes = await fetchStudentGradeProjection(user.id);
+        if (projectionRes.error) {
+          throw projectionRes.error;
         }
 
-        const gradeMap: Record<string, GradeRow> = {};
-        gradeData.forEach((grade) => {
-          gradeMap[grade.submission_id] = grade;
-        });
-
-        const studentGrades: StudentGrade[] = allSubs.map((submission) => {
-          const assignment = assignmentMap[submission.assignment_id];
-          const grade = gradeMap[submission.id];
-          const isReleased = submission.status === "released";
+        const studentGrades: StudentGrade[] = projectionRes.data.map((row) => {
+          const isReleased = row.submission_status === "released";
           return {
-            id: submission.id,
-            assignmentTitle: assignment?.title || "Assignment title unavailable",
-            moduleCode: assignment?.module_code || null,
-            score: isReleased ? (grade?.final_score ?? grade?.ai_score ?? null) : null,
-            maxScore: assignment?.max_score || 100,
-            feedback: isReleased ? (grade?.final_feedback ?? grade?.ai_feedback ?? null) : null,
-            status: submission.status,
-            submittedAt: submission.submitted_at,
-            breakdown: isReleased ? (grade?.ai_breakdown || null) : null,
-            fileUrl: submission.file_url || null,
+            id: row.submission_id,
+            assignmentTitle: row.assignment_title || "Assignment title unavailable",
+            moduleCode: row.module_code || null,
+            score: isReleased ? (row.final_score ?? row.ai_score ?? null) : null,
+            maxScore: row.max_score || 100,
+            feedback: isReleased ? (row.final_feedback ?? row.ai_feedback ?? null) : null,
+            status: row.submission_status,
+            submittedAt: row.submitted_at,
+            breakdown: isReleased ? (row.ai_breakdown || null) : null,
+            fileUrl: row.file_url || null,
           };
         });
 

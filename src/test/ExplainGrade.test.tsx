@@ -91,6 +91,23 @@ type AssignmentMetadataRow = {
   title: string | null;
 };
 
+type ProjectionRow = {
+  submission_id: string;
+  assignment_id: string;
+  assignment_title: string | null;
+  module_code: string | null;
+  max_score: number | null;
+  file_name: string | null;
+  file_url: string;
+  submission_status: string;
+  submitted_at: string;
+  final_score: number | null;
+  ai_score: number | null;
+  final_feedback: string | null;
+  ai_feedback: string | null;
+  ai_breakdown: GradeRow["ai_breakdown"];
+};
+
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -156,7 +173,7 @@ const setupSupabase = ({
   assignments = defaultAssignments,
   assignmentMetadata = defaultAssignmentMetadata,
   assignmentMetadataError = null,
-  submissionsPromise,
+  projectionPromise,
   submissionsError,
 }: {
   submissions?: SubmissionRow[];
@@ -164,58 +181,53 @@ const setupSupabase = ({
   assignments?: AssignmentRow[];
   assignmentMetadata?: AssignmentMetadataRow[];
   assignmentMetadataError?: { message: string } | null;
-  submissionsPromise?: Promise<{ data: SubmissionRow[] }>;
+  projectionPromise?: Promise<{ data: ProjectionRow[]; error?: null }>;
   submissionsError?: Error;
 } = {}) => {
   mocks.supabase.auth.getSession.mockResolvedValue({
     data: { session: { access_token: "test-token" } },
   });
-  mocks.supabase.rpc.mockResolvedValue({
-    data: assignmentMetadata,
-    error: assignmentMetadataError,
+
+  const projection: ProjectionRow[] = submissions.map((submission) => {
+    const grade = grades.find((entry) => entry.submission_id === submission.id);
+    const metadata = assignmentMetadata.find((entry) => entry.submission_id === submission.id);
+    const assignment = assignments.find((entry) => entry.id === submission.assignment_id);
+
+    return {
+      submission_id: submission.id,
+      assignment_id: submission.assignment_id ?? "missing-assignment",
+      assignment_title: metadata?.title ?? assignment?.title ?? null,
+      module_code: metadata?.module_code ?? assignment?.module_code ?? null,
+      max_score: metadata?.max_score ?? 100,
+      file_name: submission.file_name ?? null,
+      file_url: "",
+      submission_status: submission.status ?? "submitted",
+      submitted_at: "2026-04-20T10:00:00.000Z",
+      final_score: grade?.final_score ?? null,
+      ai_score: grade?.ai_score ?? null,
+      final_feedback: null,
+      ai_feedback: null,
+      ai_breakdown: grade?.ai_breakdown ?? null,
+    };
   });
 
-  mocks.supabase.from.mockImplementation((table: string) => ({
-    select: vi.fn(() => {
-      if (table === "submissions") {
-        if (submissionsError) {
-          return Promise.reject(submissionsError);
-        }
+  mocks.supabase.rpc.mockImplementation((fn: string) => {
+    if (fn !== "get_student_submission_grade_projection") {
+      throw new Error(`Unexpected rpc: ${fn}`);
+    }
+    if (submissionsError) {
+      return Promise.reject(submissionsError);
+    }
+    if (projectionPromise) {
+      return projectionPromise;
+    }
+    return Promise.resolve({
+      data: projection,
+      error: assignmentMetadataError,
+    });
+  });
 
-        if (submissionsPromise) {
-          return submissionsPromise;
-        }
-
-        return Promise.resolve({ data: submissions });
-      }
-
-      if (table === "grades") {
-        return {
-          in: vi.fn((column: string, values: string[]) =>
-            Promise.resolve({
-              data: grades.filter((grade) =>
-                column === "submission_id" ? values.includes(grade.submission_id) : true
-              ),
-            })
-          ),
-        };
-      }
-
-      if (table === "assignments") {
-        return {
-          in: vi.fn((column: string, values: string[]) =>
-            Promise.resolve({
-              data: assignments.filter((assignment) =>
-                column === "id" ? values.includes(assignment.id) : true
-              ),
-            })
-          ),
-        };
-      }
-
-      return Promise.resolve({ data: [] });
-    }),
-  }));
+  mocks.supabase.from.mockReset();
 };
 
 const renderExplainGrade = () =>
@@ -276,8 +288,8 @@ describe("ExplainGrade", () => {
   });
 
   it("shows a loading state while explanation data is pending", () => {
-    const deferred = createDeferred<{ data: SubmissionRow[] }>();
-    setupSupabase({ submissionsPromise: deferred.promise });
+    const deferred = createDeferred<{ data: ProjectionRow[]; error?: null }>();
+    setupSupabase({ projectionPromise: deferred.promise });
 
     renderExplainGrade();
 
@@ -370,6 +382,7 @@ describe("ExplainGrade", () => {
     ).toMatchObject({
       label: "fallback-report.pdf — 58%",
       assessment: "fallback-report.pdf",
+      secondaryLabel: null,
     });
 
     expect(
@@ -447,8 +460,8 @@ describe("ExplainGrade", () => {
 
     expect(await screen.findByText("Data Structures Assignment")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment — 67%");
-    expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx · Released 29 Apr 2026");
-    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_grade_assignment_metadata");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx");
+    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
     expect(screen.queryByText(/abdullahi faruk/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Other Student/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Hidden Student/i)).not.toBeInTheDocument();
@@ -465,6 +478,7 @@ describe("ExplainGrade", () => {
           status: "released",
         },
       ],
+      assignments: [],
       assignmentMetadata: [],
     });
 
@@ -485,6 +499,7 @@ describe("ExplainGrade", () => {
           status: "released",
         },
       ],
+      assignments: [],
       assignmentMetadata: [],
     });
 
