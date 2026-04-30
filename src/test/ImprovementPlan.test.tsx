@@ -91,6 +91,9 @@ describe("ImprovementPlan explanation validation", () => {
     renderWithRouter(<ImprovementPlan />);
 
     expect(screen.getByRole("heading", { name: "Best Next Moves" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Focused on the weakest repeated criteria so you know which skills to strengthen for future assignments/i),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
     expect(mocks.supabase.functions.invoke).not.toHaveBeenCalled();
     expect(mocks.toast.error).not.toHaveBeenCalled();
@@ -104,13 +107,14 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.getByText("Priority 1 - CS205: Dynamic Programming Structure")).toBeInTheDocument();
     expect(screen.getByText("Needs attention")).toBeInTheDocument();
     expect(screen.getAllByText(/(Good|Strong|High) recovery opportunity \| (short|12 min|15 min|20 min) review/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Future improvement plan").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
         /Based on (direct criterion feedback from graded work|repeated low criterion scores with some supporting feedback|limited evidence from current graded work, so this guidance is intentionally broad)\./,
       ).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText(/The solution structure is not fully visible/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/state the recurrence relation before coding/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/For future assignments, the solution structure is not visible enough/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/For future assignments, state the recurrence relation for dynamic programming structure before coding/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Marker can follow the recurrence/i)).toBeInTheDocument();
     expect(mocks.supabase.functions.invoke).not.toHaveBeenCalled();
     expect(mocks.toast.success).not.toHaveBeenCalled();
@@ -155,13 +159,13 @@ describe("ImprovementPlan explanation validation", () => {
               criterion: "Analysis",
               score: 6,
               max_score: 10,
-              feedback: "Your discussion of AI in assessment describes concepts but does not clearly evaluate their impact.",
+              feedback: "Your discussion of AI fairness risk describes concepts but does not clearly evaluate their impact.",
             },
             {
               criterion: "Testing",
               score: 5,
               max_score: 10,
-              feedback: "No visible test evidence.",
+              feedback: "BST deletion and traversal logic are not demonstrated with test output.",
             },
           ],
         },
@@ -191,9 +195,15 @@ describe("ImprovementPlan explanation validation", () => {
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
     expect(screen.getByText("Priority 1 - CS101: Testing")).toBeInTheDocument();
     expect(screen.getByText("Strong recovery opportunity | 15 min review")).toBeInTheDocument();
-    expect(screen.getByText("No visible test evidence.")).toBeInTheDocument();
+    expect(screen.getByText("Weakest criterion: Testing (50% loss)")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Feedback:\s*BST deletion and traversal logic are not demonstrated with test output\./i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("In your CS101 submission, your bst deletion and traversal logic are not visibly demonstrated, so the marker could not verify it clearly."),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Based on direct criterion feedback from graded work.").length).toBeGreaterThan(0);
-    expect(screen.getByText(/add operation outputs or screenshots that show the program working/i)).toBeInTheDocument();
+    expect(screen.getByText(/For future assignments, add operation outputs or screenshots that show bst deletion and traversal logic working/i)).toBeInTheDocument();
     expect(screen.getByText(/The marker can verify correctness directly from visible outputs/i)).toBeInTheDocument();
     expect(screen.getAllByText("CS101 - Algorithms Coursework").length).toBeGreaterThan(0);
   });
@@ -256,7 +266,7 @@ describe("ImprovementPlan explanation validation", () => {
                         criterion: "Testing",
                         score: 5,
                         max_score: 10,
-                        feedback: "No visible test evidence.",
+                        feedback: "BST deletion and traversal logic are not demonstrated with test output.",
                       },
                     ],
                   },
@@ -294,6 +304,66 @@ describe("ImprovementPlan explanation validation", () => {
     expect(await screen.findByRole("heading", { name: "CS101 - Algorithms Coursework" })).toBeInTheDocument();
     expect(screen.getByText("Priority 1 - CS101: Testing")).toBeInTheDocument();
     expect(mocks.toast.error).not.toHaveBeenCalled();
+  });
+
+  it("shows recovery guidance language for failed work", async () => {
+    mocks.authState.isDemo = false;
+    mocks.supabase.rpc.mockResolvedValue({
+      data: [
+        {
+          submission_id: "submission-1",
+          assignment_id: "assignment-1",
+          assignment_title: "AI in Assessment Essay",
+          module_code: "CS301",
+          max_score: 100,
+          file_name: "essay.pdf",
+          file_url: "",
+          submission_status: "released",
+          submitted_at: "2026-04-20T10:00:00.000Z",
+          final_score: 30,
+          ai_score: 30,
+          final_feedback: null,
+          ai_feedback: null,
+          ai_breakdown: [
+            {
+              criterion: "Analysis",
+              score: 3,
+              max_score: 10,
+              feedback: "Your discussion is descriptive and does not clearly evaluate the fairness risks.",
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+
+    mocks.supabase.from.mockImplementation((table: string) => {
+      if (table === "improvement_plan_progress") {
+        return {
+          select: () => ({
+            eq: () =>
+              Promise.resolve({
+                data: [],
+              }),
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    renderWithRouter(<ImprovementPlan />);
+
+    expect(await screen.findByRole("heading", { name: "CS301 - AI in Assessment Essay" })).toBeInTheDocument();
+    expect(screen.getByText(/Focused on the most important fixes to recover weaker submissions/i)).toBeInTheDocument();
+    expect(screen.getByText("Recovery plan")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Feedback:\s*Your discussion is descriptive and does not clearly evaluate the fairness risks\./i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/For resubmission, rewrite (analysis|ai fairness risk) so it compares at least two viewpoints/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/What to fix to recover this submission/i)).toBeInTheDocument();
   });
 
   it("collapses a fully completed real module plan by default", async () => {
