@@ -40,6 +40,38 @@ The hosted project needed a small amount of migration-history repair before the 
 
 This matters because the current database story is not just "local migrations exist." It is "local and hosted were reconciled to the same intended state."
 
+## Current migration ledger caveat
+
+The linked Supabase project's migration ledger still contains two historical
+short-form versions:
+
+- `20260412`
+- `20260413`
+
+The local repo also contains matching historical migration files with the same
+short-form prefixes:
+
+- `20260412_fix_multi_tenant_rls.sql`
+- `20260413_create_student_interventions.sql`
+
+This is not currently a missing-file problem. The issue is that Supabase CLI
+expects migration versions to parse cleanly as 14-digit timestamps in parts of
+its reconciliation flow. When it encounters these short-form versions, it fails
+to match local and remote history cleanly even though both sides contain the
+same logical migrations.
+
+As a result:
+
+- `supabase migration list --linked` shows `20260412` and `20260413` as split local-only and remote-only entries
+- `supabase db push --dry-run` remains blocked on "Remote migration versions not found in local migrations directory"
+- the new security migrations added on `2026-04-30` are locally validated, but should not be pushed remotely until the historical migration ledger is safely reconciled
+
+Until there is a tested reconciliation plan:
+
+- do not rename the historical short-form migration files
+- do not mark those migrations reverted
+- do not manually alter the remote schema to work around the ledger mismatch
+
 ## Current known-good migration baseline
 
 The current baseline is considered good when all local migrations apply cleanly through:
