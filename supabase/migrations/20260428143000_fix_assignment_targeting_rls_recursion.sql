@@ -42,7 +42,7 @@ as $$
         or exists (
           select 1 from public.assignment_cohorts ac
           where ac.assignment_id = _assignment_id
-            and ac.cohort_id = p.cohort_id
+            and ac.cohort_id::text = p.cohort_id
         )
       )
       and (

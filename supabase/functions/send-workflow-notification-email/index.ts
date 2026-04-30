@@ -16,6 +16,7 @@ import {
   getAppBaseUrl,
   sendEmail,
 } from "../_shared/email.ts";
+import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 const RequestSchema = z.discriminatedUnion("category", [
   z.object({
@@ -67,11 +68,125 @@ type SubmissionRow = {
   submitted_at: string;
 };
 
+type WorkflowNotificationLogInsert = {
+  dedupe_key: string;
+  notification_type: "assignment-published" | "submission-received" | "grade-released";
+  assignment_id: string | null;
+  submission_id: string | null;
+  recipient_email: string;
+  triggered_by: string;
+};
+
 const jsonSuccess = (corsHeaders: Record<string, string>, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+const normalizeEmail = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
+const buildNotificationDedupeKey = (input: {
+  category: "assignment-published" | "submission-received" | "grade-released";
+  assignmentId: string;
+  submissionId?: string | null;
+  recipientEmail: string;
+}) => {
+  const recipientEmail = normalizeEmail(input.recipientEmail);
+
+  if (input.category === "assignment-published") {
+    return `${input.category}:${input.assignmentId}:${recipientEmail}`;
+  }
+
+  return `${input.category}:${input.submissionId}:${recipientEmail}`;
+};
+
+const reserveWorkflowNotification = async (
+  admin: ReturnType<typeof createAdminClient>,
+  payload: WorkflowNotificationLogInsert,
+) => {
+  const { data, error } = await admin
+    .from("workflow_notification_log")
+    .insert({
+      ...payload,
+      delivery_status: "pending",
+      sent_at: null,
+      last_error: null,
+    })
+    .select("id")
+    .single();
+
+  if (error?.code === "23505") {
+    return null;
+  }
+
+  if (error || !data?.id) {
+    throw error ?? new Error("Failed to reserve workflow notification");
+  }
+
+  return data.id as string;
+};
+
+const markWorkflowNotificationSent = async (
+  admin: ReturnType<typeof createAdminClient>,
+  notificationId: string,
+) => {
+  const { error } = await admin
+    .from("workflow_notification_log")
+    .update({
+      delivery_status: "sent",
+      sent_at: new Date().toISOString(),
+      last_error: null,
+    })
+    .eq("id", notificationId);
+
+  if (error) throw error;
+};
+
+const markWorkflowNotificationFailed = async (
+  admin: ReturnType<typeof createAdminClient>,
+  notificationId: string,
+  errorMessage: string,
+) => {
+  const { error } = await admin
+    .from("workflow_notification_log")
+    .update({
+      delivery_status: "failed",
+      last_error: errorMessage.slice(0, 1000),
+    })
+    .eq("id", notificationId);
+
+  if (error) throw error;
+};
+
+const sendWorkflowEmailWithDedupe = async (
+  admin: ReturnType<typeof createAdminClient>,
+  payload: WorkflowNotificationLogInsert,
+  email: { subject: string; text: string; html: string },
+) => {
+  const notificationId = await reserveWorkflowNotification(admin, payload);
+
+  if (!notificationId) {
+    return { sent: false, duplicate: true };
+  }
+
+  try {
+    await sendEmail({
+      to: payload.recipient_email,
+      subject: email.subject,
+      text: email.text,
+      html: email.html,
+    });
+    await markWorkflowNotificationSent(admin, notificationId);
+    return { sent: true, duplicate: false };
+  } catch (error) {
+    await markWorkflowNotificationFailed(
+      admin,
+      notificationId,
+      error instanceof Error ? error.message : "Unknown email error",
+    );
+    throw error;
+  }
+};
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -188,7 +303,7 @@ serve(async (req) => {
       const sentEmails = new Set<string>();
 
       for (const student of (studentsRes.data || []) as ProfileRow[]) {
-        const recipientEmail = student.email?.trim().toLowerCase();
+        const recipientEmail = normalizeEmail(student.email);
         if (!recipientEmail || sentEmails.has(recipientEmail)) continue;
 
         sentEmails.add(recipientEmail);
@@ -198,13 +313,21 @@ serve(async (req) => {
           dueDate: assignment.due_date,
           assignmentUrl,
         });
-        await sendEmail({
-          to: recipientEmail,
-          subject: email.subject,
-          text: email.text,
-          html: email.html,
-        });
-        sentCount++;
+        const delivery = await sendWorkflowEmailWithDedupe(admin, {
+          dedupe_key: buildNotificationDedupeKey({
+            category: "assignment-published",
+            assignmentId: assignment.id,
+            recipientEmail,
+          }),
+          notification_type: "assignment-published",
+          assignment_id: assignment.id,
+          submission_id: null,
+          recipient_email: recipientEmail,
+          triggered_by: user.id,
+        }, email);
+        if (!delivery.duplicate) {
+          sentCount++;
+        }
       }
 
       return jsonSuccess(corsHeaders, { success: true, sentCount });
@@ -224,7 +347,7 @@ serve(async (req) => {
 
       const submission = submissionRes.data;
       const isSubmittingStudent =
-        submission.student_id === user.id || submission.student_email?.toLowerCase() === user.email?.toLowerCase();
+        submission.student_id === user.id || normalizeEmail(submission.student_email) === normalizeEmail(user.email);
 
       if (!isSubmittingStudent) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
@@ -251,12 +374,24 @@ serve(async (req) => {
         reviewUrl: assignmentUrl,
       });
 
-      await sendEmail({
-        to: lecturerRes.data.email,
-        subject: email.subject,
-        text: email.text,
-        html: email.html,
-      });
+      const recipientEmail = normalizeEmail(lecturerRes.data.email);
+      const delivery = await sendWorkflowEmailWithDedupe(admin, {
+        dedupe_key: buildNotificationDedupeKey({
+          category: "submission-received",
+          assignmentId: assignment.id,
+          submissionId: submission.id,
+          recipientEmail,
+        }),
+        notification_type: "submission-received",
+        assignment_id: assignment.id,
+        submission_id: submission.id,
+        recipient_email: recipientEmail,
+        triggered_by: user.id,
+      }, email);
+
+      if (delivery.duplicate) {
+        return jsonSuccess(corsHeaders, { success: true, skipped: true, reason: "duplicate_notification" });
+      }
 
       return jsonSuccess(corsHeaders, { success: true, sentCount: 1 });
     }
@@ -280,7 +415,7 @@ serve(async (req) => {
     }
 
     const submission = submissionRes.data;
-    const recipientEmail = submission.student_email?.trim().toLowerCase();
+    const recipientEmail = normalizeEmail(submission.student_email);
 
     if (!recipientEmail) {
       return jsonSuccess(corsHeaders, { success: true, skipped: true, reason: "recipient_missing" });
@@ -292,12 +427,23 @@ serve(async (req) => {
       assignmentUrl,
     });
 
-    await sendEmail({
-      to: recipientEmail,
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
-    });
+    const delivery = await sendWorkflowEmailWithDedupe(admin, {
+      dedupe_key: buildNotificationDedupeKey({
+        category: "grade-released",
+        assignmentId: assignment.id,
+        submissionId: submission.id,
+        recipientEmail,
+      }),
+      notification_type: "grade-released",
+      assignment_id: assignment.id,
+      submission_id: submission.id,
+      recipient_email: recipientEmail,
+      triggered_by: user.id,
+    }, email);
+
+    if (delivery.duplicate) {
+      return jsonSuccess(corsHeaders, { success: true, skipped: true, reason: "duplicate_notification" });
+    }
 
     return jsonSuccess(corsHeaders, { success: true, sentCount: 1 });
   } catch (error) {
