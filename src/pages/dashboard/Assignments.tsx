@@ -17,11 +17,16 @@ import {
   sendWorkflowNotificationEmail,
 } from "@/lib/communications";
 import {
-  canReleaseStatus,
-  isGradedWorkflowStatus,
-  isReviewQueueStatus,
-  isStudentGradeVisible,
-} from "@/lib/assessmentWorkflow";
+  buildAssignmentPublishedNotificationRows,
+  filterAssignments,
+  getAssignmentOverviewStats,
+  normalizeAssignment,
+  sortAssignmentsForView,
+  type AssignmentCatalogItem,
+  type AssignmentSubmissionStats,
+  type StudentNotificationProfile,
+} from "@/lib/assignmentCatalog";
+import { log } from "@/lib/logger";
 import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
 import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
 import { DEMO_ASSIGNMENTS, DEMO_STUDENT_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
@@ -133,109 +138,6 @@ const Assignments = () => {
     setSelectedDepartments(assignment.target_departments ?? []);
     setDialogOpen(true);
   };
-
-  const fetchAssignments = async () => {
-    if (isDemo) {
-      const demoAssignments = role === "student" ? DEMO_STUDENT_ASSIGNMENTS : DEMO_ASSIGNMENTS;
-      setAssignments((demoAssignments ?? []).map(normalizeAssignment));
-      setSubmissionStats({});
-      setLoading(false);
-      return;
-    }
-    if (!user) return;
-
-    let query = supabase.from("assignments").select("*").order("created_at", { ascending: false });
-
-    if (role !== "student") {
-      query = query.eq("lecturer_id", user.id);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      log.error("Assignments query failed", error, {
-        role,
-        userId: user.id,
-      });
-      toast.error("Failed to load assignments");
-      setLoading(false);
-      return;
-    }
-
-    const assignmentIds = (data || []).map((assignment) => assignment.id);
-    const { data: assignmentCohorts } =
-      role === "lecturer" && assignmentIds.length > 0
-        ? await supabase
-            .from("assignment_cohorts")
-            .select("assignment_id, cohort_id")
-            .in("assignment_id", assignmentIds)
-        : { data: [] };
-    const { data: assignmentDepartments } =
-      role === "lecturer" && assignmentIds.length > 0
-        ? await supabase
-            .from("assignment_departments")
-            .select("assignment_id, department_id")
-            .in("assignment_id", assignmentIds)
-        : { data: [] };
-
-    const cohortMap = new Map<string, string[]>();
-    for (const row of assignmentCohorts || []) {
-      const existing = cohortMap.get(row.assignment_id) ?? [];
-      existing.push(row.cohort_id);
-      cohortMap.set(row.assignment_id, existing);
-    }
-    const departmentMap = new Map<string, string[]>();
-    for (const row of assignmentDepartments || []) {
-      const existing = departmentMap.get(row.assignment_id) ?? [];
-      existing.push(row.department_id);
-      departmentMap.set(row.assignment_id, existing);
-    }
-
-    const mapped: Assignment[] = (data || [])
-      .map((a) =>
-        normalizeAssignment({
-          id: a.id,
-          title: a.title,
-          description: a.description,
-          module_code: a.module_code,
-          lecturer_id: a.lecturer_id,
-          max_score: a.max_score,
-          due_date: a.due_date,
-          status: a.status,
-          created_at: a.created_at,
-          rubric: a.rubric as unknown as RubricCriterion[] | null,
-          cohorts: cohortMap.get(a.id) ?? [],
-          departments: departmentMap.get(a.id) ?? [],
-          target_cohorts: cohortMap.get(a.id) ?? [],
-          target_departments: departmentMap.get(a.id) ?? [],
-        }),
-      )
-      .filter((assignment) => (role === "student" ? isAssignmentVisibleToStudent(assignment) : true));
-
-    setAssignments(mapped);
-
-    if (role === "lecturer" && mapped.length > 0) {
-      const { data: subs } = await supabase.from("submissions").select("id, assignment_id, status");
-      if (subs) {
-        const statsMap: Record<string, { total: number; graded: number; approved: number; released: number; needsReview: number }> = {};
-        for (const assignment of mapped) {
-          const relatedSubs = subs.filter(s => s.assignment_id === assignment.id);
-          statsMap[assignment.id] = {
-            total: relatedSubs.length,
-            graded: relatedSubs.filter(s => isGradedWorkflowStatus(s.status)).length,
-            approved: relatedSubs.filter(s => canReleaseStatus(s.status) || isStudentGradeVisible(s.status)).length,
-            released: relatedSubs.filter(s => isStudentGradeVisible(s.status)).length,
-            needsReview: relatedSubs.filter(s => isReviewQueueStatus(s.status)).length,
-          };
-        }
-        setSubmissionStats(statsMap);
-      }
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchAssignments();
-  }, [role, user, isDemo]);
 
   useEffect(() => {
     const nextStatus = searchParams.get("status");

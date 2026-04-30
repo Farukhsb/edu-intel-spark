@@ -47,8 +47,9 @@ import {
   isStudentGradeVisible,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
-import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
-import { safeParseEdgeAIGradeResponse, safeParseGradeBreakdown, safeParseIntegrityBatchResponse } from "@/lib/schemas/aiResponses";
+import { getStudentSubmissionAvailability } from "@/lib/assignmentVisibility";
+import { safeParseEdgeAIGradeResponse, safeParseIntegrityBatchResponse } from "@/lib/schemas/aiResponses";
+import { type WorkflowRubricCriterion } from "@/types/academic";
 import {
   getDemoAssignmentSetById,
 } from "@/pages/dashboard/demoAssignments";
@@ -126,223 +127,26 @@ const AssignmentDetail = () => {
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const demoAssignmentSet = isDemo && id ? getDemoAssignmentSetById(id) : null;
 
-  useEffect(() => {
-    if (!id || (!user && !isDemo)) return;
-
-    const fetchAssignment = async () => {
-      setLoading(true);
-
-      if (isDemo) {
-        const demoAssignment =
-          role === "student"
-            ? DEMO_STUDENT_ASSIGNMENTS.find((assignmentRecord) => assignmentRecord.id === id) ?? null
-            : getDemoAssignmentById(id);
-        if (demoAssignment) {
-          setAssignment({
-            id: demoAssignment.id,
-            title: demoAssignment.title,
-            description: demoAssignment.description,
-            module_code: demoAssignment.module_code,
-            max_score: demoAssignment.max_score,
-            due_date: demoAssignment.due_date,
-            status: demoAssignment.status,
-            lecturer_id: demoAssignment.lecturer_id,
-            rubric: toWorkflowRubric(demoAssignment.rubric ?? []),
-          });
-        } else {
-          setAssignment(null);
-          setSubmissions([]);
-          setGrades({});
-        }
-        setPlagiarismFlags(DEMO_ASSIGNMENT_INTEGRITY_FLAGS[id] ?? []);
-        setPlagiarismSummary(DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES[id] ?? "");
-        setLoading(false);
-        return;
-      }
-
-      let query = supabase
-        .from("assignments")
-        .select("*")
-        .eq("id", id);
-
-      if (role === "lecturer") {
-        query = query.eq("lecturer_id", user.id);
-      }
-
-      const { data } = await query.maybeSingle();
-
-      if (data && role === "student" && !isAssignmentVisibleToStudent(data)) {
-        setAssignment(null);
-        setSubmissions([]);
-        setGrades({});
-      } else if (data) {
-        setAssignment({
-          id: data.id,
-          title: data.title,
-          description: data.description,
-          module_code: data.module_code,
-          max_score: data.max_score,
-          due_date: data.due_date,
-          status: data.status,
-          lecturer_id: data.lecturer_id,
-          rubric: toWorkflowRubric(data.rubric),
-        });
-      } else {
-        setAssignment(null);
-        setSubmissions([]);
-        setGrades({});
-      }
-      setPlagiarismFlags([]);
-      setPlagiarismSummary("");
-
-      setLoading(false);
-    };
-    void fetchAssignment();
-  }, [id, isDemo, role, user]);
-
-  const loadGrades = async (subs: AssignmentDetailSubmission[]) => {
-    if (subs.length === 0) {
-      setGrades({});
-      return;
-    }
-    const { data } = await supabase
-      .from("grades")
-      .select("*")
-      .in(
-        "submission_id",
-        subs.map((s) => s.id)
-      );
-    if (data) {
-      const gradeMap: Record<string, Grade> = {};
-      for (const g of data) {
-        gradeMap[g.submission_id] = {
-          id: g.id,
-          submission_id: g.submission_id,
-          ai_score: g.ai_score,
-          ai_feedback: g.ai_feedback,
-          ai_breakdown: toAssignmentDetailBreakdown(g.ai_breakdown),
-          assignment_type: g.assignment_type,
-          grading_confidence: g.grading_confidence,
-          grading_metadata: (g.grading_metadata as GradingMetadata | null) ?? null,
-          lecturer_score: g.lecturer_score,
-          lecturer_feedback: g.lecturer_feedback,
-          final_score: g.final_score,
-          final_feedback: g.final_feedback,
-        };
-      }
-      setGrades(gradeMap);
-    }
-  };
-
-  const loadIntegrityReviews = async (subs: AssignmentDetailSubmission[]) => {
-    if (subs.length === 0 || !user) {
-      setIntegrityReviews({});
-      return;
-    }
-
-    const { data } = await supabase
-      .from("academic_integrity_reviews")
-      .select("*")
-      .eq("lecturer_id", user.id)
-      .in(
-        "submission_id",
-        subs.map((submission) => submission.id)
-      );
-
-    const reviewMap: Record<string, IntegrityReview> = {};
-    for (const review of data || []) {
-      reviewMap[review.submission_id] = review;
-    }
-    setIntegrityReviews(reviewMap);
-  };
-
-  const loadModerationCases = async (subs: AssignmentDetailSubmission[]) => {
-    if (subs.length === 0) {
-      setModerationCases({});
-      return;
-    }
-
-    const { data } = await supabase
-      .from("moderation_cases")
-      .select("*")
-      .in(
-        "submission_id",
-        subs.map((submission) => submission.id)
-      );
-
-    const caseMap: Record<string, ModerationCase> = {};
-    for (const moderationCase of data || []) {
-      caseMap[moderationCase.submission_id] = moderationCase;
-    }
-    setModerationCases(caseMap);
-  };
-
-  const loadSubmissions = async () => {
-    if (!id) return;
-    if (isDemo) {
-      const demoSubmissions =
-        role === "student"
-          ? DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS[id] ?? []
-          : DEMO_ASSIGNMENT_SUBMISSIONS[id] ?? [];
-      const gradeSource =
-        role === "student" ? DEMO_STUDENT_ASSIGNMENT_GRADES : DEMO_ASSIGNMENT_GRADES;
-      const demoGrades = Object.fromEntries(
-        demoSubmissions
-          .map((submission) => {
-            const grade = gradeSource[submission.id];
-            if (!grade) return null;
-
-            return [
-              submission.id,
-              {
-                id: grade.id,
-                submission_id: grade.submission_id,
-                ai_score: grade.ai_score,
-                ai_feedback: grade.ai_feedback,
-                ai_breakdown: toAssignmentDetailBreakdown(grade.ai_breakdown),
-                assignment_type: grade.assignment_type,
-                grading_confidence: grade.grading_confidence,
-                grading_metadata: grade.grading_metadata,
-                lecturer_score: grade.lecturer_score,
-                lecturer_feedback: grade.lecturer_feedback,
-                final_score: grade.final_score,
-                final_feedback: grade.final_feedback,
-              } satisfies Grade,
-            ] as const;
-          })
-          .filter((entry): entry is readonly [string, Grade] => entry !== null),
-      );
-
-      setSubmissions(demoSubmissions);
-      setGrades(demoGrades);
-      setIntegrityReviews({});
-      setModerationCases({});
-      setPlagiarismFlags(role === "student" ? [] : DEMO_ASSIGNMENT_INTEGRITY_FLAGS[id] ?? []);
-      setPlagiarismSummary(role === "student" ? "" : DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES[id] ?? "");
-      return;
-    }
-    const { data } = await supabase
-      .from("submissions")
-      .select("*")
-      .eq("assignment_id", id)
-      .order("submitted_at", { ascending: false });
-    if (data) {
-      const subs: AssignmentDetailSubmission[] = data.map((d) => ({
-        id: d.id,
-        assignment_id: d.assignment_id,
-        student_name: d.student_name,
-        student_email: d.student_email,
-        file_name: d.file_name,
-        file_type: d.file_type,
-        file_url: d.file_url,
-        status: d.status as SubmissionStatus,
-        submitted_at: d.submitted_at,
-        student_id: d.student_id,
-      }));
-      setSubmissions(subs);
-      await Promise.all([loadGrades(subs), loadIntegrityReviews(subs), loadModerationCases(subs)]);
-    }
-  };
+  const {
+    assignment,
+    submissions,
+    grades,
+    integrityReviews,
+    moderationCases,
+    loading,
+    plagiarismFlags,
+    plagiarismSummary,
+    reloadSubmissions,
+    setModerationCases,
+    setPlagiarismFlags,
+    setPlagiarismSummary,
+  } = useAssignmentDetailData({
+    id,
+    isDemo,
+    role,
+    userId: user?.id,
+    hasUser: Boolean(user),
+  });
 
   const persistWorkflowNotification = async (
     message: DraftCommunicationMessage,
