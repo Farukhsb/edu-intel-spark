@@ -27,13 +27,13 @@ describe("improvement plan domain helpers", () => {
               score: 6,
               max_score: 10,
               feedback:
-                "Your discussion of AI fairness risk describes concepts but does not clearly evaluate their impact.",
+                "Your discussion of AI in assessment describes concepts but does not clearly evaluate their impact.",
             },
             {
               criterion: "Testing",
               score: 5,
               max_score: 10,
-              feedback: "BST deletion and traversal logic are not demonstrated with test output.",
+              feedback: "No visible test evidence.",
             },
           ],
         },
@@ -54,13 +54,12 @@ describe("improvement plan domain helpers", () => {
       module: "CS101 - Algorithms Coursework",
       currentGrade: 68,
       targetGrade: 76,
-      guidanceMode: "future",
       weaknesses: ["Testing", "Analysis"],
     });
     expect(plan[0].weakCriteria[0]).toMatchObject({
       criterion: "Testing",
       average: 50,
-      feedback: "BST deletion and traversal logic are not demonstrated with test output.",
+      feedback: "No visible test evidence.",
     });
   });
 
@@ -84,13 +83,13 @@ describe("improvement plan domain helpers", () => {
               score: 6,
               max_score: 10,
               feedback:
-                "Your discussion of AI fairness risk describes concepts but does not clearly evaluate their impact.",
+                "Your discussion of AI in assessment describes concepts but does not clearly evaluate their impact.",
             },
             {
               criterion: "Testing",
               score: 5,
               max_score: 10,
-              feedback: "BST deletion and traversal logic are not demonstrated with test output.",
+              feedback: "No visible test evidence.",
             },
           ],
         },
@@ -114,21 +113,12 @@ describe("improvement plan domain helpers", () => {
     expect(resources[0]).toMatchObject({
       heading: "CS101: Testing",
       estimatedLift: "Strong recovery opportunity",
-      guidanceMode: "future",
-      guidanceLabel: "Future improvement plan",
       priorityLabel: "High impact",
       evidenceBasis: "Based on direct criterion feedback from graded work.",
       duration: "15 min review",
-      weakestCriterionSummary: "Weakest criterion: Testing (50% loss)",
-      feedbackSignal: "BST deletion and traversal logic are not demonstrated with test output.",
-      conceptHint: "BST deletion and traversal logic",
-      issue:
-        "In your CS101 submission, your bst deletion and traversal logic are not visibly demonstrated, so the marker could not verify it clearly.",
+      issue: "No visible test evidence.",
     });
-    expect(resources[0].actionItems[0]).toBe(
-      "For future assignments, add operation outputs or screenshots that show bst deletion and traversal logic working",
-    );
-    expect(plan[0].nextSubmissionFocus[0]).toMatch(/Improve testing next time/i);
+    expect(resources[0].actionItems[0]).toMatch(/operation outputs|screenshots/i);
     expect(summary).toEqual({
       total: 2,
       completed: 1,
@@ -162,66 +152,9 @@ describe("improvement plan domain helpers", () => {
     expect(resources[0]).toMatchObject({
       heading: "CS101: Rubric Criterion 1",
       estimatedLift: "Good recovery opportunity",
-      guidanceMode: "future",
       evidenceStrength: "limited",
       evidenceBasis: "Based on limited evidence from current graded work, so this guidance is intentionally broad.",
       duration: "short review",
     });
-  });
-
-  it("switches to recovery guidance for failed work", () => {
-    const plan = buildPlanModules({
-      submissions: [
-        {
-          id: "submission-1",
-          assignment_id: "assignment-1",
-          submitted_at: "2026-04-20T10:00:00.000Z",
-        },
-      ],
-      grades: [
-        {
-          submission_id: "submission-1",
-          final_score: 30,
-          ai_score: 30,
-          ai_breakdown: [
-            {
-              criterion: "Analysis",
-              score: 3,
-              max_score: 10,
-              feedback: "Your discussion of AI fairness risk is descriptive and does not clearly evaluate the fairness risks.",
-            },
-          ],
-        },
-      ],
-      assignmentMap: {
-        "assignment-1": {
-          id: "assignment-1",
-          title: "AI in Assessment Essay",
-          module_code: "CS301",
-          max_score: 100,
-        },
-      },
-      taskOverrides: {},
-    });
-
-    const resources = buildResourceRecommendations(plan);
-
-    expect(plan[0]).toMatchObject({
-      currentGrade: 30,
-      guidanceMode: "recovery",
-    });
-    expect(plan[0].nextSubmissionFocus[0]).toMatch(/Recover analysis/i);
-    expect(resources[0]).toMatchObject({
-      guidanceMode: "recovery",
-      guidanceLabel: "Recovery plan",
-      weakestCriterionSummary: "Weakest criterion: Analysis (70% loss)",
-      feedbackSignal: "Your discussion of AI fairness risk is descriptive and does not clearly evaluate the fairness risks.",
-      conceptHint: "AI fairness risk",
-    });
-    expect(resources[0].issue).toBe(
-      "In your CS301 assignment, your ai fairness risk describes concepts but does not evaluate them clearly enough for the marker to see a defended judgement.",
-    );
-    expect(resources[0].actionItems[0]).toMatch(/For resubmission, rewrite ai fairness risk so it compares at least two viewpoints/i);
-    expect(resources[0].evidenceOfImprovement).toMatch(/resubmission meet the rubric minimums/i);
   });
 });

@@ -141,8 +141,7 @@ export const ImprovementPlanModuleCard = ({
             <CardTitle className="text-base">{module.module}</CardTitle>
             <CardDescription>
               Current {module.currentGrade}% | Target {module.targetGrade}% |{" "}
-              {module.trend === "up" ? "improving" : module.trend === "down" ? "declining" : "steady"} trend |{" "}
-              {module.guidanceMode === "recovery" ? "recovery guidance" : "future improvement guidance"}
+              {module.trend === "up" ? "improving" : module.trend === "down" ? "declining" : "steady"} trend
             </CardDescription>
           </div>
           <div className="flex items-center gap-3">
@@ -203,11 +202,7 @@ export const ImprovementPlanModuleCard = ({
             </div>
 
             <div className="rounded-lg border p-4">
-              <p className="text-sm font-medium">
-                {module.guidanceMode === "recovery"
-                  ? "What to fix to recover this submission"
-                  : "What to improve before your next submission"}
-              </p>
+              <p className="text-sm font-medium">What to improve before your next submission</p>
               <div className="mt-3 space-y-2">
                 {module.nextSubmissionFocus.map((focus) => (
                   <div key={focus} className="flex items-start gap-2 text-sm">
@@ -307,72 +302,54 @@ export const ImprovementPlanModuleCard = ({
   );
 };
 
-export const ImprovementPlanResourcesSection = ({ resources }: { resources: Resource[] }) => {
-  const hasRecoveryGuidance = resources.some((resource) => resource.guidanceMode === "recovery");
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-primary" />
-          <CardTitle className="text-base">Best Next Moves</CardTitle>
-        </div>
-        <CardDescription>
-          {hasRecoveryGuidance
-            ? "Focused on the most important fixes to recover weaker submissions and meet the assignment requirements."
-            : "Focused on the weakest repeated criteria so you know which skills to strengthen for future assignments."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {resources.map((resource) => (
-          <div key={`${resource.heading}-${resource.module}`} className="rounded-lg border p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p className="text-sm font-semibold">
-                  Priority {resource.priority} - {resource.heading}
-                </p>
-                <p className="mt-1 text-xs font-medium text-muted-foreground">{resource.priorityLabel}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {resource.estimatedLift} | {resource.duration}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{resource.evidenceBasis}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">{resource.guidanceLabel}</Badge>
-                <Badge variant="outline">{resource.module}</Badge>
+export const ImprovementPlanResourcesSection = ({ resources }: { resources: Resource[] }) => (
+  <Card>
+    <CardHeader>
+      <div className="flex items-center gap-2">
+        <BookOpen className="h-5 w-5 text-primary" />
+        <CardTitle className="text-base">Best Next Moves</CardTitle>
+      </div>
+      <CardDescription>Prioritised from your weakest repeated criteria so you know what to fix first before the next submission</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      {resources.map((resource) => (
+        <div key={`${resource.heading}-${resource.module}`} className="rounded-lg border p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-semibold">
+                Priority {resource.priority} - {resource.heading}
+              </p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">{resource.priorityLabel}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {resource.estimatedLift} | {resource.duration}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{resource.evidenceBasis}</p>
+            </div>
+            <Badge variant="outline">{resource.module}</Badge>
+          </div>
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Issue</p>
+              <p className="mt-1 text-sm">{resource.issue}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Action</p>
+              <div className="mt-2 space-y-2">
+                {resource.actionItems.map((item) => (
+                  <div key={item} className="flex items-start gap-2 text-sm">
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <span>{item}</span>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="mt-4 space-y-4">
-              <div className="rounded-md border bg-muted/20 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">This plan is based on</p>
-                <div className="mt-2 space-y-1 text-sm">
-                  <p>{resource.weakestCriterionSummary}</p>
-                  <p className="text-muted-foreground">Feedback: {resource.feedbackSignal}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Issue</p>
-                <p className="mt-1 text-sm">{resource.issue}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Action</p>
-                <div className="mt-2 space-y-2">
-                  {resource.actionItems.map((item) => (
-                    <div key={item} className="flex items-start gap-2 text-sm">
-                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Evidence of improvement</p>
-                <p className="mt-1 text-sm">{resource.evidenceOfImprovement}</p>
-              </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Evidence of improvement</p>
+              <p className="mt-1 text-sm">{resource.evidenceOfImprovement}</p>
             </div>
           </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-};
+        </div>
+      ))}
+    </CardContent>
+  </Card>
+);

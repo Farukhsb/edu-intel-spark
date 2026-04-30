@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -11,6 +12,7 @@ import {
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import { classifyAssignmentType, type AssignmentType } from "../_shared/text-analysis.ts";
+import { sanitizeVisibleAiFeedback } from "../_shared/visible-feedback.ts";
 
 const CONFIDENCE_THRESHOLD = 0.7;
 const REGRADING_DRIFT_THRESHOLD_RATIO = 0.08;
@@ -1390,6 +1392,8 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const methodError = requirePostMethod(req, corsHeaders);
+  if (methodError) return methodError;
 
   try {
     const { user } = await requireLecturer(req);
@@ -1635,10 +1639,11 @@ serve(async (req) => {
         if (cacheHit) {
           const cachedBreakdown = normalizeBreakdown(existingGrade.ai_breakdown, normalizedRubric);
           const cachedConfidence = clampConfidence(existingGrade.grading_confidence ?? existingMetadata.confidence_score);
+          const cachedFeedback = sanitizeVisibleAiFeedback(existingGrade.ai_feedback);
           const cachedResult = {
             submissionId: sub.id,
             score: Number(existingGrade.ai_score),
-            feedback: existingGrade.ai_feedback || "Using saved AI marking result.",
+            feedback: cachedFeedback || "Using saved AI marking result.",
             breakdown: cachedBreakdown.breakdown,
             assignmentType: classifyAssignmentType({
               title: assignment.title,
@@ -1774,10 +1779,11 @@ serve(async (req) => {
           const clusterMismatch =
             (matchingExistingFingerprintCluster?.gradeCount || 0) > 1 &&
             (matchingExistingFingerprintCluster?.scoreSpread || 0) > 0;
+          const reusedFeedback = sanitizeVisibleAiFeedback(matchingExistingFingerprintGrade.ai_feedback);
           results.push({
             submissionId: sub.id,
             score: Number(matchingExistingFingerprintGrade.ai_score),
-            feedback: `${matchingExistingFingerprintGrade.ai_feedback || "Reused existing AI grade for identical content."}\n\nIdentical blinded content matched a previously graded submission in this assignment. Reused the canonical cluster grade for consistency.${clusterMismatch ? ` Historical duplicate grades for this same content varied by ${matchingExistingFingerprintCluster?.scoreSpread} marks, so the canonical cluster grade was applied and lecturer review is recommended.` : ""}`,
+            feedback: `${reusedFeedback || "Reused existing AI grade for identical content."}\n\nIdentical blinded content matched a previously graded submission in this assignment. Reused the canonical cluster grade for consistency.${clusterMismatch ? ` Historical duplicate grades for this same content varied by ${matchingExistingFingerprintCluster?.scoreSpread} marks, so the canonical cluster grade was applied and lecturer review is recommended.` : ""}`,
             breakdown: reusedBreakdown.breakdown,
             assignmentType: classifyAssignmentType({
               title: assignment.title,
@@ -2003,7 +2009,7 @@ Return corrected JSON only.`;
             }
             modelScore = previousAiScore;
             modelFeedback =
-              existingGrade?.ai_feedback?.trim() ||
+              sanitizeVisibleAiFeedback(existingGrade?.ai_feedback?.trim()) ||
               "Previous AI grade preserved because repeated regrading produced materially different scores for the same submission.";
             gradingConfidence = Math.min(clampConfidence(existingGrade?.grading_confidence), 0.65);
             regradeVariancePreservedPrior = true;
@@ -2205,7 +2211,7 @@ Return corrected JSON only.`;
           regradeVariancePreservedPrior ||
           isNearGradeBoundary(normalized.total, assignment.max_score);
 
-        const feedbackParts = [modelFeedback];
+        const feedbackParts = [sanitizeVisibleAiFeedback(modelFeedback)];
         if (scoreAdjusted) {
           feedbackParts.push("Final score was recalculated to match the exact sum of criterion scores.");
         }
@@ -2215,16 +2221,10 @@ Return corrected JSON only.`;
         if (stabilityNotes.length > 0) {
           feedbackParts.push(stabilityNotes[stabilityNotes.length - 1]);
         }
-        if (recalibrationApplied) {
-          feedbackParts.push(
-            fairnessRecalibrationApplied
-              ? "Initial AI score was inconsistent with UK marking bands. A fairness recalibration was applied and lecturer review is recommended."
-              : "Initial AI score was inconsistent with feedback. A fairness adjustment was applied.",
-          );
-        }
         if (requiresLecturerReview && reviewReasons.length > 0) {
           feedbackParts.push(`Lecturer review recommended: ${Array.from(new Set(reviewReasons)).join("; ")}`);
         }
+        const visibleFeedback = sanitizeVisibleAiFeedback(feedbackParts.filter(Boolean).join("\n\n"));
 
         const gradingHistory =
           existingGrade?.ai_score != null || forceRegenerate || existingHash !== gradingInputHash
@@ -2247,7 +2247,7 @@ Return corrected JSON only.`;
         results.push({
           submissionId: sub.id,
           score: normalized.total,
-          feedback: feedbackParts.join("\n\n"),
+          feedback: visibleFeedback,
           breakdown: normalized.breakdown,
           assignmentType,
           gradingConfidence,
@@ -2288,7 +2288,7 @@ Return corrected JSON only.`;
         });
         generatedResultsByFingerprint.set(gradingInputHash, {
           score: normalized.total,
-          feedback: feedbackParts.join("\n\n"),
+          feedback: visibleFeedback,
           breakdown: normalized.breakdown,
           assignmentType,
           gradingConfidence,

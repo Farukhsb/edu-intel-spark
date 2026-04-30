@@ -21,6 +21,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import {
+  DashboardDemoBanner,
+  DashboardLoadingState,
+} from "@/components/dashboard/PageStates";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   type IntegrityDecision,
@@ -385,16 +389,13 @@ const AcademicIntegrity = () => {
         : "No resolved integrity cases yet.";
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardLoadingState />;
   }
 
   try {
     return (
     <div className="space-y-6 animate-fade-in">
+      {isDemo && <DashboardDemoBanner label="Viewing demo academic integrity data" />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {overview.map((stat) => (
           <Card key={stat.label}>

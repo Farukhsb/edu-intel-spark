@@ -177,7 +177,10 @@ describe("AdminDashboard", () => {
 
   it("limits role changes to student and lecturer, requires confirmation, and loads audit history", async () => {
     render(
-      <MemoryRouter initialEntries={["/dashboard?view=users"]}>
+      <MemoryRouter
+        initialEntries={["/dashboard?view=users"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <AdminDashboard />
       </MemoryRouter>,
     );
