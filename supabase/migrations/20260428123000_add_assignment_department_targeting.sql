@@ -64,7 +64,7 @@ using (
         or exists (
           select 1 from public.assignment_cohorts ac
           where ac.assignment_id = public.assignments.id
-            and ac.cohort_id = p.cohort_id
+            and ac.cohort_id::text = p.cohort_id
         )
       )
       and (
@@ -95,7 +95,7 @@ with check (
     from public.assignments a
     join public.profiles p
       on p.id = auth.uid()
-    where a.id = submissions.assignment_id
+    where a.id::text = submissions.assignment_id::text
       and a.status = 'published'
       and (
         exists (
@@ -115,7 +115,7 @@ with check (
         or exists (
           select 1 from public.assignment_cohorts ac
           where ac.assignment_id = a.id
-            and ac.cohort_id = p.cohort_id
+            and ac.cohort_id::text = p.cohort_id
         )
       )
       and (

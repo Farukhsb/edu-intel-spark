@@ -77,3 +77,41 @@ procedure.
 The new security migrations created on `2026-04-30` are locally validated, but
 remote push remains blocked until the historical short-form migration history is
 reconciled safely.
+
+## Baseline experiment result
+
+The remote-only baseline experiment was stopped intentionally before any push.
+
+What was tested on an isolated branch:
+
+- the local-only `2026-04-30` migrations were moved out of active
+  `supabase/migrations`
+- the short-form anomaly files were kept archived and removed from the active
+  migration folder for the experiment
+- `npx supabase db pull` was run without any `db push`
+
+Result:
+
+- `db pull` still failed
+- after removing the local-only `2026-04-30` migrations from the active folder,
+  the remaining blocker was still the remote short-form ledger entries
+  `20260412` and `20260413`
+
+Conclusion:
+
+- the active local security migrations are not the root blocker for baseline
+  generation
+- the short-form records stored in `supabase_migrations.schema_migrations` are
+  sufficient on their own to block `supabase db pull`
+
+Do not continue from this point with:
+
+- repair commands
+- file renames
+- deletion of historical migration files
+- manual edits to the migration ledger
+
+Recommended next action:
+
+- escalate to Supabase support or an upstream CLI issue with the debug evidence
+- or reproduce the issue on a disposable project before touching production

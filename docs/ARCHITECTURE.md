@@ -1,166 +1,271 @@
 # Architecture
 
-This document describes how the system works today based on the current React app, Supabase schema and policies, Edge Functions, and deployment configuration in this repository. It is meant to be practical rather than aspirational.
+This document describes the system as it exists now. It reflects the current React frontend, Supabase backend, Edge Functions, RLS model, and the recent architecture-hardening work in this repository.
 
 ## System Overview
 
-The application is a Vite/React single-page app that uses Supabase for most backend concerns:
+GradeAI is a Vite/React single-page application backed by Supabase.
 
-- authentication through Supabase Auth
-- relational data in Postgres
-- file storage for uploaded submissions
-- Edge Functions for AI grading, integrity checks, and related assistant features
+Core platform responsibilities are split like this:
 
-At a high level, the request flow looks like this:
+- React handles dashboard UI, routing, local interaction state, and feature composition
+- Supabase Auth handles authentication and session management
+- Postgres stores assignments, submissions, grades, moderation data, communications, and analytics-supporting records
+- Supabase Storage stores uploaded student files
+- Supabase Edge Functions handle AI-heavy or privileged backend workflows such as grading, explain-grade, integrity review, and bulk operations
+
+At a high level:
 
 1. The browser loads the React app.
-2. The app initializes Supabase, restores the auth session, and loads the user profile.
-3. Most reads and writes go directly from the browser to Supabase tables, with row-level security acting as the main authorization boundary.
-4. Heavy or privileged backend work is pushed into Supabase Edge Functions. Those functions call external AI services and then return structured results to the frontend.
-5. The frontend writes workflow state changes back into Postgres and updates the UI from those results.
+2. `AuthContext` restores the session and loads the active profile.
+3. Most table reads and writes go directly from the frontend to Supabase under RLS.
+4. Sensitive or compute-heavy operations go through Edge Functions.
+5. The frontend updates workflow state and re-renders from the resulting database state.
 
-The system is frontend-driven. There is no separate custom API server in this repository. The main backend logic lives in:
+There is no separate custom API server in this repository. The main backend logic lives in:
 
-- SQL migrations and RLS policies under `supabase/migrations`
-- Supabase Edge Functions under `supabase/functions`
-- frontend workflow helpers under `src/lib`
+- `supabase/migrations`
+- `supabase/functions`
+- `src/lib`
+
+## Architectural Direction
+
+The codebase is no longer best described as “large pages with mixed UI and business logic everywhere.”
+
+The current direction is:
+
+- page files act as feature shells
+- shared domain and workflow rules live in `src/lib`
+- page-local UI sections and dialogs live beside the page in page-specific subfolders
+- Supabase remains the system of record and authorization boundary
+- Edge Functions remain the place for AI orchestration and server-side validation
+
+This is an intentional shift from the earlier frontend-heavy structure.
 
 ## Frontend Structure
 
-The app entry point is `src/App.tsx`. It sets up:
+The main frontend areas are:
 
-- `QueryClientProvider` for TanStack Query
-- `BrowserRouter` for routing
-- `AuthProvider` for session and profile state
-- global UI wrappers such as toasts, tooltips, network status, and an error boundary
+- `src/pages/dashboard`: top-level dashboard routes
+- `src/pages/dashboard/<feature>/`: page-scoped UI sections, dialogs, hooks, and types for larger pages
+- `src/components`: shared components
+- `src/components/ui`: lower-level shadcn/Radix UI primitives
+- `src/contexts`: app-wide state, mainly auth
+- `src/lib`: shared domain helpers, workflow helpers, and feature logic
+- `src/integrations/supabase`: Supabase client and generated types
+- `src/test`: Vitest and Testing Library coverage
 
-Routing is still explicit rather than generated. The app uses route-level lazy loading for most non-trivial pages. The important route groups are:
+### Current Page-Folder Pattern
 
-- public routes: `/`, `/auth`, `/reset-password`, `/install`
-- dashboard routes under `/dashboard` for lecturer, student, and admin users
-- a catch-all `*` route for `NotFound`
+Large dashboard pages are now moving to a consistent structure:
+
+- top-level page file for route wiring and feature orchestration
+- feature subfolder for page-local presentation and supporting code
+
+Current examples:
+
+- `src/pages/dashboard/assignment-detail/`
+- `src/pages/dashboard/assignments/`
+- `src/pages/dashboard/improvement-plan/`
+- `src/pages/dashboard/moderation-dashboard/`
+- `src/pages/dashboard/performance-trends/`
+- `src/pages/dashboard/student-profile/`
+
+This is one of the most important recent improvements. It gives the repo a repeatable structure instead of each large page evolving differently.
 
 ### Route and Layout Pattern
 
-Protected dashboard routes are wrapped through two layers:
+The app entry point is `src/App.tsx`. It sets up:
 
-- `ProtectedRoute` checks auth state, loading state, and the special demo mode
-- `RoleGate` narrows access where a page is role-specific
+- `QueryClientProvider`
+- `BrowserRouter`
+- `AuthProvider`
+- global error, toast, tooltip, and network-status wrappers
 
-Most dashboard pages then render inside `DashboardLayout`, which provides the shared shell and navigation.
+Protected dashboard routes use:
 
-Today, admin is not treated as a hidden lecturer. The app now has a separate admin dashboard path and admin-oriented navigation, while still keeping lecturer and student flows intact.
+- `ProtectedRoute` for auth and demo-mode handling
+- `RoleGate` for role-specific access
+- `DashboardLayout` for the shared shell
 
-### Main Frontend Areas
+## Domain Logic Layout
 
-The frontend code is mostly organized as:
+The main architectural improvement in the frontend is that workflow and feature rules are increasingly centralized in `src/lib`.
 
-- `src/pages/dashboard`: feature pages such as assignments, moderation, analytics, student profile, and settings
-- `src/components`: shared UI and feature components
-- `src/components/ui`: the lower-level shadcn/Radix UI layer
-- `src/contexts`: app-level state, mainly auth
-- `src/lib`: workflow helpers, recommendation persistence, communications, interventions, and other domain logic
-- `src/integrations/supabase`: the client and generated database types
-- `src/test` and `tests/e2e`: integration and browser tests
+Important examples:
 
-The admin area currently focuses on safe oversight rather than broad mutation. In practice that means:
+- `assessmentWorkflow.ts`
+  owns assessment status semantics, approval/release gating, and grade display rules
+- `assignmentVisibility.ts`
+  owns student-facing assignment visibility and submission availability rules
+- `assignmentCatalog.ts`
+  owns assignment list shaping, filtering, sorting, and overview stats
+- `improvementPlan.ts`
+  owns improvement-plan module building, recommendation generation, and progress shaping
+- `performanceAnalytics.ts`
+  owns cohort trend projection, grade-distribution projection, and risk-filtered lecturer analytics views
+- `studentProfile.ts`
+  owns student matching, risk-summary shaping, missed-work projection, and student profile view-model assembly
+- `moderationWorkflow.ts`
+  owns moderation queue assembly, action planning, and audit payload helpers
+- `moderation.ts`
+  owns moderation signal evaluation and reviewer-oriented moderation helpers
+- `communications.ts`
+  owns notification message shaping and communication queue helpers
 
-- admin has its own dashboard entry point
-- admin can inspect users, assignments, submissions, reporting, and system-level summaries
-- admin is intentionally not reusing the lecturer's write-heavy assessment pages as a general control surface
+This means the app is less dependent on page-local heuristics than it was earlier.
 
-### Auth and Session Handling
+## Page-Level Composition
+
+Several larger pages now follow a clearer split between orchestration and presentation.
+
+### Assignment Detail
+
+`AssignmentDetail.tsx` now delegates heavily to:
+
+- `assignment-detail/useAssignmentDetailData.ts`
+- `assignment-detail/sections.tsx`
+- `assignment-detail/review-dialog.tsx`
+- `assignment-detail/types.ts`
+
+That page used to carry fetch orchestration, display state, queue rendering, and dialog rendering inline. It is now much closer to a route shell.
+
+### Assignments
+
+`Assignments.tsx` now combines:
+
+- shared catalog logic from `src/lib/assignmentCatalog.ts`
+- page-local form UI in `assignments/assignment-form-dialog.tsx`
+
+This keeps assignment filtering and summarization reusable while keeping form rendering out of the main page body.
+
+### Improvement Plan
+
+`ImprovementPlan.tsx` now combines:
+
+- shared plan/recommendation logic from `src/lib/improvementPlan.ts`
+- page-local sections in `improvement-plan/sections.tsx`
+
+This is especially important because recommendation generation and plan shaping are now treated as domain behavior, not just JSX decisions.
+
+### Moderation Dashboard
+
+`ModerationDashboard.tsx` now combines:
+
+- shared workflow logic from `src/lib/moderationWorkflow.ts`
+- moderation signal helpers from `src/lib/moderation.ts`
+- page-local queue and dialog sections in `moderation-dashboard/sections.tsx`
+
+This keeps the moderation page aligned with the same architectural pattern as other larger dashboard flows.
+
+### Performance Trends
+
+`PerformanceTrends.tsx` now combines:
+
+- shared cohort projection logic from `src/lib/performanceAnalytics.ts`
+- page-local presentation sections in `performance-trends/sections.tsx`
+
+This removes inline cohort shaping, grade-distribution assembly, and risk filtering from the page shell.
+
+### Student Profile
+
+`StudentProfile.tsx` now combines:
+
+- shared student-support projection logic from `src/lib/studentProfile.ts`
+- page-local presentation sections in `student-profile/sections.tsx`
+
+This keeps student matching, missed-submission shaping, chart shaping, and support-summary projection out of the page body.
+
+## Auth and Session Handling
 
 `src/contexts/AuthContext.tsx` is the central auth layer. It:
 
-- restores the current Supabase session on startup
+- restores the Supabase session
 - subscribes to auth state changes
-- loads the matching row from `profiles`
-- exposes `signUp`, `signIn`, `signOut`, and password reset helpers
-- supports a local demo mode for lecturer and student flows
-- supports E2E auth overrides used by the test setup
+- loads the matching `profiles` row
+- exposes sign-in, sign-up, sign-out, and password reset helpers
+- supports demo mode
+- supports E2E auth overrides
 
-In practice, most pages depend on the auth context for:
+Most frontend authorization decisions still use:
 
-- the current `user`
-- the application role (`lecturer`, `student`, or `admin`)
-- profile metadata
-- whether the app is running in demo mode
+- `user`
+- `profile`
+- the resolved application role
+- demo-mode state
+
+But these should be treated as UI convenience layers. The real data boundary is RLS plus server-side validation in Edge Functions.
 
 ## Supabase and Backend Setup
 
-### Client Configuration
-
-The frontend Supabase client is created in `src/integrations/supabase/client.ts` using:
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
-
-Session persistence is enabled in local storage, with token refresh turned on.
-
 ### Database
 
-The application relies on Supabase Postgres as the primary system of record. The schema is managed through SQL migrations in `supabase/migrations`.
+Supabase Postgres is the system of record.
 
-There is no ORM layer in the app. The frontend talks to tables directly through the Supabase JavaScript client, and most business rules are enforced by a mix of:
+There is no ORM in the app. The frontend uses the Supabase JavaScript client directly. Business rules are enforced by a combination of:
 
-- workflow code in the frontend
-- row-level security policies
-- triggers and helper SQL functions in the database
+- RLS policies
+- SQL migrations and helper functions
+- shared frontend workflow/domain modules
+- Edge Function validation
 
 ### Storage
 
-Student work is uploaded to the Supabase Storage bucket named `submissions`.
+Student files are stored in the `submissions` storage bucket.
 
-The frontend stores the file reference on the `submissions` table and later creates signed URLs when lecturers or students need to access the file.
+The `submissions` table stores file metadata and workflow status. The frontend creates signed URLs for access when needed.
 
 ### Edge Functions
 
-The main Edge Functions configured in `supabase/config.toml` are:
+Important Edge Functions include:
 
 - `grade-submission`
 - `check-plagiarism`
 - `explain-grade`
 - `bulk-create-students`
+- `send-workflow-notification-email`
 
-In the checked-in config, these functions have `verify_jwt = false`. That does not mean they are open by default in practice, but it does mean the function code itself is responsible for checking the caller. For example, the grading and integrity functions use shared auth helpers and explicitly require a lecturer identity before doing work.
+These functions are not just thin adapters. They perform important server-side checks and normalization, especially for:
 
-This is an important architectural point: some authorization lives in database RLS, but Edge Function access control also depends on the function implementation, not only on the Supabase platform toggle.
+- lecturer-only grading and integrity operations
+- AI request validation
+- response shape validation
+- notification dispatch workflows
 
 ## Core Workflows
 
 ## Assignment Workflow
 
-The assignment workflow is centered around the `Assignments` and `AssignmentDetail` pages.
+The assignment workflow is centered around:
 
-### Lecturer side
+- `Assignments`
+- `AssignmentDetail`
+- `assignmentCatalog.ts`
+- `assignmentVisibility.ts`
 
 Lecturers can:
 
-- create assignments
-- save them as `draft`
-- publish them for students
-- define rubric data that is later reused during grading
+- create assignments as drafts
+- edit rubric and targeting metadata
+- publish assignments
+- close assignments
 
-Assignments belong to a lecturer. In the current app, lecturers typically see only their own assignments, while students see published assignments.
+Students can:
 
-### Student side
+- see only assignments visible to them
+- submit only when the shared visibility/submission rules allow it
 
-Students submit work through the assignment detail flow. A submission:
-
-- is uploaded to Supabase Storage
-- gets a row in `submissions`
-- starts in the `submitted` state
-
-The file path is later used by grading, integrity review, and download actions.
+Recent hardening work moved overdue student visibility and submission availability into shared helpers rather than keeping those rules scattered in UI code.
 
 ## Grading Workflow
 
-The grading flow is split across the frontend and the `grade-submission` Edge Function.
+The grading workflow spans:
 
-### Status model
+- `AssignmentDetail`
+- `assessmentWorkflow.ts`
+- `grade-submission`
 
-The current workflow helpers in `src/lib/assessmentWorkflow.ts` use these statuses:
+Core statuses include:
 
 - `submitted`
 - `ai_grading`
@@ -174,234 +279,154 @@ The current workflow helpers in `src/lib/assessmentWorkflow.ts` use these status
 - `approved`
 - `released`
 
-Not every submission goes through every state, but these values drive the lecturer queue, moderation gating, approval logic, and student visibility.
+Important current behavior:
 
-### How grading works
+- AI grading is an input, not the final academic decision
+- lecturer review can override or confirm grading outcomes
+- release to students is a separate step from approval
+- student-visible grade information depends on release status
 
-1. A lecturer triggers grading from the assignment detail page.
-2. The frontend marks the submission as `ai_grading`.
-3. The app invokes `grade-submission`.
-4. The function loads assignment context, downloads the submission file, prepares an AI prompt, and asks the model for a structured grading result.
-5. The function returns normalized grading data such as score, feedback, rubric breakdown, confidence, and review reasons.
-6. The frontend upserts the `grades` row and moves the submission to:
-   - `ai_graded` when no lecturer review is required
-   - `first_review` when human review is required
-
-The final grade shown to users is not always the raw AI result. The helper `resolveFinalGradeValues` prefers moderated or lecturer-reviewed values when those exist.
-
-### Approval and release
-
-Approval and release are separate steps.
-
-- `approved` means the lecturer has signed off on the grade
-- `released` means the grade is visible to the student
-
-The frontend blocks approval when moderation is still unresolved. Students only see released grades. This is enforced in the UI and reflected in the student grade page, which only exposes score and feedback when a submission has reached `released`.
+Display and action gating for these rules is increasingly centralized in `assessmentWorkflow.ts`.
 
 ## Moderation Workflow
 
-The moderation flow is implemented mainly in:
+Moderation is implemented through:
 
-- `src/pages/dashboard/ModerationDashboard.tsx`
-- `src/lib/moderationWorkflow.ts`
-- the moderation SQL migrations and policies
+- `ModerationDashboard`
+- `moderationWorkflow.ts`
+- `moderation.ts`
+- moderation-related migrations and RLS policies
 
-### Entry into moderation
+The queue is built from related moderation records rather than a single prebuilt backend projection. `fetchModerationCaseViews` assembles:
 
-After first review, the lecturer can send a case into moderation. The app creates or updates a row in `moderation_cases` and moves the submission into the moderation path.
+- moderation cases
+- submissions
+- assignments
+- grades
+- profiles
+- integrity reviews
+- moderation reviews
+- audit log entries
 
-Current moderation-related states are:
-
-- `moderation_pending`
-- `moderation_in_progress`
-- `moderated`
-- `escalated`
-
-### Moderation queue assembly
-
-The moderation dashboard does not read a single denormalized view from the database. Instead, `fetchModerationCaseViews` builds a combined view in the frontend by reading:
-
-- `moderation_cases`
-- related `submissions`
-- `assignments`
-- `grades`
-- `profiles`
-- `academic_integrity_reviews`
-- `moderation_reviews`
-- `grade_audit_log`
-
-That assembled shape is what the UI uses to render queue cards, review history, audit history, and action controls.
-
-### Moderation actions
-
-`buildModerationActionPlan` produces the state changes for each moderation action:
-
-- `agree`
-- `adjust`
-- `return`
-- `escalate`
-- `approve`
-
-In broad terms:
-
-- `agree` and `adjust` move the case to `moderated` and update final moderation values
-- `return` sends the case back to `first_review`
-- `escalate` marks the case and submission as `escalated`
-- `approve` is the owner lecturer sign-off step that pushes the submission to `approved`
-
-Non-approval actions also write a row to `moderation_reviews`. Grade changes are audited through `grade_audit_log`.
-
-### Nullable fallback behavior
-
-The moderation UI now explicitly handles incomplete related data. If a moderation case exists but the linked submission is missing, the queue card falls back to placeholder text and disables `Review case`. That behavior is covered by integration tests.
+This is still a frontend-assembled view, but the rule logic for how moderation actions work is now shared in domain helpers rather than embedded in the page body.
 
 ## Integrity Workflow
 
-Integrity review is separate from moderation but can feed into it.
+Integrity review is handled by:
 
-The `check-plagiarism` function:
+- `check-plagiarism`
+- `academic_integrity_reviews`
+- lecturer-facing dashboard and moderation surfaces
 
-- loads and normalizes submission text
-- compares text overlap and writing profile signals
-- classifies risk into similarity, AI-writing suspicion, baseline deviation, or mixed concerns
-- returns structured flags and supporting evidence
+The integrity function:
 
-Integrity decisions are stored in `academic_integrity_reviews`. Those rows are then pulled into lecturer pages and the moderation dashboard when relevant.
+- extracts and compares submission text
+- evaluates overlap, writing-profile, and AI-writing signals
+- returns structured flags and summary warnings
+
+Those results remain review prompts, not automatic misconduct decisions.
+
+## Explain Grade and Recommendation Surfaces
+
+Two product areas depend heavily on trustworthy explanation logic:
+
+- `explain-grade`
+- `ImprovementPlan`
+
+Recent hardening improved both:
+
+- Explain Grade now uses more deterministic server-side context for weakness ranking and criterion comparisons
+- Improvement Plan now uses shared domain logic and evidence-backed recommendation shaping where possible
+
+These areas still depend on underlying data quality, but they are less heuristic and less page-local than before.
 
 ## Data Model Overview
 
-The schema is broader than the core grading path, but the main working set today looks like this.
+The main working data model remains:
 
-### Identity and ownership
+- `profiles`
+- `user_roles`
+- `assignments`
+- `submissions`
+- `grades`
+- `academic_integrity_reviews`
+- `moderation_cases`
+- `moderation_reviews`
+- `grade_audit_log`
+- `communication_messages`
+- `student_interventions`
+- recommendation and analytics-supporting tables
 
-- `profiles`: application-level user profile and mirrored role metadata used by parts of the UI
-- `user_roles`: authorization-facing role records used by SQL helpers and RLS
-- `admin_audit_log`: audit trail for admin operational actions such as role changes
-
-### Teaching and submissions
-
-- `assignments`: lecturer-owned assessment definitions, including title, status, rubric, due date, and max score
-- `submissions`: uploaded student work tied to an assignment and student, including workflow status and storage reference
-- `grades`: AI, lecturer, and final grade data for a submission
-
-### Review and moderation
-
-- `academic_integrity_reviews`: integrity findings and lecturer decisions
-- `moderation_cases`: the main moderation record for a submission
-- `moderation_reviews`: reviewer actions and notes during moderation
-- `grade_audit_log`: append-only audit trail for grade-related changes
-
-### Communication and interventions
-
-- `communication_messages`: queued lecturer-to-student communication records
-- `student_interventions`: lecturer-created support or follow-up actions for students
-
-### Analytics and recommendations
-
-- `analytics_recommendations`: lecturer-facing recommendation records, optionally tied to an assignment
-- `recommendation_actions`: actions taken on those recommendations
-
-### Relationship sketch
-
-The core relationships are roughly:
+Relationship shape:
 
 - one lecturer owns many assignments
 - one assignment has many submissions
 - one submission belongs to one student and one assignment
-- one submission can have one grade row and may have integrity and moderation records
-- one moderation case can have many moderation review entries
-- one grade can generate many audit log entries over time
-
-The app often joins this data client-side rather than relying on large SQL views or RPCs.
+- one submission can have one main grade row plus integrity and moderation records
+- one moderation case can have many moderation reviews and many audit entries over time
 
 ## RLS and Permission Model
 
-Row-level security is a major part of the backend design. Most user-facing access rules are enforced there.
+RLS remains the strongest authorization boundary in the product.
 
-### General shape
+The common access shape is:
 
-The common pattern is:
+- students access only their own records and released student-visible outcomes
+- lecturers access assignments and related records they own or are explicitly participating in
+- moderation access is granted to relevant moderation participants
+- admins get oversight-oriented access rather than blanket write access to teaching workflows
 
-- students can access their own submissions and released results
-- lecturers can access rows tied to assignments they own
-- admins get a narrower system-oversight surface plus explicit protected actions, rather than blanket write access to academic workflows
-- moderation access is granted to the first marker, assigned moderator, and assignment owner, depending on the table
+Authorization still lives across three layers:
 
-The project has been tightening these policies through follow-up migrations, especially around moderation, analytics, interventions, and audit visibility.
+- frontend route and role guards
+- database RLS
+- Edge Function checks
 
-### Moderation permissions
-
-The moderation tables are enabled for RLS and now support the real workflow roles more directly.
-
-Based on the current moderation migrations:
-
-- `moderation_cases` can be viewed and changed by the lecturer who owns the assignment and by lecturers participating in the moderation case
-- `moderation_reviews` can be read by moderation participants and inserted by the acting reviewer
-- `grade_audit_log` can be read by the changer, the assignment owner, and assigned moderators tied to the case
-
-This matters because the moderation dashboard builds its own combined view. If any one of those tables is hidden by RLS, the dashboard degrades or actions stop working.
-
-### Integrity, analytics, and intervention permissions
-
-The `20260421101500_harden_permissions_rls_audit.sql` migration tightened several areas:
-
-- academic integrity reviews are constrained to the lecturer who owns the related assignment
-- analytics recommendations are constrained to the lecturer they belong to, with assignment ownership checks when an assignment is linked
-- recommendation actions are constrained through the parent recommendation
-- student interventions are constrained to the lecturer, with additional checks that tie the student back to that lecturer's assignments
-
-There is also a small SQL function, `apply_recommendation_action`, which runs as `SECURITY INVOKER`. That means it still executes under the caller's RLS constraints instead of bypassing them.
-
-### Where authorization lives
-
-The current authorization model is spread across three places:
-
-- `AuthContext` and route guards in the frontend
-- RLS policies in Supabase
-- role checks inside Edge Functions
-
-The database is the strongest boundary for table access. The frontend should be treated as a convenience layer, not the authority.
-
-There is also an important implementation detail here: the project is moving toward `user_roles` as the canonical authorization source, with `profiles.role` still mirrored for compatibility in some UI code. That is more accurate than the older lecturer-vs-student-only model that parts of the app started with.
+The key point is that the frontend is not the final authority. Sensitive operations still depend on RLS and/or function-side validation.
 
 ## Deployment Setup
 
-### Frontend build
+Frontend:
 
-The frontend is a standard Vite build:
+- Vite build output in `dist/`
+- intended static deployment on Cloudflare Pages
 
-- `npm run dev` for local development
-- `npm run build` for production output
-- output written to `dist/`
+Backend:
 
-The Vite config uses manual chunking for some vendor groups such as React, router, Supabase, markdown, analytics, and Radix UI packages.
+- Supabase for auth, database, storage, and Edge Functions
 
-### Hosting
+Operationally:
 
-The repository and README point to a split deployment model:
+- frontend deployments depend on a fresh `dist/` built from the intended branch state
+- database changes go through migrations
+- Edge Functions deploy separately through the Supabase CLI
 
-- the React app is deployed as a static frontend, intended for Cloudflare Pages
-- Supabase hosts the database, auth, storage, and Edge Functions
+## Current Architectural State
 
-There is no checked-in Cloudflare deployment config such as a `wrangler.toml` in this repository, so the Pages project configuration appears to live outside source control. In practice, that means some deployment details are controlled in the hosting dashboard rather than the repo.
+The current architecture is stronger and more consistent than the earlier project shape.
 
-### Environment and operations
+Meaningful improvements now in place:
 
-The frontend expects at least:
+- repeated workflow rules extracted from pages into `src/lib`
+- large dashboard pages increasingly follow a shared page-folder pattern
+- page files are smaller and more clearly focused on orchestration
+- recommendation and explanation logic is less ad hoc
+- student visibility, assessment workflow, catalog logic, moderation logic, and improvement-plan logic are more centralized
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
+What is still true:
 
-Database changes are applied through the Supabase migration chain. Edge Functions are deployed separately through the Supabase CLI.
-
-## Practical Notes and Current Boundaries
-
-- The app is frontend-heavy. A lot of orchestration still happens in page components, especially in `AssignmentDetail.tsx`.
-- Business rules are split between UI code and SQL policy logic. That works, but it means workflow changes usually need coordinated updates in both places.
-- The moderation dashboard relies on several separate table reads instead of a single backend projection. That keeps the backend simpler, but it makes the UI more sensitive to partial data and policy drift.
-- Demo mode exists in the frontend and is useful for local UX flows, but it is not the same path as the real Supabase-backed application.
-- Edge Function auth needs to be reviewed alongside function code, because the checked-in config disables JWT verification at the function gateway level.
+- the app is still a frontend-driven orchestration layer over Supabase
+- some admin and institutional analytics views are still better described as frontend projections over raw table reads than as backend-curated reporting endpoints
+- AI-dependent surfaces still rely on the quality of stored grading feedback and structured context
 
 ## Summary
 
-Today, this project is a React dashboard application with Supabase acting as the backend platform. Assignments, submissions, grades, moderation, integrity review, communications, and interventions are all stored in Postgres and protected mainly through RLS. AI-heavy work is handled in Edge Functions, while the frontend remains responsible for most workflow orchestration and page-level state transitions.
+Today, GradeAI is a React plus Supabase system with a clearer separation between:
+
+- route-level pages
+- shared domain/workflow modules
+- page-scoped UI sections
+- database-enforced access control
+- Edge Function AI orchestration
+
+It is no longer accurate to describe the codebase simply as “big pages with mixed logic.” The current structure is still evolving, but it now has a more consistent architecture direction and a stronger base for safe future work.
