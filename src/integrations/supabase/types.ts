@@ -930,6 +930,25 @@ export type Database = {
             title: string | null
           }[]
         }
+        get_student_submission_grade_projection: {
+          Args: never
+          Returns: {
+            ai_breakdown: Json | null
+            ai_feedback: string | null
+            ai_score: number | null
+            assignment_id: string
+            assignment_title: string | null
+            file_name: string
+            file_url: string
+            final_feedback: string | null
+            final_score: number | null
+            max_score: number | null
+            module_code: string | null
+            submission_id: string
+            submission_status: Database["public"]["Enums"]["submission_status"]
+            submitted_at: string
+          }[]
+        }
         has_role: {
           Args: {
             _role: Database["public"]["Enums"]["app_role"]

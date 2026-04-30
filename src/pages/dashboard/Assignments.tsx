@@ -6,34 +6,38 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { Plus, FileText, Calendar, BookOpen, Loader2, Search, Clock3, CheckCircle2, Archive, ChevronDown } from "lucide-react";
+import { FileText, Calendar, Search, Clock3, CheckCircle2, Archive } from "lucide-react";
 import { toast } from "sonner";
-import { RubricBuilder, type RubricCriterion } from "@/components/RubricBuilder";
+import type { RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
 import {
-  buildAssignmentPublishedNotification,
   sendWorkflowNotificationEmail,
 } from "@/lib/communications";
-import { log } from "@/lib/logger";
 import {
-  canReleaseStatus,
-  isGradedWorkflowStatus,
-  isReviewQueueStatus,
-  isStudentGradeVisible,
-} from "@/lib/assessmentWorkflow";
+  buildAssignmentPublishedNotificationRows,
+  filterAssignments,
+  getAssignmentOverviewStats,
+  normalizeAssignment,
+  sortAssignmentsForView,
+  type AssignmentCatalogItem,
+  type AssignmentSubmissionStats,
+  type StudentNotificationProfile,
+} from "@/lib/assignmentCatalog";
+import { log } from "@/lib/logger";
+import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
 import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
 import { DEMO_ASSIGNMENTS, DEMO_STUDENT_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
+import {
+  DashboardDemoBanner,
+  DashboardEmptyState,
+  DashboardLoadingState,
+  DashboardPageIntro,
+} from "@/components/dashboard/PageStates";
+import { AssignmentFormDialog } from "@/pages/dashboard/assignments/assignment-form-dialog";
+import { useAssignmentsData, type AssignmentDataItem } from "@/pages/dashboard/assignments/useAssignmentsData";
 
 const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
@@ -43,80 +47,7 @@ const COHORTS = [
   { value: "400", label: "Level 400" },
 ];
 
-interface Assignment {
-  id: string;
-  title: string;
-  description: string | null;
-  module_code: string | null;
-  lecturer_id: string;
-  max_score: number;
-  due_date: string | null;
-  status: "draft" | "published" | "closed";
-  created_at: string;
-  rubric: RubricCriterion[] | null;
-  cohorts: string[];
-  departments: string[];
-  target_cohorts: string[];
-  target_departments: string[];
-}
-
-interface StudentNotificationProfile {
-  id: string;
-  cohort_id: string | null;
-  department_id: string | null;
-  full_name: string | null;
-  email: string | null;
-  role: string | null;
-}
-
-const normalizeAssignment = (
-  assignment: Partial<Assignment> &
-    Pick<Assignment, "id" | "title" | "lecturer_id" | "max_score" | "status" | "created_at">,
-): Assignment => ({
-  id: assignment.id,
-  title: assignment.title,
-  description: assignment.description ?? null,
-  module_code: assignment.module_code ?? null,
-  lecturer_id: assignment.lecturer_id,
-  max_score: assignment.max_score,
-  due_date: assignment.due_date ?? null,
-  status: assignment.status,
-  created_at: assignment.created_at,
-  rubric: assignment.rubric ?? [],
-  cohorts: assignment.cohorts ?? [],
-  departments: assignment.departments ?? [],
-  target_cohorts: assignment.target_cohorts ?? [],
-  target_departments: assignment.target_departments ?? [],
-});
-
-const buildAssignmentPublishedNotificationRows = (input: {
-  senderId: string;
-  assignmentId: string;
-  assignmentTitle: string;
-  students: StudentNotificationProfile[];
-}) => {
-  return input.students.map((student) => {
-    const draft = buildAssignmentPublishedNotification({
-      studentName: student.full_name || student.email || "Student",
-      studentEmail: student.email,
-      studentId: student.id,
-      assignmentId: input.assignmentId,
-      assignmentTitle: input.assignmentTitle,
-    });
-
-    return {
-      sender_id: input.senderId,
-      category: draft.category,
-      recipient_name: draft.recipientName,
-      recipient_email: draft.recipientEmail,
-      recipient_id: draft.recipientId ?? null,
-      subject: draft.subject,
-      body: draft.body,
-      related_student_id: draft.relatedStudentId ?? null,
-      related_assignment_id: draft.relatedAssignmentId ?? null,
-    };
-  });
-};
+type Assignment = AssignmentDataItem;
 
 const statusVariant = (status: string) => {
   if (status === "published") return "default";
@@ -143,9 +74,6 @@ const summarizeSelection = (
 
 const Assignments = () => {
   const { role, user, isDemo } = useAuth();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [submissionStats, setSubmissionStats] = useState<Record<string, { total: number; graded: number; approved: number; released: number; needsReview: number }>>({});
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
@@ -162,6 +90,16 @@ const Assignments = () => {
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("none");
+  const {
+    assignments,
+    submissionStats,
+    loading,
+    refreshAssignments,
+  } = useAssignmentsData({
+    role,
+    userId: user?.id,
+    isDemo,
+  });
 
   const resetAssignmentForm = () => {
     setEditingAssignmentId(null);
@@ -200,109 +138,6 @@ const Assignments = () => {
     setSelectedDepartments(assignment.target_departments ?? []);
     setDialogOpen(true);
   };
-
-  const fetchAssignments = async () => {
-    if (isDemo) {
-      const demoAssignments = role === "student" ? DEMO_STUDENT_ASSIGNMENTS : DEMO_ASSIGNMENTS;
-      setAssignments((demoAssignments ?? []).map(normalizeAssignment));
-      setSubmissionStats({});
-      setLoading(false);
-      return;
-    }
-    if (!user) return;
-
-    let query = supabase.from("assignments").select("*").order("created_at", { ascending: false });
-
-    if (role === "student") {
-      query = query.eq("status", "published");
-    } else {
-      query = query.eq("lecturer_id", user.id);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      log.error("Assignments query failed", error, {
-        role,
-        userId: user.id,
-      });
-      toast.error("Failed to load assignments");
-      setLoading(false);
-      return;
-    }
-
-    const assignmentIds = (data || []).map((assignment) => assignment.id);
-    const { data: assignmentCohorts } =
-      role === "lecturer" && assignmentIds.length > 0
-        ? await supabase
-            .from("assignment_cohorts")
-            .select("assignment_id, cohort_id")
-            .in("assignment_id", assignmentIds)
-        : { data: [] };
-    const { data: assignmentDepartments } =
-      role === "lecturer" && assignmentIds.length > 0
-        ? await supabase
-            .from("assignment_departments")
-            .select("assignment_id, department_id")
-            .in("assignment_id", assignmentIds)
-        : { data: [] };
-
-    const cohortMap = new Map<string, string[]>();
-    for (const row of assignmentCohorts || []) {
-      const existing = cohortMap.get(row.assignment_id) ?? [];
-      existing.push(row.cohort_id);
-      cohortMap.set(row.assignment_id, existing);
-    }
-    const departmentMap = new Map<string, string[]>();
-    for (const row of assignmentDepartments || []) {
-      const existing = departmentMap.get(row.assignment_id) ?? [];
-      existing.push(row.department_id);
-      departmentMap.set(row.assignment_id, existing);
-    }
-
-    const mapped: Assignment[] = (data || []).map((a) =>
-      normalizeAssignment({
-        id: a.id,
-        title: a.title,
-        description: a.description,
-        module_code: a.module_code,
-        lecturer_id: a.lecturer_id,
-        max_score: a.max_score,
-        due_date: a.due_date,
-        status: a.status,
-        created_at: a.created_at,
-        rubric: a.rubric as unknown as RubricCriterion[] | null,
-        cohorts: cohortMap.get(a.id) ?? [],
-        departments: departmentMap.get(a.id) ?? [],
-        target_cohorts: cohortMap.get(a.id) ?? [],
-        target_departments: departmentMap.get(a.id) ?? [],
-      }),
-    );
-
-    setAssignments(mapped);
-
-    if (role === "lecturer" && mapped.length > 0) {
-      const { data: subs } = await supabase.from("submissions").select("id, assignment_id, status");
-      if (subs) {
-        const statsMap: Record<string, { total: number; graded: number; approved: number; released: number; needsReview: number }> = {};
-        for (const assignment of mapped) {
-          const relatedSubs = subs.filter(s => s.assignment_id === assignment.id);
-          statsMap[assignment.id] = {
-            total: relatedSubs.length,
-            graded: relatedSubs.filter(s => isGradedWorkflowStatus(s.status)).length,
-            approved: relatedSubs.filter(s => canReleaseStatus(s.status) || isStudentGradeVisible(s.status)).length,
-            released: relatedSubs.filter(s => isStudentGradeVisible(s.status)).length,
-            needsReview: relatedSubs.filter(s => isReviewQueueStatus(s.status)).length,
-          };
-        }
-        setSubmissionStats(statsMap);
-      }
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchAssignments();
-  }, [role, user, isDemo]);
 
   useEffect(() => {
     const nextStatus = searchParams.get("status");
@@ -450,7 +285,7 @@ const Assignments = () => {
 
       resetAssignmentForm();
       setDialogOpen(false);
-      fetchAssignments();
+      refreshAssignments();
     } catch {
       toast.error(editingAssignmentId ? "Failed to update assignment" : "Failed to create assignment");
     }
@@ -556,7 +391,7 @@ const Assignments = () => {
       }
 
       toast.success("Assignment published - students can now submit");
-      fetchAssignments();
+      refreshAssignments();
     } catch {
       toast.error("Failed to publish");
     }
@@ -582,234 +417,83 @@ const Assignments = () => {
       if (error) throw error;
 
       toast.success(successMessage);
-      fetchAssignments();
+      refreshAssignments();
     } catch {
       toast.error(failureMessage);
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  if (loading) return <DashboardLoadingState />;
 
   const view = searchParams.get("view");
   const isPendingReviewView = view === "needs-review";
 
-  const filteredAssignments = (assignments ?? []).filter((assignment) => {
-    const matchesSearch = !searchQuery || [assignment.title, assignment.module_code, assignment.description]
-      .filter(Boolean)
-      .some((value) => value?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+  const filteredAssignments = filterAssignments({
+    assignments: assignments as AssignmentCatalogItem[],
+    searchQuery,
+    statusFilter,
+    role,
+    isPendingReviewView,
+    submissionStats,
+  }) as Assignment[];
 
-    const matchesStatus =
-      statusFilter === "all"
-        ? (role === "lecturer" ? assignment.status !== "closed" : true)
-        : assignment.status === statusFilter;
-    const reviewCount = submissionStats[assignment.id]?.needsReview ?? 0;
-    const matchesQueue = !isPendingReviewView || reviewCount > 0;
-    return matchesSearch && matchesStatus && matchesQueue;
-  });
+  const sortedAssignments = sortAssignmentsForView({
+    assignments: filteredAssignments as AssignmentCatalogItem[],
+    isPendingReviewView,
+    submissionStats,
+  }) as Assignment[];
 
-  const sortedAssignments = [...filteredAssignments].sort((left, right) => {
-    if (!isPendingReviewView) return 0;
-    return (submissionStats[right.id]?.needsReview ?? 0) - (submissionStats[left.id]?.needsReview ?? 0);
-  });
-
-  const drafts = (assignments ?? []).filter(a => a.status === "draft").length;
-  const published = (assignments ?? []).filter(a => a.status === "published").length;
-  const dueSoon = (assignments ?? []).filter((assignment) => {
-    if (!assignment.due_date) return false;
-    const diff = new Date(assignment.due_date).getTime() - Date.now();
-    return diff > 0 && diff <= 7 * 24 * 60 * 60 * 1000;
-  }).length;
+  const { drafts, published, dueSoon } = getAssignmentOverviewStats(assignments as AssignmentCatalogItem[]);
 
   return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && (
-        <Card className="border-warning bg-warning/5">
-          <CardContent className="flex items-center gap-2 p-3">
-            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Demo Mode — synthetic sample data</span>
-          </CardContent>
-        </Card>
+        <DashboardDemoBanner label="Demo Mode — synthetic sample data" />
       )}
 
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-bold font-display">{role === "lecturer" ? "Manage Assignments" : "My Assignments"}</h2>
-          <p className="text-sm text-muted-foreground">
-            {role === "lecturer"
-              ? "Create work, publish it when ready, and track grading progress from one place."
-              : "Review deadlines, submission status, and the next action for each assignment."}
-          </p>
-        </div>
-        {role === "lecturer" && !isDemo && (
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) resetAssignmentForm();
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button onClick={openCreateDialog}><Plus className="mr-2 h-4 w-4" />New Assignment</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingAssignmentId ? "Edit Assignment" : "Create Assignment"}</DialogTitle>
-                <DialogDescription>
-                  {editingAssignmentId
-                    ? "Update the brief and cohort targeting before the next publish or release step."
-                    : "Set up the brief now, then publish when you are ready to accept submissions."}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                {!editingAssignmentId && (
-                  <div className="space-y-2">
-                    <Label htmlFor="starterTemplate">Use sample assignment</Label>
-                    <Select value={selectedTemplateId} onValueChange={applyStarterTemplate}>
-                      <SelectTrigger id="starterTemplate">
-                        <SelectValue placeholder="Start from a reusable sample" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Start from blank</SelectItem>
-                        {STARTER_ASSIGNMENT_TEMPLATES.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>
-                            {template.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Loads a starter brief and rubric into this form only. Nothing is saved or published until you review and create the draft.
-                    </p>
-                  </div>
-                )}
-                <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-                  <p className="font-medium">What happens next</p>
-                  <ul className="mt-2 space-y-1 text-muted-foreground">
-                    <li>New assignments start as drafts.</li>
-                    <li>Students only see assignments after you publish them.</li>
-                    <li>Adding a rubric now gives cleaner AI grading later.</li>
-                  </ul>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title *</Label>
-                  <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Assignment 1 - Data Structures" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="module">Module Code</Label>
-                  <Input id="module" value={moduleCode} onChange={(e) => setModuleCode(e.target.value)} placeholder="e.g. CS301" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description / Instructions</Label>
-                  <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what students should submit..." rows={3} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="maxScore">Max Score</Label>
-                    <Input id="maxScore" type="number" value={maxScore} onChange={(e) => setMaxScore(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dueDate">Due Date</Label>
-                    <Input id="dueDate" type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Target Cohorts (optional)</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Published assignment notifications only go to cohorts linked here.
-                  </p>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full justify-between font-normal"
-                      >
-                        <span className="truncate text-left">
-                          {summarizeSelection(
-                            selectedCohorts,
-                            (value) => COHORTS.find((cohort) => cohort.value === value)?.label ?? value,
-                            "Select target cohorts",
-                          )}
-                        </span>
-                        <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-3" align="start">
-                      <div className="space-y-2">
-                        {COHORTS.map((cohort) => (
-                          <label
-                            key={cohort.value}
-                            className={cn(
-                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer hover:bg-muted",
-                              selectedCohorts.includes(cohort.value) && "bg-muted",
-                            )}
-                          >
-                            <Checkbox
-                              checked={selectedCohorts.includes(cohort.value)}
-                              onCheckedChange={() => toggleCohort(cohort.value)}
-                            />
-                            {cohort.label}
-                          </label>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label>Target Departments (optional)</Label>
-                  <p className="text-xs text-muted-foreground">
-                    If set, published assignment visibility is also restricted to these departments.
-                  </p>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full justify-between font-normal"
-                      >
-                        <span className="truncate text-left">
-                          {summarizeSelection(
-                            selectedDepartments,
-                            (value) => value,
-                            "Select target departments",
-                          )}
-                        </span>
-                        <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-3" align="start">
-                      <div className="max-h-64 space-y-2 overflow-y-auto">
-                        {DEPARTMENTS.map((department) => (
-                          <label
-                            key={department}
-                            className={cn(
-                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer hover:bg-muted",
-                              selectedDepartments.includes(department) && "bg-muted",
-                            )}
-                          >
-                            <Checkbox
-                              checked={selectedDepartments.includes(department)}
-                              onCheckedChange={() => toggleDepartment(department)}
-                            />
-                            {department}
-                          </label>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <RubricBuilder rubric={rubric} onChange={setRubric} maxScore={Number(maxScore) || 100} />
-                <Button onClick={handleSaveAssignment} disabled={creating} className="w-full">
-                  {creating
-                    ? (editingAssignmentId ? "Saving..." : "Creating...")
-                    : (editingAssignmentId ? "Save Assignment Changes" : "Create Draft Assignment")}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
+      <DashboardPageIntro
+        eyebrow={role === "lecturer" ? "Assignment workflow" : "Student assignment view"}
+        title={role === "lecturer" ? "Manage Assignments" : "My Assignments"}
+        description={
+          role === "lecturer"
+            ? "Create, publish, and monitor assignment workflow from one place, including review-ready queues and grading progress."
+            : "Track live assignments, upcoming deadlines, and the next action needed for each submission window."
+        }
+        actions={
+          role === "lecturer" && !isDemo ? (
+            <AssignmentFormDialog
+              applyStarterTemplate={applyStarterTemplate}
+              creating={creating}
+              departments={DEPARTMENTS}
+              description={description}
+              dialogOpen={dialogOpen}
+              dueDate={dueDate}
+              editingAssignmentId={editingAssignmentId}
+              maxScore={maxScore}
+              moduleCode={moduleCode}
+              onDialogOpenChange={setDialogOpen}
+              onOpenCreateDialog={openCreateDialog}
+              onSave={handleSaveAssignment}
+              resetAssignmentForm={resetAssignmentForm}
+              rubric={rubric}
+              selectedCohorts={selectedCohorts}
+              selectedDepartments={selectedDepartments}
+              selectedTemplateId={selectedTemplateId}
+              setDescription={setDescription}
+              setDueDate={setDueDate}
+              setMaxScore={setMaxScore}
+              setModuleCode={setModuleCode}
+              setRubric={setRubric}
+              setTitle={setTitle}
+              summarizeSelection={summarizeSelection}
+              targetCohorts={COHORTS}
+              title={title}
+              toggleCohort={toggleCohort}
+              toggleDepartment={toggleDepartment}
+            />
+          ) : null
+        }
+      />
 
       {isDemo && role === "lecturer" && (
         <Card className="border-primary/20 bg-primary/5">
@@ -914,15 +598,10 @@ const Assignments = () => {
       </Card>
 
       {(assignments?.length ?? 0) === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <BookOpen className="h-12 w-12 text-muted-foreground/40 mb-3" />
-            <p className="font-medium">No assignments yet</p>
-            <p className="text-sm text-muted-foreground">
-              {role === "lecturer" ? "Create your first assignment to get started." : "No assignments have been published yet."}
-            </p>
-          </CardContent>
-        </Card>
+        <DashboardEmptyState
+          title="No assignments yet"
+          description={role === "lecturer" ? "Create your first assignment to get started." : "No assignments have been published yet."}
+        />
       ) : (sortedAssignments?.length ?? 0) === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">

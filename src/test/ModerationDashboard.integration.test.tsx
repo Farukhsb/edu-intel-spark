@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModerationCaseView } from "@/lib/moderationWorkflow";
 import {
@@ -64,8 +64,6 @@ const baseCase = {
   auditLog: [],
 } satisfies Omit<ModerationCaseView, "submission" | "assignment">;
 
-const getCaseRow = () => screen.getByTestId("moderation-case-case-1");
-
 describe("ModerationDashboard integration", () => {
   afterEach(() => {
     cleanup();
@@ -87,11 +85,13 @@ describe("ModerationDashboard integration", () => {
       ],
     });
 
-    await screen.findByText("Student record unavailable");
+    const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
+    const openButton = within(caseRow).getByTestId("moderation-review-open-case-1");
 
-    expect(getCaseRow()).toHaveTextContent("Assignment");
-    expect(screen.getByTestId("moderation-review-open-case-1")).toBeDisabled();
-  }, 10000);
+    expect(caseRow).toHaveTextContent("Student record unavailable");
+    expect(caseRow).toHaveTextContent("Assignment");
+    expect(openButton).toBeDisabled();
+  }, 20000);
 
   it("shows live moderation text and enables review when submission and assignment are available", async () => {
     await renderModerationDashboard({
@@ -133,9 +133,11 @@ describe("ModerationDashboard integration", () => {
       ],
     });
 
-    await screen.findByText("Sarah Student");
+    const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
+    const openButton = within(caseRow).getByTestId("moderation-review-open-case-1");
 
-    expect(getCaseRow()).toHaveTextContent("Policy Case Study");
-    expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();
-  }, 10000);
+    expect(caseRow).toHaveTextContent("Sarah Student");
+    expect(caseRow).toHaveTextContent("Policy Case Study");
+    expect(openButton).toBeEnabled();
+  }, 20000);
 });

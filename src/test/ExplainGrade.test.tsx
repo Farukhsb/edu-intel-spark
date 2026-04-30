@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import ExplainGrade, { getBreakdownMaxScore } from "@/pages/dashboard/ExplainGrade";
+import ExplainGrade, { buildGradeSelectorLabels, getBreakdownMaxScore } from "@/pages/dashboard/ExplainGrade";
 
 const mocks = vi.hoisted(() => ({
   authState: {
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   },
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     auth: {
       getSession: vi.fn(),
     },
@@ -58,6 +59,8 @@ type SubmissionRow = {
   student_name?: string | null;
   file_name?: string | null;
   status?: string | null;
+  released_at?: string | null;
+  updated_at?: string | null;
 };
 
 type GradeRow = {
@@ -78,6 +81,31 @@ type AssignmentRow = {
   id: string;
   module_code?: string | null;
   title: string;
+};
+
+type AssignmentMetadataRow = {
+  assignment_id: string;
+  max_score: number | null;
+  module_code: string | null;
+  submission_id: string;
+  title: string | null;
+};
+
+type ProjectionRow = {
+  submission_id: string;
+  assignment_id: string;
+  assignment_title: string | null;
+  module_code: string | null;
+  max_score: number | null;
+  file_name: string | null;
+  file_url: string;
+  submission_status: string;
+  submitted_at: string;
+  final_score: number | null;
+  ai_score: number | null;
+  final_feedback: string | null;
+  ai_feedback: string | null;
+  ai_breakdown: GradeRow["ai_breakdown"];
 };
 
 type Deferred<T> = {
@@ -129,64 +157,77 @@ const defaultAssignments: AssignmentRow[] = [
   },
 ];
 
+const defaultAssignmentMetadata: AssignmentMetadataRow[] = [
+  {
+    assignment_id: "assignment-1",
+    max_score: 100,
+    module_code: "ENG101",
+    submission_id: "submission-1",
+    title: "Critical Essay",
+  },
+];
+
 const setupSupabase = ({
   submissions = defaultSubmissions,
   grades = defaultGrades,
   assignments = defaultAssignments,
-  submissionsPromise,
+  assignmentMetadata = defaultAssignmentMetadata,
+  assignmentMetadataError = null,
+  projectionPromise,
   submissionsError,
 }: {
   submissions?: SubmissionRow[];
   grades?: GradeRow[];
   assignments?: AssignmentRow[];
-  submissionsPromise?: Promise<{ data: SubmissionRow[] }>;
+  assignmentMetadata?: AssignmentMetadataRow[];
+  assignmentMetadataError?: { message: string } | null;
+  projectionPromise?: Promise<{ data: ProjectionRow[]; error?: null }>;
   submissionsError?: Error;
 } = {}) => {
   mocks.supabase.auth.getSession.mockResolvedValue({
     data: { session: { access_token: "test-token" } },
   });
 
-  mocks.supabase.from.mockImplementation((table: string) => ({
-    select: vi.fn(() => {
-      if (table === "submissions") {
-        if (submissionsError) {
-          return Promise.reject(submissionsError);
-        }
+  const projection: ProjectionRow[] = submissions.map((submission) => {
+    const grade = grades.find((entry) => entry.submission_id === submission.id);
+    const metadata = assignmentMetadata.find((entry) => entry.submission_id === submission.id);
+    const assignment = assignments.find((entry) => entry.id === submission.assignment_id);
 
-        if (submissionsPromise) {
-          return submissionsPromise;
-        }
+    return {
+      submission_id: submission.id,
+      assignment_id: submission.assignment_id ?? "missing-assignment",
+      assignment_title: metadata?.title ?? assignment?.title ?? null,
+      module_code: metadata?.module_code ?? assignment?.module_code ?? null,
+      max_score: metadata?.max_score ?? 100,
+      file_name: submission.file_name ?? null,
+      file_url: "",
+      submission_status: submission.status ?? "submitted",
+      submitted_at: "2026-04-20T10:00:00.000Z",
+      final_score: grade?.final_score ?? null,
+      ai_score: grade?.ai_score ?? null,
+      final_feedback: null,
+      ai_feedback: null,
+      ai_breakdown: grade?.ai_breakdown ?? null,
+    };
+  });
 
-        return Promise.resolve({ data: submissions });
-      }
+  mocks.supabase.rpc.mockImplementation((fn: string) => {
+    if (fn !== "get_student_submission_grade_projection") {
+      throw new Error(`Unexpected rpc: ${fn}`);
+    }
+    if (submissionsError) {
+      return Promise.reject(submissionsError);
+    }
+    if (projectionPromise) {
+      return projectionPromise;
+    }
+    return Promise.resolve({
+      data: projection,
+      error: assignmentMetadataError,
+    });
+  });
 
-      if (table === "grades") {
-        return {
-          in: vi.fn((column: string, values: string[]) =>
-            Promise.resolve({
-              data: grades.filter((grade) =>
-                column === "submission_id" ? values.includes(grade.submission_id) : true
-              ),
-            })
-          ),
-        };
-      }
-
-      if (table === "assignments") {
-        return {
-          in: vi.fn((column: string, values: string[]) =>
-            Promise.resolve({
-              data: assignments.filter((assignment) =>
-                column === "id" ? values.includes(assignment.id) : true
-              ),
-            })
-          ),
-        };
-      }
-
-      return Promise.resolve({ data: [] });
-    }),
-  }));
+  mocks.supabase.from.mockReset();
 };
 
 const renderExplainGrade = () =>
@@ -200,6 +241,7 @@ describe("ExplainGrade", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     mocks.authState.isDemo = false;
     mocks.authState.user = { id: "student-1" };
   });
@@ -219,7 +261,7 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
-    expect(screen.getByText("ENG101 Critical Essay")).toBeInTheDocument();
+    expect(screen.getByText("Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("74%")).toBeInTheDocument();
   });
 
@@ -231,7 +273,7 @@ describe("ExplainGrade", () => {
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "EDU401 Evaluating the Role of Artificial Intelligence in University Assessment and Student Support",
+        "Evaluating the Role of Artificial Intelligence in University Assessment and Student Support",
       ),
     ).toBeInTheDocument();
 
@@ -246,8 +288,8 @@ describe("ExplainGrade", () => {
   });
 
   it("shows a loading state while explanation data is pending", () => {
-    const deferred = createDeferred<{ data: SubmissionRow[] }>();
-    setupSupabase({ submissionsPromise: deferred.promise });
+    const deferred = createDeferred<{ data: ProjectionRow[]; error?: null }>();
+    setupSupabase({ projectionPromise: deferred.promise });
 
     renderExplainGrade();
 
@@ -311,10 +353,160 @@ describe("ExplainGrade", () => {
 
     renderExplainGrade();
 
-    expect(await screen.findByText("ENG101 Critical Essay")).toBeInTheDocument();
+    expect(await screen.findByText("Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("How to Improve")).toBeInTheDocument();
     expect(screen.getByText("Specific guidance to raise your grade band")).toBeInTheDocument();
     expect(screen.queryByText("Draft Essay")).not.toBeInTheDocument();
+  });
+
+  it("builds grade selector labels without using the student name", () => {
+    expect(
+      buildGradeSelectorLabels({
+        assignmentTitle: "Data Structures Assignment",
+        fileName: "Nkechi Onwumere CV.docx",
+        releasedAt: "2026-04-29T10:00:00.000Z",
+        score: 67,
+      }),
+    ).toEqual({
+      label: "Data Structures Assignment — 67%",
+      assessment: "Data Structures Assignment",
+      secondaryLabel: "Nkechi Onwumere CV.docx · Released 29 Apr 2026",
+    });
+
+    expect(
+      buildGradeSelectorLabels({
+        assignmentTitle: null,
+        fileName: "fallback-report.pdf",
+        score: 58,
+      }),
+    ).toMatchObject({
+      label: "fallback-report.pdf — 58%",
+      assessment: "fallback-report.pdf",
+      secondaryLabel: null,
+    });
+
+    expect(
+      buildGradeSelectorLabels({
+        assignmentTitle: "",
+        fileName: null,
+        score: 41,
+      }),
+    ).toMatchObject({
+      label: "Released grade — 41%",
+      assessment: "Released grade",
+    });
+  });
+
+  it("uses assignment title and score as the rendered grade selector main label", async () => {
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_name: "abdullahi faruk",
+          file_name: "Nkechi Onwumere CV.docx",
+          status: "released",
+          updated_at: "2026-04-29T10:00:00.000Z",
+        },
+        {
+          id: "submission-2",
+          assignment_id: null,
+          student_name: "Other Student",
+          file_name: "fallback-report.pdf",
+          status: "released",
+          updated_at: "2026-04-28T10:00:00.000Z",
+        },
+        {
+          id: "submission-3",
+          assignment_id: null,
+          student_name: "Hidden Student",
+          file_name: null,
+          status: "released",
+        },
+      ],
+      grades: [
+        {
+          id: "grade-1",
+          submission_id: "submission-1",
+          final_score: 67,
+          ai_breakdown: [{ criterion: "Correctness", score: 17, max_score: 25 }],
+        },
+        {
+          id: "grade-2",
+          submission_id: "submission-2",
+          final_score: 58,
+          ai_breakdown: [{ criterion: "Analysis", score: 15, max_score: 25 }],
+        },
+        {
+          id: "grade-3",
+          submission_id: "submission-3",
+          final_score: 41,
+          ai_breakdown: [{ criterion: "Evidence", score: 10, max_score: 25 }],
+        },
+      ],
+      assignments: [],
+      assignmentMetadata: [
+        {
+          assignment_id: "assignment-1",
+          max_score: 100,
+          module_code: "CS201",
+          submission_id: "submission-1",
+          title: "Data Structures Assignment",
+        },
+      ],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Data Structures Assignment")).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment — 67%");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx");
+    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
+    expect(screen.queryByText(/abdullahi faruk/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Other Student/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Hidden Student/i)).not.toBeInTheDocument();
+  });
+
+  it("falls back to file name when assignment title metadata is unavailable", async () => {
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_name: "Sam Student",
+          file_name: "fallback-report.pdf",
+          status: "released",
+        },
+      ],
+      assignments: [],
+      assignmentMetadata: [],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("fallback-report.pdf")).toBeInTheDocument();
+    expect(screen.queryByText(/Sam Student/i)).not.toBeInTheDocument();
+  });
+
+  it("falls back to Released grade when assignment title and file name are unavailable", async () => {
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_name: "Sam Student",
+          file_name: null,
+          status: "released",
+        },
+      ],
+      assignments: [],
+      assignmentMetadata: [],
+    });
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Released grade")).toBeInTheDocument();
+    expect(screen.queryByText(/Sam Student/i)).not.toBeInTheDocument();
   });
 
   it("shows safe student guidance without exposing provisional or unreleased grading data", async () => {
@@ -388,5 +580,41 @@ describe("ExplainGrade", () => {
     expect(screen.queryByText("Grade Breakdown")).not.toBeInTheDocument();
 
     consoleError.mockRestore();
+  });
+
+  it("sends submissionId and messages without browser gradeContext", async () => {
+    setupSupabase();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                'data: {"choices":[{"delta":{"content":"Use the released feedback."}}]}\n\ndata: [DONE]\n\n',
+              ),
+            );
+            controller.close();
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderExplainGrade();
+
+    expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Ask about your grade..."), {
+      target: { value: "How can I improve?" },
+    });
+    fireEvent.click(screen.getAllByRole("button").at(-1)!);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+
+    expect(requestBody.submissionId).toBe("submission-1");
+    expect(requestBody.messages.at(-1)).toEqual({ role: "user", content: "How can I improve?" });
+    expect(requestBody.gradeContext).toBeUndefined();
+    expect(JSON.stringify(requestBody)).not.toContain("Argument");
   });
 });

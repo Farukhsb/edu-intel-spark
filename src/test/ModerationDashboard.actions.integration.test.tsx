@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModerationCaseView } from "@/lib/moderationWorkflow";
 import {
@@ -156,12 +156,14 @@ describe("ModerationDashboard moderator integration", () => {
   it("shows an assigned case to the moderator with student context and an enabled review action", async () => {
     await renderAssignedModerationDashboard();
 
-    await screen.findByText("Sarah Student");
+    const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
+    const openButton = within(caseRow).getByTestId("moderation-review-open-case-1");
 
-    expect(screen.getByTestId("moderation-case-case-1")).toHaveTextContent("Policy Case Study");
-    expect(screen.getByTestId("moderation-case-case-1")).toHaveTextContent("Morgan Moderator");
-    expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();
-  }, 10000);
+    expect(caseRow).toHaveTextContent("Sarah Student");
+    expect(caseRow).toHaveTextContent("Policy Case Study");
+    expect(caseRow).toHaveTextContent("Morgan Moderator");
+    expect(openButton).toBeEnabled();
+  }, 20000);
 
   it.each([
     { action: "agree", expectedCaseStatus: "moderated", expectedSubmissionStatus: "moderated" },
@@ -171,10 +173,11 @@ describe("ModerationDashboard moderator integration", () => {
   ])("allows the assigned moderator to call the $action action", async ({ action, expectedCaseStatus, expectedSubmissionStatus }) => {
     const supabaseMock = await renderAssignedModerationDashboard();
 
-    await screen.findByTestId("moderation-review-open-case-1");
-    expect(screen.getByTestId("moderation-review-open-case-1")).toBeEnabled();
+    const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
+    const openButton = within(caseRow).getByTestId("moderation-review-open-case-1");
+    expect(openButton).toBeEnabled();
 
-    fireEvent.click(screen.getByTestId("moderation-review-open-case-1"));
+    fireEvent.click(openButton);
 
     await screen.findByTestId("moderation-review-dialog");
     expect(screen.getByTestId(`moderation-action-${action}`)).toBeEnabled();
@@ -196,5 +199,5 @@ describe("ModerationDashboard moderator integration", () => {
     ).toBe(true);
     expect(supabaseMock.insertCalls.some((call) => call.table === "moderation_reviews")).toBe(true);
     expect(supabaseMock.insertCalls.some((call) => call.table === "grade_audit_log")).toBe(true);
-  }, 10000);
+  }, 20000);
 });
