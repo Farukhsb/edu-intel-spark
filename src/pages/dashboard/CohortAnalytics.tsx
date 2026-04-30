@@ -10,7 +10,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Lightbulb,
-  Loader2,
   Shield,
   TrendingDown,
 } from "lucide-react";
@@ -36,6 +35,10 @@ import { buildRecommendationInterventionRows, insertRecommendationInterventions 
 import { parseStoredReviewPayload } from "@/lib/integrityReviews";
 import { log } from "@/lib/logger";
 import { toast } from "sonner";
+import {
+  DashboardEmptyState,
+  DashboardLoadingState,
+} from "@/components/dashboard/PageStates";
 
 const ASSIGNMENT_FIELDS = "id, title, module_code, created_at, max_score";
 const SUBMISSION_FIELDS =
@@ -621,11 +624,7 @@ const CohortAnalytics = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardLoadingState />;
   }
 
   return (
@@ -666,7 +665,10 @@ const CohortAnalytics = () => {
             </CardHeader>
             <CardContent>
               {gradeDistChart.every((item) => item.count === 0) ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">No graded submissions yet</p>
+                <DashboardEmptyState
+                  title="No graded submissions yet"
+                  description="Grade distribution will appear after assignments are graded."
+                />
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={gradeDistChart}>
@@ -694,11 +696,10 @@ const CohortAnalytics = () => {
 
         <TabsContent value="modules" className="mt-4">
           {filteredModules.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No assignments found
-              </CardContent>
-            </Card>
+            <DashboardEmptyState
+              title="No assignments found"
+              description="Assignment comparison appears after assignments and grading data are available."
+            />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {filteredModules.map((module) => (
@@ -739,13 +740,10 @@ const CohortAnalytics = () => {
 
         <TabsContent value="recommendations" className="mt-4 space-y-4">
           {visibleRecommendations.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">
-                  Explainable recommendations will appear here once enough analytics data is available.
-                </p>
-              </CardContent>
-            </Card>
+            <DashboardEmptyState
+              title="No recommendations yet"
+              description="Explainable recommendations will appear here once enough analytics data is available."
+            />
           ) : (
             visibleRecommendations.map((recommendation) => (
               <Card key={recommendation.id} className="border-l-4 border-l-primary">

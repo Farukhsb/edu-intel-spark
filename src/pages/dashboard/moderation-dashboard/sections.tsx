@@ -1,0 +1,341 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Scale } from "lucide-react";
+
+import { safeFormatDate } from "@/lib/date";
+import {
+  evaluateModerationSignals,
+  formatSubmissionStatus,
+  getLatestModeratorReview,
+  type ModerationAction,
+} from "@/lib/moderation";
+import type { ModerationCaseView } from "@/lib/moderationWorkflow";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Profile = Tables<"profiles">;
+
+const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
+
+export const ModerationQueueSection = ({
+  cases,
+  onSelectCase,
+}: {
+  cases: ModerationCaseView[];
+  onSelectCase: (caseId: string) => void;
+}) => (
+  <Card>
+    <CardHeader>
+      <div className="flex items-center gap-2">
+        <Scale className="h-5 w-5 text-primary" />
+        <CardTitle className="text-base">Moderation Queue</CardTitle>
+      </div>
+      <CardDescription>
+        Moderation reuses the existing confidence, integrity, maths, and lecturer override signals. It does not auto-release final grades.
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      {cases.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No moderation cases yet. Cases appear here when first review triggers moderation.
+        </p>
+      ) : (
+        cases.map((item) => {
+          const latestModeratorReview = getLatestModeratorReview(item.reviews);
+          const moderationSignals = evaluateModerationSignals({
+            grade: item.grade,
+            integrityReview: item.integrityReview,
+            maxScore: item.assignment?.max_score ?? 100,
+          });
+
+          return (
+            <div
+              key={item.moderationCase.id}
+              data-testid={`moderation-case-${item.moderationCase.id}`}
+              className="rounded-xl border p-4"
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium">
+                      {item.submission?.student_name || item.submission?.student_email || "Student record unavailable"}
+                    </p>
+                    <Badge variant="outline">{formatSubmissionStatus(item.moderationCase.status)}</Badge>
+                    {item.moderationCase.integrity_risk_score != null && item.moderationCase.integrity_risk_score >= 55 && (
+                      <Badge variant="secondary">Integrity risk {item.moderationCase.integrity_risk_score}%</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {item.assignment?.title || "Assignment"} - Submitted{" "}
+                    {safeFormatDate(item.submission?.submitted_at, "MMM d, yyyy HH:mm")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    First marker: {item.firstMarker?.full_name || "Unassigned"} - Moderator:{" "}
+                    {item.moderator?.full_name || "Unassigned"}
+                  </p>
+                  {item.moderationCase.trigger_summary && (
+                    <p className="text-xs text-muted-foreground">{item.moderationCase.trigger_summary}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {moderationSignals.signals.map((signal) => (
+                      <Badge key={`${item.moderationCase.id}-${signal.code}`} variant="outline" className="text-xs">
+                        {signal.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-right text-xs text-muted-foreground">
+                    <p>AI {item.grade?.ai_score ?? "-"}</p>
+                    <p>First marker {item.moderationCase.first_marker_score ?? item.grade?.lecturer_score ?? "-"}</p>
+                    <p>Moderator {latestModeratorReview?.proposed_score ?? item.moderationCase.moderator_score ?? "-"}</p>
+                    <p>Agreed {item.moderationCase.final_agreed_score ?? "-"}</p>
+                  </div>
+                  <Button
+                    data-testid={`moderation-review-open-${item.moderationCase.id}`}
+                    size="sm"
+                    variant="outline"
+                    disabled={!item.submission}
+                    onClick={() => onSelectCase(item.moderationCase.id)}
+                  >
+                    Review case
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </CardContent>
+  </Card>
+);
+
+export const ModerationReviewDialog = ({
+  feedbackDraft,
+  lecturers,
+  moderatorDrafts,
+  noteDraft,
+  onAssignModerator,
+  onClose,
+  onFeedbackDraftChange,
+  onModeratorDraftChange,
+  onNoteDraftChange,
+  onSaveAction,
+  onScoreDraftChange,
+  open,
+  saving,
+  scoreDraft,
+  selectedCase,
+  userId,
+}: {
+  feedbackDraft: string;
+  lecturers: Profile[];
+  moderatorDrafts: Record<string, string>;
+  noteDraft: string;
+  onAssignModerator: (item: ModerationCaseView) => void;
+  onClose: () => void;
+  onFeedbackDraftChange: (value: string) => void;
+  onModeratorDraftChange: (caseId: string, value: string) => void;
+  onNoteDraftChange: (value: string) => void;
+  onSaveAction: (action: ModerationAction) => void;
+  onScoreDraftChange: (value: string) => void;
+  open: boolean;
+  saving: boolean;
+  scoreDraft: string;
+  selectedCase: ModerationCaseView | null;
+  userId?: string | null;
+}) => (
+  <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <DialogContent data-testid="moderation-review-dialog" className="max-h-[88vh] overflow-y-auto sm:max-w-4xl">
+      <DialogHeader>
+        <DialogTitle>Moderation Review</DialogTitle>
+        <DialogDescription>
+          {selectedCase?.submission?.student_name || selectedCase?.submission?.student_email || "Student record unavailable"} -{" "}
+          {selectedCase?.assignment?.title || "Assignment"}
+        </DialogDescription>
+      </DialogHeader>
+
+      {selectedCase && (
+        <div className="space-y-5 pt-2">
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {[
+              { label: "AI score", value: selectedCase.grade?.ai_score ?? "-" },
+              { label: "First marker", value: selectedCase.moderationCase.first_marker_score ?? selectedCase.grade?.lecturer_score ?? "-" },
+              { label: "Moderator", value: getLatestModeratorReview(selectedCase.reviews)?.proposed_score ?? selectedCase.moderationCase.moderator_score ?? "-" },
+              { label: "Final agreed", value: selectedCase.moderationCase.final_agreed_score ?? "-" },
+              { label: "Confidence", value: selectedCase.moderationCase.confidence_score != null ? `${Math.round(selectedCase.moderationCase.confidence_score * 100)}%` : "-" },
+              { label: "Integrity risk", value: selectedCase.moderationCase.integrity_risk_score != null ? `${selectedCase.moderationCase.integrity_risk_score}%` : "-" },
+            ].map((metric) => (
+              <Card key={metric.label}>
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">{metric.label}</p>
+                  <p className="mt-2 text-xl font-semibold">{metric.value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <Card>
+              <CardContent className="space-y-4 p-4">
+                <div className="space-y-2">
+                  <Label>Assigned moderator</Label>
+                  <Select
+                    value={moderatorDrafts[selectedCase.moderationCase.id] || "unassigned"}
+                    onValueChange={(value) => onModeratorDraftChange(selectedCase.moderationCase.id, value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {lecturers.map((lecturer) => (
+                        <SelectItem key={lecturer.id} value={lecturer.id}>
+                          {lecturer.full_name || lecturer.email || lecturer.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  data-testid={`moderation-assign-${selectedCase.moderationCase.id}`}
+                  variant="outline"
+                  className="w-full"
+                  disabled={saving || !selectedCase.submission || selectedCase.moderationCase.lecturer_id !== userId}
+                  onClick={() => onAssignModerator(selectedCase)}
+                >
+                  Assign Moderator
+                </Button>
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  <p>Status: {formatSubmissionStatus(selectedCase.moderationCase.status)}</p>
+                  <p className="mt-1">
+                    Trigger flags: {(selectedCase.moderationCase.trigger_flags as string[]).join(", ") || "none"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="space-y-4 p-4">
+                <div className="space-y-2">
+                  <Label>Moderation notes</Label>
+                  <Textarea
+                    rows={4}
+                    value={noteDraft}
+                    onChange={(event) => onNoteDraftChange(event.target.value)}
+                    placeholder="Record the moderation rationale, comparison notes, and outcome."
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Moderator score</Label>
+                    <Input
+                      type="number"
+                      value={scoreDraft}
+                      onChange={(event) => onScoreDraftChange(event.target.value)}
+                      placeholder={`Out of ${selectedCase.assignment?.max_score ?? 100}`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Final agreed feedback</Label>
+                    <Textarea
+                      rows={3}
+                      value={feedbackDraft}
+                      onChange={(event) => onFeedbackDraftChange(event.target.value)}
+                      placeholder="Feedback text to keep with the final agreed mark."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button data-testid="moderation-action-agree" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => onSaveAction("agree")}>
+                    Agree
+                  </Button>
+                  <Button data-testid="moderation-action-adjust" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => onSaveAction("adjust")}>
+                    Adjust
+                  </Button>
+                  <Button data-testid="moderation-action-return" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => onSaveAction("return")}>
+                    Return
+                  </Button>
+                  <Button data-testid="moderation-action-escalate" variant="outline" disabled={saving || !selectedCase.submission} onClick={() => onSaveAction("escalate")}>
+                    Escalate
+                  </Button>
+                  <Button data-testid="moderation-action-approve" disabled={saving || !selectedCase.submission} onClick={() => onSaveAction("approve")}>
+                    Approve
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Moderation History</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedCase.reviews.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No moderation actions recorded yet.</p>
+                ) : (
+                  selectedCase.reviews.map((review) => (
+                    <div key={review.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{actionLabel(review.action as ModerationAction)}</Badge>
+                        <Badge variant="secondary">{formatSubmissionStatus(review.reviewer_role)}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {safeFormatDate(review.created_at, "MMM d, yyyy HH:mm")}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm">{review.notes || "No note recorded."}</p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Audit History</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedCase.auditLog.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No audit entries recorded yet.</p>
+                ) : (
+                  selectedCase.auditLog.slice(0, 8).map((entry) => (
+                    <div key={entry.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{formatSubmissionStatus(entry.event_type)}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {safeFormatDate(entry.created_at, "MMM d, yyyy HH:mm")}
+                        </span>
+                      </div>
+                      {entry.reason && <p className="mt-2 text-sm">{entry.reason}</p>}
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+    </DialogContent>
+  </Dialog>
+);

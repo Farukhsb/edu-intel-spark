@@ -2,7 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
-import { logError } from "../_shared/log.ts";
+import { requirePostMethod } from "../_shared/http.ts";
+import { logError, logInfo, logWarn } from "../_shared/log.ts";
+import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 type StudentInput = {
   name: string;
@@ -35,13 +37,30 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const methodError = requirePostMethod(req, corsHeaders);
+  if (methodError) return methodError;
 
   try {
-    await requireLecturer(req);
+    const { user } = await requireLecturer(req);
+    const rateLimit = applyRateLimit(req, {
+      scope: "bulk-create-students",
+      limit: 20,
+      windowMs: 60_000,
+      userId: user.id,
+    });
+    if (!rateLimit.allowed) {
+      logWarn("Rate limit exceeded", { function: "bulk-create-students", identifierType: rateLimit.identifierType });
+      return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
+    }
+
     const body = await req.json().catch(() => null);
     const parsed = BulkCreateStudentsRequestSchema.safeParse(body);
 
     if (!parsed.success) {
+      logWarn("Invalid bulk student upload request", {
+        function: "bulk-create-students",
+        issueCount: parsed.error.issues.length,
+      });
       return new Response(
         JSON.stringify({
           error: "Invalid request format",
@@ -99,6 +118,14 @@ serve(async (req) => {
 
       results.push({ name, email, password, success: true });
     }
+
+    const successCount = results.filter((result) => result.success).length;
+    logInfo("bulk-create-students completed", {
+      function: "bulk-create-students",
+      requestedCount: students.length,
+      successCount,
+      failedCount: results.length - successCount,
+    });
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
