@@ -294,6 +294,11 @@ const buildRecommendedActionLabel = (value?: string) =>
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
 
+const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
+  const candidate = `${submission.file_name ?? ""} ${submission.file_url ?? ""}`.toLowerCase();
+  return Boolean(submission.file_url?.trim()) && (candidate.includes(".pdf") || candidate.includes(".docx") || candidate.includes(".txt"));
+};
+
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { role, user, profile, isDemo } = useAuth();
@@ -805,12 +810,32 @@ const AssignmentDetail = () => {
     if (!assignment) return;
 
     setGrading(true);
-    setGradingCount(toGrade.length);
+    if (role === "lecturer" && user?.id && assignment.lecturer_id !== user.id) {
+      toast.error("You can only grade assignments that are assigned to your lecturer account.");
+      return;
+    }
+
+    const preflightFailures = toGrade.filter((submission) => !hasGradableSubmissionFile(submission));
+    const gradableSubmissions = toGrade.filter((submission) => hasGradableSubmissionFile(submission));
+
+    if (preflightFailures.length > 0) {
+      toast.error(
+        preflightFailures.length === toGrade.length
+          ? "Selected submissions are missing a readable PDF, DOCX, or TXT file."
+          : `${preflightFailures.length} submission(s) were skipped because the file is missing or unsupported.`,
+      );
+    }
+
+    if (gradableSubmissions.length === 0) {
+      return;
+    }
+
+    setGradingCount(gradableSubmissions.length);
     setGradingElapsed(0);
     gradingTimerRef.current = setInterval(() => setGradingElapsed((p) => p + 1), 1000);
-    toast.info(`Sending ${toGrade.length} submission(s) for AI grading...`);
+    toast.info(`Sending ${gradableSubmissions.length} submission(s) for AI grading...`);
 
-    for (const sub of toGrade) {
+    for (const sub of gradableSubmissions) {
       try {
         await supabase.from("submissions").update({ status: "ai_grading" as const }).eq("id", sub.id);
       } catch {}
@@ -820,7 +845,7 @@ const AssignmentDetail = () => {
       const { data, error } = await supabase.functions.invoke<GradeSubmissionInvokeData>("grade-submission", {
         body: {
           assignmentId: assignment.id,
-          submissions: toGrade.map((s) => ({ id: s.id })),
+          submissions: gradableSubmissions.map((s) => ({ id: s.id })),
         },
       });
 
@@ -831,7 +856,7 @@ const AssignmentDetail = () => {
       const failureMessages = new Set<string>();
 
       for (const r of results) {
-        const sub = toGrade.find((s) => s.id === r.submissionId);
+        const sub = gradableSubmissions.find((s) => s.id === r.submissionId);
         if (!sub) continue;
 
         if (r.success) {
@@ -902,7 +927,7 @@ const AssignmentDetail = () => {
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
-      for (const sub of toGrade) {
+      for (const sub of gradableSubmissions) {
         try {
           await supabase.from("submissions").update({ status: sub.status }).eq("id", sub.id);
         } catch {}
