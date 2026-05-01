@@ -184,8 +184,7 @@ Current safeguards include:
 
 ## Current State
 
-GradeAI is a working full-stack prototype with several hardened workflows. It is not presented as a finished institution-wide platform. The current focus is making the core assessment, review, moderation, analytics, and support workflows reliable enough for controlled testing and further development.
-The backend is now running against a clean Supabase project with RLS, API grants, storage, Edge Functions, and AI secrets reconfigured under the controlled project setup.
+GradeAI is a working full-stack prototype with several hardened workflows. It is not presented as a finished institution-wide platform. The current focus is making the core assessment, review, moderation, analytics, and support workflows reliable enough for controlled testing and further development. The backend is now running against a clean Supabase project with RLS, API grants, storage, Edge Functions, and AI secrets reconfigured under the controlled project setup.
 
 Working well:
 
@@ -376,13 +375,9 @@ The active deployment target has since been moved to a clean, controlled Supabas
 YYYYMMDDHHMMSS_description.sql
 ```
 
-Do not create new short-form migration IDs such as:
+Do not create new short-form migration IDs.
 
-```text
-YYYYMMDD_description.sql
-```
-
-For deployment setup, environment variables, Supabase secrets, storage, and validation steps, see the [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
+For deployment setup and environment configuration, see the [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
 
 ## Deployment Notes
 
