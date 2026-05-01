@@ -8,6 +8,12 @@ const serializeError = (error: unknown) => {
     };
   }
 
+  if (error && typeof error === "object") {
+    return Object.fromEntries(
+      Object.entries(error as Record<string, unknown>).filter(([, value]) => value !== undefined),
+    );
+  }
+
   return {
     message: typeof error === "string" ? error : "Unknown error",
   };

@@ -59,7 +59,7 @@ serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { user } = await requireUser(req);
+    const { supabase: userSupabase, user } = await requireUser(req);
     const rateLimit = applyRateLimit(req, {
       scope: "explain-grade",
       limit: 12,
@@ -98,7 +98,7 @@ serve(async (req) => {
       ? rawMessages
       : [{ role: "user", content: message } satisfies ExplainGradeMessage];
     const admin = createAdminClient();
-    const { data: submission, error: submissionError } = await admin
+    const { data: submission, error: submissionError } = await userSupabase
       .from("submissions")
       .select("id, assignment_id, student_id, student_name, student_email, file_name, status")
       .eq("id", submissionId)
@@ -108,7 +108,7 @@ serve(async (req) => {
       throw new Error("Failed to load submission");
     }
 
-    const { data: grade, error: gradeError } = await admin
+    const { data: grade, error: gradeError } = await userSupabase
       .from("grades")
       .select("id, submission_id, ai_score, final_score, ai_feedback, ai_breakdown, grading_confidence")
       .eq("submission_id", submissionId)
@@ -120,7 +120,7 @@ serve(async (req) => {
 
     const assignmentId = typeof submission?.assignment_id === "string" ? submission.assignment_id : null;
     const { data: assignment, error: assignmentError } = assignmentId
-      ? await admin
+      ? await userSupabase
           .from("assignments")
           .select("id, title, module_code, max_score")
           .eq("id", assignmentId)

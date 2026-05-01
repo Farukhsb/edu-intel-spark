@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/lib/date";
+import { env } from "@/lib/env";
 import {
   buildAIGradingReadyNotification,
   buildGradeReleasedNotification,
@@ -104,6 +105,7 @@ const buildRecommendedActionLabel = (value?: string) =>
   value ? `Recommended action: ${String(value).replace("-", " ")}` : "Review recommended";
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
+const PLAGIARISM_CHECK_URL = `${env.VITE_SUPABASE_URL}/functions/v1/check-plagiarism`;
 
 const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
   const candidate = `${submission.file_name ?? ""} ${submission.file_url ?? ""}`.toLowerCase();
@@ -622,11 +624,14 @@ const AssignmentDetail = () => {
 
       for (let index = 0; index < submissions.length; index += batchSize) {
         const batch = submissions.slice(index, index + batchSize);
-        const { data, error } = await supabase.functions.invoke("check-plagiarism", {
+        const response = await fetch(PLAGIARISM_CHECK_URL, {
+          method: "POST",
           headers: {
+            "Content-Type": "application/json",
+            apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: {
+          body: JSON.stringify({
             assignmentId: assignment.id,
             submissions: batch.map((s) => ({
               id: s.id,
@@ -634,18 +639,21 @@ const AssignmentDetail = () => {
               file_name: s.file_name,
               file_url: s.file_url,
             })),
-          },
+          }),
         });
 
-        if (error) {
+        if (!response.ok) {
           failedBatches += 1;
-          log.error("Plagiarism batch failed", error, {
+          const errorBody = await response.json().catch(() => ({ error: "Edge Function returned a non-2xx status code" }));
+          log.error("Plagiarism batch failed", errorBody, {
             batchStart: index,
             batchSize: batch.length,
           });
           collectedWarnings.push(`A plagiarism analysis batch of ${batch.length} submission(s) failed and was skipped.`);
           continue;
         }
+
+        const data = await response.json();
 
         const parsed = safeParseIntegrityBatchResponse(data);
         if (!parsed.success) {

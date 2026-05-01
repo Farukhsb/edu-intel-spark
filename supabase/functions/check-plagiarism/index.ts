@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
-import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -773,12 +772,20 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  const methodError = requirePostMethod(req, corsHeaders);
-  if (methodError) return methodError;
 
   try {
+    const rawAuthorization = req.headers.get("Authorization");
+    logInfo("check-plagiarism request headers", {
+      method: req.method,
+      hasAuthorization: Boolean(rawAuthorization),
+      authorizationPreview: rawAuthorization ? `${rawAuthorization.slice(0, 16)}...` : null,
+      hasApiKey: req.headers.has("apikey"),
+      origin: req.headers.get("Origin"),
+      referer: req.headers.get("Referer"),
+    });
+
     const startedAt = Date.now();
-    const { user } = await requireLecturer(req);
+    const { supabase: userSupabase, user } = await requireLecturer(req);
     const rateLimit = applyRateLimit(req, {
       scope: "check-plagiarism",
       limit: 5,
@@ -842,24 +849,36 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createAdminClient();
-    const { data: assignment, error: assignmentError } = await supabaseAdmin
+    const { data: assignment, error: assignmentError } = await userSupabase
       .from("assignments")
-      .select("id, lecturer_id, title, description")
+      .select("id, lecturer_id")
       .eq("id", requestedAssignmentId)
       .maybeSingle();
 
-    if (assignmentError) throw new Error("Failed to load assignment");
+    if (assignmentError) {
+      logError("check-plagiarism assignment query failed", assignmentError, {
+        assignmentId: requestedAssignmentId,
+        submissionCount: requestedSubmissionIds.length,
+      });
+      throw new Error("Failed to load assignment");
+    }
     if (!assignment || assignment.lecturer_id !== user.id) {
       throw new HttpError(403, "You do not have access to this assignment");
     }
 
-    const { data: submissions, error: submissionsError } = await supabaseAdmin
+    const { data: submissions, error: submissionsError } = await userSupabase
       .from("submissions")
       .select("id, assignment_id, student_id, student_name, student_email, file_name, file_url")
       .eq("assignment_id", requestedAssignmentId)
       .in("id", requestedSubmissionIds);
 
-    if (submissionsError) throw new Error("Failed to load submissions");
+    if (submissionsError) {
+      logError("check-plagiarism submissions query failed", submissionsError, {
+        assignmentId: requestedAssignmentId,
+        requestedSubmissionIds,
+      });
+      throw new Error("Failed to load submissions");
+    }
     if (!submissions || submissions.length !== requestedSubmissionIds.length) {
       throw new HttpError(403, "One or more submissions are not accessible");
     }
@@ -902,7 +921,11 @@ serve(async (req) => {
           function: "check-plagiarism",
         });
       } else {
-        throw profileRowsError;
+        logError("student_writing_profiles query failed", profileRowsError, {
+          function: "check-plagiarism",
+          assignmentId: requestedAssignmentId,
+        });
+        warnings.push("Writing profile history could not be loaded, but analysis completed.");
       }
     }
 
@@ -973,6 +996,7 @@ Rules:
 - Never output a verdict, only a risk indicator with evidence.`;
 
     const userContent: Array<Record<string, string>> = [];
+    const assignmentTitle = "Assignment";
 
     if (isSingleMode) {
       const sub = submissions[0];
@@ -992,7 +1016,7 @@ Rules:
         type: "input_text",
         text: `Analyse this submission for AI-writing suspicion only.
 
-Assignment: ${assignment.title}
+Assignment: ${assignmentTitle}
 Student: ${sub.student_name || sub.student_email || "Anonymous"}
 File: ${sub.file_name || "submission"}
 
@@ -1038,7 +1062,7 @@ ${preview}`;
         type: "input_text",
         text: `Analyse these submissions for suspicious similarity and AI-writing indicators.
 
-Assignment: ${assignment.title}
+Assignment: ${assignmentTitle}
 
 Submissions:
 ${summaries.join("\n\n---\n\n")}
@@ -1212,7 +1236,7 @@ Only flag real concerns. Return valid JSON only.`,
     }
 
     const internalFindings: IntegrityProviderFinding[] = [];
-    if (shouldRunInternalProvider && submissions.length > 1) {
+    if (shouldRunInternalProvider && requestedAssignmentId && submissions.length >= 2) {
       const comparableSubmissions = submissions
         .map((submission) => {
           const content = contentMap.get(submission.id);
@@ -1233,20 +1257,42 @@ Only flag real concerns. Return valid JSON only.`,
           } => Boolean(item),
         );
 
+      logInfo("internal_similarity_started", {
+        assignmentId: requestedAssignmentId,
+        submissionCount: submissions.length,
+        comparableSubmissionCount: comparableSubmissions.length,
+      });
+
       for (let leftIndex = 0; leftIndex < comparableSubmissions.length; leftIndex += 1) {
         for (let rightIndex = leftIndex + 1; rightIndex < comparableSubmissions.length; rightIndex += 1) {
-          const left = comparableSubmissions[leftIndex];
-          const right = comparableSubmissions[rightIndex];
-          const pairwiseFinding = analyzeTextSimilarity(
-            left.content.plainText,
-            right.content.plainText,
-            left.submission.id,
-            right.submission.id,
-            requestedAssignmentId,
-          );
-          internalFindings.push(pairwiseFinding);
+          try {
+            const left = comparableSubmissions[leftIndex];
+            const right = comparableSubmissions[rightIndex];
+            const pairwiseFinding = analyzeTextSimilarity(
+              left.content.plainText,
+              right.content.plainText,
+              left.submission.id,
+              right.submission.id,
+              requestedAssignmentId,
+            );
+            internalFindings.push(pairwiseFinding);
+          } catch (error) {
+            logError("internal_similarity_pair_failed", error, {
+              assignmentId: requestedAssignmentId,
+              leftSubmissionId: comparableSubmissions[leftIndex]?.submission.id ?? null,
+              rightSubmissionId: comparableSubmissions[rightIndex]?.submission.id ?? null,
+            });
+            warnings.push("A pairwise internal similarity comparison failed and was skipped.");
+          }
         }
       }
+
+      logInfo("internal_similarity_completed", {
+        assignmentId: requestedAssignmentId,
+        submissionCount: submissions.length,
+        comparableSubmissionCount: comparableSubmissions.length,
+        findingCount: internalFindings.length,
+      });
     }
 
     const similarityBySubmission = new Map<string, number>();
@@ -1543,50 +1589,66 @@ Only flag real concerns. Return valid JSON only.`,
       .in("submission_id", submissions.map((submission) => submission.id))
       .eq("lecturer_id", user.id);
 
-    if (reviewsError && !isRecoverablePersistenceError(reviewsError)) throw reviewsError;
     if (reviewsError) {
-      logWarn("academic_integrity_reviews unavailable, continuing without persisted reviews", {
-        function: "check-plagiarism",
-      });
+      if (isRecoverablePersistenceError(reviewsError)) {
+        logWarn("academic_integrity_reviews unavailable, continuing without persisted reviews", {
+          function: "check-plagiarism",
+        });
+      } else {
+        logError("academic_integrity_reviews query failed", reviewsError, {
+          function: "check-plagiarism",
+          assignmentId: requestedAssignmentId,
+        });
+        warnings.push("Existing integrity review history could not be loaded, but analysis completed.");
+      }
     }
 
     const existingReviewMap = new Map(
       ((existingReviews || []) as Array<Record<string, unknown>>).map((review) => [String(review.submission_id), review]),
     );
 
-    if (internalFindings.length > 0) {
-      const submissionIds = submissions.map((submission) => submission.id);
-      const { error: deleteFindingsError } = await supabaseAdmin
-        .from("integrity_findings")
-        .delete()
-        .eq("assignment_id", requestedAssignmentId)
-        .eq("provider", "internal_text_similarity")
-        .in("submission_id", submissionIds);
+    if (requestedAssignmentId && internalFindings.length > 0) {
+      try {
+        const { error: deleteFindingsError } = await supabaseAdmin
+          .from("integrity_findings")
+          .delete()
+          .eq("assignment_id", requestedAssignmentId)
+          .eq("provider", "internal_text_similarity");
 
-      if (deleteFindingsError && !isRecoverablePersistenceError(deleteFindingsError)) {
-        throw deleteFindingsError;
-      }
-      if (deleteFindingsError) {
-        logWarn("Failed to clear prior internal integrity findings, continuing with insert attempt", {
-          function: "check-plagiarism",
+        if (deleteFindingsError) {
+          logWarn("Failed to clear prior internal integrity findings, continuing with insert attempt", {
+            function: "check-plagiarism",
+            assignmentId: requestedAssignmentId,
+          });
+        }
+
+        const findingInserts = internalFindings
+          .filter((finding) =>
+            Boolean(finding.assignment_id) &&
+            Boolean(finding.submission_id) &&
+            Number.isFinite(Number(finding.similarity_score))
+          )
+          .map(buildIntegrityFindingInsert);
+
+        if (findingInserts.length > 0) {
+          const { error: findingsInsertError } = await supabaseAdmin
+            .from("integrity_findings")
+            .insert(findingInserts);
+
+          if (findingsInsertError) {
+            logError("internal_similarity_insert_failed", findingsInsertError, {
+              assignmentId: requestedAssignmentId,
+              findingCount: findingInserts.length,
+            });
+            warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
+          }
+        }
+      } catch (error) {
+        logError("internal_similarity_insert_failed", error, {
           assignmentId: requestedAssignmentId,
+          findingCount: internalFindings.length,
         });
-      }
-
-      const findingInserts = internalFindings.map(buildIntegrityFindingInsert);
-      const { error: findingsInsertError } = await supabaseAdmin
-        .from("integrity_findings")
-        .insert(findingInserts);
-
-      if (findingsInsertError && !isRecoverablePersistenceError(findingsInsertError)) {
-        throw findingsInsertError;
-      }
-      if (findingsInsertError) {
-        logWarn("Failed to persist internal integrity findings, continuing without evidence-table persistence", {
-          function: "check-plagiarism",
-          assignmentId: requestedAssignmentId,
-          findingCount: findingInserts.length,
-        });
+        warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
       }
     }
 
@@ -1649,11 +1711,19 @@ Only flag real concerns. Return valid JSON only.`,
       const { error: persistError } = await supabaseAdmin
         .from("academic_integrity_reviews")
         .upsert(reviewUpserts, { onConflict: "submission_id,lecturer_id" });
-      if (persistError && !isRecoverablePersistenceError(persistError)) throw persistError;
       if (persistError) {
-        logWarn("Failed to persist academic integrity reviews, returning analysis without persistence", {
-          function: "check-plagiarism",
-        });
+        if (isRecoverablePersistenceError(persistError)) {
+          logWarn("Failed to persist academic integrity reviews, returning analysis without persistence", {
+            function: "check-plagiarism",
+          });
+        } else {
+          logError("academic_integrity_reviews upsert failed", persistError, {
+            function: "check-plagiarism",
+            assignmentId: requestedAssignmentId,
+            reviewCount: reviewUpserts.length,
+          });
+        }
+        warnings.push("Integrity review records could not be stored, but analysis completed.");
       }
     }
 
@@ -1661,13 +1731,13 @@ Only flag real concerns. Return valid JSON only.`,
       const { error: profileError } = await supabaseAdmin
         .from("student_writing_profiles")
         .upsert(profileUpserts, { onConflict: "student_id" });
-      if (profileError && !isRecoverablePersistenceError(profileError)) {
-        throw profileError;
-      }
       if (profileError) {
-        logError("Failed to update writing profiles", profileError, {
+        logError("student_writing_profiles upsert failed", profileError, {
           function: "check-plagiarism",
+          assignmentId: requestedAssignmentId,
+          profileCount: profileUpserts.length,
         });
+        warnings.push("Writing profile history could not be updated, but analysis completed.");
       }
     }
 

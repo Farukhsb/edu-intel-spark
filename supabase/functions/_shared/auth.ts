@@ -64,19 +64,19 @@ async function resolveUserRoles(
     supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
   ]);
 
-  if (rolesRes.error || profileRes.error) {
+  if (rolesRes.error && profileRes.error) {
     throw new HttpError(500, "Failed to verify user role");
   }
 
   const roles = new Set<AppRole>();
 
-  for (const row of rolesRes.data ?? []) {
+  for (const row of rolesRes.error ? [] : rolesRes.data ?? []) {
     if (row.role === "lecturer" || row.role === "student" || row.role === "admin") {
       roles.add(row.role);
     }
   }
 
-  const profileRole = profileRes.data?.role;
+  const profileRole = profileRes.error ? null : profileRes.data?.role;
   if (profileRole === "lecturer" || profileRole === "student" || profileRole === "admin") {
     roles.add(profileRole);
   }
