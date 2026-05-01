@@ -8,6 +8,19 @@ The platform is built on a simple premise: academic risk is easier to understand
 
 GradeAI is not a black-box auto-grading tool. It is designed to help educators see problems earlier, understand what is driving them, and act with more confidence through reviewable, evidence-led workflows.
 
+## Core Loop
+
+```text
+student submits work
+  -> assessment signals are extracted
+  -> academic risk is identified
+  -> lecturer reviews the evidence
+  -> intervention or moderation action is taken
+  -> student progress is tracked over time
+```
+
+This is the product loop GradeAI is built around: assessment evidence becomes risk intelligence, and risk intelligence becomes timely lecturer-led action.
+
 ## Why This Exists
 
 Struggling students are often identified too late. The warning signs may already be there: missed submissions, falling marks, repeated weaknesses against rubric criteria, poor completion patterns, or low engagement. In many institutions, those signals sit across different systems and are only reviewed after a student has already failed, disengaged, or withdrawn.
