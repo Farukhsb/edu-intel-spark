@@ -20,6 +20,8 @@ import {
   type StoredWritingProfile,
   type WritingProfileMetrics,
 } from "../_shared/text-analysis.ts";
+import { analyzeTextSimilarity } from "../_shared/providers/internal-text-similarity.ts";
+import type { IntegrityProviderFinding } from "../_shared/integrity-provider.ts";
 
 const CheckPlagiarismRequestSchema = z
   .object({
@@ -37,6 +39,9 @@ const MAX_SINGLE_TEXT_CHARS = 12000;
 const MAX_MULTI_TEXT_CHARS = 3500;
 const OPENAI_RETRY_ATTEMPTS = 2;
 const MIN_INTEGRITY_FLAG_SCORE = 25;
+const INTERNAL_SIMILARITY_MIN_WORDS = 50;
+
+type IntegrityProviderMode = "llm_legacy" | "internal_text_similarity" | "both";
 
 type IntegrityType = "similarity" | "ai-writing" | "baseline-deviation" | "mixed";
 
@@ -101,6 +106,19 @@ type ProcessedSubmissionText = {
   };
 };
 
+type IntegrityFindingInsert = {
+  provider: string;
+  assignment_id: string;
+  submission_id: string;
+  compared_submission_id: string | null;
+  similarity_score: number;
+  severity: string;
+  evidence_summary: string;
+  matched_phrases: string[];
+  raw_metadata: Record<string, unknown>;
+  analysis_limited: boolean;
+};
+
 function clampScore(value: unknown) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
@@ -137,6 +155,44 @@ const ASCII_QUOTED_BLOCK_PATTERN = /"[^"]{20,}"/g;
 
 function collapseWhitespace(value: string) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function countWords(value: string) {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function resolveIntegrityProviderMode(rawBody: Record<string, unknown> | null): IntegrityProviderMode {
+  const envProvider = Deno.env.get("INTEGRITY_PROVIDER_MODE")?.trim().toLowerCase() || "";
+  if (envProvider === "llm_legacy" || envProvider === "internal_text_similarity" || envProvider === "both") {
+    return envProvider;
+  }
+  return "both";
+}
+
+function supportsInternalTextSimilarity(content: {
+  plainText: string;
+  fileType: string;
+  success: boolean;
+  extractionError: string | null;
+}) {
+  if (!content.success || content.extractionError) return false;
+  if (!["pdf", "docx", "txt"].includes(content.fileType)) return false;
+  return countWords(content.plainText) >= INTERNAL_SIMILARITY_MIN_WORDS;
+}
+
+function buildIntegrityFindingInsert(finding: IntegrityProviderFinding): IntegrityFindingInsert {
+  return {
+    provider: finding.provider,
+    assignment_id: finding.assignment_id,
+    submission_id: finding.submission_id,
+    compared_submission_id: finding.compared_submission_id ?? null,
+    similarity_score: finding.similarity_score,
+    severity: finding.severity,
+    evidence_summary: finding.evidence_summary,
+    matched_phrases: finding.matched_phrases,
+    raw_metadata: finding.raw_metadata,
+    analysis_limited: finding.analysis_limited,
+  };
 }
 
 function countCitationPatterns(text: string) {
@@ -775,6 +831,7 @@ serve(async (req) => {
     }
 
     const integrityModel = getModel("OPENAI_INTEGRITY_MODEL", "gpt-5.4-mini");
+    const providerMode = resolveIntegrityProviderMode(rawBody);
     const requestedAssignmentId = parsedRequest.data.assignmentId ?? null;
     const requestedSubmissionIds = parsedRequest.data.submissionIds ?? (parsedRequest.data.submissionId ? [parsedRequest.data.submissionId] : []);
 
@@ -992,161 +1049,204 @@ Only flag real concerns. Return valid JSON only.`,
 
     let parsedFlags: IntegrityFlag[] = [];
     let summary = "Analysis complete";
-    try {
-      const aiData = await createIntegrityResponseWithRetry({
-        model: integrityModel,
-        input: [
-          { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
-          { role: "user", content: userContent },
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "report_integrity_results",
-            schema: {
-              type: "object",
-              properties: {
-                flags: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      student_a: { type: "string" },
-                      student_b: { type: "string" },
-                      submission_a_id: { type: "string" },
-                      submission_b_id: { type: "string" },
-                      similarity_score: { type: "number" },
-                      ai_suspicion_score: { type: "number" },
-                      baseline_deviation_score: { type: "number" },
-                      total_risk_score: { type: "number" },
-                      reason: { type: "string" },
-                      evidence_summary: { type: "string" },
-                      matched_excerpt: { type: "string" },
-                      recommended_action: { type: "string", enum: ["clear", "review", "investigate"] },
-                      integrity_type: {
-                        type: "string",
-                        enum: ["similarity", "ai-writing", "baseline-deviation", "mixed"],
-                      },
-                      severity: { type: "string", enum: ["low", "medium", "high"] },
-                      overlap_analysis: {
-                        type: "object",
-                        properties: {
-                          total_overlap: { type: "number" },
-                          cited_overlap: { type: "number" },
-                          uncited_overlap: { type: "number" },
-                          internal_peer_overlap: { type: "number" },
-                          external_source_overlap: { type: "number" },
-                        },
-                        required: [
-                          "total_overlap",
-                          "cited_overlap",
-                          "uncited_overlap",
-                          "internal_peer_overlap",
-                          "external_source_overlap",
-                        ],
-                        additionalProperties: false,
-                      },
-                      evidence_groups: {
-                        type: "object",
-                        properties: {
-                          uncited_matches: {
-                            type: "array",
-                            items: {
-                              type: "object",
-                              properties: {
-                                label: { type: "string" },
-                                value: { type: "string" },
-                                score: { type: "number" },
-                              },
-                              required: ["label", "value", "score"],
-                              additionalProperties: false,
-                            },
-                          },
-                          cited_matches: {
-                            type: "array",
-                            items: {
-                              type: "object",
-                              properties: {
-                                label: { type: "string" },
-                                value: { type: "string" },
-                                score: { type: "number" },
-                              },
-                              required: ["label", "value", "score"],
-                              additionalProperties: false,
-                            },
-                          },
-                          peer_matches: {
-                            type: "array",
-                            items: {
-                              type: "object",
-                              properties: {
-                                label: { type: "string" },
-                                value: { type: "string" },
-                                score: { type: "number" },
-                              },
-                              required: ["label", "value", "score"],
-                              additionalProperties: false,
-                            },
-                          },
-                          external_matches: {
-                            type: "array",
-                            items: {
-                              type: "object",
-                              properties: {
-                                label: { type: "string" },
-                                value: { type: "string" },
-                                score: { type: "number" },
-                              },
-                              required: ["label", "value", "score"],
-                              additionalProperties: false,
-                            },
-                          },
-                        },
-                        required: ["uncited_matches", "cited_matches", "peer_matches", "external_matches"],
-                        additionalProperties: false,
-                      },
-                    },
-                    required: [
-                      "student_a",
-                      "student_b",
-                      "submission_a_id",
-                      "submission_b_id",
-                      "similarity_score",
-                      "ai_suspicion_score",
-                      "baseline_deviation_score",
-                      "total_risk_score",
-                      "reason",
-                      "evidence_summary",
-                      "matched_excerpt",
-                      "recommended_action",
-                      "integrity_type",
-                      "severity",
-                      "overlap_analysis",
-                      "evidence_groups",
-                    ],
-                    additionalProperties: false,
-                  },
-                },
-                summary: { type: "string" },
-              },
-              required: ["flags", "summary"],
-              additionalProperties: false,
-            },
-            strict: true,
-          },
-        },
-      });
+    const shouldRunLegacy = providerMode === "llm_legacy" || providerMode === "both";
+    const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";
 
+    if (shouldRunLegacy) {
       try {
-        const parsed = parseJsonText(extractOutputText(aiData));
-        parsedFlags = normalizeFlags(parsed?.flags, submissions, processedContentMap);
-        summary = typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : summary;
-      } catch {
-        parsedFlags = normalizeFlags(aiData?.output?.[0]?.content?.[0]?.json?.flags, submissions, processedContentMap);
+        const aiData = await createIntegrityResponseWithRetry({
+          model: integrityModel,
+          input: [
+            { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
+            { role: "user", content: userContent },
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "report_integrity_results",
+              schema: {
+                type: "object",
+                properties: {
+                  flags: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        student_a: { type: "string" },
+                        student_b: { type: "string" },
+                        submission_a_id: { type: "string" },
+                        submission_b_id: { type: "string" },
+                        similarity_score: { type: "number" },
+                        ai_suspicion_score: { type: "number" },
+                        baseline_deviation_score: { type: "number" },
+                        total_risk_score: { type: "number" },
+                        reason: { type: "string" },
+                        evidence_summary: { type: "string" },
+                        matched_excerpt: { type: "string" },
+                        recommended_action: { type: "string", enum: ["clear", "review", "investigate"] },
+                        integrity_type: {
+                          type: "string",
+                          enum: ["similarity", "ai-writing", "baseline-deviation", "mixed"],
+                        },
+                        severity: { type: "string", enum: ["low", "medium", "high"] },
+                        overlap_analysis: {
+                          type: "object",
+                          properties: {
+                            total_overlap: { type: "number" },
+                            cited_overlap: { type: "number" },
+                            uncited_overlap: { type: "number" },
+                            internal_peer_overlap: { type: "number" },
+                            external_source_overlap: { type: "number" },
+                          },
+                          required: [
+                            "total_overlap",
+                            "cited_overlap",
+                            "uncited_overlap",
+                            "internal_peer_overlap",
+                            "external_source_overlap",
+                          ],
+                          additionalProperties: false,
+                        },
+                        evidence_groups: {
+                          type: "object",
+                          properties: {
+                            uncited_matches: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  label: { type: "string" },
+                                  value: { type: "string" },
+                                  score: { type: "number" },
+                                },
+                                required: ["label", "value", "score"],
+                                additionalProperties: false,
+                              },
+                            },
+                            cited_matches: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  label: { type: "string" },
+                                  value: { type: "string" },
+                                  score: { type: "number" },
+                                },
+                                required: ["label", "value", "score"],
+                                additionalProperties: false,
+                              },
+                            },
+                            peer_matches: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  label: { type: "string" },
+                                  value: { type: "string" },
+                                  score: { type: "number" },
+                                },
+                                required: ["label", "value", "score"],
+                                additionalProperties: false,
+                              },
+                            },
+                            external_matches: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  label: { type: "string" },
+                                  value: { type: "string" },
+                                  score: { type: "number" },
+                                },
+                                required: ["label", "value", "score"],
+                                additionalProperties: false,
+                              },
+                            },
+                          },
+                          required: ["uncited_matches", "cited_matches", "peer_matches", "external_matches"],
+                          additionalProperties: false,
+                        },
+                      },
+                      required: [
+                        "student_a",
+                        "student_b",
+                        "submission_a_id",
+                        "submission_b_id",
+                        "similarity_score",
+                        "ai_suspicion_score",
+                        "baseline_deviation_score",
+                        "total_risk_score",
+                        "reason",
+                        "evidence_summary",
+                        "matched_excerpt",
+                        "recommended_action",
+                        "integrity_type",
+                        "severity",
+                        "overlap_analysis",
+                        "evidence_groups",
+                      ],
+                      additionalProperties: false,
+                    },
+                  },
+                  summary: { type: "string" },
+                },
+                required: ["flags", "summary"],
+                additionalProperties: false,
+              },
+              strict: true,
+            },
+          },
+        });
+
+        try {
+          const parsed = parseJsonText(extractOutputText(aiData));
+          parsedFlags = normalizeFlags(parsed?.flags, submissions, processedContentMap);
+          summary = typeof parsed?.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : summary;
+        } catch {
+          parsedFlags = normalizeFlags(aiData?.output?.[0]?.content?.[0]?.json?.flags, submissions, processedContentMap);
+        }
+      } catch (aiError) {
+        warnings.push("AI similarity analysis was temporarily unavailable; returning baseline and persistence-safe results only.");
+        logError("check-plagiarism AI analysis failed after retries", aiError);
       }
-    } catch (aiError) {
-      warnings.push("AI similarity analysis was temporarily unavailable; returning baseline and persistence-safe results only.");
-      logError("check-plagiarism AI analysis failed after retries", aiError);
+    }
+
+    const internalFindings: IntegrityProviderFinding[] = [];
+    if (shouldRunInternalProvider && submissions.length > 1) {
+      const comparableSubmissions = submissions
+        .map((submission) => {
+          const content = contentMap.get(submission.id);
+          if (!content) return null;
+          return supportsInternalTextSimilarity(content)
+            ? {
+              submission,
+              content,
+            }
+            : null;
+        })
+        .filter(
+          (
+            item,
+          ): item is {
+            submission: SubmissionRow;
+            content: Awaited<ReturnType<typeof fetchFileContent>>;
+          } => Boolean(item),
+        );
+
+      for (let leftIndex = 0; leftIndex < comparableSubmissions.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < comparableSubmissions.length; rightIndex += 1) {
+          const left = comparableSubmissions[leftIndex];
+          const right = comparableSubmissions[rightIndex];
+          const pairwiseFinding = analyzeTextSimilarity(
+            left.content.plainText,
+            right.content.plainText,
+            left.submission.id,
+            right.submission.id,
+            requestedAssignmentId,
+          );
+          internalFindings.push(pairwiseFinding);
+        }
+      }
     }
 
     const similarityBySubmission = new Map<string, number>();
@@ -1453,6 +1553,42 @@ Only flag real concerns. Return valid JSON only.`,
     const existingReviewMap = new Map(
       ((existingReviews || []) as Array<Record<string, unknown>>).map((review) => [String(review.submission_id), review]),
     );
+
+    if (internalFindings.length > 0) {
+      const submissionIds = submissions.map((submission) => submission.id);
+      const { error: deleteFindingsError } = await supabaseAdmin
+        .from("integrity_findings")
+        .delete()
+        .eq("assignment_id", requestedAssignmentId)
+        .eq("provider", "internal_text_similarity")
+        .in("submission_id", submissionIds);
+
+      if (deleteFindingsError && !isRecoverablePersistenceError(deleteFindingsError)) {
+        throw deleteFindingsError;
+      }
+      if (deleteFindingsError) {
+        logWarn("Failed to clear prior internal integrity findings, continuing with insert attempt", {
+          function: "check-plagiarism",
+          assignmentId: requestedAssignmentId,
+        });
+      }
+
+      const findingInserts = internalFindings.map(buildIntegrityFindingInsert);
+      const { error: findingsInsertError } = await supabaseAdmin
+        .from("integrity_findings")
+        .insert(findingInserts);
+
+      if (findingsInsertError && !isRecoverablePersistenceError(findingsInsertError)) {
+        throw findingsInsertError;
+      }
+      if (findingsInsertError) {
+        logWarn("Failed to persist internal integrity findings, continuing without evidence-table persistence", {
+          function: "check-plagiarism",
+          assignmentId: requestedAssignmentId,
+          findingCount: findingInserts.length,
+        });
+      }
+    }
 
     const reviewUpserts = submissions
       .map((submission) => {
