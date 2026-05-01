@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 
-GradeAI is a full-stack academic workflow platform for higher education. It helps lecturers manage assessment, AI-assisted grading, academic integrity review, moderation, feedback release, cohort analytics, and early student-support intervention in one connected system.
+GradeAI is an academic risk intelligence platform for higher education. It helps lecturers and institutions surface academic risk earlier by turning assessment activity, grading signals, integrity review, moderation, feedback release, cohort analytics, and intervention workflows into one connected picture.
 
-The platform is built around a simple principle: AI can help prepare evidence, feedback, and support signals, but academic judgement stays with lecturers.
+The platform is built on a simple premise: academic risk is easier to understand when assessment, feedback, integrity signals, and support actions are connected instead of scattered across separate tools. AI helps prepare evidence, summaries, and draft grading output, while academic judgement stays firmly with lecturers.
 
-GradeAI is not intended to be a black-box auto-grading tool. It is designed to make assessment workflows easier to review, easier to moderate, and easier to connect to student support.
+GradeAI is not a black-box auto-grading tool. It is designed to help educators see problems earlier, understand what is driving them, and act with more confidence through reviewable, evidence-led workflows.
 
 ## Why This Exists
 
@@ -16,15 +16,37 @@ Assessment is central to this problem because it creates some of the clearest ev
 
 GradeAI brings these parts together. It uses AI-assisted marking to reduce repetitive work and structure feedback, while analytics and intervention tools help lecturers act earlier. The aim is not to automate academic judgement. The aim is to give lecturers clearer evidence and a more connected workflow.
 
+## Academic Risk Intelligence
+
+GradeAI treats academic risk as something institutions should be able to see early, not something they only discover once final outcomes are already locked in.
+
+Instead of waiting for end-of-term results, it reads day-to-day academic workflow data such as missing submissions, weak rubric performance, integrity concerns, repeated feedback patterns, release status, and cohort-level shifts to highlight where attention may be needed sooner.
+
+The goal is to help lecturers answer practical questions earlier:
+
+- Which students are showing early signs of academic risk?
+- Which assignments are generating weak outcomes or integrity concerns?
+- Which feedback patterns suggest recurring misunderstanding?
+- Which cases need moderation, review, or follow-up support?
+
+That makes GradeAI less about isolated grading automation and more about giving lecturers a live view of what is working, what is starting to drift, and where timely support could make the biggest difference.
+
 ## What GradeAI Does
 
-### Assessment and grading
+### Risk signal generation
+
+- brings together assignment, submission, grading, integrity, moderation, and intervention data
+- highlights academic risk indicators from live workflow activity
+- shows where weak performance, missing work, or repeated issues are starting to build
+- supports earlier lecturer review before risk turns into failure, disengagement, or withdrawal
+
+### Assessment intelligence
 
 - create assignments with weighted rubrics
 - collect and review student submissions
 - run AI-assisted grading through backend Edge Functions
 - return criterion-level feedback, scores, evidence, and confidence signals
-- keep lecturer review as the decision point before approval and release
+- keep lecturer review at the centre before approval and release
 
 ### Academic integrity and moderation
 
@@ -34,15 +56,15 @@ GradeAI brings these parts together. It uses AI-assisted marking to reduce repet
 - support moderation cases where work needs a second review
 - record moderation actions and audit history
 
-### Student support
+### Student support and intervention
 
 - identify students who may need support earlier
-- show explainable risk indicators
 - support intervention notes and follow-up actions
 - give students released feedback and improvement guidance
 - keep provisional AI output away from students until work is approved and released
+- connect assessment evidence to practical lecturer follow-up
 
-### Analytics
+### Analytics and oversight
 
 - cohort analytics
 - grade distribution
@@ -51,24 +73,26 @@ GradeAI brings these parts together. It uses AI-assisted marking to reduce repet
 - integrity signal monitoring
 - rule-based recommendations for lecturer review
 
-### Notifications
+### Workflow notifications
 
 - in-app workflow notifications
 - email notification backend for assignment, submission, and grade-release events
-- email delivery is feature-flagged and pending verified sender/API key setup before full live validation
+- email delivery is feature-flagged and remains optional until sender and provider setup are ready
 
 ## How The Workflow Fits Together
 
 ```text
 submission
+  -> assessment evidence
   -> document extraction
-  -> rubric-based AI grading
+  -> AI-assisted grading
+  -> integrity and confidence signals
   -> lecturer review
   -> moderation if required
   -> approval
   -> release
-  -> student explanation
-  -> analytics and support signals
+  -> student explanation and feedback
+  -> analytics and academic risk intelligence
   -> intervention / follow-up
 ```
 
