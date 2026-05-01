@@ -1095,12 +1095,25 @@ async function fetchSubmissionContent(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   sub: { file_url: string; file_name: string | null },
 ) {
+  const normalizedPath = normalizeSubmissionStoragePath(sub.file_url);
+  if (!normalizedPath) {
+    throw new Error("Submission file URL is missing. Re-upload the document and try again.");
+  }
+
+  if (!isSupportedSubmissionFile(sub.file_name, normalizedPath)) {
+    throw new Error("Submission file type is not supported. Upload a readable PDF, DOCX, or TXT file.");
+  }
+
   const { data: fileData, error: dlError } = await supabaseAdmin.storage
     .from("submissions")
-    .download(sub.file_url);
+    .download(normalizedPath);
 
   if (dlError || !fileData) {
-    throw new Error("Failed to download file");
+    const message = dlError?.message?.toLowerCase() ?? "";
+    if (message.includes("not found") || message.includes("404")) {
+      throw new Error("Submission file could not be found in storage. Re-upload the document and try again.");
+    }
+    throw new Error("Submission file could not be downloaded. Re-upload the document and try again.");
   }
 
   const extraction = await extractSubmissionDocument({
@@ -1127,6 +1140,29 @@ async function fetchSubmissionContent(
       extraction_error: extraction.extractionError,
     },
   };
+}
+
+function normalizeSubmissionStoragePath(fileUrl: string | null | undefined) {
+  const trimmed = typeof fileUrl === "string" ? fileUrl.trim() : "";
+  if (!trimmed) return null;
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/^\/+/, "");
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const marker = "/submissions/";
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    return decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
+
+function isSupportedSubmissionFile(fileName: string | null | undefined, fileUrl: string | null | undefined) {
+  const candidate = `${fileName ?? ""} ${fileUrl ?? ""}`.toLowerCase();
+  return candidate.includes(".pdf") || candidate.includes(".docx") || candidate.includes(".txt");
 }
 
 function buildSystemPrompt(assignmentType: AssignmentType, rubricLength: number, maxScore: number) {
@@ -1396,7 +1432,7 @@ serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { user } = await requireLecturer(req);
+    const { supabase: userSupabase, user } = await requireLecturer(req);
     const rateLimit = applyRateLimit(req, {
       scope: "grade-submission",
       limit: 5,
@@ -1471,15 +1507,16 @@ serve(async (req) => {
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");
     }
-    const { data: assignment, error: assignmentError } = await supabaseAdmin
+    const assignmentClient = actorIsAdmin ? supabaseAdmin : userSupabase;
+    const { data: assignment, error: assignmentError } = await assignmentClient
       .from("assignments")
       .select("id, lecturer_id, title, description, module_code, max_score, rubric")
       .eq("id", requestedAssignmentId)
       .maybeSingle();
 
     if (assignmentError) throw new Error("Failed to load assignment");
-    if (!assignment || assignment.lecturer_id !== user.id) {
-      throw new HttpError(403, "You do not have access to this assignment");
+    if (!assignment) {
+      throw new HttpError(403, "You do not have grading access to this assignment.");
     }
 
     const { data: submissions, error: submissionsError } = await supabaseAdmin
@@ -1602,8 +1639,16 @@ serve(async (req) => {
 
     const results: Array<Record<string, unknown>> = [];
     const generatedResultsByFingerprint = new Map<string, CachedGradeResult>();
+    const invalidSubmissionPaths = submissions.filter((sub) => !normalizeSubmissionStoragePath(sub.file_url));
+    for (const sub of invalidSubmissionPaths) {
+      results.push({
+        submissionId: sub.id,
+        error: "Submission file URL is missing. Re-upload the document and try again.",
+        success: false,
+      });
+    }
 
-    for (const sub of submissions) {
+    for (const sub of submissions.filter((item) => normalizeSubmissionStoragePath(item.file_url))) {
       try {
         const existingGrade = existingGradesBySubmission.get(sub.id) ?? null;
         const { extractedText, extractionMetadata } = await fetchSubmissionContent(supabaseAdmin, sub);
