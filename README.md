@@ -184,7 +184,7 @@ Current safeguards include:
 
 ## Current State
 
-GradeAI is a working full-stack prototype with several hardened workflows. It is not presented as a finished institution-wide platform. The current focus is making the core assessment, review, moderation, analytics, and support workflows reliable enough for controlled testing and further development.
+GradeAI is a working full-stack prototype with several hardened workflows. It is not presented as a finished institution-wide platform. The current focus is making the core assessment, review, moderation, analytics, and support workflows reliable enough for controlled testing and further development. The backend is now running against a clean Supabase project with RLS, API grants, storage, Edge Functions, and AI secrets reconfigured under the controlled project setup.
 
 Working well:
 
@@ -226,6 +226,7 @@ Recent backend and workflow hardening included:
 Supporting documentation:
 
 - [Technical Summary](TECHNICAL_SUMMARY.md)
+- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
 - [Security Model](docs/SECURITY_MODEL.md)
 - [Test Coverage Strategy](docs/TEST_COVERAGE_STRATEGY.md)
 - [Rollout Plan](docs/ROLLOUT_PLAN.md)
@@ -366,17 +367,17 @@ Current high-cost Edge Function rate limiting is process-local and in-memory. Th
 
 ## Migration History Note
 
-This project contains two legacy short-form migration versions in Supabase metadata:
+Earlier versions of the project included legacy short-form Supabase migration versions from the Lovable-era setup.
 
-- `20260412`
-- `20260413`
+The active deployment target has since been moved to a clean, controlled Supabase project. New migrations should use full 14-digit timestamp prefixes:
 
-These correspond to:
+```text
+YYYYMMDDHHMMSS_description.sql
+```
 
-- `20260412_fix_multi_tenant_rls.sql`
-- `20260413_create_student_interventions.sql`
+Do not create new short-form migration IDs.
 
-Supabase CLI may display these entries as unmatched because of earlier naming inconsistencies in migration IDs. This is a migration ledger hygiene issue, not a schema or permissions failure. Do not rename or modify historical migration IDs on a live project without a deliberate reconciliation plan.
+For deployment setup and environment configuration, see the [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
 
 ## Deployment Notes
 
