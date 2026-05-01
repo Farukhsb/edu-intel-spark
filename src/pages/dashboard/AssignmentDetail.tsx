@@ -606,6 +606,14 @@ const AssignmentDetail = () => {
     setCheckingPlagiarism(true);
     try {
       const batchSize = 3;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        toast.error("Your session has expired. Please sign in again before running an integrity check.");
+        return;
+      }
       const collectedFlags: PlagiarismFlag[] = [];
       const collectedSummaries: string[] = [];
       const collectedWarnings: string[] = [];
@@ -615,6 +623,9 @@ const AssignmentDetail = () => {
       for (let index = 0; index < submissions.length; index += batchSize) {
         const batch = submissions.slice(index, index + batchSize);
         const { data, error } = await supabase.functions.invoke("check-plagiarism", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
           body: {
             assignmentId: assignment.id,
             submissions: batch.map((s) => ({
