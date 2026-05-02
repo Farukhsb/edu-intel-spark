@@ -21,6 +21,13 @@ import {
 } from "../_shared/text-analysis.ts";
 import { analyzeTextSimilarity } from "../_shared/providers/internal-text-similarity.ts";
 import type { IntegrityProviderFinding } from "../_shared/integrity-provider.ts";
+import {
+  detectMossLanguage,
+  groupMossComparableSubmissions,
+  runMossSimilarityJob,
+  type MossComparableSubmission,
+  type MossRunnerConfig,
+} from "../_shared/providers/moss.ts";
 
 const CheckPlagiarismRequestSchema = z
   .object({
@@ -39,6 +46,7 @@ const MAX_MULTI_TEXT_CHARS = 3500;
 const OPENAI_RETRY_ATTEMPTS = 2;
 const MIN_INTEGRITY_FLAG_SCORE = 25;
 const INTERNAL_SIMILARITY_MIN_WORDS = 50;
+const DEFAULT_MOSS_RUNNER_TIMEOUT_MS = 20_000;
 
 type IntegrityProviderMode = "llm_legacy" | "internal_text_similarity" | "both";
 
@@ -166,6 +174,25 @@ function resolveIntegrityProviderMode(rawBody: Record<string, unknown> | null): 
     return envProvider;
   }
   return "both";
+}
+
+function resolveMossRunnerConfig(): MossRunnerConfig | null {
+  const enabledValue = Deno.env.get("MOSS_PROVIDER_ENABLED")?.trim().toLowerCase() || "";
+  const isEnabled = enabledValue === "1" || enabledValue === "true" || enabledValue === "yes";
+  if (!isEnabled) return null;
+
+  const runnerUrl = Deno.env.get("MOSS_RUNNER_URL")?.trim() || "";
+  if (!runnerUrl) return null;
+
+  const parsedTimeoutMs = Number(Deno.env.get("MOSS_RUNNER_TIMEOUT_MS") || DEFAULT_MOSS_RUNNER_TIMEOUT_MS);
+
+  return {
+    runnerUrl,
+    bearerToken: Deno.env.get("MOSS_RUNNER_BEARER_TOKEN")?.trim() || null,
+    timeoutMs: Number.isFinite(parsedTimeoutMs) && parsedTimeoutMs > 0
+      ? parsedTimeoutMs
+      : DEFAULT_MOSS_RUNNER_TIMEOUT_MS,
+  };
 }
 
 function supportsInternalTextSimilarity(content: {
@@ -623,6 +650,27 @@ async function fetchFileContent(
   }
 }
 
+async function fetchCodeSubmissionSource(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  sub: { file_url?: string; file_name?: string | null },
+): Promise<string | null> {
+  if (!sub.file_url || !detectMossLanguage(sub.file_name || sub.file_url)) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.storage.from("submissions").download(sub.file_url);
+    if (error || !data) {
+      return null;
+    }
+
+    const sourceText = await data.text();
+    return sourceText.trim() ? sourceText : null;
+  } catch {
+    return null;
+  }
+}
+
 async function createIntegrityResponseWithRetry(body: Record<string, unknown>) {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= OPENAI_RETRY_ATTEMPTS; attempt += 1) {
@@ -839,6 +887,7 @@ serve(async (req) => {
 
     const integrityModel = getModel("OPENAI_INTEGRITY_MODEL", "gpt-5.4-mini");
     const providerMode = resolveIntegrityProviderMode(rawBody);
+    const mossRunnerConfig = resolveMossRunnerConfig();
     const requestedAssignmentId = parsedRequest.data.assignmentId ?? null;
     const requestedSubmissionIds = parsedRequest.data.submissionIds ?? (parsedRequest.data.submissionId ? [parsedRequest.data.submissionId] : []);
 
@@ -1295,6 +1344,71 @@ Only flag real concerns. Return valid JSON only.`,
       });
     }
 
+    const mossFindings: IntegrityProviderFinding[] = [];
+    if (mossRunnerConfig && requestedAssignmentId && submissions.length >= 2) {
+      const mossComparableSubmissions: MossComparableSubmission[] = [];
+
+      for (const submission of submissions) {
+        const language = detectMossLanguage(submission.file_name || submission.file_url || null);
+        if (!language) continue;
+
+        const sourceText = await fetchCodeSubmissionSource(supabaseAdmin, submission);
+        if (!sourceText) {
+          logWarn("moss_source_unavailable", {
+            assignmentId: requestedAssignmentId,
+            submissionId: submission.id,
+            fileName: submission.file_name || null,
+          });
+          continue;
+        }
+
+        mossComparableSubmissions.push({
+          submissionId: submission.id,
+          fileName: submission.file_name || null,
+          sourceText,
+          studentName: submission.student_name || null,
+          studentEmail: submission.student_email || null,
+          language,
+        });
+      }
+
+      const mossGroups = groupMossComparableSubmissions(mossComparableSubmissions);
+
+      logInfo("moss_similarity_started", {
+        assignmentId: requestedAssignmentId,
+        submissionCount: submissions.length,
+        comparableSubmissionCount: mossComparableSubmissions.length,
+        languageGroupCount: mossGroups.length,
+      });
+
+      for (const group of mossGroups) {
+        try {
+          const findings = await runMossSimilarityJob({
+            config: mossRunnerConfig,
+            assignmentId: requestedAssignmentId,
+            language: group.language,
+            submissions: group.comparableSubmissions,
+          });
+          mossFindings.push(...findings);
+        } catch (error) {
+          logError("moss_similarity_failed", error, {
+            assignmentId: requestedAssignmentId,
+            language: group.language,
+            comparableSubmissionCount: group.comparableSubmissions.length,
+          });
+          warnings.push("MOSS code similarity analysis was unavailable, but existing plagiarism analysis completed.");
+        }
+      }
+
+      logInfo("moss_similarity_completed", {
+        assignmentId: requestedAssignmentId,
+        submissionCount: submissions.length,
+        comparableSubmissionCount: mossComparableSubmissions.length,
+        languageGroupCount: mossGroups.length,
+        findingCount: mossFindings.length,
+      });
+    }
+
     const similarityBySubmission = new Map<string, number>();
     const aiBySubmission = new Map<string, number>();
     for (const flag of parsedFlags) {
@@ -1648,6 +1762,51 @@ Only flag real concerns. Return valid JSON only.`,
           findingCount: internalFindings.length,
         });
         warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
+      }
+    }
+
+    if (requestedAssignmentId && mossFindings.length > 0) {
+      try {
+        logInfo("moss_similarity_upsert_started", {
+          assignmentId: requestedAssignmentId,
+          findingCount: mossFindings.length,
+        });
+
+        const mossFindingInserts = mossFindings
+          .filter((finding) =>
+            Boolean(finding.assignment_id) &&
+            Boolean(finding.submission_id) &&
+            Boolean(finding.compared_submission_id) &&
+            Number.isFinite(Number(finding.similarity_score))
+          )
+          .map(buildIntegrityFindingInsert);
+
+        if (mossFindingInserts.length > 0) {
+          const { error: mossInsertError } = await supabaseAdmin
+            .from("integrity_findings")
+            .upsert(mossFindingInserts, {
+              onConflict: "provider,assignment_id,submission_id,compared_submission_id",
+            });
+
+          if (mossInsertError) {
+            logError("moss_similarity_insert_failed", mossInsertError, {
+              assignmentId: requestedAssignmentId,
+              findingCount: mossFindingInserts.length,
+            });
+            warnings.push("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
+          } else {
+            logInfo("moss_similarity_upsert_completed", {
+              assignmentId: requestedAssignmentId,
+              findingCount: mossFindingInserts.length,
+            });
+          }
+        }
+      } catch (error) {
+        logError("moss_similarity_insert_failed", error, {
+          assignmentId: requestedAssignmentId,
+          findingCount: mossFindings.length,
+        });
+        warnings.push("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
       }
     }
 

@@ -185,13 +185,29 @@ Important Edge Functions:
 
 ### Integrity provider modes
 
-`check-plagiarism` now supports two backend integrity providers:
+`check-plagiarism` now supports two live backend integrity providers:
 
 - `llm_legacy`
 - `internal_text_similarity`
 - `both` through `INTEGRITY_PROVIDER_MODE`
 
 The visible plagiarism UI still uses the legacy response shape so lecturer-facing integrity cards remain stable. The newer `internal_text_similarity` provider currently writes pairwise evidence rows to `public.integrity_findings` for backend review and future UI work.
+
+An optional MOSS bridge is also available for code assignments. It is disabled by default and does not change the visible plagiarism UI. When explicitly configured, it:
+
+- only runs for code-like file extensions
+- calls an external HTTP runner that performs the actual MOSS submission
+- stores code-similarity evidence in `public.integrity_findings` with `provider = 'moss'`
+- never blocks or replaces the existing plagiarism response path
+
+Required MOSS bridge secrets:
+
+- `MOSS_PROVIDER_ENABLED=true`
+- `MOSS_RUNNER_URL=https://...`
+- optional `MOSS_RUNNER_BEARER_TOKEN`
+- optional `MOSS_RUNNER_TIMEOUT_MS`
+
+The local HTTP runner scaffold for this bridge lives in [`tools/moss-runner`](tools/moss-runner/README.md).
 
 ## Key Engineering Decisions
 

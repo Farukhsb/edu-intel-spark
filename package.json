@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "check": "npm run test && npm run build",
     "lint": "eslint .",
+    "moss:runner": "node tools/moss-runner/server.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

@@ -187,4 +187,16 @@ describe("edge function hardening", () => {
     expect(source).toContain("Internal similarity evidence could not be stored, but analysis completed.");
     expect(source).toContain(".filter((finding) =>");
   });
+
+  it("keeps the optional MOSS bridge non-fatal and backend-only", () => {
+    const source = readRepoFile("supabase/functions/check-plagiarism/index.ts");
+
+    expect(source).toContain("resolveMossRunnerConfig()");
+    expect(source).toContain('logInfo("moss_similarity_started"');
+    expect(source).toContain('logInfo("moss_similarity_completed"');
+    expect(source).toContain('logError("moss_similarity_failed"');
+    expect(source).toContain('logError("moss_similarity_insert_failed"');
+    expect(source).toContain("MOSS code similarity analysis was unavailable, but existing plagiarism analysis completed.");
+    expect(source).toContain("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
+  });
 });
