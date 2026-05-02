@@ -7,9 +7,17 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 const PAGES_DEV_ROOT = "gradeai.pages.dev";
-const PAGES_ROOT = "pages.dev";
+
+function getEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  return undefined;
+}
+
 const EXTRA_ALLOWED_ORIGINS = new Set(
-  (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+  (getEnv("ALLOWED_ORIGINS") ?? "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
@@ -68,10 +76,7 @@ function isAllowedOrigin(origin: string): boolean {
     return false;
   }
 
-  return (
-    url.hostname.endsWith(`.${PAGES_DEV_ROOT}`) ||
-    url.hostname.endsWith(`.${PAGES_ROOT}`)
-  );
+  return url.hostname.endsWith(`.${PAGES_DEV_ROOT}`);
 }
 
 export function createCorsForbiddenResponse() {
