@@ -57,6 +57,17 @@ export type CriterionInsight = {
   lostPercentage: number;
 };
 
+export type EvidenceQuality = "strong" | "moderate" | "limited";
+
+export type ExplainGradeEvidenceSummary = {
+  evidenceQuality: EvidenceQuality;
+  criterionCount: number;
+  hasStructuredBreakdown: boolean;
+  hasFeedback: boolean;
+  gradingConfidence: number | null;
+  evidenceWarnings: string[];
+};
+
 function toFiniteNumber(value: unknown) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
@@ -111,6 +122,48 @@ export function buildWeaknessGuidance(
   return `${weakestCriterion.name} is the weakest criterion. The student scored ${weakestCriterion.score}/${weakestCriterion.maxScore}, meaning they lost ${weakestCriterion.lostPercentage}% of available marks.${comparisonSentence}`;
 }
 
+export function buildExplainGradeEvidenceSummary({
+  criterionInsights,
+  feedback,
+  gradingConfidence,
+}: {
+  criterionInsights: CriterionInsight[];
+  feedback: string;
+  gradingConfidence: number | null;
+}): ExplainGradeEvidenceSummary {
+  const hasStructuredBreakdown = criterionInsights.length > 0;
+  const hasFeedback = feedback.trim().length > 0;
+  const evidenceWarnings: string[] = [];
+
+  if (!hasStructuredBreakdown) {
+    evidenceWarnings.push("No structured criterion breakdown is available.");
+  }
+
+  if (!hasFeedback) {
+    evidenceWarnings.push("No released narrative feedback is available.");
+  }
+
+  if (gradingConfidence != null && gradingConfidence < 0.7) {
+    evidenceWarnings.push("Grading confidence is below the normal confidence threshold.");
+  }
+
+  let evidenceQuality: EvidenceQuality = "strong";
+  if (!hasStructuredBreakdown || (!hasFeedback && criterionInsights.length < 2)) {
+    evidenceQuality = "limited";
+  } else if (!hasFeedback || criterionInsights.length < 2 || (gradingConfidence != null && gradingConfidence < 0.7)) {
+    evidenceQuality = "moderate";
+  }
+
+  return {
+    evidenceQuality,
+    criterionCount: criterionInsights.length,
+    hasStructuredBreakdown,
+    hasFeedback,
+    gradingConfidence,
+    evidenceWarnings,
+  };
+}
+
 export function buildReleasedGradeContext(
   rows: ReleasedGradeContextRows,
   userId: string,
@@ -139,6 +192,12 @@ export function buildReleasedGradeContext(
     throw createAccessError(404, "Released grade not found");
   }
   const criterionInsights = buildCriterionInsights(grade.ai_breakdown);
+  const feedback = grade.ai_feedback ?? "";
+  const evidenceSummary = buildExplainGradeEvidenceSummary({
+    criterionInsights,
+    feedback,
+    gradingConfidence: grade.grading_confidence ?? null,
+  });
 
   return {
     submissionId: submission.id,
@@ -149,10 +208,11 @@ export function buildReleasedGradeContext(
     status: submission.status,
     totalGrade,
     maxScore: assignment?.max_score ?? null,
-    feedback: grade.ai_feedback ?? "",
+    feedback,
     breakdown: Array.isArray(grade.ai_breakdown) ? grade.ai_breakdown : [],
     criterionInsights,
     weakestCriterion: criterionInsights[0] ?? null,
     gradingConfidence: grade.grading_confidence ?? null,
+    evidenceSummary,
   };
 }
