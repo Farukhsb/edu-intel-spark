@@ -20,6 +20,7 @@ import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
 import { ArrowRight, FileOutput, Loader2, Settings, Shield, Upload, Users } from "lucide-react";
 import { toast } from "sonner";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 
 type AdminMetrics = {
   totalUsers: number;
@@ -115,6 +116,23 @@ const SUBMISSION_STATUS_BADGE_STYLES: Record<string, string> = {
   moderated: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
   approved: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
   released: "border-primary/30 bg-primary/10 text-primary",
+};
+
+const getFunctionErrorMessage = async (error: unknown, fallback: string) => {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json();
+      if (payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string") {
+        return payload.error;
+      }
+    } catch {
+      return error.message || fallback;
+    }
+
+    return error.message || fallback;
+  }
+
+  return error instanceof Error ? error.message : fallback;
 };
 
 const AdminOverview = ({ metrics }: { metrics: AdminMetrics }) => {
@@ -809,9 +827,11 @@ const AdminDashboard = () => {
 
     setChangingUserId(pendingRoleChange.userId);
     try {
-      const { error } = await supabase.rpc("admin_set_user_role", {
-        p_target_user_id: pendingRoleChange.userId,
-        p_target_role: pendingRoleChange.nextRole,
+      const { error } = await supabase.functions.invoke("admin-set-user-role", {
+        body: {
+          targetUserId: pendingRoleChange.userId,
+          nextRole: pendingRoleChange.nextRole,
+        },
       });
 
       if (error) throw error;
@@ -826,7 +846,7 @@ const AdminDashboard = () => {
         targetUserId: pendingRoleChange.userId,
         nextRole: pendingRoleChange.nextRole,
       });
-      toast.error(error instanceof Error ? error.message : "Role change could not be completed.");
+      toast.error(await getFunctionErrorMessage(error, "Role change could not be completed."));
     }
     setChangingUserId(null);
   };

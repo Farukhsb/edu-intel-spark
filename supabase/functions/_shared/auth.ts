@@ -42,7 +42,7 @@ export function createAdminClient() {
   return createClient(supabaseUrl!, serviceRoleKey!);
 }
 
-export type AppRole = "lecturer" | "student" | "admin";
+type AppRole = "lecturer" | "student" | "admin";
 
 export async function requireUser(req: Request) {
   const supabase = createUserClient(req);
@@ -55,7 +55,7 @@ export async function requireUser(req: Request) {
   return { supabase, user: data.user };
 }
 
-export async function resolveUserRoles(
+async function resolveUserRoles(
   supabase: ReturnType<typeof createUserClient>,
   userId: string,
 ): Promise<AppRole[]> {
@@ -84,36 +84,26 @@ export async function resolveUserRoles(
   return [...roles];
 }
 
-function hasAnyRole(roles: AppRole[], allowedRoles: AppRole[]) {
-  return allowedRoles.some((role) => roles.includes(role));
-}
-
-function buildRoleErrorMessage(allowedRoles: AppRole[]) {
-  if (allowedRoles.length === 1) {
-    return `${allowedRoles[0][0].toUpperCase()}${allowedRoles[0].slice(1)} access required`;
-  }
-
-  const readableRoles = allowedRoles.map((role) => `${role[0].toUpperCase()}${role.slice(1)}`);
-  return `${readableRoles.slice(0, -1).join(", ")} or ${readableRoles.at(-1)} access required`;
-}
-
-export async function requireAppRoles(req: Request, allowedRoles: AppRole[]) {
+export async function requireLecturer(req: Request) {
   const { supabase, user } = await requireUser(req);
   const roles = await resolveUserRoles(supabase, user.id);
 
-  if (!hasAnyRole(roles, allowedRoles)) {
-    throw new HttpError(403, buildRoleErrorMessage(allowedRoles));
+  if (!roles.includes("lecturer") && !roles.includes("admin")) {
+    throw new HttpError(403, "Lecturer or admin access required");
   }
 
-  return { supabase, user, roles };
-}
-
-export async function requireLecturer(req: Request) {
-  return requireAppRoles(req, ["lecturer", "admin"]);
+  return { supabase, user };
 }
 
 export async function requireAdmin(req: Request) {
-  return requireAppRoles(req, ["admin"]);
+  const { supabase, user } = await requireUser(req);
+  const roles = await resolveUserRoles(supabase, user.id);
+
+  if (!roles.includes("admin")) {
+    throw new HttpError(403, "Admin access required");
+  }
+
+  return { supabase, user };
 }
 
 export function jsonError(error: unknown, corsHeaders: Record<string, string>) {

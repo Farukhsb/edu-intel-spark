@@ -21,26 +21,6 @@ import {
 } from "../_shared/text-analysis.ts";
 import { analyzeTextSimilarity } from "../_shared/providers/internal-text-similarity.ts";
 import type { IntegrityProviderFinding } from "../_shared/integrity-provider.ts";
-import {
-  type MossRunnerConfig,
-} from "../_shared/providers/moss.ts";
-import { upsertIntegrityFindings } from "../_shared/integrity-findings-store.ts";
-import type { IntegrityFindingInsert, IntegrityProviderFinding } from "../_shared/integrity-provider.ts";
-import {
-  runInternalSimilarityComparisons,
-  runMossSimilarityComparisons,
-} from "../_shared/integrity-provider-runners.ts";
-import {
-  buildIntegrityReviewUpserts,
-  ensureIntegritySnapshot,
-  mergeFlagIntoSnapshot,
-  persistIntegrityReviewUpserts,
-  persistWritingProfiles,
-  setSnapshotRiskLevel,
-  type ExistingReviewRow,
-  type IntegritySnapshot,
-  type ProfileUpsertRow,
-} from "../_shared/integrity-review-store.ts";
 
 const CheckPlagiarismRequestSchema = z
   .object({
@@ -59,7 +39,6 @@ const MAX_MULTI_TEXT_CHARS = 3500;
 const OPENAI_RETRY_ATTEMPTS = 2;
 const MIN_INTEGRITY_FLAG_SCORE = 25;
 const INTERNAL_SIMILARITY_MIN_WORDS = 50;
-const DEFAULT_MOSS_RUNNER_TIMEOUT_MS = 20_000;
 
 type IntegrityProviderMode = "llm_legacy" | "internal_text_similarity" | "both";
 
@@ -126,6 +105,19 @@ type ProcessedSubmissionText = {
   };
 };
 
+type IntegrityFindingInsert = {
+  provider: string;
+  assignment_id: string;
+  submission_id: string;
+  compared_submission_id: string | null;
+  similarity_score: number;
+  severity: string;
+  evidence_summary: string;
+  matched_phrases: string[];
+  raw_metadata: Record<string, unknown>;
+  analysis_limited: boolean;
+};
+
 function clampScore(value: unknown) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
@@ -176,25 +168,6 @@ function resolveIntegrityProviderMode(rawBody: Record<string, unknown> | null): 
   return "both";
 }
 
-function resolveMossRunnerConfig(): MossRunnerConfig | null {
-  const enabledValue = Deno.env.get("MOSS_PROVIDER_ENABLED")?.trim().toLowerCase() || "";
-  const isEnabled = enabledValue === "1" || enabledValue === "true" || enabledValue === "yes";
-  if (!isEnabled) return null;
-
-  const runnerUrl = Deno.env.get("MOSS_RUNNER_URL")?.trim() || "";
-  if (!runnerUrl) return null;
-
-  const parsedTimeoutMs = Number(Deno.env.get("MOSS_RUNNER_TIMEOUT_MS") || DEFAULT_MOSS_RUNNER_TIMEOUT_MS);
-
-  return {
-    runnerUrl,
-    bearerToken: Deno.env.get("MOSS_RUNNER_BEARER_TOKEN")?.trim() || null,
-    timeoutMs: Number.isFinite(parsedTimeoutMs) && parsedTimeoutMs > 0
-      ? parsedTimeoutMs
-      : DEFAULT_MOSS_RUNNER_TIMEOUT_MS,
-  };
-}
-
 function supportsInternalTextSimilarity(content: {
   plainText: string;
   fileType: string;
@@ -204,6 +177,21 @@ function supportsInternalTextSimilarity(content: {
   if (!content.success || content.extractionError) return false;
   if (!["pdf", "docx", "txt"].includes(content.fileType)) return false;
   return countWords(content.plainText) >= INTERNAL_SIMILARITY_MIN_WORDS;
+}
+
+function buildIntegrityFindingInsert(finding: IntegrityProviderFinding): IntegrityFindingInsert {
+  return {
+    provider: finding.provider,
+    assignment_id: finding.assignment_id,
+    submission_id: finding.submission_id,
+    compared_submission_id: finding.compared_submission_id ?? null,
+    similarity_score: finding.similarity_score,
+    severity: finding.severity,
+    evidence_summary: finding.evidence_summary,
+    matched_phrases: finding.matched_phrases,
+    raw_metadata: finding.raw_metadata,
+    analysis_limited: finding.analysis_limited,
+  };
 }
 
 function countCitationPatterns(text: string) {
@@ -635,27 +623,6 @@ async function fetchFileContent(
   }
 }
 
-async function fetchCodeSubmissionSource(
-  supabaseAdmin: ReturnType<typeof createAdminClient>,
-  sub: { file_url?: string; file_name?: string | null },
-): Promise<string | null> {
-  if (!sub.file_url || !detectMossLanguage(sub.file_name || sub.file_url)) {
-    return null;
-  }
-
-  try {
-    const { data, error } = await supabaseAdmin.storage.from("submissions").download(sub.file_url);
-    if (error || !data) {
-      return null;
-    }
-
-    const sourceText = await data.text();
-    return sourceText.trim() ? sourceText : null;
-  } catch {
-    return null;
-  }
-}
-
 async function createIntegrityResponseWithRetry(body: Record<string, unknown>) {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= OPENAI_RETRY_ATTEMPTS; attempt += 1) {
@@ -807,16 +774,6 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const rawAuthorization = req.headers.get("Authorization");
-    logInfo("check-plagiarism request headers", {
-      method: req.method,
-      hasAuthorization: Boolean(rawAuthorization),
-      authorizationPreview: rawAuthorization ? `${rawAuthorization.slice(0, 16)}...` : null,
-      hasApiKey: req.headers.has("apikey"),
-      origin: req.headers.get("Origin"),
-      referer: req.headers.get("Referer"),
-    });
-
     const startedAt = Date.now();
     const { supabase: userSupabase, user } = await requireLecturer(req);
     const rateLimit = applyRateLimit(req, {
@@ -872,7 +829,6 @@ serve(async (req) => {
 
     const integrityModel = getModel("OPENAI_INTEGRITY_MODEL", "gpt-5.4-mini");
     const providerMode = resolveIntegrityProviderMode(rawBody);
-    const mossRunnerConfig = resolveMossRunnerConfig();
     const requestedAssignmentId = parsedRequest.data.assignmentId ?? null;
     const requestedSubmissionIds = parsedRequest.data.submissionIds ?? (parsedRequest.data.submissionId ? [parsedRequest.data.submissionId] : []);
 
@@ -885,7 +841,7 @@ serve(async (req) => {
     const supabaseAdmin = createAdminClient();
     const { data: assignment, error: assignmentError } = await userSupabase
       .from("assignments")
-      .select("id, lecturer_id")
+      .select("id, lecturer_id, title, description")
       .eq("id", requestedAssignmentId)
       .maybeSingle();
 
@@ -1030,7 +986,6 @@ Rules:
 - Never output a verdict, only a risk indicator with evidence.`;
 
     const userContent: Array<Record<string, string>> = [];
-    const assignmentTitle = "Assignment";
 
     if (isSingleMode) {
       const sub = submissions[0];
@@ -1050,7 +1005,7 @@ Rules:
         type: "input_text",
         text: `Analyse this submission for AI-writing suspicion only.
 
-Assignment: ${assignmentTitle}
+Assignment: ${assignment.title}
 Student: ${sub.student_name || sub.student_email || "Anonymous"}
 File: ${sub.file_name || "submission"}
 
@@ -1096,7 +1051,7 @@ ${preview}`;
         type: "input_text",
         text: `Analyse these submissions for suspicious similarity and AI-writing indicators.
 
-Assignment: ${assignmentTitle}
+Assignment: ${assignment.title}
 
 Submissions:
 ${summaries.join("\n\n---\n\n")}
@@ -1269,27 +1224,65 @@ Only flag real concerns. Return valid JSON only.`,
       }
     }
 
-    const internalFindings: IntegrityProviderFinding[] =
-      shouldRunInternalProvider && requestedAssignmentId && submissions.length >= 2
-        ? await runInternalSimilarityComparisons({
-          assignmentId: requestedAssignmentId,
-          submissions,
-          contentMap,
-          supportsInternalTextSimilarity,
-          warnings,
+    const internalFindings: IntegrityProviderFinding[] = [];
+    if (shouldRunInternalProvider && requestedAssignmentId && submissions.length >= 2) {
+      const comparableSubmissions = submissions
+        .map((submission) => {
+          const content = contentMap.get(submission.id);
+          if (!content) return null;
+          return supportsInternalTextSimilarity(content)
+            ? {
+              submission,
+              content,
+            }
+            : null;
         })
-        : [];
+        .filter(
+          (
+            item,
+          ): item is {
+            submission: SubmissionRow;
+            content: Awaited<ReturnType<typeof fetchFileContent>>;
+          } => Boolean(item),
+        );
 
-    const mossFindings: IntegrityProviderFinding[] =
-      mossRunnerConfig && requestedAssignmentId && submissions.length >= 2
-        ? await runMossSimilarityComparisons({
-          assignmentId: requestedAssignmentId,
-          submissions,
-          config: mossRunnerConfig,
-          fetchCodeSubmissionSource: (submission) => fetchCodeSubmissionSource(supabaseAdmin, submission),
-          warnings,
-        })
-        : [];
+      logInfo("internal_similarity_started", {
+        assignmentId: requestedAssignmentId,
+        submissionCount: submissions.length,
+        comparableSubmissionCount: comparableSubmissions.length,
+      });
+
+      for (let leftIndex = 0; leftIndex < comparableSubmissions.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < comparableSubmissions.length; rightIndex += 1) {
+          try {
+            const left = comparableSubmissions[leftIndex];
+            const right = comparableSubmissions[rightIndex];
+            const pairwiseFinding = analyzeTextSimilarity(
+              left.content.plainText,
+              right.content.plainText,
+              left.submission.id,
+              right.submission.id,
+              requestedAssignmentId,
+            );
+            internalFindings.push(pairwiseFinding);
+          } catch (error) {
+            logError("internal_similarity_pair_failed", error, {
+              assignmentId: requestedAssignmentId,
+              leftSubmissionId: comparableSubmissions[leftIndex]?.submission.id ?? null,
+              rightSubmissionId: comparableSubmissions[rightIndex]?.submission.id ?? null,
+            });
+            warnings.push("A pairwise internal similarity comparison failed and was skipped.");
+          }
+        }
+      }
+
+      logInfo("internal_similarity_completed", {
+        assignmentId: requestedAssignmentId,
+        submissionCount: submissions.length,
+        comparableSubmissionCount: comparableSubmissions.length,
+        findingCount: internalFindings.length,
+      });
+    }
 
     const similarityBySubmission = new Map<string, number>();
     const aiBySubmission = new Map<string, number>();
@@ -1311,8 +1304,69 @@ Only flag real concerns. Return valid JSON only.`,
     }
 
     const syntheticFlags: IntegrityFlag[] = [];
-    const profileUpserts: ProfileUpsertRow[] = [];
-    const snapshots = new Map<string, IntegritySnapshot>();
+    const profileUpserts: Array<Record<string, unknown>> = [];
+    const snapshots = new Map<
+      string,
+        {
+          totalScore: number;
+          aiWritingScore: number;
+          similarityScore: number;
+          overlapBreakdown: {
+          totalOverlap: number;
+          citedOverlap: number;
+          uncitedOverlap: number;
+          internalPeerOverlap: number;
+            externalSourceOverlap: number;
+          };
+          baselineDeviationScore: number;
+          analysisLimited: boolean;
+          limitations: string[];
+          riskLevel: "high" | "medium" | "low";
+          evidence: {
+            aiWriting: Array<{ label: string; value: string; score: number }>;
+            similarity: Array<{ label: string; value: string; score: number }>;
+          baselineDeviation: Array<{ label: string; value: string; score: number }>;
+          uncitedMatches: EvidenceItem[];
+          citedMatches: EvidenceItem[];
+          peerMatches: EvidenceItem[];
+          externalMatches: EvidenceItem[];
+        };
+        flags: string[];
+      }
+    >();
+
+    const ensureSnapshot = (submission: SubmissionRow) => {
+      const existing = snapshots.get(submission.id);
+      if (existing) return existing;
+      const next = {
+        totalScore: 0,
+        aiWritingScore: 0,
+        similarityScore: 0,
+        overlapBreakdown: {
+          totalOverlap: 0,
+          citedOverlap: 0,
+          uncitedOverlap: 0,
+          internalPeerOverlap: 0,
+          externalSourceOverlap: 0,
+          },
+          baselineDeviationScore: 0,
+          analysisLimited: false,
+          limitations: [] as string[],
+          riskLevel: "low" as const,
+          evidence: {
+            aiWriting: [] as Array<{ label: string; value: string; score: number }>,
+            similarity: [] as Array<{ label: string; value: string; score: number }>,
+          baselineDeviation: [] as Array<{ label: string; value: string; score: number }>,
+          uncitedMatches: [] as EvidenceItem[],
+          citedMatches: [] as EvidenceItem[],
+          peerMatches: [] as EvidenceItem[],
+          externalMatches: [] as EvidenceItem[],
+        },
+        flags: [] as string[],
+      };
+      snapshots.set(submission.id, next);
+      return next;
+    };
 
     for (const submission of submissions) {
       const content = contentMap.get(submission.id) || {
@@ -1348,12 +1402,16 @@ Only flag real concerns. Return valid JSON only.`,
       const similarityScore = similarityBySubmission.get(submission.id) || 0;
       const aiScore = aiBySubmission.get(submission.id) || 0;
       const totalRiskScore = computeRisk(similarityScore, aiScore, baselineDeviation.score);
-      const snapshot = ensureIntegritySnapshot(snapshots, submission);
+      const snapshot = ensureSnapshot(submission);
       snapshot.totalScore = Math.max(snapshot.totalScore, totalRiskScore);
       snapshot.aiWritingScore = Math.max(snapshot.aiWritingScore, aiScore);
       snapshot.similarityScore = Math.max(snapshot.similarityScore, similarityScore);
       snapshot.baselineDeviationScore = Math.max(snapshot.baselineDeviationScore, baselineDeviation.score);
-      setSnapshotRiskLevel(snapshot, severityFromRisk);
+      snapshot.riskLevel = severityFromRisk(snapshot.totalScore) === "high"
+        ? "high"
+        : severityFromRisk(snapshot.totalScore) === "medium"
+          ? "medium"
+          : "low";
 
       if (baselineDeviation.reasons.length > 0) {
         snapshot.evidence.baselineDeviation.push({
@@ -1430,12 +1488,77 @@ Only flag real concerns. Return valid JSON only.`,
     for (const flag of parsedFlags) {
       const submission = submissions.find((item) => item.id === flag.submission_a_id);
       if (!submission) continue;
-      const snapshot = ensureIntegritySnapshot(snapshots, submission);
-      mergeFlagIntoSnapshot({
-        snapshot,
-        flag,
-        severityFromRisk,
-      });
+      const snapshot = ensureSnapshot(submission);
+      snapshot.totalScore = Math.max(snapshot.totalScore, flag.total_risk_score);
+      snapshot.aiWritingScore = Math.max(snapshot.aiWritingScore, flag.ai_suspicion_score);
+      snapshot.similarityScore = Math.max(snapshot.similarityScore, flag.similarity_score);
+      snapshot.baselineDeviationScore = Math.max(snapshot.baselineDeviationScore, flag.baseline_deviation_score);
+      snapshot.overlapBreakdown.totalOverlap = Math.max(
+        snapshot.overlapBreakdown.totalOverlap,
+        flag.overlap_analysis?.total_overlap || flag.similarity_score,
+      );
+      snapshot.overlapBreakdown.citedOverlap = Math.max(
+        snapshot.overlapBreakdown.citedOverlap,
+        flag.overlap_analysis?.cited_overlap || 0,
+      );
+      snapshot.overlapBreakdown.uncitedOverlap = Math.max(
+        snapshot.overlapBreakdown.uncitedOverlap,
+        flag.overlap_analysis?.uncited_overlap || 0,
+      );
+      snapshot.overlapBreakdown.internalPeerOverlap = Math.max(
+        snapshot.overlapBreakdown.internalPeerOverlap,
+        flag.overlap_analysis?.internal_peer_overlap || 0,
+      );
+      snapshot.overlapBreakdown.externalSourceOverlap = Math.max(
+        snapshot.overlapBreakdown.externalSourceOverlap,
+        flag.overlap_analysis?.external_source_overlap || 0,
+      );
+      snapshot.riskLevel = severityFromRisk(snapshot.totalScore) === "high"
+        ? "high"
+        : severityFromRisk(snapshot.totalScore) === "medium"
+          ? "medium"
+          : "low";
+
+      if (flag.ai_suspicion_score > 0) {
+        snapshot.evidence.aiWriting.push({
+          label: "AI-writing risk",
+          value: flag.evidence_summary || flag.reason,
+          score: flag.ai_suspicion_score,
+        });
+        snapshot.flags.push("ai writing suspicion");
+      }
+
+      if (flag.similarity_score > 0) {
+        snapshot.evidence.similarity.push({
+          label: (flag.overlap_analysis?.uncited_overlap || 0) > 0
+            ? "Uncited overlap"
+            : (flag.overlap_analysis?.cited_overlap || 0) > 0
+              ? "Cited material"
+              : "Similarity overlap",
+          value: flag.reason,
+          score: flag.similarity_score,
+        });
+        snapshot.flags.push(
+          (flag.overlap_analysis?.uncited_overlap || 0) > 0
+            ? "uncited overlap"
+            : (flag.overlap_analysis?.cited_overlap || 0) > 0
+              ? "cited material"
+              : "similarity overlap",
+        );
+      }
+
+      for (const evidence of flag.evidence_groups?.uncited_matches || []) {
+        snapshot.evidence.uncitedMatches.push(evidence);
+      }
+      for (const evidence of flag.evidence_groups?.cited_matches || []) {
+        snapshot.evidence.citedMatches.push(evidence);
+      }
+      for (const evidence of flag.evidence_groups?.peer_matches || []) {
+        snapshot.evidence.peerMatches.push(evidence);
+      }
+      for (const evidence of flag.evidence_groups?.external_matches || []) {
+        snapshot.evidence.externalMatches.push(evidence);
+      }
     }
 
     const allFlags = [...parsedFlags, ...syntheticFlags].filter((flag, index, array) => {
@@ -1470,59 +1593,142 @@ Only flag real concerns. Return valid JSON only.`,
     }
 
     const existingReviewMap = new Map(
-      ((existingReviews || []) as ExistingReviewRow[]).map((review) => [String(review.submission_id), review]),
+      ((existingReviews || []) as Array<Record<string, unknown>>).map((review) => [String(review.submission_id), review]),
     );
 
     if (requestedAssignmentId && internalFindings.length > 0) {
-      await upsertIntegrityFindings({
-        supabaseAdmin,
-        assignmentId: requestedAssignmentId,
-        findings: internalFindings,
-        providerLabel: "internal_text_similarity",
-        startLogMessage: "internal_similarity_upsert_started",
-        successLogMessage: "internal_similarity_upsert_completed",
-        errorLogMessage: "internal_similarity_insert_failed",
-        warningMessage: "Internal similarity evidence could not be stored, but analysis completed.",
-        warnings,
-      });
+      try {
+        const { error: deleteFindingsError } = await supabaseAdmin
+          .from("integrity_findings")
+          .delete()
+          .eq("assignment_id", requestedAssignmentId)
+          .eq("provider", "internal_text_similarity");
+
+        if (deleteFindingsError) {
+          logWarn("Failed to clear prior internal integrity findings, continuing with insert attempt", {
+            function: "check-plagiarism",
+            assignmentId: requestedAssignmentId,
+          });
+        }
+
+        const findingInserts = internalFindings
+          .filter((finding) =>
+            Boolean(finding.assignment_id) &&
+            Boolean(finding.submission_id) &&
+            Number.isFinite(Number(finding.similarity_score))
+          )
+          .map(buildIntegrityFindingInsert);
+
+        if (findingInserts.length > 0) {
+          const { error: findingsInsertError } = await supabaseAdmin
+            .from("integrity_findings")
+            .insert(findingInserts);
+
+          if (findingsInsertError) {
+            logError("internal_similarity_insert_failed", findingsInsertError, {
+              assignmentId: requestedAssignmentId,
+              findingCount: findingInserts.length,
+            });
+            warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
+          }
+        }
+      } catch (error) {
+        logError("internal_similarity_insert_failed", error, {
+          assignmentId: requestedAssignmentId,
+          findingCount: internalFindings.length,
+        });
+        warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
+      }
     }
 
-    if (requestedAssignmentId && mossFindings.length > 0) {
-      await upsertIntegrityFindings({
-        supabaseAdmin,
-        assignmentId: requestedAssignmentId,
-        findings: mossFindings,
-        providerLabel: "moss",
-        startLogMessage: "moss_similarity_upsert_started",
-        successLogMessage: "moss_similarity_upsert_completed",
-        errorLogMessage: "moss_similarity_insert_failed",
-        warningMessage: "MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.",
-        warnings,
-        requireComparedSubmissionId: true,
-      });
+    const reviewUpserts = submissions
+      .map((submission) => {
+        const snapshot = snapshots.get(submission.id) || null;
+        const existingReview = existingReviewMap.get(submission.id);
+        if (!snapshot && !existingReview) return null;
+
+        const notePayload = (() => {
+          if (existingReview?.lecturer_note && typeof existingReview.lecturer_note === "string") {
+            try {
+              const parsed = JSON.parse(existingReview.lecturer_note);
+              return {
+                latestNote: typeof parsed.latestNote === "string" ? parsed.latestNote : "",
+                history: Array.isArray(parsed.history) ? parsed.history : [],
+              };
+            } catch {
+              return { latestNote: "", history: [] };
+            }
+          }
+          return { latestNote: "", history: [] };
+        })();
+
+        return {
+          submission_id: submission.id,
+          lecturer_id: user.id,
+          review_type:
+            snapshot && snapshot.baselineDeviationScore > 0 && snapshot.aiWritingScore === 0 && snapshot.similarityScore === 0
+              ? "baseline-deviation"
+              : snapshot && snapshot.aiWritingScore > 0 && snapshot.similarityScore > 0
+                ? "mixed"
+                : snapshot && snapshot.aiWritingScore > 0
+                  ? "ai-writing-suspicion"
+                  : "similarity-plagiarism-suspicion",
+          decision: String(existingReview?.decision || "pending"),
+          evidence_summary: snapshot
+            ? [
+                ...snapshot.evidence.aiWriting.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.similarity.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.uncitedMatches.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.citedMatches.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.peerMatches.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.externalMatches.map((entry) => `${entry.label}: ${entry.value}`),
+                ...snapshot.evidence.baselineDeviation.map((entry) => `${entry.label}: ${entry.value}`),
+              ]
+                .slice(0, 8)
+                .join("\n\n") || null
+            : null,
+          lecturer_note: JSON.stringify({
+            latestNote: notePayload.latestNote,
+            history: notePayload.history,
+            integritySnapshot: snapshot,
+          }),
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+
+    if (reviewUpserts.length > 0) {
+      const { error: persistError } = await supabaseAdmin
+        .from("academic_integrity_reviews")
+        .upsert(reviewUpserts, { onConflict: "submission_id,lecturer_id" });
+      if (persistError) {
+        if (isRecoverablePersistenceError(persistError)) {
+          logWarn("Failed to persist academic integrity reviews, returning analysis without persistence", {
+            function: "check-plagiarism",
+          });
+        } else {
+          logError("academic_integrity_reviews upsert failed", persistError, {
+            function: "check-plagiarism",
+            assignmentId: requestedAssignmentId,
+            reviewCount: reviewUpserts.length,
+          });
+        }
+        warnings.push("Integrity review records could not be stored, but analysis completed.");
+      }
     }
 
-    const reviewUpserts = buildIntegrityReviewUpserts({
-      submissions,
-      snapshots,
-      existingReviewMap,
-      lecturerId: user.id,
-    });
-
-    await persistIntegrityReviewUpserts({
-      supabaseAdmin,
-      reviewUpserts,
-      assignmentId: requestedAssignmentId,
-      warnings,
-      isRecoverablePersistenceError,
-    });
-
-    await persistWritingProfiles({
-      supabaseAdmin,
-      profileUpserts,
-      assignmentId: requestedAssignmentId,
-      warnings,
-    });
+    if (profileUpserts.length > 0) {
+      const { error: profileError } = await supabaseAdmin
+        .from("student_writing_profiles")
+        .upsert(profileUpserts, { onConflict: "student_id" });
+      if (profileError) {
+        logError("student_writing_profiles upsert failed", profileError, {
+          function: "check-plagiarism",
+          assignmentId: requestedAssignmentId,
+          profileCount: profileUpserts.length,
+        });
+        warnings.push("Writing profile history could not be updated, but analysis completed.");
+      }
+    }
 
     const thresholdCrossingFlags = allFlags.filter(
       (flag) =>

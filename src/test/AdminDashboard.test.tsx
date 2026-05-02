@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   rpc: vi.fn(),
+  invoke: vi.fn(),
   from: vi.fn(),
   useAuth: vi.fn(),
 }));
@@ -20,6 +21,9 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: mocks.from,
     rpc: mocks.rpc,
+    functions: {
+      invoke: mocks.invoke,
+    },
   },
 }));
 
@@ -168,6 +172,8 @@ describe("AdminDashboard", () => {
     mocks.toastSuccess.mockReset();
     mocks.rpc.mockReset();
     mocks.rpc.mockResolvedValue({ error: null });
+    mocks.invoke.mockReset();
+    mocks.invoke.mockResolvedValue({ error: null });
     mocks.from.mockReset();
     mocks.from.mockImplementation((table: string) => buildQueryResponse(table));
     mocks.useAuth.mockReturnValue({
@@ -202,9 +208,11 @@ describe("AdminDashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm Change" }));
 
     await waitFor(() => {
-      expect(mocks.rpc).toHaveBeenCalledWith("admin_set_user_role", {
-        p_target_user_id: "student-1",
-        p_target_role: "lecturer",
+      expect(mocks.invoke).toHaveBeenCalledWith("admin-set-user-role", {
+        body: {
+          targetUserId: "student-1",
+          nextRole: "lecturer",
+        },
       });
     });
 
