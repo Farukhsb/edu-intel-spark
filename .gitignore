@@ -43,3 +43,7 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
+.codex_*.patch
+worktrees/
+supabase/manual_*.sql
+supabase/migrations_archive/

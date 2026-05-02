@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
-import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -12,7 +11,6 @@ import {
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import { classifyAssignmentType, type AssignmentType } from "../_shared/text-analysis.ts";
-import { sanitizeVisibleAiFeedback } from "../_shared/visible-feedback.ts";
 
 const CONFIDENCE_THRESHOLD = 0.7;
 const REGRADING_DRIFT_THRESHOLD_RATIO = 0.08;
@@ -186,6 +184,27 @@ function normalizeHistory(metadata: Record<string, unknown> | null | undefined) 
       reason_for_regrade: typeof item.reason_for_regrade === "string" ? item.reason_for_regrade : "",
     }))
     .filter((item) => item.grading_input_hash);
+}
+
+async function resolveActorRoles(
+  roleClient: { from: ReturnType<typeof createAdminClient>["from"] },
+  userId: string,
+) {
+  const [rolesRes, profileRes] = await Promise.all([
+    roleClient.from("user_roles").select("role").eq("user_id", userId),
+    roleClient.from("profiles").select("role").eq("id", userId).maybeSingle(),
+  ]);
+
+  if (rolesRes.error && profileRes.error) {
+    throw new Error("Failed to resolve actor roles");
+  }
+
+  const roles = new Set<string>();
+  for (const row of rolesRes.error ? [] : rolesRes.data || []) {
+    if (typeof row.role === "string") roles.add(row.role);
+  }
+  if (!profileRes.error && typeof profileRes.data?.role === "string") roles.add(profileRes.data.role);
+  return [...roles];
 }
 
 function normalizeFingerprintText(text: string) {
@@ -1408,11 +1427,9 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  const methodError = requirePostMethod(req, corsHeaders);
-  if (methodError) return methodError;
 
   try {
-    const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);
+    const { supabase: userSupabase, user } = await requireLecturer(req);
     const rateLimit = applyRateLimit(req, {
       scope: "grade-submission",
       limit: 5,
@@ -1482,6 +1499,7 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createAdminClient();
+    const actorRoles = await resolveActorRoles(userSupabase, user.id);
     const actorIsAdmin = actorRoles.includes("admin");
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");
@@ -1688,11 +1706,10 @@ serve(async (req) => {
         if (cacheHit) {
           const cachedBreakdown = normalizeBreakdown(existingGrade.ai_breakdown, normalizedRubric);
           const cachedConfidence = clampConfidence(existingGrade.grading_confidence ?? existingMetadata.confidence_score);
-          const cachedFeedback = sanitizeVisibleAiFeedback(existingGrade.ai_feedback);
           const cachedResult = {
             submissionId: sub.id,
             score: Number(existingGrade.ai_score),
-            feedback: cachedFeedback || "Using saved AI marking result.",
+            feedback: existingGrade.ai_feedback || "Using saved AI marking result.",
             breakdown: cachedBreakdown.breakdown,
             assignmentType: classifyAssignmentType({
               title: assignment.title,
@@ -1828,11 +1845,10 @@ serve(async (req) => {
           const clusterMismatch =
             (matchingExistingFingerprintCluster?.gradeCount || 0) > 1 &&
             (matchingExistingFingerprintCluster?.scoreSpread || 0) > 0;
-          const reusedFeedback = sanitizeVisibleAiFeedback(matchingExistingFingerprintGrade.ai_feedback);
           results.push({
             submissionId: sub.id,
             score: Number(matchingExistingFingerprintGrade.ai_score),
-            feedback: `${reusedFeedback || "Reused existing AI grade for identical content."}\n\nIdentical blinded content matched a previously graded submission in this assignment. Reused the canonical cluster grade for consistency.${clusterMismatch ? ` Historical duplicate grades for this same content varied by ${matchingExistingFingerprintCluster?.scoreSpread} marks, so the canonical cluster grade was applied and lecturer review is recommended.` : ""}`,
+            feedback: `${matchingExistingFingerprintGrade.ai_feedback || "Reused existing AI grade for identical content."}\n\nIdentical blinded content matched a previously graded submission in this assignment. Reused the canonical cluster grade for consistency.${clusterMismatch ? ` Historical duplicate grades for this same content varied by ${matchingExistingFingerprintCluster?.scoreSpread} marks, so the canonical cluster grade was applied and lecturer review is recommended.` : ""}`,
             breakdown: reusedBreakdown.breakdown,
             assignmentType: classifyAssignmentType({
               title: assignment.title,
@@ -2058,7 +2074,7 @@ Return corrected JSON only.`;
             }
             modelScore = previousAiScore;
             modelFeedback =
-              sanitizeVisibleAiFeedback(existingGrade?.ai_feedback?.trim()) ||
+              existingGrade?.ai_feedback?.trim() ||
               "Previous AI grade preserved because repeated regrading produced materially different scores for the same submission.";
             gradingConfidence = Math.min(clampConfidence(existingGrade?.grading_confidence), 0.65);
             regradeVariancePreservedPrior = true;
@@ -2260,7 +2276,7 @@ Return corrected JSON only.`;
           regradeVariancePreservedPrior ||
           isNearGradeBoundary(normalized.total, assignment.max_score);
 
-        const feedbackParts = [sanitizeVisibleAiFeedback(modelFeedback)];
+        const feedbackParts = [modelFeedback];
         if (scoreAdjusted) {
           feedbackParts.push("Final score was recalculated to match the exact sum of criterion scores.");
         }
@@ -2273,7 +2289,6 @@ Return corrected JSON only.`;
         if (requiresLecturerReview && reviewReasons.length > 0) {
           feedbackParts.push(`Lecturer review recommended: ${Array.from(new Set(reviewReasons)).join("; ")}`);
         }
-        const visibleFeedback = sanitizeVisibleAiFeedback(feedbackParts.filter(Boolean).join("\n\n"));
 
         const gradingHistory =
           existingGrade?.ai_score != null || forceRegenerate || existingHash !== gradingInputHash
@@ -2296,7 +2311,7 @@ Return corrected JSON only.`;
         results.push({
           submissionId: sub.id,
           score: normalized.total,
-          feedback: visibleFeedback,
+          feedback: feedbackParts.join("\n\n"),
           breakdown: normalized.breakdown,
           assignmentType,
           gradingConfidence,
@@ -2337,7 +2352,7 @@ Return corrected JSON only.`;
         });
         generatedResultsByFingerprint.set(gradingInputHash, {
           score: normalized.total,
-          feedback: visibleFeedback,
+          feedback: feedbackParts.join("\n\n"),
           breakdown: normalized.breakdown,
           assignmentType,
           gradingConfidence,

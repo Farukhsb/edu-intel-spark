@@ -8,7 +8,8 @@ const optionalBooleanFlag = z
 
 const EnvSchema = z.object({
   VITE_SUPABASE_URL: z.string().url(),
-  VITE_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+  VITE_SUPABASE_PUBLISHABLE_KEY: optionalString,
+  VITE_SUPABASE_ANON_KEY: optionalString,
   VITE_APP_ENV: z.enum(["development", "staging", "production"]).default("development"),
   VITE_SENTRY_DSN: optionalUrl,
   VITE_APP_URL: optionalUrl,
@@ -18,7 +19,12 @@ const EnvSchema = z.object({
   VITE_SUPABASE_PROJECT_ID: optionalString,
 });
 
-export type AppEnv = z.infer<typeof EnvSchema>;
+type ParsedEnv = z.infer<typeof EnvSchema>;
+
+export type AppEnv = Omit<ParsedEnv, "VITE_SUPABASE_PUBLISHABLE_KEY" | "VITE_SUPABASE_ANON_KEY"> & {
+  VITE_SUPABASE_PUBLISHABLE_KEY: string;
+  VITE_SUPABASE_ANON_KEY?: string;
+};
 
 export function parseEnv(rawEnv: Record<string, unknown>): AppEnv {
   const normalizedEnv = {
@@ -28,7 +34,19 @@ export function parseEnv(rawEnv: Record<string, unknown>): AppEnv {
 
   const parsed = EnvSchema.safeParse(normalizedEnv);
   if (parsed.success) {
-    return parsed.data;
+    const publishableKey =
+      parsed.data.VITE_SUPABASE_PUBLISHABLE_KEY ?? parsed.data.VITE_SUPABASE_ANON_KEY;
+
+    if (!publishableKey) {
+      throw new Error(
+        "Invalid environment configuration: VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY",
+      );
+    }
+
+    return {
+      ...parsed.data,
+      VITE_SUPABASE_PUBLISHABLE_KEY: publishableKey,
+    };
   }
 
   const variableNames = [...new Set(parsed.error.issues.map((issue) => issue.path[0]).filter((key): key is string => typeof key === "string"))];
