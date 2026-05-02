@@ -28,6 +28,8 @@ import {
   type MossComparableSubmission,
   type MossRunnerConfig,
 } from "../_shared/providers/moss.ts";
+import { upsertIntegrityFindings } from "../_shared/integrity-findings-store.ts";
+import type { IntegrityFindingInsert, IntegrityProviderFinding } from "../_shared/integrity-provider.ts";
 
 const CheckPlagiarismRequestSchema = z
   .object({
@@ -113,19 +115,6 @@ type ProcessedSubmissionText = {
   };
 };
 
-type IntegrityFindingInsert = {
-  provider: string;
-  assignment_id: string;
-  submission_id: string;
-  compared_submission_id: string | null;
-  similarity_score: number;
-  severity: string;
-  evidence_summary: string;
-  matched_phrases: string[];
-  raw_metadata: Record<string, unknown>;
-  analysis_limited: boolean;
-};
-
 function clampScore(value: unknown) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
@@ -204,21 +193,6 @@ function supportsInternalTextSimilarity(content: {
   if (!content.success || content.extractionError) return false;
   if (!["pdf", "docx", "txt"].includes(content.fileType)) return false;
   return countWords(content.plainText) >= INTERNAL_SIMILARITY_MIN_WORDS;
-}
-
-function buildIntegrityFindingInsert(finding: IntegrityProviderFinding): IntegrityFindingInsert {
-  return {
-    provider: finding.provider,
-    assignment_id: finding.assignment_id,
-    submission_id: finding.submission_id,
-    compared_submission_id: finding.compared_submission_id ?? null,
-    similarity_score: finding.similarity_score,
-    severity: finding.severity,
-    evidence_summary: finding.evidence_summary,
-    matched_phrases: finding.matched_phrases,
-    raw_metadata: finding.raw_metadata,
-    analysis_limited: finding.analysis_limited,
-  };
 }
 
 function countCitationPatterns(text: string) {
@@ -1722,92 +1696,32 @@ Only flag real concerns. Return valid JSON only.`,
     );
 
     if (requestedAssignmentId && internalFindings.length > 0) {
-      try {
-        logInfo("internal_similarity_upsert_started", {
-          assignmentId: requestedAssignmentId,
-          findingCount: internalFindings.length,
-        });
-
-        const findingInserts = internalFindings
-          .filter((finding) =>
-            Boolean(finding.assignment_id) &&
-            Boolean(finding.submission_id) &&
-            Number.isFinite(Number(finding.similarity_score))
-          )
-          .map(buildIntegrityFindingInsert);
-
-        if (findingInserts.length > 0) {
-          const { error: findingsInsertError } = await supabaseAdmin
-            .from("integrity_findings")
-            .upsert(findingInserts, {
-              onConflict: "provider,assignment_id,submission_id,compared_submission_id",
-            });
-
-          if (findingsInsertError) {
-            logError("internal_similarity_insert_failed", findingsInsertError, {
-              assignmentId: requestedAssignmentId,
-              findingCount: findingInserts.length,
-            });
-            warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
-          } else {
-            logInfo("internal_similarity_upsert_completed", {
-              assignmentId: requestedAssignmentId,
-              findingCount: findingInserts.length,
-            });
-          }
-        }
-      } catch (error) {
-        logError("internal_similarity_insert_failed", error, {
-          assignmentId: requestedAssignmentId,
-          findingCount: internalFindings.length,
-        });
-        warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
-      }
+      await upsertIntegrityFindings({
+        supabaseAdmin,
+        assignmentId: requestedAssignmentId,
+        findings: internalFindings,
+        providerLabel: "internal_text_similarity",
+        startLogMessage: "internal_similarity_upsert_started",
+        successLogMessage: "internal_similarity_upsert_completed",
+        errorLogMessage: "internal_similarity_insert_failed",
+        warningMessage: "Internal similarity evidence could not be stored, but analysis completed.",
+        warnings,
+      });
     }
 
     if (requestedAssignmentId && mossFindings.length > 0) {
-      try {
-        logInfo("moss_similarity_upsert_started", {
-          assignmentId: requestedAssignmentId,
-          findingCount: mossFindings.length,
-        });
-
-        const mossFindingInserts = mossFindings
-          .filter((finding) =>
-            Boolean(finding.assignment_id) &&
-            Boolean(finding.submission_id) &&
-            Boolean(finding.compared_submission_id) &&
-            Number.isFinite(Number(finding.similarity_score))
-          )
-          .map(buildIntegrityFindingInsert);
-
-        if (mossFindingInserts.length > 0) {
-          const { error: mossInsertError } = await supabaseAdmin
-            .from("integrity_findings")
-            .upsert(mossFindingInserts, {
-              onConflict: "provider,assignment_id,submission_id,compared_submission_id",
-            });
-
-          if (mossInsertError) {
-            logError("moss_similarity_insert_failed", mossInsertError, {
-              assignmentId: requestedAssignmentId,
-              findingCount: mossFindingInserts.length,
-            });
-            warnings.push("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
-          } else {
-            logInfo("moss_similarity_upsert_completed", {
-              assignmentId: requestedAssignmentId,
-              findingCount: mossFindingInserts.length,
-            });
-          }
-        }
-      } catch (error) {
-        logError("moss_similarity_insert_failed", error, {
-          assignmentId: requestedAssignmentId,
-          findingCount: mossFindings.length,
-        });
-        warnings.push("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
-      }
+      await upsertIntegrityFindings({
+        supabaseAdmin,
+        assignmentId: requestedAssignmentId,
+        findings: mossFindings,
+        providerLabel: "moss",
+        startLogMessage: "moss_similarity_upsert_started",
+        successLogMessage: "moss_similarity_upsert_completed",
+        errorLogMessage: "moss_similarity_insert_failed",
+        warningMessage: "MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.",
+        warnings,
+        requireComparedSubmissionId: true,
+      });
     }
 
     const reviewUpserts = submissions

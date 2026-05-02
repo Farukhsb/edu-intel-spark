@@ -59,3 +59,31 @@ export function createAnalysisLimitedFinding(params: {
     analysis_limited: true,
   };
 }
+
+export type IntegrityFindingInsert = {
+  provider: string;
+  assignment_id: string;
+  submission_id: string;
+  compared_submission_id: string | null;
+  similarity_score: number;
+  severity: string;
+  evidence_summary: string;
+  matched_phrases: string[];
+  raw_metadata: Record<string, unknown>;
+  analysis_limited: boolean;
+};
+
+export function buildIntegrityFindingInsert(finding: IntegrityProviderFinding): IntegrityFindingInsert {
+  return {
+    provider: finding.provider,
+    assignment_id: finding.assignment_id,
+    submission_id: finding.submission_id,
+    compared_submission_id: finding.compared_submission_id ?? null,
+    similarity_score: finding.similarity_score,
+    severity: finding.severity,
+    evidence_summary: finding.evidence_summary,
+    matched_phrases: finding.matched_phrases,
+    raw_metadata: finding.raw_metadata,
+    analysis_limited: finding.analysis_limited,
+  };
+}

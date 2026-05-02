@@ -182,25 +182,30 @@ describe("edge function hardening", () => {
 
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
     const source = readRepoFile("supabase/functions/check-plagiarism/index.ts");
+    const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
 
     expect(source).toContain('const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";');
     expect(source).toContain("if (shouldRunInternalProvider && requestedAssignmentId && submissions.length >= 2)");
     expect(source).toContain('logInfo("internal_similarity_started"');
     expect(source).toContain('logInfo("internal_similarity_completed"');
     expect(source).toContain('logError("internal_similarity_pair_failed"');
-    expect(source).toContain('logError("internal_similarity_insert_failed"');
+    expect(source).toContain('errorLogMessage: "internal_similarity_insert_failed"');
+    expect(storeSource).toContain("export async function upsertIntegrityFindings");
+    expect(storeSource).toContain("logError(errorLogMessage, error");
     expect(source).toContain("Internal similarity evidence could not be stored, but analysis completed.");
-    expect(source).toContain(".filter((finding) =>");
+    expect(storeSource).toContain(".filter((finding) =>");
   });
 
   it("keeps the optional MOSS bridge non-fatal and backend-only", () => {
     const source = readRepoFile("supabase/functions/check-plagiarism/index.ts");
+    const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
 
     expect(source).toContain("resolveMossRunnerConfig()");
     expect(source).toContain('logInfo("moss_similarity_started"');
     expect(source).toContain('logInfo("moss_similarity_completed"');
     expect(source).toContain('logError("moss_similarity_failed"');
-    expect(source).toContain('logError("moss_similarity_insert_failed"');
+    expect(source).toContain('errorLogMessage: "moss_similarity_insert_failed"');
+    expect(storeSource).toContain("requireComparedSubmissionId = false");
     expect(source).toContain("MOSS code similarity analysis was unavailable, but existing plagiarism analysis completed.");
     expect(source).toContain("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
   });
