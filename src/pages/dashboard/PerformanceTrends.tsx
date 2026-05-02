@@ -9,7 +9,6 @@ import { log } from "@/lib/logger";
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
-  DashboardLiveBanner,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 import {
@@ -288,7 +287,6 @@ const PerformanceTrends = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && <DashboardDemoBanner label="Viewing demo performance trends data" />}
-      {!isDemo && <DashboardLiveBanner label="Viewing live performance trends for your lecturer-scoped assignments" />}
       <PerformanceFiltersBar
         modules={modules}
         moduleFilter={moduleFilter}

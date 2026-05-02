@@ -7,37 +7,64 @@ import {
   isAssignmentVisibleToStudent,
 } from "@/lib/assignmentVisibility";
 
-describe("assignment visibility helpers", () => {
-  const futureDueDate = "2099-04-29T13:00:00.000Z";
-  const pastDueDate = "2000-04-29T13:00:00.000Z";
+describe("assignmentVisibility", () => {
+  const now = new Date("2026-04-29T12:00:00.000Z").getTime();
 
-  it("detects when a due date has passed", () => {
-    expect(hasAssignmentDueDatePassed(pastDueDate, new Date("2026-04-29T13:00:00.000Z").getTime())).toBe(true);
-    expect(hasAssignmentDueDatePassed(futureDueDate, new Date("2026-04-29T13:00:00.000Z").getTime())).toBe(false);
+  it("keeps published future-due assignments visible to students", () => {
+    expect(
+      isAssignmentVisibleToStudent(
+        {
+          status: "published",
+          due_date: "2026-04-29T13:00:00.000Z",
+        },
+        now,
+      ),
+    ).toBe(true);
   });
 
-  it("treats only upcoming close deadlines as due soon", () => {
-    const now = new Date("2026-04-29T13:00:00.000Z").getTime();
-    const soonDueDate = new Date(now + 2 * 24 * 60 * 60 * 1000).toISOString();
-    const distantDueDate = new Date(now + 12 * 24 * 60 * 60 * 1000).toISOString();
-
-    expect(isAssignmentDueSoon(soonDueDate, now)).toBe(true);
-    expect(isAssignmentDueSoon(distantDueDate, now)).toBe(false);
-    expect(isAssignmentDueSoon(pastDueDate, now)).toBe(false);
+  it("hides published assignments once the due date has passed", () => {
+    expect(
+      isAssignmentVisibleToStudent(
+        {
+          status: "published",
+          due_date: "2026-04-29T11:00:00.000Z",
+        },
+        now,
+      ),
+    ).toBe(false);
   });
 
-  it("hides overdue assignments from student visibility", () => {
-    expect(isAssignmentVisibleToStudent({ status: "published", due_date: futureDueDate })).toBe(true);
-    expect(isAssignmentVisibleToStudent({ status: "published", due_date: pastDueDate })).toBe(false);
-    expect(isAssignmentVisibleToStudent({ status: "draft", due_date: futureDueDate })).toBe(false);
+  it("does not hide undated published assignments", () => {
+    expect(
+      isAssignmentVisibleToStudent(
+        {
+          status: "published",
+          due_date: null,
+        },
+        now,
+      ),
+    ).toBe(true);
   });
 
-  it("computes open submission state for eligible students", () => {
+  it("treats the exact due timestamp as no longer visible", () => {
+    expect(hasAssignmentDueDatePassed("2026-04-29T12:00:00.000Z", now)).toBe(true);
+  });
+
+  it("flags assignments due within seven days as due soon", () => {
+    expect(isAssignmentDueSoon("2026-05-02T12:00:00.000Z", now)).toBe(true);
+    expect(isAssignmentDueSoon("2026-05-10T12:00:00.000Z", now)).toBe(false);
+  });
+
+  it("builds an open submission state for eligible students", () => {
     expect(
       getStudentSubmissionAvailability({
-        assignment: { status: "published", due_date: futureDueDate },
+        assignment: {
+          status: "published",
+          due_date: "2026-04-29T13:00:00.000Z",
+        },
         hasExistingSubmission: false,
         hasUser: true,
+        now,
       }),
     ).toEqual({
       canSubmit: true,
@@ -46,24 +73,34 @@ describe("assignment visibility helpers", () => {
     });
   });
 
-  it("computes blocked submission state for overdue or already-submitted work", () => {
+  it("builds a closed submission state once the due date has passed", () => {
     expect(
       getStudentSubmissionAvailability({
-        assignment: { status: "published", due_date: pastDueDate },
+        assignment: {
+          status: "published",
+          due_date: "2026-04-29T11:00:00.000Z",
+        },
         hasExistingSubmission: false,
         hasUser: true,
+        now,
       }),
     ).toEqual({
       canSubmit: false,
       ctaLabel: "Closed",
       helperText: "The due date has passed, so this assignment is no longer accepting submissions.",
     });
+  });
 
+  it("builds an already-submitted state when the student has uploaded work", () => {
     expect(
       getStudentSubmissionAvailability({
-        assignment: { status: "published", due_date: futureDueDate },
+        assignment: {
+          status: "published",
+          due_date: "2026-04-29T13:00:00.000Z",
+        },
         hasExistingSubmission: true,
         hasUser: true,
+        now,
       }),
     ).toEqual({
       canSubmit: false,

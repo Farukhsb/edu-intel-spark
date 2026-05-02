@@ -36,8 +36,6 @@ import { parseStoredReviewPayload } from "@/lib/integrityReviews";
 import { log } from "@/lib/logger";
 import { toast } from "sonner";
 import {
-  DashboardDemoBanner,
-  DashboardLiveBanner,
   DashboardEmptyState,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
@@ -631,11 +629,6 @@ const CohortAnalytics = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo ? (
-        <DashboardDemoBanner label="Viewing demo cohort analytics data" />
-      ) : (
-        <DashboardLiveBanner label="Viewing live cohort analytics for your lecturer-scoped assignments" />
-      )}
       {modules.length > 0 && (
         <div className="flex items-center gap-4">
           <Select value={moduleFilter} onValueChange={setModuleFilter}>

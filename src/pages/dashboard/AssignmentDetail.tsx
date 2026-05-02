@@ -1,14 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -97,18 +91,6 @@ interface GradeSubmissionInvokeData {
   results?: GradeSubmissionResult[];
 }
 
-interface InternalSimilarityEvidenceRow {
-  id: string;
-  submission_id: string;
-  compared_submission_id: string | null;
-  similarity_score: number;
-  severity: string;
-  evidence_summary: string;
-  matched_phrases: string[];
-  analysis_limited: boolean;
-  created_at: string;
-}
-
 const formatStatusLabel = (status: string) => formatSubmissionStatus(status);
 
 const normalizeStudentKey = (value: string | null | undefined) =>
@@ -124,6 +106,7 @@ const buildRecommendedActionLabel = (value?: string) =>
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
 const PLAGIARISM_CHECK_URL = `${env.VITE_SUPABASE_URL}/functions/v1/check-plagiarism`;
+const GRADE_SUBMISSION_URL = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;
 
 const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
   const candidate = `${submission.file_name ?? ""} ${submission.file_url ?? ""}`.toLowerCase();
@@ -146,9 +129,6 @@ const AssignmentDetail = () => {
   const [editScore, setEditScore] = useState("");
   const [editFeedback, setEditFeedback] = useState("");
   const [checkingPlagiarism, setCheckingPlagiarism] = useState(false);
-  const [internalSimilarityEvidence, setInternalSimilarityEvidence] = useState<InternalSimilarityEvidenceRow[]>([]);
-  const [loadingInternalSimilarityEvidence, setLoadingInternalSimilarityEvidence] = useState(false);
-  const [internalSimilarityEvidenceError, setInternalSimilarityEvidenceError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | SubmissionStatus>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -433,7 +413,6 @@ const AssignmentDetail = () => {
     }
     if (!assignment) return;
 
-    setGrading(true);
     if (role === "lecturer" && user?.id && assignment.lecturer_id !== user.id) {
       toast.error("You can only grade assignments that are assigned to your lecturer account.");
       return;
@@ -454,6 +433,7 @@ const AssignmentDetail = () => {
       return;
     }
 
+    setGrading(true);
     setGradingCount(gradableSubmissions.length);
     setGradingElapsed(0);
     gradingTimerRef.current = setInterval(() => setGradingElapsed((p) => p + 1), 1000);
@@ -466,14 +446,31 @@ const AssignmentDetail = () => {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke<GradeSubmissionInvokeData>("grade-submission", {
-        body: {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("Your session has expired. Please sign in again before running AI grading.");
+      }
+
+      const response = await fetch(GRADE_SUBMISSION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
           assignmentId: assignment.id,
           submissions: gradableSubmissions.map((s) => ({ id: s.id })),
-        },
+        }),
       });
 
-      if (error) throw error;
+      const data = (await response.json()) as GradeSubmissionInvokeData & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || "AI grading failed");
+      }
       const results = data?.results || [];
       let successCount = 0;
       let failCount = 0;
@@ -628,7 +625,6 @@ const AssignmentDetail = () => {
     if (!assignment) return;
     setCheckingPlagiarism(true);
     try {
-      const batchSize = 3;
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -637,6 +633,8 @@ const AssignmentDetail = () => {
         toast.error("Your session has expired. Please sign in again before running an integrity check.");
         return;
       }
+
+      const batchSize = 3;
       const collectedFlags: PlagiarismFlag[] = [];
       const collectedSummaries: string[] = [];
       const collectedWarnings: string[] = [];
@@ -723,7 +721,6 @@ const AssignmentDetail = () => {
 
       setPlagiarismFlags(uniqueFlags);
       setPlagiarismSummary(summaryParts.filter(Boolean).join(" "));
-      await loadInternalSimilarityEvidence(assignment.id);
 
       if (successfulBatches > 0) {
         await persistWorkflowNotification(
@@ -1150,96 +1147,9 @@ Please review the feedback in the platform and let me know if you would like to 
     toast.success("Grade release note saved");
   };
 
-  const loadInternalSimilarityEvidence = async (assignmentId: string) => {
-    if (isDemo) {
-      setInternalSimilarityEvidence([]);
-      setInternalSimilarityEvidenceError(null);
-      return;
-    }
-
-    setLoadingInternalSimilarityEvidence(true);
-    setInternalSimilarityEvidenceError(null);
-
-    try {
-      const supabaseUntyped = supabase as unknown as {
-        from: (table: string) => {
-          select: (columns: string) => {
-            eq: (column: string, value: string) => {
-              eq: (column: string, value: string) => {
-                order: (
-                  column: string,
-                  options?: { ascending?: boolean },
-                ) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>;
-              };
-            };
-          };
-        };
-      };
-
-      const { data, error } = await supabaseUntyped
-        .from("integrity_findings")
-        .select(
-          "id, submission_id, compared_submission_id, similarity_score, severity, evidence_summary, matched_phrases, analysis_limited, created_at",
-        )
-        .eq("assignment_id", assignmentId)
-        .eq("provider", "internal_text_similarity")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        throw new Error(error.message || "Failed to load internal evidence");
-      }
-
-      const rows = Array.isArray(data)
-        ? data
-            .map((row) => {
-              const record = row as Record<string, unknown>;
-              return {
-                id: String(record.id ?? ""),
-                submission_id: String(record.submission_id ?? ""),
-                compared_submission_id:
-                  typeof record.compared_submission_id === "string"
-                    ? record.compared_submission_id
-                    : null,
-                similarity_score: Number(record.similarity_score ?? 0),
-                severity: String(record.severity ?? "low"),
-                evidence_summary: String(record.evidence_summary ?? ""),
-                matched_phrases: Array.isArray(record.matched_phrases)
-                  ? record.matched_phrases.map((phrase) => String(phrase))
-                  : [],
-                analysis_limited: Boolean(record.analysis_limited),
-                created_at: String(record.created_at ?? ""),
-              } satisfies InternalSimilarityEvidenceRow;
-            })
-            .filter((row) => row.id && row.submission_id && row.compared_submission_id)
-        : [];
-
-      setInternalSimilarityEvidence(rows);
-    } catch (error) {
-      log.warn("Internal similarity evidence load failed", {
-        assignmentId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-      setInternalSimilarityEvidence([]);
-      setInternalSimilarityEvidenceError("Internal evidence could not be loaded.");
-    } finally {
-      setLoadingInternalSimilarityEvidence(false);
-    }
-  };
-
   const summary = useMemo(() => {
       return getAssessmentSummary(submissions);
     }, [submissions]);
-
-  const submissionDisplayNames = useMemo(
-    () =>
-      new Map(
-        submissions.map((submission) => [
-          submission.id,
-          submission.student_name || submission.student_email || submission.file_name || submission.id,
-        ]),
-      ),
-    [submissions],
-  );
 
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((submission) => {
@@ -1252,11 +1162,6 @@ Please review the feedback in the platform and let me know if you would like to 
       return matchesSearch && matchesStatus;
     });
   }, [searchQuery, statusFilter, submissions]);
-
-  useEffect(() => {
-    if (!assignment?.id || isDemo) return;
-    void loadInternalSimilarityEvidence(assignment.id);
-  }, [assignment?.id, isDemo]);
 
   if (loading)
     return (
@@ -1539,82 +1444,6 @@ Please review the feedback in the platform and let me know if you would like to 
               </CardContent>
             </Card>
           )}
-
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Internal Similarity Evidence</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Backend evidence for lecturer review. Not a determination of misconduct.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="internal-similarity-evidence" className="border-b-0">
-                  <AccordionTrigger className="py-0 text-sm">
-                    View internal text similarity findings
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-4">
-                    {loadingInternalSimilarityEvidence ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading internal evidence...
-                      </div>
-                    ) : internalSimilarityEvidenceError ? (
-                      <p className="text-sm text-muted-foreground">{internalSimilarityEvidenceError}</p>
-                    ) : internalSimilarityEvidence.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No internal similarity evidence recorded for this assignment yet.
-                      </p>
-                    ) : (
-                      <div className="space-y-3">
-                        {internalSimilarityEvidence.map((finding) => (
-                          <div key={finding.id} className="rounded-xl border bg-background p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium">
-                                  {submissionDisplayNames.get(finding.submission_id) || finding.submission_id} {"↔"}{" "}
-                                  {submissionDisplayNames.get(finding.compared_submission_id || "") ||
-                                    finding.compared_submission_id}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Similarity score {finding.similarity_score}% · Recorded{" "}
-                                  {finding.created_at
-                                    ? safeFormatDate(finding.created_at, "MMM d, yyyy HH:mm", "Unknown date")
-                                    : "Unknown date"}
-                                  {finding.analysis_limited ? " · Analysis limited" : ""}
-                                </p>
-                                <p className="text-sm text-muted-foreground">{finding.evidence_summary}</p>
-                                {finding.matched_phrases.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 pt-1">
-                                    {finding.matched_phrases.slice(0, 3).map((phrase, index) => (
-                                      <Badge key={`${finding.id}-phrase-${index}`} variant="outline" className="max-w-full whitespace-normal text-[11px]">
-                                        {phrase}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                              <Badge
-                                variant={
-                                  finding.severity === "high"
-                                    ? "destructive"
-                                    : finding.severity === "medium"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                              >
-                                {finding.severity}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </CardContent>
-          </Card>
         </div>
       </div>
 
