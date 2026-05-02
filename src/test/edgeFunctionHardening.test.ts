@@ -66,7 +66,11 @@ describe("edge function hardening", () => {
       "supabase/functions/send-workflow-notification-email/index.ts",
     ]) {
       const source = readRepoFile(file);
-      const authIndex = Math.max(source.indexOf("requireLecturer(req)"), source.indexOf("requireUser(req)"));
+      const authIndex = Math.max(
+        source.indexOf("requireAdmin(req)"),
+        source.indexOf("requireLecturer(req)"),
+        source.indexOf("requireUser(req)"),
+      );
       const rateLimitIndex = source.indexOf("applyRateLimit(req");
 
       expect(authIndex).toBeGreaterThan(-1);
@@ -134,6 +138,7 @@ describe("edge function hardening", () => {
   it("keeps the existing bulk student upload request shape in the edge function schema", () => {
     const source = readRepoFile("supabase/functions/bulk-create-students/index.ts");
 
+    expect(source).toContain("requireAdmin(req)");
     expect(source).toContain("students: z.array(StudentInputSchema)");
     expect(source).toContain("email: z.string().trim().email()");
     expect(source).toContain("name: z.string().trim().min(1)");
@@ -198,5 +203,16 @@ describe("edge function hardening", () => {
     expect(source).toContain('logError("moss_similarity_insert_failed"');
     expect(source).toContain("MOSS code similarity analysis was unavailable, but existing plagiarism analysis completed.");
     expect(source).toContain("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
+  });
+
+  it("centralizes role resolution inside shared edge-function auth", () => {
+    const authSource = readRepoFile("supabase/functions/_shared/auth.ts");
+    const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+
+    expect(authSource).toContain("export async function resolveUserRoles");
+    expect(authSource).toContain("export async function requireAppRoles");
+    expect(authSource).toContain("export async function requireAdmin");
+    expect(gradingSource).not.toContain("async function resolveActorRoles");
+    expect(gradingSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
   });
 });

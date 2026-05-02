@@ -188,27 +188,6 @@ function normalizeHistory(metadata: Record<string, unknown> | null | undefined) 
     .filter((item) => item.grading_input_hash);
 }
 
-async function resolveActorRoles(
-  roleClient: { from: ReturnType<typeof createAdminClient>["from"] },
-  userId: string,
-) {
-  const [rolesRes, profileRes] = await Promise.all([
-    roleClient.from("user_roles").select("role").eq("user_id", userId),
-    roleClient.from("profiles").select("role").eq("id", userId).maybeSingle(),
-  ]);
-
-  if (rolesRes.error && profileRes.error) {
-    throw new Error("Failed to resolve actor roles");
-  }
-
-  const roles = new Set<string>();
-  for (const row of rolesRes.error ? [] : rolesRes.data || []) {
-    if (typeof row.role === "string") roles.add(row.role);
-  }
-  if (!profileRes.error && typeof profileRes.data?.role === "string") roles.add(profileRes.data.role);
-  return [...roles];
-}
-
 function normalizeFingerprintText(text: string) {
   return text
     .toLowerCase()
@@ -1433,7 +1412,7 @@ serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { supabase: userSupabase, user } = await requireLecturer(req);
+    const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);
     const rateLimit = applyRateLimit(req, {
       scope: "grade-submission",
       limit: 5,
@@ -1503,7 +1482,6 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createAdminClient();
-    const actorRoles = await resolveActorRoles(userSupabase, user.id);
     const actorIsAdmin = actorRoles.includes("admin");
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");

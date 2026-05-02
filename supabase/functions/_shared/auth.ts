@@ -42,7 +42,7 @@ export function createAdminClient() {
   return createClient(supabaseUrl!, serviceRoleKey!);
 }
 
-type AppRole = "lecturer" | "student" | "admin";
+export type AppRole = "lecturer" | "student" | "admin";
 
 export async function requireUser(req: Request) {
   const supabase = createUserClient(req);
@@ -55,7 +55,7 @@ export async function requireUser(req: Request) {
   return { supabase, user: data.user };
 }
 
-async function resolveUserRoles(
+export async function resolveUserRoles(
   supabase: ReturnType<typeof createUserClient>,
   userId: string,
 ): Promise<AppRole[]> {
@@ -84,15 +84,36 @@ async function resolveUserRoles(
   return [...roles];
 }
 
-export async function requireLecturer(req: Request) {
+function hasAnyRole(roles: AppRole[], allowedRoles: AppRole[]) {
+  return allowedRoles.some((role) => roles.includes(role));
+}
+
+function buildRoleErrorMessage(allowedRoles: AppRole[]) {
+  if (allowedRoles.length === 1) {
+    return `${allowedRoles[0][0].toUpperCase()}${allowedRoles[0].slice(1)} access required`;
+  }
+
+  const readableRoles = allowedRoles.map((role) => `${role[0].toUpperCase()}${role.slice(1)}`);
+  return `${readableRoles.slice(0, -1).join(", ")} or ${readableRoles.at(-1)} access required`;
+}
+
+export async function requireAppRoles(req: Request, allowedRoles: AppRole[]) {
   const { supabase, user } = await requireUser(req);
   const roles = await resolveUserRoles(supabase, user.id);
 
-  if (!roles.includes("lecturer") && !roles.includes("admin")) {
-    throw new HttpError(403, "Lecturer or admin access required");
+  if (!hasAnyRole(roles, allowedRoles)) {
+    throw new HttpError(403, buildRoleErrorMessage(allowedRoles));
   }
 
-  return { supabase, user };
+  return { supabase, user, roles };
+}
+
+export async function requireLecturer(req: Request) {
+  return requireAppRoles(req, ["lecturer", "admin"]);
+}
+
+export async function requireAdmin(req: Request) {
+  return requireAppRoles(req, ["admin"]);
 }
 
 export function jsonError(error: unknown, corsHeaders: Record<string, string>) {

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
-import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createAdminClient, jsonError, requireAdmin, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
@@ -41,7 +41,7 @@ serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { user } = await requireLecturer(req);
+    const { user } = await requireAdmin(req);
     const rateLimit = applyRateLimit(req, {
       scope: "bulk-create-students",
       limit: 20,
