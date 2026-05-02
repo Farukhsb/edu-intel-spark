@@ -3,6 +3,13 @@ type StudentVisibleAssignment = {
   due_date: string | null;
 };
 
+type StudentSubmissionAvailabilityInput = {
+  assignment: StudentVisibleAssignment;
+  hasExistingSubmission: boolean;
+  hasUser: boolean;
+  now?: number;
+};
+
 export function hasAssignmentDueDatePassed(dueDate: string | null, now = Date.now()) {
   if (!dueDate) return false;
 
@@ -32,13 +39,6 @@ export function isAssignmentDueSoon(
   const diff = dueAt - now;
   return diff > 0 && diff <= windowMs;
 }
-
-type StudentSubmissionAvailabilityInput = {
-  assignment: StudentVisibleAssignment;
-  hasExistingSubmission: boolean;
-  hasUser: boolean;
-  now?: number;
-};
 
 export function getStudentSubmissionAvailability({
   assignment,
