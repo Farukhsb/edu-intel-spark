@@ -49,7 +49,7 @@ describe("internal_text_similarity provider", () => {
     expect(finding.matched_phrases.length).toBeGreaterThan(0);
     expect(finding.matched_phrases.length).toBeLessThanOrEqual(5);
     expect(finding.raw_metadata).toMatchObject({
-      method: "jaccard_word_shingles",
+      method: "hybrid_shingles_and_concepts",
       shingle_size: 8,
       compared_within_assignment_only: true,
     });
