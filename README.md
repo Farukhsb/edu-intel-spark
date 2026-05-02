@@ -154,6 +154,16 @@ Important Edge Functions:
 - `bulk-create-students`
 - `send-workflow-notification-email`
 
+### Integrity provider modes
+
+`check-plagiarism` now supports two backend integrity providers:
+
+- `llm_legacy`
+- `internal_text_similarity`
+- `both` through `INTEGRITY_PROVIDER_MODE`
+
+The visible plagiarism UI still uses the legacy response shape so lecturer-facing integrity cards remain stable. The newer `internal_text_similarity` provider currently writes pairwise evidence rows to `public.integrity_findings` for backend review and future UI work.
+
 ## Key Engineering Decisions
 
 A few decisions shape how the platform works:
@@ -283,6 +293,13 @@ Do not commit local environment files.
 npm run dev
 ```
 
+When calling Supabase Edge Functions directly from the browser during local development, requests must include both:
+
+- `Authorization: Bearer <session_access_token>`
+- `apikey: <VITE_SUPABASE_PUBLISHABLE_KEY>`
+
+Localhost Edge Function CORS now supports any `localhost` or `127.0.0.1` port, so Vite does not need to stay on one fixed port for grading, plagiarism, or grade explanation flows.
+
 If you pull schema or workflow-notification changes, apply the latest Supabase migrations before testing related features locally.
 
 If you have pulled the newer assignment-targeting work, apply the latest assignment migrations before testing assignment visibility, publishing, or student grades. The recent changes add persisted cohort and department targeting, lecturer archive behaviour, and a student-grade metadata RPC. If those migrations are only partially applied, you can end up with missing assignment titles, broken assignment loading, or visibility rules that look inconsistent.
@@ -360,6 +377,20 @@ These migrations do three connected things:
 - provide the safe student-grade assignment metadata lookup used by `StudentGrades`
 
 If you only apply part of that chain, the app may still build, but assignment pages can fail to load or student grade cards can fall back to `Assignment title unavailable`.
+
+The integrity pipeline also depends on these newer migrations being present together:
+
+- `20260501170444_add_integrity_findings_table.sql`
+- `20260501181500_grant_service_role_delete_on_integrity_findings.sql`
+- `20260501190500_grant_service_role_select_on_assignments.sql`
+- `20260501195500_fix_integrity_persistence_permissions_and_dedupe.sql`
+
+Those migrations do four connected things:
+
+- create `public.integrity_findings`
+- allow safe refresh of `internal_text_similarity` evidence rows
+- close service-role permission gaps discovered during live grading and plagiarism checks
+- dedupe and stabilise repeated integrity evidence writes across reruns
 
 If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
