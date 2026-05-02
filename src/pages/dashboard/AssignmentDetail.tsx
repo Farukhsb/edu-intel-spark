@@ -1578,7 +1578,9 @@ Please review the feedback in the platform and let me know if you would like to 
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   Similarity score {finding.similarity_score}% · Recorded{" "}
-                                  {safeFormatDate(finding.created_at)}
+                                  {finding.created_at
+                                    ? safeFormatDate(finding.created_at, "MMM d, yyyy HH:mm", "Unknown date")
+                                    : "Unknown date"}
                                   {finding.analysis_limited ? " · Analysis limited" : ""}
                                 </p>
                                 <p className="text-sm text-muted-foreground">{finding.evidence_summary}</p>
