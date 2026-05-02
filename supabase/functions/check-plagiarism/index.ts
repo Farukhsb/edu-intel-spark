@@ -1609,18 +1609,10 @@ Only flag real concerns. Return valid JSON only.`,
 
     if (requestedAssignmentId && internalFindings.length > 0) {
       try {
-        const { error: deleteFindingsError } = await supabaseAdmin
-          .from("integrity_findings")
-          .delete()
-          .eq("assignment_id", requestedAssignmentId)
-          .eq("provider", "internal_text_similarity");
-
-        if (deleteFindingsError) {
-          logWarn("Failed to clear prior internal integrity findings, continuing with insert attempt", {
-            function: "check-plagiarism",
-            assignmentId: requestedAssignmentId,
-          });
-        }
+        logInfo("internal_similarity_upsert_started", {
+          assignmentId: requestedAssignmentId,
+          findingCount: internalFindings.length,
+        });
 
         const findingInserts = internalFindings
           .filter((finding) =>
@@ -1633,7 +1625,9 @@ Only flag real concerns. Return valid JSON only.`,
         if (findingInserts.length > 0) {
           const { error: findingsInsertError } = await supabaseAdmin
             .from("integrity_findings")
-            .insert(findingInserts);
+            .upsert(findingInserts, {
+              onConflict: "provider,assignment_id,submission_id,compared_submission_id",
+            });
 
           if (findingsInsertError) {
             logError("internal_similarity_insert_failed", findingsInsertError, {
@@ -1641,6 +1635,11 @@ Only flag real concerns. Return valid JSON only.`,
               findingCount: findingInserts.length,
             });
             warnings.push("Internal similarity evidence could not be stored, but analysis completed.");
+          } else {
+            logInfo("internal_similarity_upsert_completed", {
+              assignmentId: requestedAssignmentId,
+              findingCount: findingInserts.length,
+            });
           }
         }
       } catch (error) {

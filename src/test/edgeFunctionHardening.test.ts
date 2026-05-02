@@ -160,4 +160,31 @@ describe("edge function hardening", () => {
       ),
     ).toBe("Lecturer review recommended: borderline mark.");
   });
+
+  it("keeps explicit browser auth headers for direct edge-function fetch calls", () => {
+    const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
+    const explainGradeSource = readRepoFile("src/pages/dashboard/ExplainGrade.tsx");
+
+    expect(assignmentDetailSource).toContain("PLAGIARISM_CHECK_URL");
+    expect(assignmentDetailSource).toContain("supabase.auth.getSession()");
+    expect(assignmentDetailSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
+    expect(assignmentDetailSource).toContain("Authorization: `Bearer ${session.access_token}`");
+
+    expect(explainGradeSource).toContain("supabase.auth.getSession()");
+    expect(explainGradeSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
+    expect(explainGradeSource).toContain("Authorization: `Bearer ${accessToken}`");
+  });
+
+  it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
+    const source = readRepoFile("supabase/functions/check-plagiarism/index.ts");
+
+    expect(source).toContain('const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";');
+    expect(source).toContain("if (shouldRunInternalProvider && requestedAssignmentId && submissions.length >= 2)");
+    expect(source).toContain('logInfo("internal_similarity_started"');
+    expect(source).toContain('logInfo("internal_similarity_completed"');
+    expect(source).toContain('logError("internal_similarity_pair_failed"');
+    expect(source).toContain('logError("internal_similarity_insert_failed"');
+    expect(source).toContain("Internal similarity evidence could not be stored, but analysis completed.");
+    expect(source).toContain(".filter((finding) =>");
+  });
 });
