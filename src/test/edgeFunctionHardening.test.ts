@@ -187,12 +187,13 @@ describe("edge function hardening", () => {
 
     expect(source).toContain('const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";');
     expect(source).toContain("shouldRunInternalProvider && requestedAssignmentId && submissions.length >= 2");
-    expect(source).toContain("runInternalSimilarityComparisons({");
+    expect(source).toContain('import { analyzeTextSimilarity } from "../_shared/providers/internal-text-similarity.ts";');
+    expect(source).toContain("const pairwiseFinding = analyzeTextSimilarity(");
     expect(runnerSource).toContain('logInfo("internal_similarity_started"');
     expect(runnerSource).toContain('logInfo("internal_similarity_completed"');
     expect(runnerSource).toContain('logError("internal_similarity_pair_failed"');
     expect(runnerSource).toContain("A pairwise internal similarity comparison failed and was skipped.");
-    expect(source).toContain('errorLogMessage: "internal_similarity_insert_failed"');
+    expect(source).toContain('logError("internal_similarity_insert_failed"');
     expect(storeSource).toContain("export async function upsertIntegrityFindings");
     expect(storeSource).toContain("logError(errorLogMessage, error");
     expect(source).toContain("Internal similarity evidence could not be stored, but analysis completed.");
@@ -204,16 +205,15 @@ describe("edge function hardening", () => {
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const runnerSource = readRepoFile("supabase/functions/_shared/integrity-provider-runners.ts");
 
-    expect(source).toContain("resolveMossRunnerConfig()");
-    expect(source).toContain("runMossSimilarityComparisons({");
+    expect(source).not.toContain("resolveMossRunnerConfig()");
+    expect(source).not.toContain("runMossSimilarityComparisons({");
     expect(runnerSource).toContain('logInfo("moss_similarity_started"');
     expect(runnerSource).toContain('logInfo("moss_similarity_completed"');
     expect(runnerSource).toContain('logError("moss_similarity_failed"');
     expect(runnerSource).toContain('logWarn("moss_source_unavailable"');
-    expect(source).toContain('errorLogMessage: "moss_similarity_insert_failed"');
+    expect(runnerSource).toContain("export async function runMossSimilarityComparisons");
     expect(storeSource).toContain("requireComparedSubmissionId = false");
     expect(runnerSource).toContain("MOSS code similarity analysis was unavailable, but existing plagiarism analysis completed.");
-    expect(source).toContain("MOSS code similarity evidence could not be stored, but existing plagiarism analysis completed.");
   });
 
   it("centralizes role resolution inside shared edge-function auth", () => {
