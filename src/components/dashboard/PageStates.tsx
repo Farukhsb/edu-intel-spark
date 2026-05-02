@@ -40,6 +40,17 @@ export const DashboardDemoBanner = ({ label }: { label: string }) => (
   </Card>
 );
 
+export const DashboardLiveBanner = ({ label }: { label: string }) => (
+  <Card className="border-success/30 bg-success/5">
+    <CardContent className="flex items-center gap-2 p-3">
+      <Badge variant="outline" className="border-success text-success">
+        Live
+      </Badge>
+      <span className="text-sm text-muted-foreground">{label}</span>
+    </CardContent>
+  </Card>
+);
+
 export const DashboardPageIntro = ({
   eyebrow,
   title,
