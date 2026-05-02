@@ -189,23 +189,23 @@ function normalizeHistory(metadata: Record<string, unknown> | null | undefined) 
 }
 
 async function resolveActorRoles(
-  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  roleClient: { from: ReturnType<typeof createAdminClient>["from"] },
   userId: string,
 ) {
   const [rolesRes, profileRes] = await Promise.all([
-    supabaseAdmin.from("user_roles").select("role").eq("user_id", userId),
-    supabaseAdmin.from("profiles").select("role").eq("id", userId).maybeSingle(),
+    roleClient.from("user_roles").select("role").eq("user_id", userId),
+    roleClient.from("profiles").select("role").eq("id", userId).maybeSingle(),
   ]);
 
-  if (rolesRes.error || profileRes.error) {
+  if (rolesRes.error && profileRes.error) {
     throw new Error("Failed to resolve actor roles");
   }
 
   const roles = new Set<string>();
-  for (const row of rolesRes.data || []) {
+  for (const row of rolesRes.error ? [] : rolesRes.data || []) {
     if (typeof row.role === "string") roles.add(row.role);
   }
-  if (typeof profileRes.data?.role === "string") roles.add(profileRes.data.role);
+  if (!profileRes.error && typeof profileRes.data?.role === "string") roles.add(profileRes.data.role);
   return [...roles];
 }
 
@@ -765,7 +765,7 @@ function assessSubmissionRelevance({
     /does not address the required task/,
     /no relevant evidence/,
     /cannot be credited against this assignment/,
-    /unrelated to the assignment brief/,
+    /unrelated to the assignment instruction/,
     /wrong subject/,
     /wrong task/,
   ];
@@ -773,13 +773,13 @@ function assessSubmissionRelevance({
   const matchedRedFlags = redFlagPatterns.filter((pattern) => pattern.test(combinedEvaluatorText));
   if (matchedRedFlags.length > 0) {
     const explicitWrongTask = matchedRedFlags.some((pattern) =>
-      /off-topic|wrong task|wrong subject|unrelated to the assignment brief|cannot be credited against this assignment/.test(
+      /off-topic|wrong task|wrong subject|unrelated to the assignment instruction|cannot be credited against this assignment/.test(
         pattern.source,
       )
     );
     return {
       classification: explicitWrongTask ? "OFF_TOPIC" : "PARTIALLY_RELEVANT",
-      reasons: ["Evaluator feedback indicates the submission does not answer the assignment brief."],
+      reasons: ["Evaluator feedback indicates the submission does not answer the assignment instruction."],
     };
   }
 
@@ -827,7 +827,7 @@ function assessSubmissionRelevance({
 
   return {
     classification: "RELEVANT",
-    reasons: ["Submission content aligns with the assignment brief and rubric."],
+    reasons: ["Submission content aligns with the assignment instruction and rubric."],
   };
 }
 
@@ -1225,6 +1225,7 @@ CONSISTENCY RULES:
 - If feedback is positive, for example "clear", "relevant", or "meets requirement", the score must not be in the fail range.
 - If score is below 40%, you must clearly explain why the work fails to meet the criterion.
 - If unsure, reduce confidence instead of reducing score.
+- When describing off-topic or non-responsive work, prefer the phrase "assignment instruction" instead of "assignment prompt" or "assignment brief".
 
 SCORING RULES:
 
@@ -1502,7 +1503,7 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createAdminClient();
-    const actorRoles = await resolveActorRoles(supabaseAdmin, user.id);
+    const actorRoles = await resolveActorRoles(userSupabase, user.id);
     const actorIsAdmin = actorRoles.includes("admin");
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");
@@ -1514,37 +1515,62 @@ serve(async (req) => {
       .eq("id", requestedAssignmentId)
       .maybeSingle();
 
-    if (assignmentError) throw new Error("Failed to load assignment");
+    if (assignmentError) {
+      logError("grade-submission assignment query failed", assignmentError, {
+        assignmentId: requestedAssignmentId,
+        requestedSubmissionIds,
+      });
+      throw new Error("Failed to load assignment");
+    }
     if (!assignment) {
       throw new HttpError(403, "You do not have grading access to this assignment.");
     }
 
-    const { data: submissions, error: submissionsError } = await supabaseAdmin
+    const submissionClient = actorIsAdmin ? supabaseAdmin : userSupabase;
+    const gradesClient = actorIsAdmin ? supabaseAdmin : userSupabase;
+    const { data: submissions, error: submissionsError } = await submissionClient
       .from("submissions")
       .select("id, assignment_id, student_name, student_email, file_name, file_url")
       .eq("assignment_id", requestedAssignmentId)
       .in("id", requestedSubmissionIds);
 
-    if (submissionsError) throw new Error("Failed to load submissions");
+    if (submissionsError) {
+      logError("grade-submission submissions query failed", submissionsError, {
+        assignmentId: requestedAssignmentId,
+        requestedSubmissionIds,
+      });
+      throw new Error("Failed to load submissions");
+    }
     if (!submissions || submissions.length !== requestedSubmissionIds.length) {
       throw new HttpError(403, "One or more submissions are not accessible");
     }
 
-    const { data: assignmentSubmissionRows, error: assignmentSubmissionIdsError } = await supabaseAdmin
+    const { data: assignmentSubmissionRows, error: assignmentSubmissionIdsError } = await submissionClient
       .from("submissions")
       .select("id, file_url, file_name, student_name, student_email")
       .eq("assignment_id", requestedAssignmentId);
 
-    if (assignmentSubmissionIdsError) throw new Error("Failed to load assignment submissions");
+    if (assignmentSubmissionIdsError) {
+      logError("grade-submission assignment submissions query failed", assignmentSubmissionIdsError, {
+        assignmentId: requestedAssignmentId,
+      });
+      throw new Error("Failed to load assignment submissions");
+    }
     const assignmentSubmissionIds = (assignmentSubmissionRows || []).map((row) => row.id).filter(Boolean);
     const assignmentSubmissionsById = new Map((assignmentSubmissionRows || []).map((row) => [row.id, row]));
 
-    const { data: existingGradesData, error: existingGradesError } = await supabaseAdmin
+    const { data: existingGradesData, error: existingGradesError } = await gradesClient
       .from("grades")
       .select("id, submission_id, ai_score, ai_feedback, ai_breakdown, grading_confidence, grading_metadata, created_at")
       .in("submission_id", assignmentSubmissionIds.length > 0 ? assignmentSubmissionIds : requestedSubmissionIds);
 
-    if (existingGradesError) throw new Error("Failed to load existing grades");
+    if (existingGradesError) {
+      logError("grade-submission existing grades query failed", existingGradesError, {
+        assignmentId: requestedAssignmentId,
+        requestedSubmissionIds,
+      });
+      throw new Error("Failed to load existing grades");
+    }
     const existingGradeRows = (existingGradesData || []) as ExistingGradeRecord[];
     const existingGradesBySubmission = new Map(existingGradeRows.map((grade) => [grade.submission_id, grade]));
     const gradesByFingerprint = new Map<string, ExistingGradeRecord[]>();
@@ -2182,7 +2208,7 @@ Return corrected JSON only.`;
           }
         }
         if (relevanceAssessment.classification === "OFF_TOPIC") {
-          fairnessNotes.push("Fairness recalibration skipped because the submission does not address the assignment brief.");
+          fairnessNotes.push("Fairness recalibration skipped because the submission does not address the assignment instruction.");
           gradingConfidence = Math.min(gradingConfidence, 0.7);
         } else if (relevanceAssessment.classification === "PARTIALLY_RELEVANT") {
           fairnessNotes.push("Fairness recalibration skipped because the submission addresses the wrong task.");

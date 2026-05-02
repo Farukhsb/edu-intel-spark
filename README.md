@@ -183,6 +183,16 @@ Important Edge Functions:
 - `bulk-create-students`
 - `send-workflow-notification-email`
 
+### Integrity provider modes
+
+`check-plagiarism` now supports two backend integrity providers:
+
+- `llm_legacy`
+- `internal_text_similarity`
+- `both` through `INTEGRITY_PROVIDER_MODE`
+
+The visible plagiarism UI still uses the legacy response shape so lecturer-facing integrity cards remain stable. The newer `internal_text_similarity` provider currently writes pairwise evidence rows to `public.integrity_findings` for backend review and future UI work.
+
 ## Key Engineering Decisions
 
 A few decisions shape how the platform works:
@@ -322,6 +332,13 @@ Do not commit local environment files.
 npm run dev
 ```
 
+When calling Supabase Edge Functions directly from the browser during local development, requests must include both:
+
+- `Authorization: Bearer <session_access_token>`
+- `apikey: <VITE_SUPABASE_PUBLISHABLE_KEY>`
+
+Localhost Edge Function CORS now supports any `localhost` or `127.0.0.1` port, so Vite does not need to stay on one fixed port for grading, plagiarism, or grade explanation flows.
+
 If you pull schema or workflow-notification changes, apply the latest Supabase migrations before testing related features locally.
 
 ## Testing
@@ -381,7 +398,30 @@ Recent assignment visibility work depends on the related targeting migrations be
 
 If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. Schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
-Current high-cost Edge Function rate limiting is process-local and in-memory. That is acceptable for prototype use and controlled pilot testing, but wider rollout should move high-cost AI rate limiting into a persistent/shared store or complement it with provider-level controls.
+These migrations do three connected things:
+- persist assignment cohort and department targeting
+- enforce student assignment visibility and submission access through targeting-aware RLS
+- provide the safe student-grade assignment metadata lookup used by `StudentGrades`
+
+If you only apply part of that chain, the app may still build, but assignment pages can fail to load or student grade cards can fall back to `Assignment title unavailable`.
+
+The integrity pipeline also depends on these newer migrations being present together:
+
+- `20260501170444_add_integrity_findings_table.sql`
+- `20260501181500_grant_service_role_delete_on_integrity_findings.sql`
+- `20260501190500_grant_service_role_select_on_assignments.sql`
+- `20260501195500_fix_integrity_persistence_permissions_and_dedupe.sql`
+
+Those migrations do four connected things:
+
+- create `public.integrity_findings`
+- allow safe refresh of `internal_text_similarity` evidence rows
+- close service-role permission gaps discovered during live grading and plagiarism checks
+- dedupe and stabilise repeated integrity evidence writes across reruns
+
+If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
+
+Current high-cost Edge Function rate limiting is process-local and in-memory. That is acceptable for prototype use and controlled pilot testing, but it is not distributed production-grade protection yet. Wider rollout should move high-cost AI rate limiting into a persistent/shared store or complement it with provider-level controls.
 
 ## Migration History Note
 

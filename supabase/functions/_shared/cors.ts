@@ -46,6 +46,13 @@ function isAllowedOrigin(origin: string): boolean {
     return false;
   }
 
+  if (
+    url.protocol === "http:" &&
+    (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+  ) {
+    return true;
+  }
+
   if (url.protocol !== "https:") {
     return false;
   }
