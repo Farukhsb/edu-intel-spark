@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "npm:zod";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
