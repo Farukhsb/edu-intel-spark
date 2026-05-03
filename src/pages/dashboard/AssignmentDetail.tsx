@@ -1425,7 +1425,6 @@ Please review the feedback in the platform and let me know if you would like to 
                         <p className="text-sm font-medium">
                           {flag.student_a} ↔ {flag.student_b}
                         </p>
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{flag.reason}</p>
                       </div>
                       <Badge
                         variant={
