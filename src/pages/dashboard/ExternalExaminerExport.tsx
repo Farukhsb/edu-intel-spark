@@ -90,6 +90,22 @@ const getClassification = (score: number | null): string => {
   return "Fail";
 };
 
+const getExportSummary = (rows: ExternalExaminerExportRow[]) => {
+  const scores = rows.map((row) => row.finalScore).filter((score): score is number => score != null);
+  const averageScore = scores.length > 0 ? Math.round(scores.reduce((left, right) => left + right, 0) / scores.length) : 0;
+  const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
+  const moderatedCount = rows.filter((row) => row.lecturerScore != null).length;
+  const releasedCount = rows.filter((row) => row.status === "released").length;
+
+  return {
+    averageScore,
+    passRate,
+    moderatedCount,
+    releasedCount,
+    moderationCoverage: rows.length > 0 ? Math.round((moderatedCount / rows.length) * 100) : 0,
+  };
+};
+
 const ExternalExaminerExport = () => {
   const { isDemo } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -186,6 +202,7 @@ const ExternalExaminerExport = () => {
   const filteredData = selectedAssignment === "all"
     ? exportData
     : exportData.filter((row) => row.assignmentTitle === assignments.find((assignment) => assignment.id === selectedAssignment)?.title);
+  const exportSummary = getExportSummary(filteredData);
 
   const handleExport = (format: "csv" | "detailed") => {
     setExporting(true);
@@ -280,6 +297,52 @@ const ExternalExaminerExport = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Average final score</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.averageScore}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Pass rate</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.passRate}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Moderation coverage</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.moderationCoverage}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Released to students</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.releasedCount}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+          <div>
+            <p className="text-sm font-medium">Governed export scope</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Only `moderated`, `approved`, and `released` submissions are included in the examiner export.
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-medium">External review intent</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Use this view to inspect final outcomes, moderation evidence, and score consistency before downloading the full report.
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-medium">Current selection</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {selectedAssignment === "all"
+                ? "All assignments"
+                : assignments.find((assignment) => assignment.id === selectedAssignment)?.title || "Filtered assignment"} | {filteredData.length} records ready
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">

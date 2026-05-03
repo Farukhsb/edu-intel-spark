@@ -20,6 +20,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
 import { safeToLocaleDate } from "@/lib/date";
+import { getLecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
 import { log } from "@/lib/logger";
 
 const ASSIGNMENT_FIELDS = "id, title, max_score";
@@ -322,6 +323,25 @@ const LecturerOverview = () => {
   }, [isDemo]);
 
   const totalScored = gradeDistribution.reduce((total, band) => total + band.count, 0);
+  const leadPendingAssignmentTitle =
+    recent.find((submission) =>
+      [
+        "submitted",
+        "ai_grading",
+        "ai_graded",
+        "first_review",
+        "moderation_pending",
+        "moderation_in_progress",
+        "escalated",
+        "under_review",
+      ].includes(submission.status),
+    )?.assignment_title ?? null;
+  const readiness = getLecturerOverviewReadiness({
+    pendingCount: stats.pendingCount,
+    atRiskCount: stats.atRisk,
+    assignmentCount: stats.assignmentCount,
+    leadPendingAssignmentTitle,
+  });
   const heroSummary = useMemo(() => {
     if (stats.pendingCount > 0 && stats.atRisk > 0) {
       return `${stats.pendingCount} submissions are awaiting review and ${stats.atRisk} student${stats.atRisk > 1 ? "s" : ""} may need attention.`;
@@ -375,6 +395,32 @@ const LecturerOverview = () => {
             <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/performance?risk=high-plus")}>
               View risk insights
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
+        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on your current review queue, at-risk students, and live assignment activity.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the workflow pressure point most likely to affect your next teaching action.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use it to decide whether to clear the queue first or shift attention to student support.
+            </p>
           </div>
         </CardContent>
       </Card>

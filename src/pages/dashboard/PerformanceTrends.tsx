@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +17,7 @@ import {
   buildPerformanceProjection,
   EMPTY_GRADE_DIST,
   filterAtRiskStudents,
+  getPerformanceReportingReadiness,
 } from "@/lib/performanceAnalytics";
 import {
   AssessmentTrendsCard,
@@ -267,6 +269,16 @@ const PerformanceTrends = () => {
     });
   }, [atRiskStudents, riskFilter, scoreBandFilter]);
 
+  const reportingReadiness = useMemo(
+    () =>
+      getPerformanceReportingReadiness({
+        assessmentTrends,
+        atRiskStudents,
+        gradeDist,
+      }),
+    [assessmentTrends, atRiskStudents, gradeDist],
+  );
+
   const updateFilters = (nextRisk: string, nextScoreBand: string) => {
     const next = new URLSearchParams(searchParams);
     if (nextRisk === "all") next.delete("risk");
@@ -287,6 +299,39 @@ const PerformanceTrends = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && <DashboardDemoBanner label="Viewing demo performance trends data" />}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-base">Reporting Readiness</CardTitle>
+          <CardDescription>
+            A compact reading of which performance signal is most likely to need intervention or explanation next.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current risk, failing-band, and assessment-average signals in this performance view.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the signal most likely to require either lecturer intervention or a clear explanation in review.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to act on student support first or review assessment performance first.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <PerformanceFiltersBar
         modules={modules}
         moduleFilter={moduleFilter}

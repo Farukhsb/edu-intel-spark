@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getResetPasswordReadiness } from "@/lib/resetPasswordReadiness";
 
 const getHashParams = () => {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
@@ -37,6 +38,11 @@ const ResetPassword = () => {
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [linkChecked, setLinkChecked] = useState(false);
   const [isRecovered, setIsRecovered] = useState(false);
+  const readiness = getResetPasswordReadiness({
+    linkChecked,
+    recoveryReady,
+    isRecovered,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -190,6 +196,17 @@ const ResetPassword = () => {
             Back to login
           </Link>
         </Button>
+
+        <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+          <CardContent className="grid gap-4 p-6">
+            <div className="rounded-lg border bg-background/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recovery Readiness</p>
+              <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{readiness.likelyChallenge}</p>
+              <p className="mt-3 text-sm font-medium">{readiness.bestNextAction}</p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

@@ -226,6 +226,8 @@ describe("AccreditationDashboard integration", () => {
     expect(await screen.findByText("Overall Compliance", {}, { timeout: 10000 })).toBeInTheDocument();
 
     expect(screen.getByText("Top Findings")).toBeInTheDocument();
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("First challenge likely")).toBeInTheDocument();
     expect(screen.getByText("QAA Quality Standards")).toBeInTheDocument();
     expect(screen.getAllByText("Feedback Turnaround").length).toBeGreaterThan(0);
     expect(screen.getByText("Recommended Actions")).toBeInTheDocument();

@@ -1,4 +1,5 @@
 import {
+  getAcademicIntegrityReadiness,
   buildIntegrityCases,
   buildIntegrityDrafts,
   buildIntegrityOverview,
@@ -125,5 +126,66 @@ describe("integrity queue mapping", () => {
     expect(getIntegrityReviewType({ aiWritingScore: 12, similarityScore: 0, baselineDeviationScore: 0 })).toBe("ai-writing-suspicion");
     expect(getIntegrityReviewType({ aiWritingScore: 0, similarityScore: 0, baselineDeviationScore: 24 })).toBe("baseline-deviation");
     expect(getIntegrityReviewType({ aiWritingScore: 0, similarityScore: 25, baselineDeviationScore: 0 })).toBe("similarity-plagiarism-suspicion");
+  });
+
+  it("derives an integrity readiness summary from case state and totals", () => {
+    const cases = buildIntegrityCases({
+      assignments: [{ id: "a1", title: "Essay 1" }],
+      submissions: [
+        {
+          id: "s1",
+          assignment_id: "a1",
+          student_name: "Sam Student",
+          student_email: "sam@example.com",
+          status: "submitted",
+          submitted_at: "2026-04-01T10:00:00.000Z",
+        },
+      ],
+      reviews: [
+        {
+          submission_id: "s1",
+          decision: "investigate",
+          updated_at: "2026-04-02T10:00:00.000Z",
+          lecturer_note: JSON.stringify({
+            latestNote: "Needs review",
+            history: [],
+            integritySnapshot: {
+              totalScore: 81,
+              aiWritingScore: 35,
+              similarityScore: 62,
+              riskLevel: "high",
+              analysisLimited: false,
+              limitations: [],
+              overlapBreakdown: {
+                totalOverlap: 60,
+                citedOverlap: 10,
+                uncitedOverlap: 50,
+                internalPeerOverlap: 40,
+                externalSourceOverlap: 20,
+              },
+              evidence: {
+                aiWriting: [],
+                similarity: [],
+                uncitedMatches: [],
+                citedMatches: [],
+                peerMatches: [],
+                externalMatches: [],
+                baselineDeviation: [],
+              },
+              flags: [],
+            },
+          }),
+        },
+      ],
+    });
+
+    const readiness = getAcademicIntegrityReadiness({
+      cases,
+      totals: buildIntegrityTotals(cases),
+    });
+
+    expect(readiness.postureLabel).toBe("Escalated review position");
+    expect(readiness.likelyChallenge).toBe("Essay 1");
+    expect(readiness.bestNextAction).toBe("Complete active investigations and record lecturer decisions");
   });
 });

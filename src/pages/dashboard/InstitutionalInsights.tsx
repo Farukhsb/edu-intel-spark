@@ -8,6 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { log } from "@/lib/logger";
 import {
+  EMPTY_ACCREDITATION,
+  getInstitutionalReportingReadiness,
+} from "@/lib/institutionalInsights";
+import {
   DashboardDemoBanner,
   DashboardEmptyState,
   DashboardLoadingState,
@@ -38,13 +42,6 @@ type AccreditationMetric = {
   target: number;
   status: "met" | "at-risk" | "below";
 };
-
-const EMPTY_ACCREDITATION: AccreditationMetric[] = [
-  { metric: "Module Pass Rate (Avg)", value: 0, target: 75, status: "below" },
-  { metric: "Graded Submissions", value: 0, target: 95, status: "below" },
-  { metric: "Average Score", value: 0, target: 60, status: "below" },
-  { metric: "Assessment Completion Rate", value: 0, target: 90, status: "below" },
-];
 
 const getMetricStatus = (value: number, target: number): AccreditationMetric["status"] => {
   if (value >= target) return "met";
@@ -215,6 +212,10 @@ const InstitutionalInsights = () => {
   const weakestDepartment = [...departmentStats].sort((left, right) => left.passRate - right.passRate)[0];
   const weakestAssessment = lowPerforming[0];
   const weakestAccreditationMetric = [...accreditation].sort((left, right) => left.value - right.value)[0];
+  const reportingReadiness = getInstitutionalReportingReadiness({
+    accreditation,
+    lowPerforming,
+  });
 
   const exportInsightsSnapshot = () => {
     const lines = [
@@ -268,6 +269,38 @@ const InstitutionalInsights = () => {
           Export snapshot
         </Button>
       </div>
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-base">Reporting Readiness</CardTitle>
+          <CardDescription>
+            The shortest path from institutional signal to the report line most likely to need explanation.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current accreditation-style thresholds across grading, pass-rate, and completion signals.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely first challenge</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the line most likely to need a concrete explanation in a reporting or quality-review context.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next report</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextReport}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to move into accreditation detail or stay at institutional snapshot level first.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

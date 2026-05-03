@@ -31,6 +31,7 @@ import {
 } from "@/lib/integrityReviews";
 import {
   type AcademicIntegrityOverviewStat,
+  getAcademicIntegrityReadiness,
   buildIntegrityCases,
   buildIntegrityDrafts,
   buildIntegrityOverview,
@@ -356,6 +357,14 @@ const AcademicIntegrity = () => {
   };
 
   const totals = useMemo(() => buildIntegrityTotals(flagged), [flagged]);
+  const integrityReadiness = useMemo(
+    () =>
+      getAcademicIntegrityReadiness({
+        cases: flagged,
+        totals,
+      }),
+    [flagged, totals]
+  );
   const filteredCases = useMemo(() => {
     if (queueFilter === "pending") {
       return flagged.filter((item) => item.decision === "pending");
@@ -396,6 +405,39 @@ const AcademicIntegrity = () => {
     return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && <DashboardDemoBanner label="Viewing demo academic integrity data" />}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-base">Reporting Readiness</CardTitle>
+          <CardDescription>
+            A compact reading of which integrity signal is most likely to need review or explanation next.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">{integrityReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on active investigations, pending flagged cases, and analysis-limited evidence in this queue.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{integrityReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the integrity case line most likely to require follow-up or a clear review justification.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{integrityReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to finish investigations first or clear the pending review queue first.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {overview.map((stat) => (
           <Card key={stat.label}>

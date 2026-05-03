@@ -25,6 +25,12 @@ export interface StudentTrajectory {
   trend: "improving" | "declining" | "stable";
 }
 
+export interface LearningOutcomesReportingReadiness {
+  postureLabel: string;
+  likelyChallenge: string;
+  bestNextAction: string;
+}
+
 type AssignmentRow = Pick<Tables<"assignments">, "id" | "title" | "module_code">;
 type SubmissionRow = Pick<
   Tables<"submissions">,
@@ -225,5 +231,33 @@ export const loadLearningOutcomesData = async ({
   return {
     assignments,
     ...snapshot,
+  };
+};
+
+export const getLearningOutcomesReportingReadiness = ({
+  outcomes,
+  trajectories,
+}: {
+  outcomes: OutcomeRow[];
+  trajectories: StudentTrajectory[];
+}): LearningOutcomesReportingReadiness => {
+  const belowTargetOutcomes = outcomes.filter((outcome) => outcome.status !== "above");
+  const decliningStudents = trajectories.filter((student) => student.trend === "declining");
+  const weakestOutcome = [...belowTargetOutcomes].sort((left, right) => left.pct - right.pct)[0];
+
+  return {
+    postureLabel:
+      belowTargetOutcomes.length === 0 && decliningStudents.length === 0
+        ? "Strong outcomes position"
+        : decliningStudents.length > 0
+          ? "Watch list position"
+          : "Criterion intervention position",
+    likelyChallenge: weakestOutcome?.criterion || "No weak criterion detected",
+    bestNextAction:
+      decliningStudents.length > 0
+        ? "Review declining student trajectories"
+        : belowTargetOutcomes.length > 0
+          ? "Tighten feedback on weak criteria"
+          : "Sustain strong rubric performance",
   };
 };

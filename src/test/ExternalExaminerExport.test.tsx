@@ -265,6 +265,10 @@ describe("ExternalExaminerExport", () => {
     render(<ExternalExaminerExport />);
 
     expect(await screen.findByText("1 records ready for export")).toBeInTheDocument();
+    expect(screen.getByText("Average final score")).toBeInTheDocument();
+    expect(screen.getByText("72%")).toBeInTheDocument();
+    expect(screen.getByText("Governed export scope")).toBeInTheDocument();
+    expect(screen.getByText(/Only `moderated`, `approved`, and `released` submissions/i)).toBeInTheDocument();
     expect(screen.getByText("Policy Case Study")).toBeInTheDocument();
     expect(screen.getByText("POL301")).toBeInTheDocument();
     expect(screen.getByText("1st")).toBeInTheDocument();

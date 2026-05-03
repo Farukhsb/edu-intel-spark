@@ -22,6 +22,7 @@ import {
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 import {
+  getLearningOutcomesReportingReadiness,
   loadLearningOutcomesData,
   type AssignmentOption,
   type OutcomeRow,
@@ -68,6 +69,10 @@ const LearningOutcomes = () => {
   const selectedAssignmentLabel = selectedAssignment === "all"
     ? "all assignments"
     : assignments.find((assignment) => assignment.id === selectedAssignment)?.title || "selected assignment";
+  const reportingReadiness = getLearningOutcomesReportingReadiness({
+    outcomes,
+    trajectories,
+  });
 
   const exportOutcomeSnapshot = () => {
     const lines = [
@@ -138,6 +143,38 @@ const LearningOutcomes = () => {
           </Button>
         </div>
       )}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-base">Reporting Readiness</CardTitle>
+          <CardDescription>
+            A compact reading of what this outcomes view is most likely to require you to explain next.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current weak-criterion and trajectory signals in {selectedAssignmentLabel}.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the criterion most likely to raise questions about teaching, feedback, or rubric alignment.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to act on student trajectories or criterion-level feedback first.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

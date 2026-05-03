@@ -463,6 +463,50 @@ const AccreditationDashboard = () => {
         </CardContent>
       </Card>
 
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-base">Reporting Readiness</CardTitle>
+          <CardDescription>
+            A compact view of the evidence line an accreditor is most likely to question first.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">
+              {summary.overallCompliance >= 85
+                ? "Strong reporting position"
+                : summary.overallCompliance >= 70
+                  ? "Watch list position"
+                  : "Evidence risk position"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {summary.overallCompliance}% of current QAA-style metrics are meeting target.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">First challenge likely</p>
+            <p className="mt-2 text-sm font-semibold">{summary.weakestQaaMetric?.metric || "No weak metric yet"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {summary.weakestQaaMetric
+                ? summary.weakestQaaMetric.detail
+                : "Once live grading data grows, the weakest compliance line will appear here automatically."}
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next report</p>
+            <p className="mt-2 text-sm font-semibold">
+              {summary.belowCount > 0 || summary.atRiskCount > 0 ? "QAA compliance export" : "Programme distribution export"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {summary.belowCount > 0 || summary.atRiskCount > 0
+                ? "Start with the compliance report to explain where standards are below or at risk."
+                : "Use the programme report to evidence distribution stability and module-level outcomes."}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <TabsList>

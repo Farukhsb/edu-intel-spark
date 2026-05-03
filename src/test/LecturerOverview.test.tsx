@@ -185,6 +185,12 @@ describe("LecturerOverview", () => {
     await waitFor(() => {
       expect(screen.getByText("Active Students")).toBeInTheDocument();
     });
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Live delivery position")).toBeInTheDocument();
+    expect(screen.getByText("1 active assignment still need routine monitoring")).toBeInTheDocument();
+    expect(
+      screen.getByText("Track live submissions and keep release-ready work moving through the workflow"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Awaiting Review")).toBeInTheDocument();
     expect(screen.getByText("Average Grade")).toBeInTheDocument();
     expect(screen.getByText("At-Risk Students")).toBeInTheDocument();
