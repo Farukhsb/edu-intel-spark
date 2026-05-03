@@ -1,129 +1,117 @@
-# Updated Audit Summary - April 24, 2026
+# GradeAI Audit Summary - May 3, 2026
 
-## Key Findings
+## Release Audit Verdict
 
-### ✅ Improvements Since Last Audit
+### Codebase state
 
-1. **PostHog API Key** - Hardcoded fallback key REMOVED ✅
-   - Now safely uses environment variable only
-   - Graceful fallback to null if not configured
-   - Status: RESOLVED
+- `npm run test` passed
+  - 82 test files
+  - 356 tests
+- `npm run build` passed
+- `npm run lint` passed
 
-2. **Temporary SQL Files** - DELETED ✅
-   - temp_admin_profile_validation.sql removed
-   - temp_admin_profile_validation_2.sql removed
-   - Status: RESOLVED
+### Repo state
 
-3. **JSON.parse Safety** - FIXED ✅
-   - DashboardLayout now has proper try-catch
-   - Graceful fallback to default state
-   - Status: RESOLVED
+- Branch: `main`
+- Working tree is **not clean**
+- There is a large local change set across frontend pages, workflow logic, tests, Supabase functions, migrations, and docs
 
-### 🟠 Current High Priority Issues (3)
+## Push Recommendation
 
-1. **45+ 'any' Type Instances** - Type Safety Crisis
-   - AssignmentDetail.tsx: 11 instances
-   - openai.ts: 5 instances
-   - ExplainGrade.tsx: 4 instances
-   - Others: 25+ instances
-   - **Fix:** Create src/types/index.ts, replace types systematically
-   - **Time:** 2-3 weeks
-   - **Impact:** HIGH
+### Safe to push to GitHub?
 
-2. **Loose TypeScript Configuration**
-   - strict: false, noImplicitAny: false, etc.
-   - Root cause of 'any' type proliferation
-   - **Fix:** Enable warnings → fix violations → enable errors
-   - **Time:** 4 weeks
-   - **Impact:** HIGH
+**Yes, for a branch push / backup / PR.**
 
-3. **Input Validation Gaps**
-   - CSV email validation too loose
-   - API responses not validated
-   - **Fix:** Add Zod schemas, validate inputs
-   - **Time:** 1-2 weeks
-   - **Impact:** HIGH
+The local codebase is in a technically strong state for source-control push because:
 
-### 🟡 Medium Priority Issues (6)
+- unit and integration tests are green
+- the production build succeeds
+- lint succeeds
+- the recent workflow hardening changes are covered by focused tests
 
-1. Error Handling Type Safety (20+ locations)
-2. Promise Cleanup Issues (8+ locations)  
-3. Test Coverage Gaps (~40%, target 80%)
-4. Logging & Observability (inconsistent patterns)
-5. Dependency Deprecations (3 packages)
-6. LocalStorage Error Handling (quota exceeded not handled)
+### Safe to treat as production-ready release?
 
-### 🔵 Low Priority Issues (3)
+**Not yet as a final production go/no-go.**
 
-1. TODO comment in index.html
-2. Demo mode documentation missing
-3. Error utility centralization opportunity
+There are still release-gate items that were **not** verified in this audit:
 
----
+- live Supabase migration state on the target project
+- edge function deployment state on the target project
+- live role-boundary smoke across real accounts
+- Playwright end-to-end coverage
 
-## Overall Health Score: 7.6/10 ↑
+## Current Strengths
 
-- **Security:** 7/10 - Good (one issue fixed)
-- **Architecture:** 9/10 - Excellent
-- **Code Quality:** 6/10 - Needs improvement (type safety)
-- **Testing:** 6/10 - Fair (40% coverage)
-- **Maintainability:** 6/10 - Medium (loose typing)
+- Integrity workflow is materially stronger:
+  - internal similarity is real and user-visible
+  - degraded-path behavior is tested
+  - JWT boundary hardening is in place for sensitive functions
+- Moderation workflow is much clearer:
+  - authority rules are enforced
+  - disagreement and escalation states are surfaced
+  - release handoff is clearer
+- Admin dashboard is much stronger:
+  - oversight sections exist
+  - RPC-backed summaries were added
+  - system-health wording is more honest
+- Student and lecturer workflow handoffs are more coherent:
+  - released-result navigation
+  - notification reconciliation
+  - assignment-stage reconciliation
+- Release and notification flows are better audited and more failure-aware
 
----
+## Remaining Release Risks
 
-## Immediate Action Items (Next 2 Weeks)
+### 1. Live environment verification not completed
 
-**Week 1:**
-- Create src/types/index.ts with core interfaces
-- Create src/lib/errorUtils.ts
-- Start replacing 'any' types in AssignmentDetail.tsx
-- Enable TypeScript warnings in ESLint
+This audit did **not** verify:
 
-**Week 2:**
-- Complete type replacements
-- Add Zod validation for CSV parser
-- Add API response validation
-- Fix all TypeScript warnings
+- `supabase db push --linked` against the intended target right now
+- edge function deployment status
+- secret presence in the target project
+- live RLS / role smoke behavior
 
----
+This is the biggest remaining release risk.
 
-## Full Details
+### 2. No E2E run in this audit
 
-📄 **Detailed Report:** [AUDIT_REPORT_UPDATED.md](AUDIT_REPORT_UPDATED.md)
+The repo has `test:e2e`, but it was not run in this release check.
 
-This document contains:
-- Complete issue descriptions with code examples
-- Remediation strategies with estimated effort
-- Security assessment
-- Architecture review
-- Test coverage analysis
-- Dependency status
-- Prioritized recommendations
+That means the browser-level workflow contract is still inferred from integration tests, not proven in Playwright for this specific release candidate.
 
----
+### 3. Working tree is large and still uncommitted
 
-## Key Metrics
+This is not a code-quality failure, but it is a release-management risk.
 
-| Category | Current | Target | Gap |
-|----------|---------|--------|-----|
-| Type Safety (no 'any') | 45 instances ❌ | 0 | 45 |
-| Test Coverage | 40% ⚠️ | 80% | 40% |
-| TypeScript Strict | OFF ❌ | ON | 100% |
-| Hardcoded Secrets | 0 ✅ | 0 | 0 |
-| Input Validation | Partial ⚠️ | Complete | Medium |
+There are many modified and untracked files. Before pushing, you should:
 
----
+- review the diff carefully
+- ensure no accidental local-only changes are included
+- split the work into logical commits if possible
 
-## Status Summary
+## Recommended Next Steps
 
-- ✅ **3 Critical Issues RESOLVED** (security fixes complete)
-- 🟠 **3 High Priority Issues** (type safety, validation)
-- 🟡 **6 Medium Priority Issues** (error handling, testing)
-- 🔵 **3 Low Priority Issues** (documentation, cleanup)
+### If your goal is source-control safety today
 
-**Total:** 12 active issues requiring attention
+1. Review the diff.
+2. Commit the current work in logical chunks.
+3. Push to GitHub.
 
----
+### If your goal is production release confidence
 
-Generated: April 24, 2026  
-Auditor: GitHub Copilot AI
+1. Verify target Supabase project and migration state.
+2. Verify changed edge functions are deployed.
+3. Run the live role-boundary smoke checklist.
+4. Run `npm run test:e2e` if browser coverage is part of your gate.
+
+## Final Assessment
+
+### For GitHub push
+
+**Go**, after a normal diff review and commit step.
+
+### For production-grade release signoff
+
+**Conditional go only after live environment checks.**
+
+The repo itself is in a good state. The remaining uncertainty is mostly deployment-state verification, not local code health.
