@@ -4,13 +4,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRisk } from "@/lib/studentRisk";
 import { safeFormatDate } from "@/lib/date";
-import { queueCommunicationMessage } from "@/lib/communications";
+import { dispatchCommunicationMessage } from "@/lib/communications";
 import { log } from "@/lib/logger";
 import { toast } from "sonner";
 import {
   buildManualInterventionPayload,
   fetchStudentInterventions,
   getInterventionErrorText,
+  getStudentInterventionReadiness,
   insertManualIntervention,
   normalizeManualInterventionStatus,
   normalizeManualInterventionType,
@@ -46,6 +47,33 @@ const UUID_PATTERN =
 
 const isUuid = (value: string | null | undefined): value is string =>
   typeof value === "string" && UUID_PATTERN.test(value);
+
+const getSupportNotificationToastCopy = (
+  actionLabel: string,
+  dispatchResult: {
+    ok: boolean;
+    status: "created" | "duplicate" | "failed" | "unauthenticated";
+  },
+) => {
+  if (dispatchResult.status === "duplicate") {
+    return {
+      level: "warning" as const,
+      message: `${actionLabel} was already queued for this student. No duplicate notice was created.`,
+    };
+  }
+
+  if (!dispatchResult.ok) {
+    return {
+      level: "error" as const,
+      message: `${actionLabel} could not be queued right now.`,
+    };
+  }
+
+  return {
+    level: "success" as const,
+    message: `${actionLabel} saved`,
+  };
+};
 
 const StudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
@@ -295,7 +323,7 @@ const StudentProfile = () => {
     setInterventionStatus("ongoing");
     toast.success("Intervention logged");
 
-    const notificationResult = await queueCommunicationMessage({
+    const notificationResult = await dispatchCommunicationMessage({
       category: "intervention-follow-up",
       recipientName: student.name,
       recipientEmail: student.email,
@@ -318,8 +346,13 @@ ${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}
       relatedStudentId: resolvedStudentRecordId,
     });
 
-    if (!notificationResult) {
-      toast.error("Intervention saved, but the student notification could not be created");
+    if (notificationResult.status === "failed" || notificationResult.status === "unauthenticated") {
+      toast.warning("Intervention saved, but the student notification could not be created");
+      return;
+    }
+
+    if (notificationResult.status === "duplicate") {
+      toast.warning("Intervention logged. An equivalent student support notice was already queued.");
     }
   };
 
@@ -333,7 +366,7 @@ ${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}
       toast.error("Student record is not linked, so the alert cannot be saved correctly yet");
       return;
     }
-    const result = await queueCommunicationMessage({
+    const result = await dispatchCommunicationMessage({
       category: "at-risk-alert",
       recipientName: student.name,
       recipientEmail: student.email,
@@ -352,11 +385,8 @@ ${student.recommendation}
 Please reply to arrange a short meeting so we can agree the most useful support before the next submission.`,
       relatedStudentId: resolvedStudentRecordId,
     });
-    if (!result) {
-      toast.error("Could not save at-risk alert");
-      return;
-    }
-    toast.success("At-risk alert saved");
+    const feedback = getSupportNotificationToastCopy("At-risk alert", result);
+    toast[feedback.level](feedback.message);
   };
 
   const queueFollowUpReminder = async () => {
@@ -370,7 +400,7 @@ Please reply to arrange a short meeting so we can agree the most useful support 
       return;
     }
     const latestIntervention = interventions[0];
-    const result = await queueCommunicationMessage({
+    const result = await dispatchCommunicationMessage({
       category: "intervention-follow-up",
       recipientName: student.name,
       recipientEmail: student.email,
@@ -386,11 +416,8 @@ ${student.recommendation}
 Please share a short update before ${latestIntervention?.followUpDate ? safeFormatDate(latestIntervention.followUpDate, "MMM d, yyyy") : "our next review"} so we can confirm what is working and what still needs attention.`,
       relatedStudentId: resolvedStudentRecordId,
     });
-    if (!result) {
-      toast.error("Could not save follow-up reminder");
-      return;
-    }
-    toast.success("Follow-up reminder saved");
+    const feedback = getSupportNotificationToastCopy("Follow-up reminder", result);
+    toast[feedback.level](feedback.message);
   };
 
   if (loading) {
@@ -410,6 +437,13 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
   }
 
   const openInterventions = interventions.filter((entry) => entry.status === "ongoing").length;
+  const interventionReadiness = getStudentInterventionReadiness({
+    riskLevel: student.riskLevel,
+    recommendation: student.recommendation,
+    missedAssignmentsCount: student.missedAssignments.length,
+    openInterventions,
+    latestIntervention: interventions[0] || null,
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -422,6 +456,38 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
         onQueueAtRiskAlert={() => void queueAtRiskAlert()}
         onQueueFollowUpReminder={() => void queueFollowUpReminder()}
       />
+
+      <div className="rounded-lg border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <div className="flex flex-col space-y-1.5 p-6">
+          <h3 className="text-base font-semibold tracking-tight">Reporting Readiness</h3>
+          <p className="text-sm text-muted-foreground">
+            A compact reading of what this student support view is most likely to require next.
+          </p>
+        </div>
+        <div className="grid gap-4 p-6 pt-0 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">{interventionReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current risk level, missed assignments, and open intervention state for this student.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{interventionReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the support issue most likely to need follow-up or a clear explanation in review.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{interventionReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to open a first intervention, chase progress, or close the loop.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <StudentProfileSummaryCards
         student={student}

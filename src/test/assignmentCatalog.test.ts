@@ -5,6 +5,8 @@ import {
   buildAssignmentSubmissionStats,
   filterAssignments,
   getAssignmentOverviewStats,
+  getLecturerAssignmentCatalogReadiness,
+  getStudentAssignmentCatalogReadiness,
   normalizeAssignment,
   sortAssignmentsForView,
 } from "@/lib/assignmentCatalog";
@@ -140,5 +142,55 @@ describe("assignment catalog helpers", () => {
       published: 1,
       dueSoon: 1,
     });
+  });
+
+  it("derives lecturer and student assignment readiness summaries", () => {
+    const submissionStats = {
+      "assignment-1": {
+        total: 4,
+        graded: 3,
+        approved: 2,
+        released: 1,
+        needsReview: 2,
+      },
+      "assignment-2": {
+        total: 1,
+        graded: 1,
+        approved: 1,
+        released: 1,
+        needsReview: 0,
+      },
+      "assignment-3": {
+        total: 0,
+        graded: 0,
+        approved: 0,
+        released: 0,
+        needsReview: 0,
+      },
+    };
+
+    const lecturerReadiness = getLecturerAssignmentCatalogReadiness({
+      assignments,
+      submissionStats,
+    });
+    const studentReadiness = getStudentAssignmentCatalogReadiness({
+      assignments,
+      studentWorkflow: {
+        "assignment-1": {
+          assignmentId: "assignment-1",
+          submissionId: "submission-1",
+          status: "released",
+          submittedAt: "2026-04-22T10:00:00.000Z",
+        },
+      },
+    });
+
+    expect(lecturerReadiness.postureLabel).toBe("Active marking position");
+    expect(lecturerReadiness.likelyChallenge).toBe("Algorithms Coursework has 2 submissions needing review");
+    expect(lecturerReadiness.bestNextAction).toBe("Open the review queue and clear grading, approval, or release blockers");
+
+    expect(studentReadiness.postureLabel).toBe("Released result position");
+    expect(studentReadiness.likelyChallenge).toBe("Algorithms Coursework has a released result ready to review");
+    expect(studentReadiness.bestNextAction).toBe("Open the released result and review the feedback summary");
   });
 });

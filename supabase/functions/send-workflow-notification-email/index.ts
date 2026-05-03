@@ -421,10 +421,12 @@ serve(async (req) => {
       return jsonSuccess(corsHeaders, { success: true, skipped: true, reason: "recipient_missing" });
     }
 
+    const explainGradeUrl = `${getAppBaseUrl()}/dashboard/explain-grade?assignment=${encodeURIComponent(assignment.id)}&submission=${encodeURIComponent(submission.id)}&source=email`;
+
     const email = formatGradeReleasedEmail({
       studentName: submission.student_name,
       assignmentTitle: assignment.title,
-      assignmentUrl,
+      assignmentUrl: explainGradeUrl,
     });
 
     const delivery = await sendWorkflowEmailWithDedupe(admin, {

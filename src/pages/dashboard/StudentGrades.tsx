@@ -8,6 +8,7 @@ import { Download, Loader2 } from "lucide-react";
 import { safeToLocaleDate } from "@/lib/date";
 import { log } from "@/lib/logger";
 import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
+import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
   DEMO_STUDENT_ASSIGNMENT_GRADES,
@@ -26,6 +27,39 @@ interface StudentGrade {
   breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
   fileUrl: string | null;
 }
+
+const getScoreTone = (score: number, maxScore: number) => {
+  const ratio = score / maxScore;
+  if (ratio >= 0.7) return "success";
+  if (ratio >= 0.5) return "primary";
+  return "destructive";
+};
+
+const getScoreBadgeVariant = (score: number, maxScore: number) => {
+  const ratio = score / maxScore;
+  if (ratio >= 0.7) return "default" as const;
+  if (ratio >= 0.5) return "secondary" as const;
+  return "destructive" as const;
+};
+
+const getBreakdownInsights = (breakdown: Array<{ criterion: string; score: number; max_score: number }> | null) => {
+  if (!breakdown || breakdown.length === 0) {
+    return {
+      strongest: [] as Array<{ criterion: string; percent: number }>,
+      focusAreas: [] as Array<{ criterion: string; percent: number }>,
+    };
+  }
+
+  const normalized = breakdown.map((item) => ({
+    criterion: item.criterion,
+    percent: Math.round((item.score / Math.max(item.max_score, 1)) * 100),
+  }));
+
+  return {
+    strongest: [...normalized].sort((left, right) => right.percent - left.percent).slice(0, 2),
+    focusAreas: [...normalized].sort((left, right) => left.percent - right.percent).slice(0, 2),
+  };
+};
 
 const DEMO_GRADES: StudentGrade[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
   .flat()
@@ -128,6 +162,12 @@ const StudentGrades = () => {
 
   const releasedGrades = grades.filter((grade) => grade.score != null);
   const pendingGrades = grades.filter((grade) => grade.score == null);
+  const readiness = getStudentGradeReadiness({
+    releasedCount: releasedGrades.length,
+    pendingCount: pendingGrades.length,
+    latestReleasedAssignmentTitle: releasedGrades[0]?.assignmentTitle ?? null,
+    latestPendingStatus: pendingGrades[0]?.status ?? null,
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -139,6 +179,32 @@ const StudentGrades = () => {
               ? `${pendingGrades.length} submission(s) are still being reviewed. Released grades appear below with feedback and downloads.`
               : "All released grades and feedback for your submitted work are shown below."}
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on your current released and pending grade state.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the result state most likely to affect what you should review next.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to review a released result or wait for the next workflow step.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -198,16 +264,11 @@ const StudentGrades = () => {
                           {grade.score}/{grade.maxScore}
                         </span>
                         <Badge
-                          variant={
-                            grade.score >= grade.maxScore * 0.7
-                              ? "default"
-                              : grade.score >= grade.maxScore * 0.5
-                                ? "secondary"
-                                : "destructive"
-                          }
+                          variant={getScoreBadgeVariant(grade.score, grade.maxScore)}
                         >
                           {Math.round((grade.score / grade.maxScore) * 100)}%
                         </Badge>
+                        <Badge variant="outline">Released</Badge>
                       </>
                     ) : (
                       <Badge variant="outline" className="capitalize">
@@ -220,9 +281,9 @@ const StudentGrades = () => {
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
                       className={`h-full rounded-full ${
-                        grade.score >= grade.maxScore * 0.7
+                        getScoreTone(grade.score, grade.maxScore) === "success"
                           ? "bg-success"
-                          : grade.score >= grade.maxScore * 0.5
+                          : getScoreTone(grade.score, grade.maxScore) === "primary"
                             ? "bg-primary"
                             : "bg-destructive"
                       }`}
@@ -230,16 +291,81 @@ const StudentGrades = () => {
                     />
                   </div>
                 )}
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span>Submission status: {grade.status.replace(/_/g, " ")}</span>
+                  {grade.score != null && <span>Feedback visible to student</span>}
+                </div>
                 {grade.breakdown && Array.isArray(grade.breakdown) && grade.breakdown.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {grade.breakdown.map((breakdownItem, index) => (
-                      <span key={index} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
-                        {breakdownItem.criterion}: {breakdownItem.score}/{breakdownItem.max_score}
-                      </span>
-                    ))}
+                  <>
+                    <div className="space-y-2 rounded-xl border bg-muted/20 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Criterion Breakdown
+                      </p>
+                      <div className="space-y-2">
+                        {grade.breakdown.map((breakdownItem, index) => {
+                          const percent = Math.round((breakdownItem.score / Math.max(breakdownItem.max_score, 1)) * 100);
+                          return (
+                            <div key={index} className="space-y-1">
+                              <div className="flex items-center justify-between gap-3 text-xs">
+                                <span>{breakdownItem.criterion}</span>
+                                <span className="font-medium">
+                                  {breakdownItem.score}/{breakdownItem.max_score} ({percent}%)
+                                </span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    percent >= 70 ? "bg-success" : percent >= 50 ? "bg-primary" : "bg-destructive"
+                                  }`}
+                                  style={{ width: `${percent}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {(() => {
+                      const insights = getBreakdownInsights(grade.breakdown);
+                      return (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl border bg-background p-3">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Strongest Areas
+                            </p>
+                            <div className="mt-2 space-y-1">
+                              {insights.strongest.map((item) => (
+                                <p key={item.criterion} className="text-sm">
+                                  {item.criterion} <span className="text-muted-foreground">({item.percent}%)</span>
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border bg-background p-3">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Focus Next Time
+                            </p>
+                            <div className="mt-2 space-y-1">
+                              {insights.focusAreas.map((item) => (
+                                <p key={item.criterion} className="text-sm">
+                                  {item.criterion} <span className="text-muted-foreground">({item.percent}%)</span>
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+                {grade.feedback && (
+                  <div className="rounded-xl border bg-background p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Lecturer Feedback
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">{grade.feedback}</p>
                   </div>
                 )}
-                {grade.feedback && <p className="text-sm text-muted-foreground">{grade.feedback}</p>}
                 {grade.fileUrl && grade.score != null && (
                   <Button
                     variant="outline"

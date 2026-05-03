@@ -13,6 +13,12 @@ export interface InterventionEntry {
   status: string;
 }
 
+export interface StudentInterventionReadiness {
+  postureLabel: string;
+  likelyChallenge: string;
+  bestNextAction: string;
+}
+
 export type StudentInterventionRow = Tables<"student_interventions">;
 
 export interface RecommendationInterventionTarget {
@@ -186,3 +192,39 @@ export async function insertRecommendationInterventions(
   const { error } = await supabase.from("student_interventions").insert(rows);
   return { error };
 }
+
+export const getStudentInterventionReadiness = ({
+  riskLevel,
+  recommendation,
+  missedAssignmentsCount,
+  openInterventions,
+  latestIntervention,
+}: {
+  riskLevel: string | null | undefined;
+  recommendation: string;
+  missedAssignmentsCount: number;
+  openInterventions: number;
+  latestIntervention: InterventionEntry | null;
+}): StudentInterventionReadiness => {
+  const urgentRisk = riskLevel === "critical" || riskLevel === "high";
+  const pendingFollowUp = latestIntervention?.status === "ongoing";
+
+  return {
+    postureLabel:
+      urgentRisk && openInterventions === 0
+        ? "Immediate intervention position"
+        : pendingFollowUp || missedAssignmentsCount > 0
+          ? "Active follow-up position"
+          : "Stabilisation position",
+    likelyChallenge:
+      missedAssignmentsCount > 0
+        ? `${missedAssignmentsCount} missed assignment${missedAssignmentsCount === 1 ? "" : "s"} still unresolved`
+        : latestIntervention?.note || recommendation,
+    bestNextAction:
+      openInterventions === 0
+        ? "Log the first intervention and send a student support alert"
+        : pendingFollowUp
+          ? "Review the latest intervention and confirm follow-up progress"
+          : "Close resolved actions or schedule the next support check-in",
+  };
+};

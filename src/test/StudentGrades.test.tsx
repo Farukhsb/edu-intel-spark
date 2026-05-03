@@ -59,7 +59,7 @@ type ProjectionRow = {
   ai_score: number | null;
   final_feedback: string | null;
   ai_feedback: string | null;
-  ai_breakdown: null;
+  ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
 };
 
 const defaultProjection: ProjectionRow[] = [
@@ -77,7 +77,11 @@ const defaultProjection: ProjectionRow[] = [
     ai_score: null,
     final_feedback: "Released feedback",
     ai_feedback: null,
-    ai_breakdown: null,
+    ai_breakdown: [
+      { criterion: "Argument", score: 24, max_score: 30 },
+      { criterion: "Evidence", score: 28, max_score: 35 },
+      { criterion: "Structure", score: 24, max_score: 35 },
+    ],
   },
 ];
 
@@ -154,10 +158,18 @@ describe("StudentGrades", () => {
     render(<StudentGrades />);
 
     await waitFor(() => {
-      expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
+    expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Released result position")).toBeInTheDocument();
+    expect(screen.getByText("Algorithms Essay has feedback ready to review")).toBeInTheDocument();
+    expect(screen.getByText("Open the released result and review the criterion feedback")).toBeInTheDocument();
     expect(screen.getByText("76/100")).toBeInTheDocument();
+    expect(screen.getByText("Released")).toBeInTheDocument();
+    expect(screen.getByText("Lecturer Feedback")).toBeInTheDocument();
+    expect(screen.getByText("Strongest Areas")).toBeInTheDocument();
+    expect(screen.getByText("Focus Next Time")).toBeInTheDocument();
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
   });
 
@@ -246,5 +258,38 @@ describe("StudentGrades", () => {
     expect(screen.getByText("Network Security Incident Reflection")).toBeInTheDocument();
     expect(screen.getByText("submitted")).toBeInTheDocument();
     expect(mocks.supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("renders a safe pending-state card when feedback is not yet released", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          submission_id: "submission-pending",
+          assignment_id: "assignment-2",
+          assignment_title: "Pending Review Essay",
+          submission_status: "moderation_in_progress",
+          final_score: null,
+          ai_score: null,
+          final_feedback: null,
+          ai_feedback: null,
+          ai_breakdown: null,
+        },
+      ],
+    });
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Pending Review Essay")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Pending review position")).toBeInTheDocument();
+    expect(screen.getByText("moderation in progress is still blocking release")).toBeInTheDocument();
+    expect(screen.getByText("Wait for marking and moderation to complete before checking again")).toBeInTheDocument();
+    expect(screen.getByText("moderation in progress")).toBeInTheDocument();
+    expect(screen.queryByText("Lecturer Feedback")).not.toBeInTheDocument();
+    expect(screen.queryByText("Strongest Areas")).not.toBeInTheDocument();
   });
 });

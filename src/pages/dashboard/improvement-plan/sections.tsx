@@ -311,7 +311,7 @@ export const ImprovementPlanResourcesSection = ({ resources }: { resources: Reso
   const hasRecoveryGuidance = resources.some((resource) => resource.guidanceMode === "recovery");
 
   return (
-    <Card>
+    <Card id="best-next-moves">
       <CardHeader>
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />

@@ -47,6 +47,12 @@ export interface AssignmentSubmissionStats {
   needsReview: number;
 }
 
+export interface AssignmentCatalogReadiness {
+  postureLabel: string;
+  likelyChallenge: string;
+  bestNextAction: string;
+}
+
 export const normalizeAssignment = <
   T extends Partial<AssignmentCatalogItem> &
     Pick<
@@ -176,3 +182,103 @@ export const getAssignmentOverviewStats = (assignments: AssignmentCatalogItem[])
   published: assignments.filter((assignment) => assignment.status === "published").length,
   dueSoon: assignments.filter((assignment) => isAssignmentDueSoon(assignment.due_date)).length,
 });
+
+export const getLecturerAssignmentCatalogReadiness = ({
+  assignments,
+  submissionStats,
+}: {
+  assignments: AssignmentCatalogItem[];
+  submissionStats: Record<string, AssignmentSubmissionStats>;
+}): AssignmentCatalogReadiness => {
+  const published = assignments.filter((assignment) => assignment.status === "published").length;
+  const drafts = assignments.filter((assignment) => assignment.status === "draft").length;
+  const dueSoon = assignments.filter((assignment) => isAssignmentDueSoon(assignment.due_date)).length;
+  const reviewQueueAssignments = assignments
+    .map((assignment) => ({
+      assignment,
+      needsReview: submissionStats[assignment.id]?.needsReview ?? 0,
+    }))
+    .filter((entry) => entry.needsReview > 0)
+    .sort((left, right) => right.needsReview - left.needsReview);
+  const highestReviewQueue = reviewQueueAssignments[0];
+
+  return {
+    postureLabel:
+      reviewQueueAssignments.length > 0
+        ? "Active marking position"
+        : drafts > 0
+          ? "Draft preparation position"
+          : published > 0
+            ? "Live delivery position"
+            : "Setup position",
+    likelyChallenge:
+      highestReviewQueue
+        ? `${highestReviewQueue.assignment.title} has ${highestReviewQueue.needsReview} submission${highestReviewQueue.needsReview === 1 ? "" : "s"} needing review`
+        : dueSoon > 0
+          ? `${dueSoon} assignment${dueSoon === 1 ? "" : "s"} due within 7 days`
+          : drafts > 0
+            ? `${drafts} draft assignment${drafts === 1 ? "" : "s"} not yet published`
+            : "No assignment pressure point yet",
+    bestNextAction:
+      highestReviewQueue
+        ? "Open the review queue and clear grading, approval, or release blockers"
+        : drafts > 0
+          ? "Publish the next draft assignment when the brief and rubric are ready"
+          : published > 0
+            ? "Monitor live assignment progress and upcoming deadlines"
+            : "Create the first assignment workflow",
+  };
+};
+
+export const getStudentAssignmentCatalogReadiness = ({
+  assignments,
+  studentWorkflow,
+}: {
+  assignments: AssignmentCatalogItem[];
+  studentWorkflow: Record<
+    string,
+    {
+      assignmentId: string;
+      submissionId: string;
+      status: string;
+      submittedAt: string;
+    }
+  >;
+}): AssignmentCatalogReadiness => {
+  const visibleAssignments = assignments.filter((assignment) => assignment.status === "published");
+  const releasedAssignments = visibleAssignments.filter((assignment) =>
+    isStudentGradeVisible(studentWorkflow[assignment.id]?.status ?? ""),
+  );
+  const moderationAssignments = visibleAssignments.filter((assignment) =>
+    ["moderation_pending", "moderation_in_progress", "escalated"].includes(studentWorkflow[assignment.id]?.status ?? ""),
+  );
+  const readyToSubmit = visibleAssignments.filter((assignment) => !studentWorkflow[assignment.id]).length;
+  const firstReleased = releasedAssignments[0];
+
+  return {
+    postureLabel:
+      releasedAssignments.length > 0
+        ? "Released result position"
+        : moderationAssignments.length > 0
+          ? "Moderation wait position"
+          : readyToSubmit > 0
+            ? "Submission window position"
+            : "Assessment in progress position",
+    likelyChallenge:
+      firstReleased
+        ? `${firstReleased.title} has a released result ready to review`
+        : moderationAssignments.length > 0
+          ? `${moderationAssignments.length} assignment${moderationAssignments.length === 1 ? "" : "s"} still in moderation`
+          : readyToSubmit > 0
+            ? `${readyToSubmit} published assignment${readyToSubmit === 1 ? "" : "s"} ready for submission`
+            : "No assignment pressure point yet",
+    bestNextAction:
+      firstReleased
+        ? "Open the released result and review the feedback summary"
+        : moderationAssignments.length > 0
+          ? "Track moderation outcomes and wait for final release"
+          : readyToSubmit > 0
+            ? "Open the next assignment and submit your work"
+            : "Monitor the assignment workflow for the next update",
+  };
+};

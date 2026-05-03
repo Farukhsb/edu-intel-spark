@@ -14,18 +14,25 @@ import { toast } from "sonner";
 import type { RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
 import {
-  sendWorkflowNotificationEmail,
+  dispatchWorkflowNotificationEmail,
 } from "@/lib/communications";
+import { isStudentGradeVisible } from "@/lib/assessmentWorkflow";
 import {
   buildAssignmentPublishedNotificationRows,
   filterAssignments,
+  getLecturerAssignmentCatalogReadiness,
   getAssignmentOverviewStats,
+  getStudentAssignmentCatalogReadiness,
   normalizeAssignment,
   sortAssignmentsForView,
   type AssignmentCatalogItem,
   type AssignmentSubmissionStats,
   type StudentNotificationProfile,
 } from "@/lib/assignmentCatalog";
+import {
+  summarizeAssignmentPublishWorkflow,
+  type AssignmentPublishWorkflowSummary,
+} from "@/lib/assignmentPublishWorkflow";
 import { log } from "@/lib/logger";
 import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
 import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
@@ -72,6 +79,54 @@ const summarizeSelection = (
   return `${values.length} selected`;
 };
 
+const getStudentAssignmentJourney = (status: string | undefined) => {
+  if (!status) {
+    return {
+      badge: "Not submitted",
+      title: "Ready to submit",
+      description: "This assignment is open to you, but no submission has been recorded yet.",
+    };
+  }
+
+  if (status === "released") {
+    return {
+      badge: "Released",
+      title: "Released result available",
+      description: "Your released result and explanation are ready to review.",
+    };
+  }
+
+  if (status === "approved") {
+    return {
+      badge: "Approved",
+      title: "Awaiting release",
+      description: "Your submission has been approved and is waiting for final release to students.",
+    };
+  }
+
+  if (status === "moderation_pending" || status === "moderation_in_progress" || status === "escalated") {
+    return {
+      badge: "Moderation",
+      title: "Under moderation",
+      description: "Your submission is still in the moderation workflow before a final result can be released.",
+    };
+  }
+
+  if (status === "ai_graded" || status === "first_review" || status === "under_review" || status === "moderated") {
+    return {
+      badge: "Review",
+      title: "Awaiting final review",
+      description: "Marking is in progress and the released result is not available yet.",
+    };
+  }
+
+  return {
+    badge: "Submitted",
+    title: "Submission received",
+    description: "Your submission is in the assessment workflow and has not been released yet.",
+  };
+};
+
 const Assignments = () => {
   const { role, user, isDemo } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -93,6 +148,7 @@ const Assignments = () => {
   const {
     assignments,
     submissionStats,
+    studentWorkflow,
     loading,
     refreshAssignments,
   } = useAssignmentsData({
@@ -299,6 +355,13 @@ const Assignments = () => {
       const { error } = await supabase.from("assignments").update({ status: "published" as const }).eq("id", id);
       if (error) throw error;
 
+      const publishWorkflowSummary: AssignmentPublishWorkflowSummary = {
+        targetingStatus: "ready",
+        recipientStatus: "skipped",
+        bellStatus: "skipped",
+        emailStatus: "skipped",
+      };
+
       if (user?.id && assignmentToPublish) {
         const { data: assignmentTargets, error: assignmentTargetsError } = await supabase
           .from("assignment_cohorts")
@@ -310,11 +373,13 @@ const Assignments = () => {
           .eq("assignment_id", id);
 
         if (assignmentTargetsError) {
+          publishWorkflowSummary.targetingStatus = "lookup_failed";
           log.warn("Assignment publish target cohort lookup failed", {
             assignmentId: id,
           });
         }
         if (assignmentDepartmentTargetsError) {
+          publishWorkflowSummary.targetingStatus = "lookup_failed";
           log.warn("Assignment publish target department lookup failed", {
             assignmentId: id,
           });
@@ -328,6 +393,7 @@ const Assignments = () => {
         );
 
         if (cohortIds.length === 0 && departmentIds.length === 0) {
+          publishWorkflowSummary.targetingStatus = "missing";
           log.warn("Assignment publish notifications skipped because no targeting is stored", {
             assignmentId: id,
           });
@@ -348,6 +414,7 @@ const Assignments = () => {
             const { data: studentProfiles, error: studentProfilesError } = await studentProfilesQuery;
 
             if (studentProfilesError) {
+              publishWorkflowSummary.recipientStatus = "failed";
               log.warn("Assignment publish bell notification load failed", {
                 assignmentId: id,
               });
@@ -365,32 +432,60 @@ const Assignments = () => {
                   .insert(rows);
 
                 if (notificationError) {
+                  publishWorkflowSummary.recipientStatus = "loaded";
+                  publishWorkflowSummary.bellStatus = "failed";
                   log.warn("Assignment publish bell notifications did not persist", {
                     assignmentId: id,
                   });
-                } else if (typeof window !== "undefined") {
-                  window.dispatchEvent(new Event("gradeai:communications-updated"));
+                } else {
+                  publishWorkflowSummary.recipientStatus = "loaded";
+                  publishWorkflowSummary.bellStatus = "sent";
+
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new Event("gradeai:communications-updated"));
+                  }
                 }
+              } else {
+                publishWorkflowSummary.recipientStatus = "no_recipients";
               }
             }
           } catch {
+            publishWorkflowSummary.recipientStatus = "failed";
             log.warn("Assignment publish bell notifications failed", {
               assignmentId: id,
             });
           }
 
-          void sendWorkflowNotificationEmail({
+          const emailResult = await dispatchWorkflowNotificationEmail({
             category: "assignment-published",
             assignmentId: id,
           }).catch(() => {
             log.warn("Assignment publish notification email failed", {
               assignmentId: id,
             });
+            return { ok: false, status: "failed" as const, reason: "dispatch_rejected" };
           });
-        }
-      }
 
-      toast.success("Assignment published - students can now submit");
+          publishWorkflowSummary.emailStatus = emailResult.status;
+
+          if (!emailResult.ok) {
+            log.warn("Assignment publish notification email failed", {
+              assignmentId: id,
+              status: emailResult.status,
+            });
+          }
+        }
+
+        const publishFeedback = summarizeAssignmentPublishWorkflow(publishWorkflowSummary);
+
+        if (publishFeedback.warnings.length > 0) {
+          toast.warning(`Assignment published. ${publishFeedback.warnings.join("; ")}.`);
+        } else {
+          toast.success("Assignment published - students can now submit");
+        }
+      } else {
+        toast.success("Assignment published - students can now submit");
+      }
       refreshAssignments();
     } catch {
       toast.error("Failed to publish");
@@ -444,6 +539,16 @@ const Assignments = () => {
   }) as Assignment[];
 
   const { drafts, published, dueSoon } = getAssignmentOverviewStats(assignments as AssignmentCatalogItem[]);
+  const catalogReadiness =
+    role === "lecturer"
+      ? getLecturerAssignmentCatalogReadiness({
+          assignments: assignments as AssignmentCatalogItem[],
+          submissionStats,
+        })
+      : getStudentAssignmentCatalogReadiness({
+          assignments: assignments as AssignmentCatalogItem[],
+          studentWorkflow,
+        });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -519,6 +624,38 @@ const Assignments = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="mt-2 text-sm font-semibold">{catalogReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {role === "lecturer"
+                ? "Based on current draft, due-soon, and review-queue assignment state."
+                : "Based on your published assignments and latest submission state."}
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{catalogReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {role === "lecturer"
+                ? "This is the assignment line most likely to need attention next."
+                : "This is the assignment checkpoint most likely to affect your next step."}
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{catalogReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {role === "lecturer"
+                ? "Use this to decide whether to publish, review, or monitor assignment progress."
+                : "Use this to decide whether to submit now or open a released result."}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card><CardContent className="p-4">
@@ -630,6 +767,8 @@ const Assignments = () => {
           {(sortedAssignments ?? []).map((rawAssignment) => {
             const assignment = normalizeAssignment(rawAssignment);
             const stats = submissionStats[assignment.id];
+            const studentState = role === "student" ? studentWorkflow[assignment.id] : undefined;
+            const studentJourney = role === "student" ? getStudentAssignmentJourney(studentState?.status) : null;
             const StatusIcon = statusIcon(assignment.status);
             const rubricCriteria = assignment.rubric ?? [];
             const targetCohorts = assignment.target_cohorts ?? [];
@@ -710,6 +849,23 @@ const Assignments = () => {
                           </div>
                         </div>
                       )}
+
+                      {role === "student" && studentJourney && (
+                        <div className="rounded-lg border bg-muted/30 p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={isStudentGradeVisible(studentState?.status ?? "") ? "default" : "outline"} className="text-xs">
+                              {studentJourney.badge}
+                            </Badge>
+                            <p className="text-sm font-medium">{studentJourney.title}</p>
+                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground">{studentJourney.description}</p>
+                          {studentState?.submittedAt && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Latest submission: {safeFormatDate(studentState.submittedAt, "MMM d, yyyy HH:mm")}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2 self-start">
@@ -749,9 +905,22 @@ const Assignments = () => {
                           Restore
                         </Button>
                       )}
+                      {role === "student" && studentState && isStudentGradeVisible(studentState.status) && (
+                        <Button size="sm" asChild>
+                          <Link
+                            to={`/dashboard/explain-grade?assignment=${encodeURIComponent(assignment.id)}&submission=${encodeURIComponent(studentState.submissionId)}&source=assignments`}
+                          >
+                            Open Released Result
+                          </Link>
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" asChild>
                         <Link to={`/dashboard/assignments/${assignment.id}`}>
-                          {role === "lecturer" ? "Open Workflow" : "Open Assignment"}
+                          {role === "lecturer"
+                            ? "Open Workflow"
+                            : studentState
+                              ? "Open Submission Window"
+                              : "Open Assignment"}
                         </Link>
                       </Button>
                     </div>

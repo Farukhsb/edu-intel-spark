@@ -4,9 +4,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ImprovementPlan from "@/pages/dashboard/ImprovementPlan";
 
-const renderWithRouter = (ui: React.ReactNode) =>
+const renderWithRouter = (
+  ui: React.ReactNode,
+  initialEntries:
+    | string[]
+    | Array<
+        | string
+        | {
+            pathname: string;
+            search?: string;
+            hash?: string;
+            state?: unknown;
+          }
+      > = ["/dashboard/improvements"],
+) =>
   render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter initialEntries={initialEntries} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       {ui}
     </MemoryRouter>,
   );
@@ -90,6 +103,14 @@ describe("ImprovementPlan explanation validation", () => {
   it("renders suggested focus areas without a misleading refresh action", () => {
     renderWithRouter(<ImprovementPlan />);
 
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Active support position")).toBeInTheDocument();
+    expect(
+      screen.getByText("CS205: Dynamic Programming Structure is still the highest-priority improvement area"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Complete Complete Big-O analysis worksheet before the next submission window"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Best Next Moves" })).toBeInTheDocument();
     expect(
       screen.getByText(/Focused on the weakest repeated criteria so you know which skills to strengthen for future assignments/i),
@@ -134,6 +155,37 @@ describe("ImprovementPlan explanation validation", () => {
 
     expect(screen.getByText("Review lecturer feedback before next lab")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /hide completed tasks/i })).toBeInTheDocument();
+  });
+
+  it("shows a focused support handoff when opened from an intervention notification", () => {
+    renderWithRouter(
+      <ImprovementPlan />,
+      [
+        {
+          pathname: "/dashboard/improvements",
+          state: {
+            notification: {
+              id: "notice-1",
+              createdAt: "2026-05-03T09:00:00.000Z",
+              cleared: false,
+              read: false,
+              category: "intervention-follow-up",
+              recipientName: "Student",
+              recipientEmail: "student@example.com",
+              recipientId: "student-1",
+              subject: "Study plan reminder",
+              body: "Review the complexity-analysis tasks in your improvement plan before the next submission window.",
+            },
+          },
+        },
+      ],
+    );
+
+    expect(screen.getByTestId("improvement-plan-notice-focus")).toBeInTheDocument();
+    expect(screen.getByText("Opened from support notice")).toBeInTheDocument();
+    expect(screen.getByText("Start Here")).toBeInTheDocument();
+    expect(screen.getByText("First Open Task")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review best next moves" })).toBeInTheDocument();
   });
 
   it("builds a plan for a real student using assignment metadata RPC", async () => {

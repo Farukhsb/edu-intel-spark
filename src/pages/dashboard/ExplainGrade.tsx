@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Brain, ChevronDown, ChevronUp, Loader2, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { env } from "@/lib/env";
+import { getExplainGradeReadiness } from "@/lib/explainGradeReadiness";
 import { log } from "@/lib/logger";
 import {
   buildDemoGradeResponse,
@@ -35,17 +37,27 @@ const INITIAL_ASSISTANT_MESSAGE: ChatMsg = {
     "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
 };
 
+const getScoreTone = (score: number) => {
+  if (score >= 70) return "success";
+  if (score >= 50) return "primary";
+  return "destructive";
+};
+
 const ExplainGrade = () => {
   const { isDemo, user } = useAuth();
   const { submissions, selectedId, setSelectedId, loading } = useExplainGradeData({
     isDemo,
     userId: user?.id,
   });
+  const [searchParams, setSearchParams] = useSearchParams();
   const [expandedArea, setExpandedArea] = useState<number | null>(0);
   const [messages, setMessages] = useState<ChatMsg[]>([INITIAL_ASSISTANT_MESSAGE]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const focusAssignmentId = searchParams.get("assignment");
+  const focusSubmissionId = searchParams.get("submission");
+  const focusSource = searchParams.get("source");
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -53,8 +65,42 @@ const ExplainGrade = () => {
     }
   }, [messages]);
 
+  useEffect(() => {
+    if (!submissions.length) return;
+
+    const focusedSubmission =
+      (focusSubmissionId
+        ? submissions.find((submission) => submission.submissionId === focusSubmissionId)
+        : undefined) ??
+      (focusAssignmentId
+        ? submissions.find((submission) => submission.assignmentId === focusAssignmentId)
+        : undefined);
+
+    if (focusedSubmission && focusedSubmission.gradeId !== selectedId) {
+      setSelectedId(focusedSubmission.gradeId);
+      setMessages([INITIAL_ASSISTANT_MESSAGE]);
+    }
+  }, [focusAssignmentId, focusSubmissionId, selectedId, setSelectedId, submissions]);
+
   const selected = submissions.find((submission) => submission.gradeId === selectedId);
   const gradeBreakdown = selected?.breakdown;
+  const strongestComponents = [...(gradeBreakdown?.components ?? [])]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 2);
+  const primaryStrength = strongestComponents[0];
+  const priorityImprovementAreas = gradeBreakdown?.improvementAreas.slice(0, 2) ?? [];
+  const readiness = getExplainGradeReadiness({
+    assignmentLabel: selected?.label ?? null,
+    band: gradeBreakdown?.band ?? "current",
+    strongestArea: primaryStrength?.name ?? null,
+    topImprovementArea: gradeBreakdown?.improvementAreas[0]
+      ? {
+          area: gradeBreakdown.improvementAreas[0].area,
+          nextBand: gradeBreakdown.improvementAreas[0].nextBand,
+          pointsNeeded: gradeBreakdown.improvementAreas[0].pointsNeeded,
+        }
+      : null,
+  });
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading || !gradeBreakdown) return;
@@ -227,6 +273,98 @@ const ExplainGrade = () => {
         </Card>
       )}
 
+      {(focusSource === "notification" || focusSource === "email") && (focusAssignmentId || focusSubmissionId) && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium">Opened from released-grade notification</p>
+              <p className="text-xs text-muted-foreground">
+                This view is focused on the released result linked from your {focusSource === "email" ? "email" : "notification"}.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchParams({}, { replace: true });
+              }}
+            >
+              Show all released grades
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on the released breakdown, band, and strongest improvement route for this result.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the released-result question most likely to matter before your next submission.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide what to carry into the next piece of work before asking deeper follow-up questions.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">Released Result Summary</CardTitle>
+          </div>
+          <CardDescription>{selected?.secondaryLabel || "Released grade context for this submission."}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-4xl font-bold font-display">{gradeBreakdown.totalGrade}%</span>
+            <Badge>{gradeBreakdown.band}</Badge>
+            <Badge variant="outline">Released grade</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strongest Areas</p>
+              <div className="mt-2 space-y-1">
+                {strongestComponents.map((component) => (
+                  <p key={component.name} className="text-sm">
+                    {component.name} <span className="text-muted-foreground">({component.score}%)</span>
+                  </p>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best Improvement Route</p>
+              {gradeBreakdown.improvementAreas[0] ? (
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm font-medium">{gradeBreakdown.improvementAreas[0].area}</p>
+                  <p className="text-xs text-muted-foreground">
+                    +{gradeBreakdown.improvementAreas[0].pointsNeeded} points to move toward {gradeBreakdown.improvementAreas[0].nextBand}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No major weak area stands out from this released breakdown.
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -236,10 +374,6 @@ const ExplainGrade = () => {
           <CardDescription>{gradeBreakdown.assessment}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex items-center gap-3">
-            <span className="text-4xl font-bold font-display">{gradeBreakdown.totalGrade}%</span>
-            <Badge>{gradeBreakdown.band}</Badge>
-          </div>
           <div className="space-y-3">
             {gradeBreakdown.components.map((component, index) => (
               <div key={index} className="space-y-1">
@@ -252,7 +386,11 @@ const ExplainGrade = () => {
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
                     className={`h-full rounded-full ${
-                      component.score >= 70 ? "bg-success" : component.score >= 50 ? "bg-primary" : "bg-destructive"
+                      getScoreTone(component.score) === "success"
+                        ? "bg-success"
+                        : getScoreTone(component.score) === "primary"
+                          ? "bg-primary"
+                          : "bg-destructive"
                     }`}
                     style={{ width: `${component.score}%` }}
                   />
@@ -303,6 +441,51 @@ const ExplainGrade = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Next Submission Action Plan</CardTitle>
+          <CardDescription>Turn this released result into a short, specific plan for the next piece of work.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Keep This Strength</p>
+            <p className="mt-2 text-sm font-medium">
+              {primaryStrength
+                ? `${primaryStrength.name} is already one of your strongest criteria. Keep its current standard while you improve weaker areas.`
+                : "Carry your strongest habits forward into the next submission."}
+            </p>
+          </div>
+
+          {priorityImprovementAreas.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {priorityImprovementAreas.map((area) => (
+                <div key={area.area} className="rounded-xl border p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Priority Focus</p>
+                  <p className="mt-2 text-sm font-semibold">{area.area}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Aim for roughly +{area.pointsNeeded} points to move toward {area.nextBand}.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {area.tips.slice(0, 2).map((tip) => (
+                      <div key={tip} className="flex items-start gap-2 text-sm">
+                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        {tip}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border p-4">
+              <p className="text-sm text-muted-foreground">
+                This released breakdown does not show a major weak criterion, so focus on consistency across the whole rubric.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
