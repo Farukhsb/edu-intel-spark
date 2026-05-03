@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables, TablesInsert } from "@/integrations/supabase/types";
+import { canReleaseStatus, getApprovalBlockReason } from "@/lib/assessmentWorkflow";
 import type { ModerationAction } from "@/lib/moderation";
 
 export type ModerationCaseRow = Tables<"moderation_cases">;
@@ -70,6 +71,66 @@ interface ModerationActionPlanInput {
   feedbackDraft: string;
 }
 
+interface ModerationActionPermissionInput {
+  action: ModerationAction;
+  moderationCase: ModerationCaseRow;
+  userId: string | null | undefined;
+}
+
+interface ModerationDisagreementInput {
+  moderationCase: ModerationCaseRow;
+  grade: Pick<GradeRow, "lecturer_score" | "lecturer_feedback"> | null;
+  latestModeratorReview: Pick<ModerationReviewRow, "action" | "proposed_score" | "proposed_feedback"> | null;
+}
+
+interface ModerationEscalationSummaryInput {
+  moderationCase: ModerationCaseRow;
+  disagreement: ReturnType<typeof getModerationDisagreementSummary>;
+  latestModeratorReview: Pick<ModerationReviewRow, "notes"> | null;
+}
+
+interface ModerationReleaseStateInput {
+  moderationCase: ModerationCaseRow;
+  submissionStatus: SubmissionRow["status"];
+}
+
+export type ModerationQueueFilter =
+  | "all"
+  | "assigned_to_me"
+  | "awaiting_my_approval"
+  | "escalated"
+  | "ready_for_release";
+
+export type ModerationQueueSort = "priority" | "newest" | "student";
+
+export interface ModerationOwnerAssignmentSummary {
+  assignmentId: string;
+  assignmentTitle: string;
+  approvedReadyCount: number;
+  escalatedCount: number;
+}
+
+interface ModerationQueueFilterInput {
+  item: ModerationCaseView;
+  filter: ModerationQueueFilter;
+  userId: string | null | undefined;
+}
+
+interface ModerationQueueSearchInput {
+  item: ModerationCaseView;
+  query: string;
+}
+
+interface ModerationBulkAssignEligibilityInput {
+  item: ModerationCaseView;
+  userId: string | null | undefined;
+}
+
+interface ModerationBulkApproveEligibilityInput {
+  item: ModerationCaseView;
+  userId: string | null | undefined;
+}
+
 const unique = <T>(values: T[]) => Array.from(new Set(values));
 
 const toMap = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
@@ -80,6 +141,50 @@ export const getModerationQueueStats = (cases: ModerationCaseView[]) => ({
   moderated: cases.filter((item) => item.moderationCase.status === "moderated").length,
   escalated: cases.filter((item) => item.moderationCase.status === "escalated").length,
 });
+
+export const getModerationOwnerAssignmentSummaries = (
+  cases: ModerationCaseView[],
+  userId: string | null | undefined,
+): ModerationOwnerAssignmentSummary[] => {
+  if (!userId) return [];
+
+  const summaries = new Map<string, ModerationOwnerAssignmentSummary>();
+
+  for (const item of cases) {
+    if (item.moderationCase.lecturer_id !== userId) continue;
+
+    const releaseState = getModerationReleaseState({
+      moderationCase: item.moderationCase,
+      submissionStatus: item.submission?.status ?? item.moderationCase.status,
+    });
+    const approvedReadyCount = releaseState.tone === "ready" ? 1 : 0;
+    const escalatedCount = item.moderationCase.status === "escalated" ? 1 : 0;
+
+    if (approvedReadyCount === 0 && escalatedCount === 0) continue;
+
+    const assignmentId = item.assignment?.id || item.moderationCase.assignment_id;
+    const current = summaries.get(assignmentId) || {
+      assignmentId,
+      assignmentTitle: item.assignment?.title || "Assignment",
+      approvedReadyCount: 0,
+      escalatedCount: 0,
+    };
+
+    current.approvedReadyCount += approvedReadyCount;
+    current.escalatedCount += escalatedCount;
+    summaries.set(assignmentId, current);
+  }
+
+  return [...summaries.values()].sort((left, right) => {
+    if (right.escalatedCount !== left.escalatedCount) {
+      return right.escalatedCount - left.escalatedCount;
+    }
+    if (right.approvedReadyCount !== left.approvedReadyCount) {
+      return right.approvedReadyCount - left.approvedReadyCount;
+    }
+    return left.assignmentTitle.localeCompare(right.assignmentTitle);
+  });
+};
 
 export const buildModerationAuditPayload = ({
   submissionId,
@@ -258,6 +363,253 @@ const getReviewerRole = (moderationCase: ModerationCaseRow, userId: string) => {
   if (moderationCase.first_marker_id === userId) return "first_marker";
   if (moderationCase.lecturer_id === userId) return "lecturer";
   return "moderator";
+};
+
+export const canPerformModerationAction = ({
+  action,
+  moderationCase,
+  userId,
+}: ModerationActionPermissionInput) => {
+  if (!userId) return false;
+
+  if (action === "approve") {
+    return moderationCase.lecturer_id === userId && moderationCase.status === "moderated";
+  }
+
+  return moderationCase.moderator_id === userId;
+};
+
+export const getModerationDisagreementSummary = ({
+  moderationCase,
+  grade,
+  latestModeratorReview,
+}: ModerationDisagreementInput) => {
+  const baselineScore = moderationCase.first_marker_score ?? grade?.lecturer_score ?? null;
+  const moderatorScore =
+    latestModeratorReview?.proposed_score ?? moderationCase.moderator_score ?? moderationCase.final_agreed_score ?? null;
+  const baselineFeedback = grade?.lecturer_feedback?.trim() || null;
+  const moderatorFeedback =
+    latestModeratorReview?.proposed_feedback?.trim() ||
+    moderationCase.final_agreed_feedback?.trim() ||
+    null;
+
+  const scoreChanged =
+    typeof baselineScore === "number" &&
+    typeof moderatorScore === "number" &&
+    Math.abs(baselineScore - moderatorScore) >= 1;
+  const feedbackChanged =
+    Boolean(moderatorFeedback) &&
+    moderatorFeedback !== baselineFeedback;
+
+  const hasMaterialChange = scoreChanged || feedbackChanged;
+  let label = "Moderator confirmed the first marker decision.";
+
+  if (scoreChanged && feedbackChanged) {
+    label = "Moderator changed both the score and feedback.";
+  } else if (scoreChanged) {
+    label = "Moderator changed the score.";
+  } else if (feedbackChanged) {
+    label = "Moderator changed the feedback.";
+  }
+
+  return {
+    hasMaterialChange,
+    scoreChanged,
+    feedbackChanged,
+    baselineScore,
+    moderatorScore,
+    label,
+  };
+};
+
+export const getModerationEscalationSummary = ({
+  moderationCase,
+  disagreement,
+  latestModeratorReview,
+}: ModerationEscalationSummaryInput) => {
+  const headline = disagreement.hasMaterialChange
+    ? "Escalated after the moderator changed the outcome."
+    : "Escalated without a material score or feedback change.";
+
+  const resolutionState =
+    "This case is still unresolved and needs owner or senior review before final approval.";
+
+  const escalationReason =
+    latestModeratorReview?.notes?.trim() || moderationCase.trigger_summary?.trim() || null;
+
+  return {
+    headline,
+    resolutionState,
+    escalationReason,
+  };
+};
+
+export const getModerationReleaseState = ({
+  moderationCase,
+  submissionStatus,
+}: ModerationReleaseStateInput) => {
+  if (canReleaseStatus(submissionStatus)) {
+    return {
+      tone: "ready" as const,
+      badge: "Ready for release",
+      detail: "This case has owner approval and can now be released to the student from the assignment workflow.",
+    };
+  }
+
+  if (submissionStatus === "released") {
+    return {
+      tone: "released" as const,
+      badge: "Released to student",
+      detail: "This moderated outcome has already been released to the student.",
+    };
+  }
+
+  const blockReason = getApprovalBlockReason({
+    status: submissionStatus,
+    needsModeration: true,
+  });
+
+  if (blockReason === "moderation_in_progress") {
+    return {
+      tone: "blocked" as const,
+      badge: "Release blocked",
+      detail: "This case cannot be approved or released while moderation is still active or escalated.",
+    };
+  }
+
+  return {
+    tone: "approval" as const,
+    badge: "Owner approval required",
+    detail: "This case is moderated but still needs assignment-owner approval before any grade release.",
+  };
+};
+
+export const matchesModerationQueueFilter = ({
+  item,
+  filter,
+  userId,
+}: ModerationQueueFilterInput) => {
+  if (filter === "all") return true;
+
+  if (filter === "assigned_to_me") {
+    return Boolean(userId) && item.moderationCase.moderator_id === userId;
+  }
+
+  if (filter === "awaiting_my_approval") {
+    return (
+      Boolean(userId) &&
+      item.moderationCase.lecturer_id === userId &&
+      getModerationReleaseState({
+        moderationCase: item.moderationCase,
+        submissionStatus: item.submission?.status ?? item.moderationCase.status,
+      }).tone === "approval"
+    );
+  }
+
+  if (filter === "escalated") {
+    return item.moderationCase.status === "escalated" || item.submission?.status === "escalated";
+  }
+
+  if (filter === "ready_for_release") {
+    return (
+      getModerationReleaseState({
+        moderationCase: item.moderationCase,
+        submissionStatus: item.submission?.status ?? item.moderationCase.status,
+      }).tone === "ready"
+    );
+  }
+
+  return true;
+};
+
+export const matchesModerationQueueSearch = ({
+  item,
+  query,
+}: ModerationQueueSearchInput) => {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return true;
+
+  const haystack = [
+    item.submission?.student_name,
+    item.submission?.student_email,
+    item.assignment?.title,
+    item.moderator?.full_name,
+    item.firstMarker?.full_name,
+    item.moderationCase.status,
+    item.submission?.status,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(trimmed);
+};
+
+const getModerationPriorityRank = (item: ModerationCaseView) => {
+  const releaseState = getModerationReleaseState({
+    moderationCase: item.moderationCase,
+    submissionStatus: item.submission?.status ?? item.moderationCase.status,
+  });
+
+  if (item.moderationCase.status === "escalated") return 0;
+  if (releaseState.tone === "approval") return 1;
+  if (releaseState.tone === "ready") return 2;
+  if (item.moderationCase.status === "moderation_in_progress") return 3;
+  if (item.moderationCase.status === "moderation_pending") return 4;
+  if (releaseState.tone === "released") return 5;
+  return 6;
+};
+
+export const sortModerationQueueCases = (
+  items: ModerationCaseView[],
+  sort: ModerationQueueSort,
+) => {
+  return [...items].sort((left, right) => {
+    if (sort === "student") {
+      const leftName = left.submission?.student_name || left.submission?.student_email || "";
+      const rightName = right.submission?.student_name || right.submission?.student_email || "";
+      return leftName.localeCompare(rightName);
+    }
+
+    if (sort === "newest") {
+      const leftTime = new Date(left.moderationCase.updated_at).getTime();
+      const rightTime = new Date(right.moderationCase.updated_at).getTime();
+      return rightTime - leftTime;
+    }
+
+    const rankDelta = getModerationPriorityRank(left) - getModerationPriorityRank(right);
+    if (rankDelta !== 0) return rankDelta;
+
+    const leftTime = new Date(left.moderationCase.updated_at).getTime();
+    const rightTime = new Date(right.moderationCase.updated_at).getTime();
+    return rightTime - leftTime;
+  });
+};
+
+export const canBulkAssignModerator = ({
+  item,
+  userId,
+}: ModerationBulkAssignEligibilityInput) => {
+  if (!userId || !item.submission) return false;
+
+  return (
+    item.moderationCase.lecturer_id === userId &&
+    (item.moderationCase.status === "moderation_pending" ||
+      item.moderationCase.status === "moderation_in_progress")
+  );
+};
+
+export const canBulkApproveModeration = ({
+  item,
+  userId,
+}: ModerationBulkApproveEligibilityInput) => {
+  if (!userId || !item.submission || !item.grade) return false;
+
+  return (
+    item.moderationCase.lecturer_id === userId &&
+    item.moderationCase.status === "moderated" &&
+    item.submission.status === "moderated"
+  );
 };
 
 export const buildModerationActionPlan = ({

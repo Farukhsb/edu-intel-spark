@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ModerationQueueSummary } from "@/components/moderation/ModerationQueueSummary";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,9 +13,19 @@ import {
 import {
   buildModerationActionPlan,
   buildModerationAuditPayload,
+  canBulkApproveModeration,
+  canBulkAssignModerator,
+  canPerformModerationAction,
   fetchModerationCaseViews,
+  getModerationDisagreementSummary,
+  getModerationOwnerAssignmentSummaries,
+  matchesModerationQueueFilter,
+  matchesModerationQueueSearch,
+  type ModerationQueueFilter,
+  type ModerationQueueSort,
   getModerationQueueStats,
   insertModerationAuditEntry,
+  sortModerationQueueCases,
   type ModerationCaseView,
 } from "@/lib/moderationWorkflow";
 import { Loader2 } from "lucide-react";
@@ -177,11 +188,18 @@ const DEMO_MODERATION_CASES = [
 
 const ModerationDashboard = () => {
   const { user, profile, isDemo } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cases, setCases] = useState<ModerationCaseView[]>([]);
   const [lecturers, setLecturers] = useState<Profile[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [queueFilter, setQueueFilter] = useState<ModerationQueueFilter>("all");
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueSort, setQueueSort] = useState<ModerationQueueSort>("priority");
+  const [assignmentFocusId, setAssignmentFocusId] = useState<string | null>(null);
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
+  const [bulkModeratorId, setBulkModeratorId] = useState("unassigned");
   const [noteDraft, setNoteDraft] = useState("");
   const [scoreDraft, setScoreDraft] = useState("");
   const [feedbackDraft, setFeedbackDraft] = useState("");
@@ -246,9 +264,130 @@ const ModerationDashboard = () => {
     );
   }, [selectedCase]);
 
+  useEffect(() => {
+    const knownIds = new Set(cases.map((item) => item.moderationCase.id));
+    setSelectedCaseIds((current) => current.filter((id) => knownIds.has(id)));
+  }, [cases]);
+
   const queueStats = useMemo(
     () => getModerationQueueStats(cases),
     [cases]
+  );
+
+  const ownerAssignmentSummaries = useMemo(
+    () => getModerationOwnerAssignmentSummaries(cases, user?.id),
+    [cases, user?.id],
+  );
+
+  const assignmentFocusTitle = useMemo(
+    () =>
+      assignmentFocusId
+        ? ownerAssignmentSummaries.find((summary) => summary.assignmentId === assignmentFocusId)?.assignmentTitle ||
+          cases.find((item) => (item.assignment?.id || item.moderationCase.assignment_id) === assignmentFocusId)?.assignment?.title ||
+          "Assignment"
+        : null,
+    [assignmentFocusId, cases, ownerAssignmentSummaries],
+  );
+
+  const queueFilterOptions = useMemo(
+    () =>
+      [
+        { value: "all" as const, label: "All cases" },
+        { value: "assigned_to_me" as const, label: "Assigned to me" },
+        { value: "awaiting_my_approval" as const, label: "Awaiting my approval" },
+        { value: "escalated" as const, label: "Escalated" },
+        { value: "ready_for_release" as const, label: "Ready for release" },
+      ].map((option) => ({
+        ...option,
+        count: cases.filter((item) =>
+          matchesModerationQueueFilter({
+            item,
+            filter: option.value,
+            userId: user?.id,
+          }),
+        ).length,
+      })),
+    [cases, user?.id],
+  );
+
+  const filteredCases = useMemo(() => {
+    const visible = cases.filter(
+      (item) =>
+        (!assignmentFocusId ||
+          (item.assignment?.id || item.moderationCase.assignment_id) === assignmentFocusId) &&
+        matchesModerationQueueFilter({
+          item,
+          filter: queueFilter,
+          userId: user?.id,
+        }) &&
+        matchesModerationQueueSearch({
+          item,
+          query: queueSearch,
+        }),
+    );
+
+    return sortModerationQueueCases(visible, queueSort);
+  }, [assignmentFocusId, cases, queueFilter, queueSearch, queueSort, user?.id]);
+
+  const bulkAssignableFilteredCases = useMemo(
+    () =>
+      filteredCases.filter((item) =>
+        canBulkAssignModerator({
+          item,
+          userId: user?.id,
+        }),
+      ),
+    [filteredCases, user?.id],
+  );
+
+  const bulkApprovableFilteredCases = useMemo(
+    () =>
+      filteredCases.filter((item) =>
+        canBulkApproveModeration({
+          item,
+          userId: user?.id,
+        }),
+      ),
+    [filteredCases, user?.id],
+  );
+
+  const selectedBulkCases = useMemo(
+    () => cases.filter((item) => selectedCaseIds.includes(item.moderationCase.id)),
+    [cases, selectedCaseIds],
+  );
+
+  const selectedBulkApprovalCases = useMemo(
+    () =>
+      selectedBulkCases.filter((item) =>
+        canBulkApproveModeration({
+          item,
+          userId: user?.id,
+        }),
+      ),
+    [selectedBulkCases, user?.id],
+  );
+
+  const selectedBulkApprovalSummaries = useMemo(
+    () =>
+      selectedBulkApprovalCases.map((item) => {
+        const disagreement = getModerationDisagreementSummary({
+          moderationCase: item.moderationCase,
+          grade: item.grade,
+          latestModeratorReview: getLatestModeratorReview(item.reviews),
+        });
+
+        return {
+          caseId: item.moderationCase.id,
+          studentLabel:
+            item.submission?.student_name || item.submission?.student_email || "Student record unavailable",
+          assignmentTitle: item.assignment?.title || "Assignment",
+          disagreementLabel: disagreement.label,
+          baselineScore: disagreement.baselineScore,
+          moderatorScore: disagreement.moderatorScore,
+          feedbackChanged: disagreement.feedbackChanged,
+        };
+      }),
+    [selectedBulkApprovalCases],
   );
 
   const insertAuditEntry = async (
@@ -353,6 +492,225 @@ const ModerationDashboard = () => {
     toast.success("Moderator assigned.");
     setSaving(false);
     await fetchCases();
+  };
+
+  const toggleSelectedCase = (caseId: string, checked: boolean) => {
+    setSelectedCaseIds((current) =>
+      checked ? Array.from(new Set([...current, caseId])) : current.filter((id) => id !== caseId),
+    );
+  };
+
+  const toggleSelectAllVisible = (checked: boolean) => {
+    const visibleIds = bulkAssignableFilteredCases.map((item) => item.moderationCase.id);
+    setSelectedCaseIds((current) => {
+      if (checked) return Array.from(new Set([...current, ...visibleIds]));
+      return current.filter((id) => !visibleIds.includes(id));
+    });
+  };
+
+  const assignModeratorBulk = async () => {
+    if (!user) return;
+    if (!bulkModeratorId || bulkModeratorId === "unassigned") {
+      toast.error("Choose a moderator before assigning the selected cases.");
+      return;
+    }
+
+    const eligibleCases = selectedBulkCases.filter((item) =>
+      canBulkAssignModerator({
+        item,
+        userId: user.id,
+      }),
+    );
+
+    if (eligibleCases.length === 0) {
+      toast.error("Select at least one moderation case that you own before assigning a moderator.");
+      return;
+    }
+
+    if (isDemo) {
+      setCases((current) =>
+        current.map((entry) =>
+          selectedCaseIds.includes(entry.moderationCase.id) &&
+          canBulkAssignModerator({
+            item: entry,
+            userId: user.id,
+          })
+            ? {
+                ...entry,
+                moderationCase: {
+                  ...entry.moderationCase,
+                  moderator_id: bulkModeratorId,
+                  status: "moderation_in_progress",
+                },
+                moderator: DEMO_LECTURERS.find((lecturer) => lecturer.id === bulkModeratorId) || entry.moderator,
+                submission: entry.submission
+                  ? { ...entry.submission, status: "moderation_in_progress" }
+                  : entry.submission,
+              }
+            : entry,
+        ),
+      );
+      setSelectedCaseIds([]);
+      toast.success(`${eligibleCases.length} moderation case(s) assigned in demo mode.`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      for (const item of eligibleCases) {
+        const { error: caseError } = await supabase
+          .from("moderation_cases")
+          .update({
+            moderator_id: bulkModeratorId,
+            status: "moderation_in_progress",
+          })
+          .eq("id", item.moderationCase.id);
+        if (caseError) throw caseError;
+
+        const { error: submissionError } = await supabase
+          .from("submissions")
+          .update({ status: "moderation_in_progress" as const })
+          .eq("id", item.submission!.id);
+        if (submissionError) throw submissionError;
+
+        await insertAuditEntry(
+          item,
+          "moderator_assigned",
+          { moderator_id: item.moderationCase.moderator_id, status: item.moderationCase.status },
+          { moderator_id: bulkModeratorId, status: "moderation_in_progress" },
+          "Moderator assigned in bulk from the moderation queue.",
+        );
+      }
+
+      setSelectedCaseIds([]);
+      toast.success(`${eligibleCases.length} moderation case(s) assigned.`);
+      await fetchCases();
+    } catch (error) {
+      log.error("Failed to bulk assign moderators", error, {
+        selectedCaseIds,
+        moderatorId: bulkModeratorId,
+      });
+      toast.error("Bulk moderator assignment failed. Try again, and confirm the selected cases still belong to you.");
+    }
+    setSaving(false);
+  };
+
+  const approveModerationBulk = async () => {
+    if (!user) return;
+
+    const eligibleCases = selectedBulkApprovalCases;
+    if (eligibleCases.length === 0) {
+      toast.error("Select at least one moderated case that you own before bulk approval.");
+      return;
+    }
+
+    if (isDemo) {
+      setCases((current) =>
+        current.map((entry) =>
+          selectedCaseIds.includes(entry.moderationCase.id) &&
+          canBulkApproveModeration({
+            item: entry,
+            userId: user.id,
+          })
+            ? {
+                ...entry,
+                moderationCase: {
+                  ...entry.moderationCase,
+                  approved_at: new Date().toISOString(),
+                },
+                submission: entry.submission ? { ...entry.submission, status: "approved" } : entry.submission,
+                grade: entry.grade
+                  ? {
+                      ...entry.grade,
+                      final_score:
+                        entry.moderationCase.final_agreed_score ??
+                        entry.grade.final_score ??
+                        entry.grade.lecturer_score ??
+                        entry.grade.ai_score ??
+                        null,
+                      final_feedback:
+                        entry.moderationCase.final_agreed_feedback ??
+                        entry.grade.final_feedback ??
+                        entry.grade.lecturer_feedback ??
+                        entry.grade.ai_feedback ??
+                        null,
+                    }
+                  : entry.grade,
+              }
+            : entry,
+        ),
+      );
+      setSelectedCaseIds([]);
+      toast.success(`${eligibleCases.length} moderation case(s) approved in demo mode.`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      for (const item of eligibleCases) {
+        const resolvedScore =
+          item.moderationCase.final_agreed_score ??
+          item.moderationCase.first_marker_score ??
+          item.grade?.lecturer_score ??
+          item.grade?.ai_score ??
+          null;
+        const resolvedFeedback =
+          item.moderationCase.final_agreed_feedback ??
+          item.grade?.final_feedback ??
+          item.grade?.lecturer_feedback ??
+          item.grade?.ai_feedback ??
+          null;
+
+        const { error: caseError } = await supabase
+          .from("moderation_cases")
+          .update({ approved_at: new Date().toISOString() })
+          .eq("id", item.moderationCase.id);
+        if (caseError) throw caseError;
+
+        const { error: submissionError } = await supabase
+          .from("submissions")
+          .update({ status: "approved" as const })
+          .eq("id", item.submission!.id);
+        if (submissionError) throw submissionError;
+
+        const { error: gradeError } = await supabase
+          .from("grades")
+          .update({
+            final_score: resolvedScore,
+            final_feedback: resolvedFeedback,
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", item.grade!.id);
+        if (gradeError) throw gradeError;
+
+        await insertAuditEntry(
+          item,
+          "moderation_approve",
+          {
+            case_status: item.moderationCase.status,
+            submission_status: item.submission!.status,
+            final_agreed_score: item.moderationCase.final_agreed_score,
+          },
+          {
+            case_status: item.moderationCase.status,
+            submission_status: "approved",
+            final_agreed_score: item.moderationCase.final_agreed_score ?? resolvedScore,
+          },
+          "Moderated case approved in bulk from the moderation queue.",
+        );
+      }
+
+      setSelectedCaseIds([]);
+      toast.success(`${eligibleCases.length} moderation case(s) approved.`);
+      await fetchCases();
+    } catch (error) {
+      log.error("Failed to bulk approve moderated cases", error, {
+        selectedCaseIds,
+      });
+      toast.error("Bulk approval failed. Try again, and confirm the selected cases are still moderated and owned by you.");
+    }
+    setSaving(false);
   };
 
   const saveAction = async (action: ModerationAction) => {
@@ -468,6 +826,20 @@ const ModerationDashboard = () => {
       toast.error("Only the assignment owner can approve the final moderated outcome. Ask the owning lecturer to complete approval.");
       return;
     }
+    if (
+      !canPerformModerationAction({
+        action,
+        moderationCase,
+        userId: user.id,
+      })
+    ) {
+      toast.error(
+        action === "approve"
+          ? "This case must be moderated before the owner can approve it."
+          : "Only the assigned moderator can record this moderation action.",
+      );
+      return;
+    }
 
     setSaving(true);
     try {
@@ -553,11 +925,50 @@ const ModerationDashboard = () => {
   }
   return (
     <div className="space-y-6 animate-fade-in">
-      <ModerationQueueSummary queueStats={queueStats} />
+      <ModerationQueueSummary
+        queueStats={queueStats}
+        ownerAssignmentSummaries={ownerAssignmentSummaries}
+        onViewAssignmentCases={(assignmentId) => setAssignmentFocusId(assignmentId)}
+        onFocusAssignmentQueue={(assignmentId, filter) => {
+          setAssignmentFocusId(assignmentId);
+          setQueueFilter(filter);
+        }}
+        onOpenReleaseWorkflow={(assignmentId) =>
+          navigate(`/dashboard/assignments/${assignmentId}?source=moderation&focus=release-ready`)
+        }
+      />
 
       <ModerationQueueSection
-        cases={cases}
+        cases={filteredCases}
         onSelectCase={setSelectedCaseId}
+        queueFilter={queueFilter}
+        queueFilterOptions={queueFilterOptions}
+        onQueueFilterChange={setQueueFilter}
+        queueSearch={queueSearch}
+        onQueueSearchChange={setQueueSearch}
+        queueSort={queueSort}
+        onQueueSortChange={setQueueSort}
+        assignmentFocusTitle={assignmentFocusTitle}
+        onClearAssignmentFocus={() => setAssignmentFocusId(null)}
+        onOpenReleaseWorkflow={(assignmentId) =>
+          navigate(`/dashboard/assignments/${assignmentId}?source=moderation&focus=release-ready`)
+        }
+        bulkModeratorId={bulkModeratorId}
+        lecturers={lecturers}
+        onBulkModeratorChange={setBulkModeratorId}
+        onBulkAssignModerator={() => void assignModeratorBulk()}
+        onToggleSelectAllVisible={toggleSelectAllVisible}
+        onToggleSelectedCase={toggleSelectedCase}
+        selectedCaseIds={selectedCaseIds}
+        selectableCaseIds={[
+          ...bulkAssignableFilteredCases.map((item) => item.moderationCase.id),
+          ...bulkApprovableFilteredCases.map((item) => item.moderationCase.id),
+        ]}
+        bulkAssignableCaseIds={bulkAssignableFilteredCases.map((item) => item.moderationCase.id)}
+        bulkApprovableCaseIds={bulkApprovableFilteredCases.map((item) => item.moderationCase.id)}
+        onBulkApproveModeration={() => void approveModerationBulk()}
+        selectedBulkApprovalSummaries={selectedBulkApprovalSummaries}
+        saving={saving}
       />
 
       <ModerationReviewDialog
