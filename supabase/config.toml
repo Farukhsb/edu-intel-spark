@@ -1,13 +1,13 @@
-project_id = "nyhisxovomznzldafgtz"
+project_id = "huncjayakgnqdgizzfjx"
 
 [functions.check-plagiarism]
-verify_jwt = false
+verify_jwt = true
 
 [functions.grade-submission]
-verify_jwt = false
+verify_jwt = true
 
 [functions.explain-grade]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bulk-create-students]
-verify_jwt = false
+verify_jwt = true

@@ -181,27 +181,66 @@ describe("edge function hardening", () => {
   });
 
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
-    const source = readRepoFile("supabase/functions/check-plagiarism/index.ts");
+    const source = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
+    const entrySource = readRepoFile("supabase/functions/check-plagiarism/index.ts");
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
-    const runnerSource = readRepoFile("supabase/functions/_shared/integrity-provider-runners.ts");
+    const bootstrapSource = readRepoFile("supabase/functions/check-plagiarism/bootstrap.ts");
+    const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
+    const configSource = readRepoFile("supabase/config.toml");
 
+    expect(entrySource).toContain("registerCheckPlagiarismEntrypoint");
+    expect(bootstrapSource).toContain("createCheckPlagiarismHandler");
+    expect(bootstrapSource).toContain("serve:");
     expect(source).toContain('const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";');
-    expect(source).toContain("shouldRunInternalProvider && requestedAssignmentId && submissions.length >= 2");
+    expect(source).toContain("shouldRunInternalProvider &&");
+    expect(source).toContain("requestedAssignmentId &&");
+    expect(source).toContain("comparisonSubmissions.length >= 2");
+    expect(source).toContain('.eq("assignment_id", requestedAssignmentId)');
+    expect(source).toContain("const comparisonSubmissions = assignmentSubmissions ?? submissions;");
+    expect(source).toContain('import { mapWithConcurrency } from "./map-with-concurrency.ts";');
+    expect(source).toContain("const EXTRACTION_CONCURRENCY = 4;");
+    expect(source).toContain("const LARGE_COHORT_WARNING_THRESHOLD = 30;");
+    expect(source).toContain("const MAX_INTERNAL_COMPARISON_SUBMISSIONS = 80;");
+    expect(source).toContain("const MAX_REQUESTED_SUBMISSION_IDS = 80;");
+    expect(source).toContain('logWarn("internal_similarity_large_cohort"');
+    expect(source).toContain('logWarn("internal_similarity_skipped_large_cohort"');
+    expect(source).toContain("Internal cohort similarity scanning was skipped because this assignment has");
+    expect(source).toContain("const extractedComparisonContent = await mapWithConcurrency(");
+    expect(source).toContain('logInfo("comparison_submission_extraction_started"');
+    expect(source).toContain('logInfo("comparison_submission_extraction_completed"');
+    expect(source).toContain('"comparison_submission_extraction_summary"');
+    expect(source).toContain('function summarizeExtractionObservability');
+    expect(source).toContain('function categorizeIntegrityWarnings');
+    expect(source).toContain('logWarn("check-plagiarism inaccessible_requested_submissions"');
+    expect(source).toContain("const internalFlags = normalizeFlags(buildInternalSimilarityFlagCandidates({");
+    expect(source).toContain("const mergedFlags = mergeIntegrityFlags([...parsedFlags, ...internalFlags]);");
     expect(source).toContain('import { analyzeTextSimilarity } from "../_shared/providers/internal-text-similarity.ts";');
+    expect(source).toContain('import { buildInternalComparisonPairs } from "./internal-comparison-pairs.ts";');
+    expect(source).toContain("const comparablePairs = buildInternalComparisonPairs(comparableSubmissions, requestedSubmissionIdSet);");
     expect(source).toContain("const pairwiseFinding = analyzeTextSimilarity(");
-    expect(runnerSource).toContain('logInfo("internal_similarity_started"');
-    expect(runnerSource).toContain('logInfo("internal_similarity_completed"');
-    expect(runnerSource).toContain('logError("internal_similarity_pair_failed"');
-    expect(runnerSource).toContain("A pairwise internal similarity comparison failed and was skipped.");
-    expect(source).toContain('logError("internal_similarity_insert_failed"');
+    expect(source).toContain('logInfo("internal_similarity_pairs_selected"');
+    expect(source).toContain('logInfo("internal_similarity_started"');
+    expect(source).toContain('logInfo("internal_similarity_completed"');
+    expect(source).toContain('logError("internal_similarity_pair_failed"');
+    expect(source).toContain("A pairwise internal similarity comparison failed and was skipped.");
+    expect(source).toContain("await upsertIntegrityFindings({");
+    expect(source).toContain("requireComparedSubmissionId: true");
     expect(storeSource).toContain("export async function upsertIntegrityFindings");
-    expect(storeSource).toContain("logError(errorLogMessage, error");
+    expect(storeSource).toContain("const INTEGRITY_FINDINGS_CONFLICT_TARGET =");
     expect(source).toContain("Internal similarity evidence could not be stored, but analysis completed.");
-    expect(storeSource).toContain(".filter((finding) =>");
+    expect(source).toContain('logWarn("check-plagiarism completed_with_limitations"');
+    expect(source).toContain("analysisLimitedSubmissionCount");
+    expect(source).toContain("warningCategories: categorizeIntegrityWarnings(warnings)");
+    expect(assignmentDetailSource).toContain("const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;");
+    expect(assignmentDetailSource).toContain("const batchSize = MAX_INTEGRITY_REQUEST_SUBMISSIONS;");
+    expect(configSource).toContain("[functions.check-plagiarism]");
+    expect(configSource).toContain("verify_jwt = true");
+    expect(configSource).toContain("[functions.grade-submission]");
+    expect(configSource).toContain("[functions.explain-grade]");
   });
 
   it("keeps the optional MOSS bridge non-fatal and backend-only", () => {
-    const source = readRepoFile("supabase/functions/check-plagiarism/index.ts");
+    const source = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const runnerSource = readRepoFile("supabase/functions/_shared/integrity-provider-runners.ts");
 
