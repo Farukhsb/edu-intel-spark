@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -1415,17 +1416,16 @@ Please review the feedback in the platform and let me know if you would like to 
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">{plagiarismSummary}</p>
-                {plagiarismFlags.map((flag, i) => (
-                  <div key={i} className="rounded-xl border bg-background p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
+                <Accordion type="multiple" className="space-y-3">
+                  {plagiarismFlags.map((flag, i) => (
+                    <AccordionItem key={i} value={`integrity-flag-${i}`} className="rounded-xl border bg-background px-3">
+                      <AccordionTrigger className="gap-3 py-3 hover:no-underline">
+                        <div className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+                          <div className="min-w-0">
                         <p className="text-sm font-medium">
                           {flag.student_a} ↔ {flag.student_b}
                         </p>
-                        <p className="mt-1 text-xs text-muted-foreground">{flag.reason}</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          Raw overlap {flag.overlap_analysis?.total_overlap || 0}% | Similarity risk {flag.similarity_score}% | Uncited {flag.overlap_analysis?.uncited_overlap || 0}% | Cited {flag.overlap_analysis?.cited_overlap || 0}% | AI {flag.ai_suspicion_score || 0}% | Baseline {flag.baseline_deviation_score || 0}% | Total risk {flag.total_risk_score || 0}%
-                        </p>
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{flag.reason}</p>
                       </div>
                       <Badge
                         variant={
@@ -1435,12 +1435,21 @@ Please review the feedback in the platform and let me know if you would like to 
                             ? "secondary"
                             : "outline"
                         }
+                        className="shrink-0"
                       >
                         {flag.total_risk_score || flag.similarity_score}% risk
                       </Badge>
-                    </div>
-                  </div>
-                ))}
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-3 pt-0">
+                        <p className="text-xs text-muted-foreground">{flag.reason}</p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Raw overlap {flag.overlap_analysis?.total_overlap || 0}% | Similarity risk {flag.similarity_score}% | Uncited {flag.overlap_analysis?.uncited_overlap || 0}% | Cited {flag.overlap_analysis?.cited_overlap || 0}% | AI {flag.ai_suspicion_score || 0}% | Baseline {flag.baseline_deviation_score || 0}% | Total risk {flag.total_risk_score || 0}%
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               </CardContent>
             </Card>
           )}
