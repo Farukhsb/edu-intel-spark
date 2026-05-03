@@ -96,12 +96,60 @@ const auditRows = [
   },
 ];
 
-const buildQueryResponse = (table: string) => {
+const largeProfiles = [
+  ...profiles,
+  ...Array.from({ length: 12 }, (_, index) => ({
+    id: `student-extra-${index + 1}`,
+    full_name: `Student Extra ${index + 1}`,
+    email: `extra${index + 1}@gradeai.test`,
+    role: "student",
+    created_at: `2026-04-${String((index % 9) + 10).padStart(2, "0")}T10:00:00.000Z`,
+  })),
+];
+
+const largeAssignments = [
+  ...assignments,
+  {
+    id: "assignment-2",
+    title: "Networks Report",
+    module_code: "CS202",
+    status: "draft",
+    due_date: null,
+    created_at: "2026-04-29T10:00:00.000Z",
+    lecturer_id: "lecturer-1",
+  },
+];
+
+const largeSubmissions = [
+  ...submissions,
+  ...Array.from({ length: 12 }, (_, index) => ({
+    id: `submission-extra-${index + 1}`,
+    assignment_id: index % 2 === 0 ? "assignment-1" : "assignment-2",
+    student_name: `Student Extra ${index + 1}`,
+    student_email: `extra${index + 1}@gradeai.test`,
+    status: index % 3 === 0 ? "submitted" : "released",
+    submitted_at: `2026-04-${String((index % 9) + 10).padStart(2, "0")}T11:00:00.000Z`,
+    file_name: index === 4 ? "target-file.pdf" : `essay-${index + 1}.pdf`,
+  })),
+];
+
+const buildQueryResponse = (
+  table: string,
+  options?: {
+    profilesData?: typeof profiles;
+    assignmentsData?: typeof assignments;
+    submissionsData?: typeof submissions;
+  },
+) => {
+  const profilesData = options?.profilesData ?? profiles;
+  const assignmentsData = options?.assignmentsData ?? assignments;
+  const submissionsData = options?.submissionsData ?? submissions;
+
   if (table === "profiles") {
     return {
       select: () => ({
         order: vi.fn().mockResolvedValue({
-          data: profiles,
+          data: profilesData,
           error: null,
         }),
       }),
@@ -112,12 +160,12 @@ const buildQueryResponse = (table: string) => {
     return {
       select: (_columns: string, options?: { count?: string; head?: boolean }) => {
         if (options?.head) {
-          return Promise.resolve({ count: assignments.length, error: null });
+          return Promise.resolve({ count: assignmentsData.length, error: null });
         }
 
         return {
           order: vi.fn().mockResolvedValue({
-            data: assignments,
+            data: assignmentsData,
             error: null,
           }),
         };
@@ -129,12 +177,12 @@ const buildQueryResponse = (table: string) => {
     return {
       select: (_columns: string, options?: { count?: string; head?: boolean }) => {
         if (options?.head) {
-          return Promise.resolve({ count: submissions.length, error: null });
+          return Promise.resolve({ count: submissionsData.length, error: null });
         }
 
         return {
           order: vi.fn().mockResolvedValue({
-            data: submissions,
+            data: submissionsData,
             error: null,
           }),
         };
@@ -144,7 +192,12 @@ const buildQueryResponse = (table: string) => {
 
   if (table === "moderation_cases") {
     return {
-      select: () => Promise.resolve({ count: 0, error: null }),
+      select: () => ({
+        order: vi.fn().mockResolvedValue({
+          data: [],
+          error: null,
+        }),
+      }),
     };
   }
 
@@ -157,6 +210,45 @@ const buildQueryResponse = (table: string) => {
               data: auditRows,
               error: null,
             }),
+          }),
+        }),
+      }),
+    };
+  }
+
+  if (table === "grade_audit_log") {
+    return {
+      select: () => ({
+        order: () => ({
+          limit: vi.fn().mockResolvedValue({
+            data: [],
+            error: null,
+          }),
+        }),
+      }),
+    };
+  }
+
+  if (table === "grades") {
+    return {
+      select: () => ({
+        order: () => ({
+          limit: vi.fn().mockResolvedValue({
+            data: [],
+            error: null,
+          }),
+        }),
+      }),
+    };
+  }
+
+  if (table === "communication_messages") {
+    return {
+      select: () => ({
+        order: () => ({
+          limit: vi.fn().mockResolvedValue({
+            data: [],
+            error: null,
           }),
         }),
       }),
@@ -191,7 +283,7 @@ describe("AdminDashboard", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("heading", { name: "User Management" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
     expect(screen.getByText("No role change")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Promote to Lecturer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Demote to Student" })).toBeInTheDocument();
@@ -218,5 +310,109 @@ describe("AdminDashboard", () => {
 
     expect(mocks.from).toHaveBeenCalledWith("admin_audit_log");
     expect(mocks.toastSuccess).toHaveBeenCalled();
+  });
+
+  it("opens an admin-safe user summary modal instead of routing students into lecturer-only pages", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard?view=users&filter=student"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
+    expect(screen.getByText("Profile record only")).toBeInTheDocument();
+    expect(screen.getByText("Sam Student")).toBeInTheDocument();
+    expect(screen.queryByText("Dr Ada Lecturer")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
+
+    expect(await screen.findByRole("heading", { name: "User summary" })).toBeInTheDocument();
+    expect(screen.getByText(/Admin-safe profile summary/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Sam Student").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("student@gradeai.test").length).toBeGreaterThan(0);
+  });
+
+  it("uses observational wording in system health instead of claiming definitive live service health", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard?view=system"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /System health/i })).toBeInTheDocument();
+    expect(screen.getByText("Read snapshot succeeded")).toBeInTheDocument();
+    expect(screen.getAllByText("No direct signal").length).toBeGreaterThan(0);
+    expect(screen.getByText(/direct grading-run telemetry is not yet exposed here/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Healthy$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Online$/)).not.toBeInTheDocument();
+  });
+
+  it("supports user search and pagination in the full users table", async () => {
+    mocks.from.mockImplementation((table: string) =>
+      buildQueryResponse(table, {
+        profilesData: largeProfiles,
+        assignmentsData: largeAssignments,
+        submissionsData: largeSubmissions,
+      }),
+    );
+
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard?view=users"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
+    expect(screen.getByText(/Users page 1 of 2/i)).toBeInTheDocument();
+    expect(screen.getByText("Student Extra 1")).toBeInTheDocument();
+    expect(screen.queryByText("Student Extra 12")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(await screen.findByText(/Users page 2 of 2/i)).toBeInTheDocument();
+    expect(screen.getByText("Student Extra 12")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search users"), {
+      target: { value: "extra12@gradeai.test" },
+    });
+
+    expect(await screen.findByText("Student Extra 12")).toBeInTheDocument();
+    expect(screen.queryByText("Student Extra 11")).not.toBeInTheDocument();
+  });
+
+  it("supports submission search in the full submissions table", async () => {
+    mocks.from.mockImplementation((table: string) =>
+      buildQueryResponse(table, {
+        profilesData: largeProfiles,
+        assignmentsData: largeAssignments,
+        submissionsData: largeSubmissions,
+      }),
+    );
+
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard?view=submissions"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /Recent submissions/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search submissions"), {
+      target: { value: "target-file.pdf" },
+    });
+
+    expect(await screen.findByText("target-file.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("essay-12.pdf")).not.toBeInTheDocument();
   });
 });
