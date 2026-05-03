@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import {
   buildGradeReleasedNotification,
   buildIntegrityCheckReadyNotification,
   buildSubmissionReceivedNotification,
-  sendWorkflowNotificationEmail,
+  dispatchWorkflowNotificationEmail,
   type DraftCommunicationMessage,
   queueCommunicationMessage,
 } from "@/lib/communications";
@@ -59,6 +59,20 @@ import {
   SubmissionListSection,
   WorkflowActionsSection,
 } from "@/pages/dashboard/assignment-detail/sections";
+import {
+  buildIntegrityClientOutcome,
+  deriveIntegrityCardPresentation,
+} from "@/pages/dashboard/assignment-detail/integrityUi";
+import { getModerationReleaseHandoffState } from "@/pages/dashboard/assignment-detail/moderationReleaseHandoff";
+import {
+  getAssignmentNotificationFocusState,
+  type AssignmentNotificationFocus,
+} from "@/pages/dashboard/assignment-detail/notificationFocus";
+import {
+  getLecturerAssignmentWorkflowReadiness,
+  getStudentAssignmentWorkflowReadiness,
+} from "@/pages/dashboard/assignment-detail/workflowReadiness";
+import { executeGradeRelease, summarizeGradeReleaseBatch } from "@/lib/gradeReleaseWorkflow";
 import { SubmissionReviewDialog } from "@/pages/dashboard/assignment-detail/review-dialog";
 import type {
   AssignmentDetailSubmission,
@@ -108,6 +122,8 @@ const buildRecommendedActionLabel = (value?: string) =>
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
 const PLAGIARISM_CHECK_URL = `${env.VITE_SUPABASE_URL}/functions/v1/check-plagiarism`;
 const GRADE_SUBMISSION_URL = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;
+const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;
+const INTEGRITY_RUNTIME_WARNING_THRESHOLD = 30;
 
 const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
   const candidate = `${submission.file_name ?? ""} ${submission.file_url ?? ""}`.toLowerCase();
@@ -117,6 +133,7 @@ const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { role, user, profile, isDemo } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -135,6 +152,24 @@ const AssignmentDetail = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const demoAssignmentSet = isDemo && id ? getDemoAssignmentSetById(id) : null;
+  const moderationReleaseFocus = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("source") === "moderation" && params.get("focus") === "release-ready";
+  }, [location.search]);
+  const assignmentNotificationFocus = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("source") !== "notification") return null;
+    const focus = params.get("focus");
+    if (
+      focus === "submission-review" ||
+      focus === "ai-results" ||
+      focus === "integrity-review" ||
+      focus === "release-follow-up"
+    ) {
+      return focus as AssignmentNotificationFocus;
+    }
+    return null;
+  }, [location.search]);
 
   const {
     assignment,
@@ -291,10 +326,18 @@ const AssignmentDetail = () => {
         },
       );
       if (insertedSubmission?.id) {
-        void sendWorkflowNotificationEmail({
+        void dispatchWorkflowNotificationEmail({
           category: "submission-received",
           assignmentId: assignment.id,
           submissionId: insertedSubmission.id,
+        }).then((result) => {
+          if (!result.ok) {
+            log.warn("Submission notification email failed", {
+              assignmentId: assignment.id,
+              submissionId: insertedSubmission.id,
+              status: result.status,
+            });
+          }
         }).catch(() => {
           log.warn("Submission notification email failed", {
             assignmentId: assignment.id,
@@ -607,13 +650,124 @@ const AssignmentDetail = () => {
       return;
     }
 
+    const results: Array<Awaited<ReturnType<typeof executeGradeRelease>>> = [];
     for (const sub of toRelease) {
-      try {
-        await supabase.from("submissions").update({ status: "released" as const }).eq("id", sub.id);
-        await queueGradeReleaseNotification(sub);
-      } catch {}
+      const grade = grades[sub.id];
+      const moderationCase = moderationCases[sub.id];
+      const { finalScore } = grade
+        ? resolveFinalGradeValues({ grade, moderationCase })
+        : { finalScore: null };
+
+      const result = await executeGradeRelease({
+        submissionId: sub.id,
+        markReleased: async () => {
+          const { error } = await supabase
+            .from("submissions")
+            .update({ status: "released" as const })
+            .eq("id", sub.id);
+
+          if (error) throw error;
+        },
+        logAudit: async () => {
+          if (!user) return false;
+
+          const { error } = await insertModerationAuditEntry(
+            supabase,
+            buildModerationAuditPayload({
+              submissionId: sub.id,
+              gradeId: grade?.id ?? null,
+              moderationCaseId: moderationCase?.id ?? null,
+              changedBy: user.id,
+              eventType: "grade_released",
+              actorRole: "lecturer",
+              previousValues: { status: sub.status, final_score: grade?.final_score ?? null },
+              newValues: { status: "released", final_score: finalScore },
+              reason: "Released to student after final approval.",
+            }),
+          );
+
+          if (error) {
+            log.warn("Failed to write grade release audit log", {
+              submissionId: sub.id,
+              moderationCaseId: moderationCase?.id ?? null,
+            });
+            return false;
+          }
+
+          return true;
+        },
+        queueNotification: async () => {
+          if (!assignment) return false;
+
+          const result = await queueCommunicationMessage(
+            buildGradeReleasedNotification({
+              studentName: sub.student_name || sub.student_email || "Student",
+              studentEmail: sub.student_email,
+              studentId: sub.student_id || undefined,
+              assignmentId: assignment.id,
+              assignmentTitle: assignment.title,
+            }),
+          );
+
+          return Boolean(result);
+        },
+        sendEmail: async () => {
+          if (!assignment) return false;
+
+          const emailResult = await dispatchWorkflowNotificationEmail({
+            category: "grade-released",
+            assignmentId: assignment.id,
+            submissionId: sub.id,
+          });
+          return emailResult.ok;
+        },
+      });
+
+      if (result.released && !result.notificationSaved) {
+        log.warn("Grade release notification did not persist", {
+          assignmentId: assignment?.id ?? null,
+          submissionId: sub.id,
+        });
+      }
+
+      if (result.released && !result.emailQueued) {
+        log.warn("Grade release notification email failed", {
+          assignmentId: assignment?.id ?? null,
+          submissionId: sub.id,
+        });
+      }
+
+      results.push(result);
     }
-    toast.success(`${toRelease.length} grade(s) released to students`);
+
+    const summary = summarizeGradeReleaseBatch(results);
+
+    if (summary.releasedCount === 0) {
+      toast.error("No grades were released");
+      return;
+    }
+
+    const warnings = [
+      summary.updateFailureCount > 0
+        ? `${summary.updateFailureCount} release update${summary.updateFailureCount === 1 ? "" : "s"} failed`
+        : null,
+      summary.auditFailureCount > 0
+        ? `${summary.auditFailureCount} audit entr${summary.auditFailureCount === 1 ? "y" : "ies"} failed`
+        : null,
+      summary.notificationFailureCount > 0
+        ? `${summary.notificationFailureCount} in-app release notice${summary.notificationFailureCount === 1 ? "" : "s"} failed`
+        : null,
+      summary.emailFailureCount > 0
+        ? `${summary.emailFailureCount} email notification${summary.emailFailureCount === 1 ? "" : "s"} failed`
+        : null,
+    ].filter(Boolean);
+
+    if (warnings.length > 0) {
+      toast.warning(`${summary.releasedCount} grade(s) released. ${warnings.join("; ")}.`);
+    } else {
+      toast.success(`${summary.releasedCount} grade(s) released to students`);
+    }
+
     setSelected(new Set());
     await reloadSubmissions();
   };
@@ -635,7 +789,17 @@ const AssignmentDetail = () => {
         return;
       }
 
-      const batchSize = 3;
+      if (submissions.length > MAX_INTEGRITY_REQUEST_SUBMISSIONS) {
+        toast.warning(
+          `This assignment has ${submissions.length} submissions. Integrity scanning will run in limited large-cohort mode and may skip full peerwise comparison.`,
+        );
+      } else if (submissions.length > INTEGRITY_RUNTIME_WARNING_THRESHOLD) {
+        toast.warning(
+          `This assignment has ${submissions.length} submissions. Integrity scanning may take longer than usual.`,
+        );
+      }
+
+      const batchSize = MAX_INTEGRITY_REQUEST_SUBMISSIONS;
       const collectedFlags: PlagiarismFlag[] = [];
       const collectedSummaries: string[] = [];
       const collectedWarnings: string[] = [];
@@ -711,17 +875,15 @@ const AssignmentDetail = () => {
         );
       });
 
-      const summaryParts = [
-        collectedSummaries[0] || "Analysis complete",
-        ...Array.from(new Set(collectedWarnings)),
-      ];
-
-      if (failedBatches > 0) {
-        summaryParts.push(`${failedBatches} batch(es) could not be analysed and were skipped.`);
-      }
+      const outcome = buildIntegrityClientOutcome({
+        flags: uniqueFlags,
+        summaries: collectedSummaries,
+        warnings: collectedWarnings,
+        failedBatches,
+      });
 
       setPlagiarismFlags(uniqueFlags);
-      setPlagiarismSummary(summaryParts.filter(Boolean).join(" "));
+      setPlagiarismSummary(outcome.summary);
 
       if (successfulBatches > 0) {
         await persistWorkflowNotification(
@@ -737,20 +899,7 @@ const AssignmentDetail = () => {
         );
       }
 
-      if (uniqueFlags.length === 0) {
-        if (collectedWarnings.length > 0 || failedBatches > 0) {
-          toast.warning("Integrity analysis completed with limitations");
-        } else {
-          toast.success("No suspicious similarities found");
-        }
-      } else {
-        toast.warning(`${uniqueFlags.length} potential issue(s) flagged`);
-      }
-      if (failedBatches > 0) {
-        toast.warning(`${failedBatches} plagiarism batch(es) failed and were skipped`);
-      } else if (collectedWarnings.length > 0) {
-        toast.warning(collectedWarnings[0]);
-      }
+      toast[outcome.toastTone](outcome.toastMessage);
     } catch (err: unknown) {
       toast.error(err?.message || "Plagiarism check failed");
     }
@@ -1135,10 +1284,18 @@ Please review the feedback in the platform and let me know if you would like to 
       toast.error("Could not save release note");
       return;
     }
-    void sendWorkflowNotificationEmail({
+    void dispatchWorkflowNotificationEmail({
       category: "grade-released",
       assignmentId: assignment.id,
       submissionId: sub.id,
+    }).then((emailResult) => {
+      if (!emailResult.ok) {
+        log.warn("Grade release notification email failed", {
+          assignmentId: assignment.id,
+          submissionId: sub.id,
+          status: emailResult.status,
+        });
+      }
     }).catch(() => {
       log.warn("Grade release notification email failed", {
         assignmentId: assignment.id,
@@ -1148,21 +1305,155 @@ Please review the feedback in the platform and let me know if you would like to 
     toast.success("Grade release note saved");
   };
 
+  const handleSingleRelease = async (sub: AssignmentDetailSubmission) => {
+    if (isDemo) {
+      toast.info("Grade release is disabled in demo mode");
+      return;
+    }
+    if (!assignment) {
+      toast.error("Failed to release grade");
+      return;
+    }
+
+    const grade = grades[sub.id];
+    const moderationCase = moderationCases[sub.id];
+    const { finalScore } = grade
+      ? resolveFinalGradeValues({ grade, moderationCase })
+      : { finalScore: null };
+
+    const result = await executeGradeRelease({
+      submissionId: sub.id,
+      markReleased: async () => {
+        const { error } = await supabase
+          .from("submissions")
+          .update({ status: "released" as const })
+          .eq("id", sub.id);
+
+        if (error) throw error;
+      },
+      logAudit: async () => {
+        if (!user) return false;
+
+        const { error } = await insertModerationAuditEntry(
+          supabase,
+          buildModerationAuditPayload({
+            submissionId: sub.id,
+            gradeId: grade?.id ?? null,
+            moderationCaseId: moderationCase?.id ?? null,
+            changedBy: user.id,
+            eventType: "grade_released",
+            actorRole: "lecturer",
+            previousValues: { status: sub.status, final_score: grade?.final_score ?? null },
+            newValues: { status: "released", final_score: finalScore },
+            reason: "Released to student after final approval.",
+          }),
+        );
+
+        if (error) {
+          log.warn("Failed to write single grade release audit log", {
+            submissionId: sub.id,
+            moderationCaseId: moderationCase?.id ?? null,
+          });
+          return false;
+        }
+
+        return true;
+      },
+      queueNotification: async () => {
+        const savedNotification = await queueCommunicationMessage(
+          buildGradeReleasedNotification({
+            studentName: sub.student_name || sub.student_email || "Student",
+            studentEmail: sub.student_email,
+            studentId: sub.student_id || undefined,
+            assignmentId: assignment.id,
+            assignmentTitle: assignment.title,
+          }),
+        );
+
+        return Boolean(savedNotification);
+      },
+      sendEmail: async () => {
+        const emailResult = await dispatchWorkflowNotificationEmail({
+          category: "grade-released",
+          assignmentId: assignment.id,
+          submissionId: sub.id,
+        });
+
+        return emailResult.ok;
+      },
+    });
+
+    if (!result.released) {
+      toast.error("Failed to release grade");
+      return;
+    }
+
+    const releaseSummary = summarizeGradeReleaseBatch([result]);
+    const warnings: string[] = [];
+
+    if (releaseSummary.auditFailureCount > 0) {
+      warnings.push("audit log was not saved");
+    }
+    if (releaseSummary.notificationFailureCount > 0) {
+      warnings.push("release note was not saved");
+    }
+    if (releaseSummary.emailFailureCount > 0) {
+      warnings.push("release email was not queued");
+    }
+
+    if (warnings.length > 0) {
+      toast.warning(`Grade released to student. ${warnings.join("; ")}.`);
+      return;
+    }
+
+    toast.success("Grade released to student");
+  };
+
   const summary = useMemo(() => {
       return getAssessmentSummary(submissions);
     }, [submissions]);
+  const moderationReleaseHandoffState = useMemo(
+    () => getModerationReleaseHandoffState(submissions),
+    [submissions],
+  );
+  const assignmentNotificationFocusState = useMemo(
+    () => getAssignmentNotificationFocusState(assignmentNotificationFocus, submissions),
+    [assignmentNotificationFocus, submissions],
+  );
+  const notificationFocusedSubmissionIds = assignmentNotificationFocusState?.visibleSubmissionIds;
 
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((submission) => {
+      const matchesNotificationFocus =
+        !notificationFocusedSubmissionIds ||
+        notificationFocusedSubmissionIds.includes(submission.id);
       const matchesSearch =
         !searchQuery ||
         [submission.student_name, submission.student_email, submission.file_name]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
       const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      return matchesNotificationFocus && matchesSearch && matchesStatus;
     });
-  }, [searchQuery, statusFilter, submissions]);
+  }, [notificationFocusedSubmissionIds, searchQuery, statusFilter, submissions]);
+
+  useEffect(() => {
+    if (!moderationReleaseFocus || role !== "lecturer") return;
+
+    setStatusFilter(moderationReleaseHandoffState.statusFilter);
+    setSelected(new Set(moderationReleaseHandoffState.selectedSubmissionIds));
+  }, [moderationReleaseFocus, moderationReleaseHandoffState, role]);
+
+  useEffect(() => {
+    if (!assignmentNotificationFocusState || role !== "lecturer") return;
+
+    setStatusFilter(assignmentNotificationFocusState.statusFilter);
+    setSelected(new Set(assignmentNotificationFocusState.selectedSubmissionIds));
+  }, [assignmentNotificationFocusState, role]);
+  const integrityCard = deriveIntegrityCardPresentation({
+    flags: plagiarismFlags,
+    summary: plagiarismSummary,
+  });
 
   if (loading)
     return (
@@ -1191,8 +1482,40 @@ Please review the feedback in the platform and let me know if you would like to 
     hasExistingSubmission,
     hasUser: Boolean(currentUserId),
   });
+  const currentStudentSubmission = !isLecturer
+    ? [...submissions]
+        .filter((s) => s.student_id === currentUserId || (currentUserEmail && s.student_email === currentUserEmail))
+        .sort((left, right) => new Date(right.submitted_at).getTime() - new Date(left.submitted_at).getTime())[0] ?? null
+    : null;
   const selectedStatuses = submissions.filter((s) => selected.has(s.id)).map((s) => s.status);
   const selectedWorkflowState = getSelectedWorkflowActionState(selectedStatuses);
+  const integrityRuntimeWarning =
+    submissions.length > MAX_INTEGRITY_REQUEST_SUBMISSIONS
+      ? `Large cohort: ${submissions.length} submissions. The backend will switch to limited large-cohort mode and may skip full peerwise comparison.`
+      : submissions.length > INTEGRITY_RUNTIME_WARNING_THRESHOLD
+        ? `Large cohort: ${submissions.length} submissions. Integrity scanning may take longer than usual.`
+        : null;
+  const workflowReadiness = isLecturer
+    ? getLecturerAssignmentWorkflowReadiness({
+        statuses: submissions.map((submission) => submission.status),
+        hasReleaseReady: submissions.some((submission) => canReleaseStatus(submission.status)),
+        hasApprovable: submissions.some(
+          (submission) =>
+            submission.status === "ai_graded" ||
+            submission.status === "moderated" ||
+            submission.status === "under_review",
+        ),
+        integrityRuntimeWarning,
+      })
+    : getStudentAssignmentWorkflowReadiness({
+        currentStatus: currentStudentSubmission?.status ?? null,
+      });
+
+  const openReleasedResult = (submission: AssignmentDetailSubmission) => {
+    navigate(
+      `/dashboard/explain-grade?assignment=${encodeURIComponent(submission.assignment_id)}&submission=${encodeURIComponent(submission.id)}&source=assignment-detail`,
+    );
+  };
 
   const exportReviewedReports = () => {
     const reviewedSubmissions = submissions.filter((submission) => {
@@ -1337,6 +1660,88 @@ Please review the feedback in the platform and let me know if you would like to 
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
         <div className="space-y-6">
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Reporting Readiness</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-lg border bg-background/70 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+                <p className="mt-2 text-sm font-semibold">{workflowReadiness.postureLabel}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isLecturer
+                    ? "Based on current submission states, moderation blockers, release readiness, and integrity runtime limits."
+                    : "Based on your current submission state in the assessment workflow."}
+                </p>
+              </div>
+              <div className="rounded-lg border bg-background/70 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+                <p className="mt-2 text-sm font-semibold">{workflowReadiness.likelyChallenge}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isLecturer
+                    ? "This is the workflow line most likely to need immediate action or explanation."
+                    : "This is the current checkpoint most likely to affect when your result becomes available."}
+                </p>
+              </div>
+              <div className="rounded-lg border bg-background/70 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+                <p className="mt-2 text-sm font-semibold">{workflowReadiness.bestNextAction}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isLecturer
+                    ? "Use this to decide whether to review, moderate, approve, or release next."
+                    : "Use this to decide whether to submit now or wait for the next workflow step."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {moderationReleaseFocus && isLecturer && (
+            <Card data-testid="assignment-moderation-release-focus" className="border-primary/20 bg-primary/5 shadow-sm">
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium">{moderationReleaseHandoffState.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {moderationReleaseHandoffState.description}
+                    </p>
+                  </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setSelected(new Set());
+                    navigate(location.pathname, { replace: true });
+                  }}
+                >
+                  Show all submissions
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {assignmentNotificationFocusState && isLecturer && (
+            <Card data-testid="assignment-notification-focus" className="border-primary/20 bg-primary/5 shadow-sm">
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">{assignmentNotificationFocusState.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {assignmentNotificationFocusState.description}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigate(location.pathname, { replace: true });
+                  }}
+                >
+                  Clear notice focus
+                </Button>
+              </CardContent>
+            </Card>
+          )}
           <WorkflowActionsSection
             isDemo={isDemo}
             isLecturer={isLecturer}
@@ -1347,9 +1752,12 @@ Please review the feedback in the platform and let me know if you would like to 
             uploading={uploading}
             uploadProgress={uploadProgress}
             currentUserId={currentUserId}
+            currentStudentSubmission={currentStudentSubmission}
+            openReleasedResult={openReleasedResult}
             handleBulkUpload={handleBulkUpload}
             handlePlagiarismCheck={handlePlagiarismCheck}
             checkingPlagiarism={checkingPlagiarism}
+            integrityRuntimeWarning={integrityRuntimeWarning}
             submissionsCount={submissions.length}
             handleAIGrade={handleAIGrade}
             selectedWorkflowState={selectedWorkflowState}
@@ -1381,9 +1789,11 @@ Please review the feedback in the platform and let me know if you would like to 
             openModeration={() => navigate("/dashboard/moderation")}
             openReview={openReview}
             approveSubmission={approveSubmission}
+            releaseSubmission={handleSingleRelease}
             loadSubmissions={reloadSubmissions}
             queueFeedbackSummary={queueFeedbackSummary}
             queueGradeReleaseNotification={queueGradeReleaseNotification}
+            openReleasedResult={openReleasedResult}
           />
         </div>
 
@@ -1407,15 +1817,42 @@ Please review the feedback in the platform and let me know if you would like to 
             </Card>
           )}
 
-          {plagiarismFlags.length > 0 && (
-            <Card className="border-warning/30 bg-warning/5 shadow-sm">
+          {integrityCard.shouldShowCard && (
+            <Card
+              className={
+                integrityCard.cardTone === "clear"
+                  ? "border-emerald-500/20 bg-emerald-500/5 shadow-sm"
+                  : "border-warning/30 bg-warning/5 shadow-sm"
+              }
+            >
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <AlertTriangle className="h-4 w-4 text-warning" /> Integrity Flags
+                  <AlertTriangle className="h-4 w-4 text-warning" /> Integrity Check Results
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">{plagiarismSummary}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">{plagiarismSummary}</p>
+                  {integrityCard.badgeLabel ? (
+                    <Badge
+                      variant={
+                        integrityCard.cardTone === "flagged"
+                          ? "destructive"
+                          : integrityCard.cardTone === "limited"
+                            ? "secondary"
+                            : "outline"
+                      }
+                      className="shrink-0"
+                    >
+                      {integrityCard.badgeLabel}
+                    </Badge>
+                  ) : null}
+                </div>
+                {integrityCard.cardTone === "limited" && plagiarismFlags.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    No pairwise flags were produced, but this run had limited coverage. Review the notes above before treating the result as clear.
+                  </p>
+                ) : null}
                 <Accordion type="multiple" className="space-y-3">
                   {plagiarismFlags.map((flag, i) => (
                     <AccordionItem key={i} value={`integrity-flag-${i}`} className="rounded-xl border bg-background px-3">

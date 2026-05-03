@@ -26,6 +26,7 @@ import {
   formatSubmissionNotificationEmail,
 } from "../../supabase/functions/_shared/email";
 import {
+  dispatchWorkflowNotificationEmail,
   WorkflowEmailRequestSchema,
   sendWorkflowNotificationEmail,
 } from "@/lib/communications";
@@ -57,11 +58,12 @@ describe("workflow email notifications", () => {
     const email = formatGradeReleasedEmail({
       studentName: "Sam Student",
       assignmentTitle: "Algorithms Essay",
-      assignmentUrl: "https://gradeai.test/dashboard/assignments/assignment-1",
+      assignmentUrl: "https://gradeai.test/dashboard/explain-grade?assignment=assignment-1&submission=submission-1&source=email",
     });
 
     expect(email.subject).toBe("Feedback released");
     expect(email.text).toContain("Algorithms Essay");
+    expect(email.text).toContain("/dashboard/explain-grade?");
     expect(email.text).not.toMatch(forbiddenContentPattern);
     expect(email.html).not.toMatch(forbiddenContentPattern);
   });
@@ -100,6 +102,49 @@ describe("workflow email notifications", () => {
     expect(warnMock).toHaveBeenCalled();
   });
 
+  it("reports duplicate workflow emails without treating them as failures", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        skipped: true,
+        reason: "duplicate_notification",
+      },
+      error: null,
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "duplicate",
+      reason: "duplicate_notification",
+    });
+  });
+
+  it("reports invocation failures as failed workflow email dispatches", async () => {
+    invokeMock.mockResolvedValue({
+      data: null,
+      error: { message: "network issue" },
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: "failed",
+      reason: "invoke_failed",
+    });
+    expect(warnMock).toHaveBeenCalled();
+  });
+
   it("escapes dynamic HTML values while keeping plain text readable", () => {
     const assignmentTitle = `<Algorithms & "Trees">`;
     const studentName = `Sam <Student>`;
@@ -124,12 +169,12 @@ describe("workflow email notifications", () => {
     const email = formatGradeReleasedEmail({
       studentName: `Ari "Student"`,
       assignmentTitle: `Graphs <Final>`,
-      assignmentUrl: "https://gradeai.test/dashboard/assignments/assignment-2?source=bell&view=student",
+      assignmentUrl: "https://gradeai.test/dashboard/explain-grade?assignment=assignment-2&submission=submission-2&source=email",
     });
 
     expect(email.html).toContain("Graphs &lt;Final&gt;");
     expect(email.html).toContain("Ari &quot;Student&quot;");
-    expect(email.html).toContain("source=bell&amp;view=student");
+    expect(email.html).toContain("source=email");
     expect(email.text).toContain("Graphs <Final>");
   });
 });

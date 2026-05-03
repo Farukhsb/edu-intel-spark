@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -65,9 +65,12 @@ describe("AssignmentDetail demo data isolation", () => {
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
     expect(screen.getByText("Demo Mode — synthetic sample data")).toBeInTheDocument();
     expect(screen.getByText("AI in Higher Education Essay Workflow")).toBeInTheDocument();
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Active review position")).toBeInTheDocument();
+    expect(screen.getByText("Open moderation-linked submissions and clear blocked review cases")).toBeInTheDocument();
     expect(screen.getByText("Workflow Actions")).toBeInTheDocument();
     expect(screen.getByText("Rubric")).toBeInTheDocument();
-    expect(screen.getByText("Integrity Flags")).toBeInTheDocument();
+    expect(screen.getByText("Integrity Check Results")).toBeInTheDocument();
     expect(screen.getByText(/Review what AI receives/)).toBeInTheDocument();
     expect(screen.getByText("Daniel Okafor")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
@@ -95,10 +98,88 @@ describe("AssignmentDetail demo data isolation", () => {
     );
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Released result position")).toBeInTheDocument();
+    expect(screen.getByText("Open the released result and review the feedback summary")).toBeInTheDocument();
+    expect(screen.getByText("Released result available")).toBeInTheDocument();
+    expect(screen.getAllByText("Open Released Result").length).toBeGreaterThan(0);
     expect(screen.getByText("Open file")).toBeInTheDocument();
     expect(screen.getByText("An excellent critical analysis of AI in higher education. The essay is clear, balanced, and well-argued, and it makes a persuasive case that AI should be used to support academic judgement rather than replace it. To improve further, add one slightly more developed institutional governance example.")).toBeInTheDocument();
     expect(screen.queryByText("Daniel Okafor")).not.toBeInTheDocument();
-    expect(screen.queryByText("Integrity Flags")).not.toBeInTheDocument();
+    expect(screen.queryByText("Integrity Check Results")).not.toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("falls forward to released submissions when an older moderation handoff has already completed", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=moderation&focus=release-ready`]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("assignment-moderation-release-focus")).toBeInTheDocument();
+    expect(screen.getByText("Opened from moderation handoff after release")).toBeInTheDocument();
+    expect(screen.getByText("The earlier moderation handoff has already completed, so the list is focused on submissions that were released to students.")).toBeInTheDocument();
+    expect(screen.queryByText("No submissions match this view")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Show all submissions"));
+    expect(await screen.findByText("Daniel Okafor")).toBeInTheDocument();
+  });
+
+  it("shows a lecturer notification-focus banner when opened from a workflow notice", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=release-follow-up`]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("assignment-notification-focus")).toBeInTheDocument();
+    expect(screen.getByText("Opened from release follow-up notice")).toBeInTheDocument();
+    expect(screen.getByText("This assignment notification points to the released-grade follow-up state for this workflow.")).toBeInTheDocument();
+  });
+
+  it("falls forward from an older lecturer notice into the latest released workflow stage", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=submission-review`]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("assignment-notification-focus")).toBeInTheDocument();
+    expect(screen.getByText("Opened from an earlier notice after release")).toBeInTheDocument();
+    expect(screen.getByText("The earlier workflow notice has already been overtaken by released results, so the list is focused on submissions already released to students.")).toBeInTheDocument();
+    expect(screen.queryByText("Daniel Okafor")).not.toBeInTheDocument();
+  });
+
+  it("does not offer stale approval actions on AI-graded submissions before first review", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("submission-card-demo-submission-1")).toBeInTheDocument();
+    expect(screen.getByTestId("submission-review-demo-submission-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("submission-approve-demo-submission-1")).not.toBeInTheDocument();
   });
 });

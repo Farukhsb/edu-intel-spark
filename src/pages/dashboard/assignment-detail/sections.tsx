@@ -27,7 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import {
   getSelectedWorkflowActionState,
   getSubmissionDisplayState,
@@ -119,6 +118,54 @@ const statusConfig: Record<
   },
 };
 
+const getStudentWorkflowJourney = (status: SubmissionStatus | null) => {
+  if (!status) {
+    return {
+      badge: "Ready",
+      title: "Ready to submit",
+      description: "Upload your work once to enter the grading and review workflow.",
+    };
+  }
+
+  if (status === "released") {
+    return {
+      badge: "Released",
+      title: "Released result available",
+      description: "Your final result has been released. You can now review the feedback and explanation.",
+    };
+  }
+
+  if (status === "approved") {
+    return {
+      badge: "Approved",
+      title: "Awaiting release",
+      description: "Your submission has been approved and is waiting for final release to students.",
+    };
+  }
+
+  if (status === "moderation_pending" || status === "moderation_in_progress" || status === "escalated") {
+    return {
+      badge: "Moderation",
+      title: "Under moderation",
+      description: "Your submission is still moving through the moderation workflow before a final result can be released.",
+    };
+  }
+
+  if (status === "ai_graded" || status === "first_review" || status === "moderated" || status === "under_review") {
+    return {
+      badge: "Review",
+      title: "Awaiting final review",
+      description: "Marking is in progress and the released result is not available yet.",
+    };
+  }
+
+  return {
+    badge: "Submitted",
+    title: "Submission received",
+    description: "Your file has been received and is now progressing through the assessment workflow.",
+  };
+};
+
 export const WorkflowActionsSection = ({
   isDemo,
   isLecturer,
@@ -132,6 +179,7 @@ export const WorkflowActionsSection = ({
   handleBulkUpload,
   handlePlagiarismCheck,
   checkingPlagiarism,
+  integrityRuntimeWarning,
   submissionsCount,
   handleAIGrade,
   selectedWorkflowState,
@@ -139,6 +187,8 @@ export const WorkflowActionsSection = ({
   selectedSize,
   handleReleaseGrades,
   handleBulkApprove,
+  currentStudentSubmission,
+  openReleasedResult,
   searchQuery,
   setSearchQuery,
   statusFilter,
@@ -159,6 +209,7 @@ export const WorkflowActionsSection = ({
   handleBulkUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   handlePlagiarismCheck: () => void;
   checkingPlagiarism: boolean;
+  integrityRuntimeWarning: string | null;
   submissionsCount: number;
   handleAIGrade: () => void;
   selectedWorkflowState: WorkflowActionState;
@@ -166,6 +217,8 @@ export const WorkflowActionsSection = ({
   selectedSize: number;
   handleReleaseGrades: () => void;
   handleBulkApprove: () => void;
+  currentStudentSubmission: AssignmentDetailSubmission | null;
+  openReleasedResult: (submission: AssignmentDetailSubmission) => void;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   statusFilter: "all" | SubmissionStatus;
@@ -173,7 +226,10 @@ export const WorkflowActionsSection = ({
   exportReviewedReports: () => void;
   gradingElapsed: number;
   gradingCount: number;
-}) => (
+}) => {
+  const studentJourney = !isLecturer ? getStudentWorkflowJourney(currentStudentSubmission?.status ?? null) : null;
+
+  return (
   <Card className="shadow-sm">
     <CardHeader className="pb-3">
       <CardTitle className="text-base">Workflow Actions</CardTitle>
@@ -187,7 +243,33 @@ export const WorkflowActionsSection = ({
       {!isLecturer ? (
         <>
           <input ref={fileInputRef} type="file" className="hidden" onChange={handleStudentSubmit} />
-          <div className="flex flex-col gap-3 rounded-xl border border-dashed p-5">
+          <div className="space-y-3">
+            {studentJourney && (
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={currentStudentSubmission?.status === "released" ? "default" : "outline"} className="text-xs">
+                    {studentJourney.badge}
+                  </Badge>
+                  <p className="text-sm font-medium">{studentJourney.title}</p>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{studentJourney.description}</p>
+                {currentStudentSubmission?.submitted_at && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Latest submission: {safeFormatDate(currentStudentSubmission.submitted_at, "MMM d, yyyy 'at' HH:mm")}
+                  </p>
+                )}
+                {currentStudentSubmission?.status === "released" && (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    onClick={() => openReleasedResult(currentStudentSubmission)}
+                  >
+                    Open Released Result
+                  </Button>
+                )}
+              </div>
+            )}
+            <div className="flex flex-col gap-3 rounded-xl border border-dashed p-5">
             <div>
               <p className="text-sm font-medium">Submit your work</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -202,6 +284,7 @@ export const WorkflowActionsSection = ({
               {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               {uploading ? `Uploading... ${uploadProgress}%` : studentSubmissionAvailability.ctaLabel}
             </Button>
+          </div>
           </div>
         </>
       ) : (
@@ -253,6 +336,11 @@ export const WorkflowActionsSection = ({
                 : `Approve${selectedSize > 0 ? ` (${selectedSize})` : ""}`}
             </Button>
           </div>
+          {integrityRuntimeWarning ? (
+            <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">
+              {integrityRuntimeWarning}
+            </div>
+          ) : null}
 
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_auto]">
             <div className="relative">
@@ -317,7 +405,8 @@ export const WorkflowActionsSection = ({
       )}
     </CardContent>
   </Card>
-);
+  );
+};
 
 const SubmissionCardItem = ({
   submission,
@@ -332,9 +421,11 @@ const SubmissionCardItem = ({
   openModeration,
   openReview,
   approveSubmission,
+  releaseSubmission,
   loadSubmissions,
   queueFeedbackSummary,
   queueGradeReleaseNotification,
+  openReleasedResult,
 }: {
   submission: AssignmentDetailSubmission;
   assignment: AssignmentDetailAssignment;
@@ -348,9 +439,11 @@ const SubmissionCardItem = ({
   openModeration: () => void;
   openReview: (submission: AssignmentDetailSubmission) => void;
   approveSubmission: (submission: AssignmentDetailSubmission) => Promise<boolean>;
+  releaseSubmission: (submission: AssignmentDetailSubmission) => Promise<void>;
   loadSubmissions: () => Promise<void>;
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
+  openReleasedResult: (submission: AssignmentDetailSubmission) => void;
 }) => {
   const submissionDisplay = getSubmissionDisplayState({
     status: submission.status,
@@ -513,12 +606,7 @@ const SubmissionCardItem = ({
                   disabled={isDemo}
                   onClick={async () => {
                     try {
-                      await supabase
-                        .from("submissions")
-                        .update({ status: "released" as const })
-                        .eq("id", submission.id);
-                      await queueGradeReleaseNotification(submission);
-                      toast.success("Grade released to student");
+                      await releaseSubmission(submission);
                       await loadSubmissions();
                     } catch {
                       toast.error("Failed to release grade");
@@ -539,6 +627,11 @@ const SubmissionCardItem = ({
                 </Button>
               )}
             </div>
+          )}
+          {!isLecturer && submission.status === "released" && (
+            <Button size="sm" onClick={() => openReleasedResult(submission)}>
+              Open Released Result
+            </Button>
           )}
         </div>
       </div>
@@ -561,9 +654,11 @@ export const SubmissionListSection = ({
   openModeration,
   openReview,
   approveSubmission,
+  releaseSubmission,
   loadSubmissions,
   queueFeedbackSummary,
   queueGradeReleaseNotification,
+  openReleasedResult,
 }: {
   submissions: AssignmentDetailSubmission[];
   filteredSubmissions: AssignmentDetailSubmission[];
@@ -579,9 +674,11 @@ export const SubmissionListSection = ({
   openModeration: () => void;
   openReview: (submission: AssignmentDetailSubmission) => void;
   approveSubmission: (submission: AssignmentDetailSubmission) => Promise<boolean>;
+  releaseSubmission: (submission: AssignmentDetailSubmission) => Promise<void>;
   loadSubmissions: () => Promise<void>;
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
+  openReleasedResult: (submission: AssignmentDetailSubmission) => void;
 }) => (
   <Card className="shadow-sm">
     <CardHeader className="pb-3">
@@ -629,9 +726,11 @@ export const SubmissionListSection = ({
               openModeration={openModeration}
               openReview={openReview}
               approveSubmission={approveSubmission}
+              releaseSubmission={releaseSubmission}
               loadSubmissions={loadSubmissions}
               queueFeedbackSummary={queueFeedbackSummary}
               queueGradeReleaseNotification={queueGradeReleaseNotification}
+              openReleasedResult={openReleasedResult}
             />
           ))}
         </div>

@@ -47,9 +47,14 @@ export const REGRADABLE_WORKFLOW_STATUSES: AssessmentWorkflowStatus[] = [
 ];
 
 export const APPROVABLE_WORKFLOW_STATUSES: AssessmentWorkflowStatus[] = [
-  "ai_graded",
   "first_review",
   "moderated",
+  "under_review",
+];
+
+export const FIRST_REVIEW_EDITABLE_STATUSES: AssessmentWorkflowStatus[] = [
+  "ai_graded",
+  "first_review",
   "under_review",
 ];
 
@@ -93,6 +98,9 @@ export const isRegradableWorkflowStatus = (status: string) =>
 
 export const isApprovableWorkflowStatus = (status: string) =>
   APPROVABLE_WORKFLOW_STATUSES.includes(status as AssessmentWorkflowStatus);
+
+export const isFirstReviewEditableStatus = (status: string) =>
+  FIRST_REVIEW_EDITABLE_STATUSES.includes(status as AssessmentWorkflowStatus);
 
 export const isModerationBlockingStatus = (status: string) =>
   MODERATION_BLOCKING_STATUSES.includes(status as AssessmentWorkflowStatus);
@@ -148,14 +156,15 @@ export const getSubmissionDisplayState = ({
     : { finalScore: null, finalFeedback: null };
   const studentVisible = isStudentGradeVisible(status);
   const releaseReady = canReleaseStatus(status);
-  const lecturerReviewable = hasGrade && !releaseReady && !studentVisible;
+  const canEditFirstReview = hasGrade && isFirstReviewEditableStatus(status);
+  const canApprove = hasGrade && isApprovableWorkflowStatus(status);
 
   return {
     scoreToDisplay: finalScore,
     studentVisibleFeedback: studentVisible ? finalFeedback : null,
     showFeedbackSummary: isLecturer && hasGrade,
-    showFirstReview: isLecturer && lecturerReviewable,
-    showApprove: isLecturer && lecturerReviewable,
+    showFirstReview: isLecturer && canEditFirstReview,
+    showApprove: isLecturer && canApprove,
     showRelease: isLecturer && releaseReady,
     showReleaseNote: isLecturer && studentVisible,
   };

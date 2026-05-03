@@ -44,7 +44,8 @@ describe("assessment workflow rules", () => {
     expect(isRegradableWorkflowStatus("approved")).toBe(true);
     expect(isRegradableWorkflowStatus("released")).toBe(false);
 
-    expect(isApprovableWorkflowStatus("ai_graded")).toBe(true);
+    expect(isApprovableWorkflowStatus("ai_graded")).toBe(false);
+    expect(isApprovableWorkflowStatus("first_review")).toBe(true);
     expect(isApprovableWorkflowStatus("moderated")).toBe(true);
     expect(isApprovableWorkflowStatus("approved")).toBe(false);
   });
@@ -61,7 +62,7 @@ describe("assessment workflow rules", () => {
     ).toEqual({
       submittedCount: 1,
       regradableCount: 4,
-      approvableCount: 2,
+      approvableCount: 1,
       releaseReadyCount: 1,
       hasRegradable: true,
       hasApprovable: true,
@@ -84,6 +85,27 @@ describe("assessment workflow rules", () => {
       studentVisibleFeedback: null,
       showFeedbackSummary: true,
       showFirstReview: true,
+      showApprove: false,
+      showRelease: false,
+      showReleaseNote: false,
+    });
+  });
+
+  it("shows approval without first-review editing once work has moved into moderation-complete state", () => {
+    expect(
+      getSubmissionDisplayState({
+        status: "moderated",
+        grade: {
+          ai_score: 58,
+          ai_feedback: "AI feedback",
+        },
+        isLecturer: true,
+      }),
+    ).toEqual({
+      scoreToDisplay: 58,
+      studentVisibleFeedback: null,
+      showFeedbackSummary: true,
+      showFirstReview: false,
       showApprove: true,
       showRelease: false,
       showReleaseNote: false,

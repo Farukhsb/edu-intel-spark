@@ -33,6 +33,39 @@ export type DraftCommunicationMessage = Omit<
   "id" | "createdAt" | "cleared" | "read"
 >;
 
+export interface CommunicationDispatchResult {
+  ok: boolean;
+  status: "created" | "duplicate" | "failed" | "unauthenticated";
+  message: CommunicationMessage | null;
+}
+
+const normalizeMessageToken = (value: string | null | undefined) =>
+  value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+
+export const buildCommunicationMessageFingerprint = (
+  message: Pick<
+    DraftCommunicationMessage,
+    | "category"
+    | "recipientName"
+    | "recipientEmail"
+    | "recipientId"
+    | "subject"
+    | "body"
+    | "relatedStudentId"
+    | "relatedAssignmentId"
+  >,
+) =>
+  [
+    message.category,
+    normalizeMessageToken(message.recipientName),
+    normalizeMessageToken(message.recipientEmail),
+    normalizeMessageToken(message.recipientId),
+    normalizeMessageToken(message.subject),
+    normalizeMessageToken(message.body),
+    normalizeMessageToken(message.relatedStudentId),
+    normalizeMessageToken(message.relatedAssignmentId),
+  ].join("|");
+
 interface CommunicationMessageRow {
   id: string;
   created_at: string;
@@ -161,9 +194,90 @@ const normalizeReadOnlyMessage = (
   relatedAssignmentId: message.related_assignment_id || undefined,
 });
 
-export const queueCommunicationMessage = async (
-  message: DraftCommunicationMessage
+const findExistingCommunicationMessage = async (
+  message: DraftCommunicationMessage,
 ) => {
+  const recipientId = message.recipientId ?? null;
+  const recipientEmail = message.recipientEmail ?? null;
+  const relatedAssignmentId = message.relatedAssignmentId ?? null;
+  const relatedStudentId = message.relatedStudentId ?? null;
+
+  const fetchWithSelect = async (selectClause: string) => {
+    let query = supabase
+      .from("communication_messages")
+      .select(selectClause)
+      .eq("category", message.category)
+      .eq("subject", message.subject)
+      .eq("body", message.body);
+
+    if (recipientId) {
+      query = query.eq("recipient_id", recipientId);
+    } else {
+      query = query.is("recipient_id", null);
+    }
+
+    if (recipientEmail) {
+      query = query.eq("recipient_email", recipientEmail);
+    } else {
+      query = query.is("recipient_email", null);
+    }
+
+    if (relatedAssignmentId) {
+      query = query.eq("related_assignment_id", relatedAssignmentId);
+    } else {
+      query = query.is("related_assignment_id", null);
+    }
+
+    if (relatedStudentId) {
+      query = query.eq("related_student_id", relatedStudentId);
+    } else {
+      query = query.is("related_student_id", null);
+    }
+
+    return query.limit(10);
+  };
+
+  const { data, error } = await fetchWithSelect(COMMUNICATION_MESSAGE_SELECT);
+
+  if (isMissingNotificationStateColumnError(error)) {
+    const { missingRead, missingCleared } = getNotificationStateColumnAvailability(error);
+
+    if (missingRead && !missingCleared) {
+      const fallbackResult = await fetchWithSelect(COMMUNICATION_MESSAGE_CLEARED_ONLY_SELECT);
+      return {
+        data: (fallbackResult.data || []) as CommunicationMessageClearedOnlyRow[],
+        error: fallbackResult.error,
+        mode: "cleared-only" as const,
+      };
+    }
+
+    if (missingCleared && !missingRead) {
+      const fallbackResult = await fetchWithSelect(COMMUNICATION_MESSAGE_READ_ONLY_SELECT);
+      return {
+        data: (fallbackResult.data || []) as CommunicationMessageReadOnlyRow[],
+        error: fallbackResult.error,
+        mode: "read-only" as const,
+      };
+    }
+
+    const fallbackResult = await fetchWithSelect(LEGACY_COMMUNICATION_MESSAGE_SELECT);
+    return {
+      data: (fallbackResult.data || []) as CommunicationMessageLegacyRow[],
+      error: fallbackResult.error,
+      mode: "legacy" as const,
+    };
+  }
+
+  return {
+    data: (data || []) as CommunicationMessageRow[],
+    error,
+    mode: "full" as const,
+  };
+};
+
+export const dispatchCommunicationMessage = async (
+  message: DraftCommunicationMessage,
+): Promise<CommunicationDispatchResult> => {
   const e2eUserId = getE2EAuthenticatedUserId();
   const userId =
     e2eUserId ??
@@ -173,7 +287,41 @@ export const queueCommunicationMessage = async (
     null;
 
   if (!userId) {
-    return null;
+    return {
+      ok: false,
+      status: "unauthenticated",
+      message: null,
+    };
+  }
+
+  const fingerprint = buildCommunicationMessageFingerprint(message);
+  const existingResult = await findExistingCommunicationMessage(message);
+
+  if (!existingResult.error && existingResult.data.length > 0) {
+    const normalizedExistingMessages =
+      existingResult.mode === "full"
+        ? (existingResult.data as CommunicationMessageRow[]).map((item) => normalizeMessage(item))
+        : existingResult.mode === "cleared-only"
+          ? (existingResult.data as CommunicationMessageClearedOnlyRow[]).map((item) =>
+              normalizeClearedOnlyMessage(item),
+            )
+          : existingResult.mode === "read-only"
+            ? (existingResult.data as CommunicationMessageReadOnlyRow[]).map((item) =>
+                normalizeReadOnlyMessage(item),
+              )
+            : (existingResult.data as CommunicationMessageLegacyRow[]).map((item) => normalizeLegacyMessage(item));
+
+    const matched = normalizedExistingMessages.find(
+      (existingMessage) => buildCommunicationMessageFingerprint(existingMessage) === fingerprint,
+    );
+
+    if (matched) {
+      return {
+        ok: true,
+        status: "duplicate",
+        message: matched,
+      };
+    }
   }
 
   const { data, error } = await supabase
@@ -216,13 +364,19 @@ export const queueCommunicationMessage = async (
       .single();
 
     if (!legacyResult.error && legacyResult.data) {
+      const normalizedMessage = normalizeLegacyMessage(
+        legacyResult.data as CommunicationMessageLegacyRow,
+      );
+
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("gradeai:communications-updated"));
       }
 
-      return normalizeLegacyMessage(
-        legacyResult.data as CommunicationMessageLegacyRow,
-      );
+      return {
+        ok: true,
+        status: "created",
+        message: normalizedMessage,
+      };
     }
 
     log.error("Failed to save communication message after legacy retry", legacyResult.error, {
@@ -233,7 +387,11 @@ export const queueCommunicationMessage = async (
       relatedStudentId: message.relatedStudentId ?? null,
       ...toSafeSupabaseErrorContext(legacyResult.error),
     });
-    return null;
+    return {
+      ok: false,
+      status: "failed",
+      message: null,
+    };
   }
 
   if (error || !data) {
@@ -245,14 +403,31 @@ export const queueCommunicationMessage = async (
       relatedStudentId: message.relatedStudentId ?? null,
       ...toSafeSupabaseErrorContext(error),
     });
-    return null;
+    return {
+      ok: false,
+      status: "failed",
+      message: null,
+    };
   }
+
+  const normalizedMessage = normalizeMessage(data as CommunicationMessageRow);
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
 
-  return normalizeMessage(data as CommunicationMessageRow);
+  return {
+    ok: true,
+    status: "created",
+    message: normalizedMessage,
+  };
+};
+
+export const queueCommunicationMessage = async (
+  message: DraftCommunicationMessage
+) => {
+  const result = await dispatchCommunicationMessage(message);
+  return result.message;
 };
 
 export const markCommunicationMessageRead = async (id: string) => {
@@ -420,7 +595,7 @@ export const buildGradeReleasedNotification = (input: {
   recipientEmail: input.studentEmail,
   recipientId: input.studentId,
   subject: "Feedback released",
-  body: `Your feedback for ${input.assignmentTitle} is now available`,
+  body: `Your released result for ${input.assignmentTitle} is now available`,
   relatedAssignmentId: input.assignmentId,
   relatedStudentId: input.studentId,
 });
@@ -463,7 +638,15 @@ export const WorkflowEmailRequestSchema = z.discriminatedUnion("category", [
 
 export type WorkflowEmailRequest = z.infer<typeof WorkflowEmailRequestSchema>;
 
-export const sendWorkflowNotificationEmail = async (request: WorkflowEmailRequest) => {
+export interface WorkflowEmailDispatchResult {
+  ok: boolean;
+  status: "sent" | "duplicate" | "failed" | "invalid";
+  reason?: string | null;
+}
+
+export const dispatchWorkflowNotificationEmail = async (
+  request: WorkflowEmailRequest,
+): Promise<WorkflowEmailDispatchResult> => {
   const parsed = WorkflowEmailRequestSchema.safeParse(request);
 
   if (!parsed.success) {
@@ -476,10 +659,10 @@ export const sendWorkflowNotificationEmail = async (request: WorkflowEmailReques
       hasSubmissionId:
         typeof request === "object" && request && "submissionId" in request && typeof request.submissionId === "string",
     });
-    return false;
+    return { ok: false, status: "invalid", reason: "invalid_request" };
   }
 
-  const { error } = await supabase.functions.invoke("send-workflow-notification-email", {
+  const { data, error } = await supabase.functions.invoke("send-workflow-notification-email", {
     body: parsed.data,
   });
 
@@ -489,10 +672,26 @@ export const sendWorkflowNotificationEmail = async (request: WorkflowEmailReques
       assignmentId: request.assignmentId,
       submissionId: "submissionId" in request ? request.submissionId : null,
     });
-    return false;
+    return { ok: false, status: "failed", reason: "invoke_failed" };
   }
 
-  return true;
+  const duplicate = Boolean(
+    data &&
+      typeof data === "object" &&
+      "reason" in data &&
+      (data as { reason?: string }).reason === "duplicate_notification",
+  );
+
+  if (duplicate) {
+    return { ok: true, status: "duplicate", reason: "duplicate_notification" };
+  }
+
+  return { ok: true, status: "sent", reason: null };
+};
+
+export const sendWorkflowNotificationEmail = async (request: WorkflowEmailRequest) => {
+  const result = await dispatchWorkflowNotificationEmail(request);
+  return result.ok;
 };
 
 export const getVisibleCommunicationMessages = (

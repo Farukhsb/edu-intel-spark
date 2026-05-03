@@ -13,6 +13,11 @@ import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
+import { getDashboardShellContext } from "@/lib/dashboardShell";
+import {
+  getLecturerWorkflowNotificationDestination,
+  getLecturerWorkflowNotificationPreviewHint,
+} from "@/lib/lecturerWorkflowNotifications";
 import {
   clearCommunicationMessage,
   loadVisibleCommunicationMessages,
@@ -20,8 +25,35 @@ import {
   type CommunicationMessage,
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
+import { getStudentSupportNotificationDestination } from "@/lib/studentSupportWorkflow";
 
 const DEMO_LECTURER_NOTIFICATIONS: CommunicationMessage[] = [
+  {
+    id: "demo-notice-release-follow-up",
+    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: false,
+    category: "grade-released",
+    recipientName: "Dr. Demo Lecturer",
+    recipientEmail: "demo@gradeai.com",
+    recipientId: "demo-lecturer",
+    subject: "Released result follow-up",
+    body: "Released results are ready to review for the policy brief assignment.",
+    relatedAssignmentId: "demo-assignment-policy-brief",
+  },
+  {
+    id: "demo-notice-ai-ready",
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: false,
+    category: "ai-grading-ready",
+    recipientName: "Dr. Demo Lecturer",
+    recipientEmail: "demo@gradeai.com",
+    recipientId: "demo-lecturer",
+    subject: "Synthetic AI grading ready",
+    body: "AI grading is ready for the policy brief assignment.",
+    relatedAssignmentId: "demo-assignment-policy-brief",
+  },
   {
     id: "demo-notice-1",
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
@@ -191,6 +223,45 @@ const defaultAdminSectionState = Object.fromEntries(
   adminSections.map((section) => [section.label, section.defaultOpen]),
 ) as Record<(typeof adminSections)[number]["label"], boolean>;
 
+const getNotificationCategoryLabel = (category: CommunicationMessage["category"]) => {
+  switch (category) {
+    case "grade-released":
+      return "Released result";
+    case "feedback-summary":
+      return "Feedback";
+    case "assignment-published":
+      return "Assignment";
+    case "submission-received":
+      return "Submission";
+    case "ai-grading-ready":
+      return "AI grading";
+    case "integrity-check-ready":
+      return "Integrity";
+    case "at-risk-alert":
+      return "At-risk";
+    case "intervention-follow-up":
+      return "Support";
+    default:
+      return "Notice";
+  }
+};
+
+const getStudentNotificationPreviewHint = (notification: CommunicationMessage) => {
+  switch (notification.category) {
+    case "grade-released":
+      return "Opens your released result and grade explanation.";
+    case "feedback-summary":
+      return "Opens your released result summary.";
+    case "assignment-published":
+      return "Opens the assignment submission window.";
+    case "at-risk-alert":
+    case "intervention-follow-up":
+      return "Opens your improvement plan.";
+    default:
+      return null;
+  }
+};
+
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
@@ -306,6 +377,36 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
     if (isStudentRole(profile?.role)) {
       if (notification.category === "at-risk-alert" || notification.category === "intervention-follow-up") {
+        const supportDestination = getStudentSupportNotificationDestination({
+          notification,
+          notifications,
+        });
+
+        if (supportDestination.kind === "released-result") {
+          const params = new URLSearchParams();
+          if (supportDestination.targetNotification?.relatedAssignmentId) {
+            params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
+          }
+          params.set("source", "support-notification");
+          navigate(`/dashboard/explain-grade${params.toString() ? `?${params.toString()}` : ""}`, {
+            state: {
+              notification: supportDestination.targetNotification ?? notification,
+              redirectedFromSupportNotification: notification,
+            },
+          });
+          return;
+        }
+
+        if (supportDestination.kind === "assignments") {
+          navigate("/dashboard/assignments?source=support-notification", {
+            state: {
+              notification: supportDestination.targetNotification ?? notification,
+              redirectedFromSupportNotification: notification,
+            },
+          });
+          return;
+        }
+
         navigate(`/dashboard/improvements?notice=${encodeURIComponent(notification.id)}`, {
           state: { notification },
         });
@@ -314,9 +415,18 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
       if (
         notification.category === "feedback-summary" ||
-        notification.category === "grade-released" ||
-        notification.category === "assignment-published"
+        notification.category === "grade-released"
       ) {
+        const params = new URLSearchParams();
+        if (notification.relatedAssignmentId) {
+          params.set("assignment", notification.relatedAssignmentId);
+        }
+        params.set("source", "notification");
+        navigate(`/dashboard/explain-grade${params.toString() ? `?${params.toString()}` : ""}`);
+        return;
+      }
+
+      if (notification.category === "assignment-published") {
         navigate("/dashboard/assignments");
         return;
       }
@@ -328,6 +438,26 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     }
 
     if (isLecturerEquivalent && notification.relatedAssignmentId) {
+      const destination = getLecturerWorkflowNotificationDestination({
+        notification,
+        notifications,
+      });
+
+      if (destination) {
+        navigate(
+          `/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}?source=notification&focus=${destination.focus}`,
+          destination.redirected
+            ? {
+                state: {
+                  notification: destination.targetNotification,
+                  redirectedFromNotification: notification,
+                },
+              }
+            : undefined,
+        );
+        return;
+      }
+
       navigate(`/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}`);
       return;
     }
@@ -371,6 +501,13 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const activeSection = isLecturerEquivalent
     ? roleSections.find((section) => section.links.some((link) => isLinkActive(link.to)))
     : null;
+  const shellContext = getDashboardShellContext({
+    isAdmin,
+    isLecturerEquivalent,
+    activeSectionLabel: activeSection?.label ?? null,
+    activeSectionDescription: activeSection?.description ?? null,
+    activeLinkLabel: activeLink?.label ?? null,
+  });
 
   useEffect(() => {
     if (!activeSection || searchQuery) return;
@@ -557,11 +694,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           </Button>
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              {activeSection?.label || (isLecturerEquivalent ? "Workspace" : "Student")}
+              {shellContext.workspaceLabel}
             </p>
             <h1 className="truncate font-display text-xl font-semibold tracking-tight">
               {activeLink?.label || "Dashboard"}
             </h1>
+            <p className="mt-0.5 hidden max-w-2xl truncate text-xs text-muted-foreground md:block">
+              {shellContext.workspaceHint}
+            </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             {isDemo && (
@@ -572,7 +712,13 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" size="icon" className="relative rounded-xl" onClick={() => setShowNotifications(!showNotifications)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative rounded-xl"
+              aria-label="Open notifications"
+              onClick={() => setShowNotifications(!showNotifications)}
+            >
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
             </Button>
@@ -610,8 +756,29 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                             {safeFormatDate(notification.createdAt, "MMM d, HH:mm")}
                           </span>
                         </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="text-[10px]">
+                            {getNotificationCategoryLabel(notification.category)}
+                          </Badge>
+                        </div>
                         <p className="mt-1 text-muted-foreground">{notification.recipientName}</p>
                         <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>
+                        {isStudentRole(profile?.role) && getStudentNotificationPreviewHint(notification) && (
+                          <p className="mt-2 text-[11px] font-medium text-foreground/80">
+                            {getStudentNotificationPreviewHint(notification)}
+                          </p>
+                        )}
+                        {!isStudentRole(profile?.role) && getLecturerWorkflowNotificationPreviewHint({
+                          notification,
+                          notifications,
+                        }) && (
+                          <p className="mt-2 text-[11px] font-medium text-foreground/80">
+                            {getLecturerWorkflowNotificationPreviewHint({
+                              notification,
+                              notifications,
+                            })}
+                          </p>
+                        )}
                         </button>
                         <div className="flex justify-end px-3 pb-3">
                           <button
