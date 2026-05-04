@@ -13,8 +13,8 @@ const AssignmentStatusFilterSchema = z.enum(["draft", "published", "closed"]);
 const AssignmentListViewSchema = z.enum(["needs-review"]);
 const AdminViewSchema = z.enum(["overview", "users", "system", "assignments", "submissions", "audit"]);
 const AdminUserFilterSchema = z.enum(["student", "lecturer", "admin"]);
-const PerformanceRiskFilterSchema = z.enum(["all", "critical", "high", "medium"]);
-const PerformanceScoreBandFilterSchema = z.enum(["all", "failing", "borderline", "passing"]);
+const PerformanceRiskFilterSchema = z.enum(["all", "high-plus", "critical", "high", "moderate"]);
+const PerformanceScoreBandFilterSchema = z.enum(["all", "lt40", "40-49", "50-59", "60plus"]);
 
 export type ExplainGradeSource = z.infer<typeof ExplainGradeSourceSchema>;
 export type AssignmentNotificationFocusValue = z.infer<typeof AssignmentNotificationFocusSchema>;

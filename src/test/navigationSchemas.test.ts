@@ -93,15 +93,15 @@ describe("navigation schemas", () => {
 
   it("normalizes performance trend filters to known risk and score-band values", () => {
     const valid = parsePerformanceTrendsSearchState(
-      new URLSearchParams("risk=critical&scoreBand=borderline"),
+      new URLSearchParams("risk=high-plus&scoreBand=lt40"),
     );
     const invalid = parsePerformanceTrendsSearchState(
       new URLSearchParams("risk=extreme&scoreBand=???"),
     );
 
     expect(valid).toEqual({
-      riskFilter: "critical",
-      scoreBandFilter: "borderline",
+      riskFilter: "high-plus",
+      scoreBandFilter: "lt40",
     });
     expect(invalid).toEqual({
       riskFilter: "all",
