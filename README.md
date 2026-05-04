@@ -191,7 +191,7 @@ Important Edge Functions:
 - `internal_text_similarity`
 - `both` through `INTEGRITY_PROVIDER_MODE`
 
-The visible plagiarism UI still uses the legacy response shape so lecturer-facing integrity cards remain stable. The newer `internal_text_similarity` provider currently writes pairwise evidence rows to `public.integrity_findings` for backend review and future UI work.
+The lecturer-facing plagiarism workflow still keeps the established response shape, but `internal_text_similarity` is now part of the live backend decision path. It contributes pairwise similarity flags and risk scoring during `check-plagiarism`, and it also writes evidence rows to `public.integrity_findings` for audit and future provider-specific UI work.
 
 An optional MOSS bridge is also available for code assignments. It is disabled by default and does not change the visible plagiarism UI. When explicitly configured, it:
 
@@ -259,7 +259,7 @@ Working well:
 Still improving:
 
 - broader live-environment verification
-- stronger automated tests for role boundaries and RLS behaviour
+- deeper live-environment verification of role boundaries and RLS behaviour
 - stricter TypeScript coverage
 - targeted recipient logic for assignment-published email notifications
 - final live email delivery validation after verified sender/API key setup
