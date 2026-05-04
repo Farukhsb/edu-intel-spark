@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { env } from "@/lib/env";
 import { getExplainGradeReadiness } from "@/lib/explainGradeReadiness";
 import { log } from "@/lib/logger";
+import { parseExplainGradeSearchState } from "@/lib/schemas/navigation";
 import {
   buildDemoGradeResponse,
   buildGradeSelectorLabels,
@@ -55,9 +56,8 @@ const ExplainGrade = () => {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const focusAssignmentId = searchParams.get("assignment");
-  const focusSubmissionId = searchParams.get("submission");
-  const focusSource = searchParams.get("source");
+  const { assignmentId: focusAssignmentId, submissionId: focusSubmissionId, source: focusSource } =
+    parseExplainGradeSearchState(searchParams);
 
   useEffect(() => {
     if (scrollRef.current) {

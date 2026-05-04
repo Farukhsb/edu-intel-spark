@@ -48,6 +48,20 @@ const parseFilterValues = (raw: string) => {
 const matchesFilters = (row: Row, url: URL) => {
   for (const [key, value] of url.searchParams.entries()) {
     if (["select", "order", "limit", "offset", "on_conflict"].includes(key)) continue;
+    if (key === "or") {
+      const normalized = value.startsWith("(") && value.endsWith(")")
+        ? value.slice(1, -1)
+        : value;
+      const clauses = normalized.split(",").map((clause) => clause.trim()).filter(Boolean);
+      const matched = clauses.some((clause) => {
+        const [column, operator, raw] = clause.split(".");
+        if (!column || !operator || raw == null) return false;
+        if (operator !== "eq") return false;
+        return row[column] === parseValue(raw);
+      });
+      if (!matched) return false;
+      continue;
+    }
     if (value.startsWith("eq.")) {
       if (row[key] !== parseValue(value.slice(3))) return false;
       continue;

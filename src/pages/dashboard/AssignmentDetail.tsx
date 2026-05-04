@@ -27,6 +27,7 @@ import {
   queueCommunicationMessage,
 } from "@/lib/communications";
 import { log } from "@/lib/logger";
+import { parseAssignmentDetailSearchState } from "@/lib/schemas/navigation";
 import type {
   AIResponse,
   GradeBreakdown,
@@ -66,7 +67,6 @@ import {
 import { getModerationReleaseHandoffState } from "@/pages/dashboard/assignment-detail/moderationReleaseHandoff";
 import {
   getAssignmentNotificationFocusState,
-  type AssignmentNotificationFocus,
 } from "@/pages/dashboard/assignment-detail/notificationFocus";
 import {
   getLecturerAssignmentWorkflowReadiness,
@@ -152,24 +152,10 @@ const AssignmentDetail = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const demoAssignmentSet = isDemo && id ? getDemoAssignmentSetById(id) : null;
-  const moderationReleaseFocus = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get("source") === "moderation" && params.get("focus") === "release-ready";
-  }, [location.search]);
-  const assignmentNotificationFocus = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get("source") !== "notification") return null;
-    const focus = params.get("focus");
-    if (
-      focus === "submission-review" ||
-      focus === "ai-results" ||
-      focus === "integrity-review" ||
-      focus === "release-follow-up"
-    ) {
-      return focus as AssignmentNotificationFocus;
-    }
-    return null;
-  }, [location.search]);
+  const { moderationReleaseFocus, notificationFocus: assignmentNotificationFocus } = useMemo(
+    () => parseAssignmentDetailSearchState(new URLSearchParams(location.search)),
+    [location.search],
+  );
 
   const {
     assignment,
@@ -1196,7 +1182,7 @@ const AssignmentDetail = () => {
           ? "First marker review saved and sent to moderation."
           : "First marker review saved."
       );
-      await loadSubmissions();
+      await reloadSubmissions();
     } catch (e) {
       log.error("Save review failed", e, {
         submissionId: reviewSubmission.id,

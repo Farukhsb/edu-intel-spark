@@ -45,6 +45,7 @@ import {
 } from "@/components/dashboard/PageStates";
 import { AssignmentFormDialog } from "@/pages/dashboard/assignments/assignment-form-dialog";
 import { useAssignmentsData, type AssignmentDataItem } from "@/pages/dashboard/assignments/useAssignmentsData";
+import { parseAssignmentsSearchState } from "@/lib/schemas/navigation";
 
 const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
@@ -135,6 +136,7 @@ const Assignments = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Assignment["status"]>("all");
   const [searchParams, setSearchParams] = useSearchParams();
+  const assignmentSearchState = parseAssignmentsSearchState(searchParams);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -196,13 +198,8 @@ const Assignments = () => {
   };
 
   useEffect(() => {
-    const nextStatus = searchParams.get("status");
-    if (nextStatus === "draft" || nextStatus === "published" || nextStatus === "closed") {
-      setStatusFilter(nextStatus);
-      return;
-    }
-    setStatusFilter("all");
-  }, [searchParams]);
+    setStatusFilter(assignmentSearchState.statusFilter);
+  }, [assignmentSearchState.statusFilter]);
 
   const toggleCohort = (val: string) => setSelectedCohorts(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const toggleDepartment = (val: string) => setSelectedDepartments(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
@@ -520,8 +517,7 @@ const Assignments = () => {
 
   if (loading) return <DashboardLoadingState />;
 
-  const view = searchParams.get("view");
-  const isPendingReviewView = view === "needs-review";
+  const isPendingReviewView = assignmentSearchState.view === "needs-review";
 
   const filteredAssignments = filterAssignments({
     assignments: assignments as AssignmentCatalogItem[],

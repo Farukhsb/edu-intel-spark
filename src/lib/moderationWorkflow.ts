@@ -268,11 +268,16 @@ export async function upsertModerationCase(
 }
 
 export async function fetchModerationCaseViews(
-  supabase: SupabaseClient<Database>
+  supabase: SupabaseClient<Database>,
+  lecturerId: string
 ): Promise<FetchModerationCaseViewsResult> {
   const [{ data: moderationCaseRows, error: caseError }, { data: lecturerRows, error: lecturerError }] =
     await Promise.all([
-      supabase.from("moderation_cases").select("*").order("updated_at", { ascending: false }),
+      supabase
+        .from("moderation_cases")
+        .select("*")
+        .or(`lecturer_id.eq.${lecturerId},moderator_id.eq.${lecturerId}`)
+        .order("updated_at", { ascending: false }),
       supabase.from("profiles").select("*").eq("role", "lecturer"),
     ]);
 

@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type AtRiskStudent, computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
 import { log } from "@/lib/logger";
+import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
@@ -121,6 +122,7 @@ const PerformanceTrends = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const performanceSearchState = parsePerformanceTrendsSearchState(searchParams);
   const [moduleFilter, setModuleFilter] = useState("all");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,8 +132,7 @@ const PerformanceTrends = () => {
   const [gradeDist, setGradeDist] = useState(EMPTY_GRADE_DIST);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
 
-  const riskFilter = searchParams.get("risk") || "all";
-  const scoreBandFilter = searchParams.get("scoreBand") || "all";
+  const { riskFilter, scoreBandFilter } = performanceSearchState;
 
   useEffect(() => {
     if (isDemo) {

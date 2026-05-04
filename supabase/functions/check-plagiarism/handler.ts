@@ -1,4 +1,5 @@
 import { z } from "npm:zod";
+import type { createAdminClient, requireLecturer } from "../_shared/auth.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -33,13 +34,22 @@ class HttpError extends Error {
 }
 
 type CheckPlagiarismHandlerDeps = {
-  createAdminClient: () => any;
-  requireLecturer: (req: Request) => Promise<{ supabase: any; user: { id: string } }>;
+  createAdminClient: typeof createAdminClient;
+  requireLecturer: typeof requireLecturer;
   jsonError: (error: unknown, corsHeaders: Record<string, string>) => Response;
   getCorsHeaders: (req: Request) => Record<string, string> | null;
   createCorsForbiddenResponse: () => Response;
-  createIntegrityResponseWithRetry?: (body: Record<string, unknown>) => Promise<any>;
+  createIntegrityResponseWithRetry?: (
+    body: Record<string, unknown>,
+  ) => Promise<Record<string, unknown> | null>;
 };
+
+type AdminSupabaseClient = ReturnType<typeof createAdminClient>;
+
+const ExistingReviewNoteSchema = z.object({
+  latestNote: z.string().catch(""),
+  history: z.array(z.unknown()).catch([]),
+});
 
 function readEnv(name: string) {
   if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
@@ -565,7 +575,7 @@ function isRecoverablePersistenceError(error: unknown) {
 }
 
 async function fetchFileContent(
-  supabaseAdmin: any,
+  supabaseAdmin: AdminSupabaseClient,
   sub: { file_url?: string; file_name?: string | null },
 ): Promise<{
   plainText: string;
@@ -1892,10 +1902,10 @@ Only flag real concerns. Return valid JSON only.`,
         const notePayload = (() => {
           if (existingReview?.lecturer_note && typeof existingReview.lecturer_note === "string") {
             try {
-              const parsed = JSON.parse(existingReview.lecturer_note);
+              const parsed = ExistingReviewNoteSchema.safeParse(JSON.parse(existingReview.lecturer_note));
               return {
-                latestNote: typeof parsed.latestNote === "string" ? parsed.latestNote : "",
-                history: Array.isArray(parsed.history) ? parsed.history : [],
+                latestNote: parsed.success ? parsed.data.latestNote : "",
+                history: parsed.success ? parsed.data.history : [],
               };
             } catch {
               return { latestNote: "", history: [] };

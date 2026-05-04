@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, HttpError, jsonError, requireUser } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { buildReleasedGradeContext } from "../_shared/explain-grade-context.ts";
+import { parseExplainGradeRequestPayload } from "../_shared/explain-grade-request.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logWarn } from "../_shared/log.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
@@ -12,16 +12,6 @@ import {
   hasWeaknessIntent,
 } from "../_shared/explain-grade-prompt.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
-
-const ExplainGradeRequestSchema = z.object({
-  submissionId: z.string().uuid(),
-  message: z.string().min(1).max(2000),
-});
-
-type ExplainGradeMessage = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
 
 function createSseResponse(content: string, corsHeaders: HeadersInit) {
   const encoder = new TextEncoder();
@@ -38,17 +28,6 @@ function createSseResponse(content: string, corsHeaders: HeadersInit) {
   return new Response(body, {
     headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
   });
-}
-
-function isExplainGradeMessage(value: unknown): value is ExplainGradeMessage {
-  if (!value || typeof value !== "object") return false;
-
-  const message = value as Record<string, unknown>;
-
-  return (
-    (message.role === "user" || message.role === "assistant" || message.role === "system") &&
-    typeof message.content === "string"
-  );
 }
 
 serve(async (req) => {
@@ -71,14 +50,7 @@ serve(async (req) => {
       return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
     }
     const body = await req.json().catch(() => null);
-    const payload = body && typeof body === "object" ? body as Record<string, unknown> : null;
-    const rawMessages = Array.isArray(payload?.messages) ? payload.messages.filter(isExplainGradeMessage) : [];
-    const latestUserMessage = [...rawMessages].reverse().find((entry) => entry.role === "user");
-
-    const parsed = ExplainGradeRequestSchema.safeParse({
-      submissionId: typeof payload?.submissionId === "string" ? payload.submissionId : undefined,
-      message: typeof payload?.message === "string" ? payload.message : latestUserMessage?.content,
-    });
+    const parsed = parseExplainGradeRequestPayload(body);
 
     if (!parsed.success) {
       return new Response(
@@ -93,10 +65,7 @@ serve(async (req) => {
       );
     }
 
-    const { submissionId, message } = parsed.data;
-    const messages = rawMessages.length > 0
-      ? rawMessages
-      : [{ role: "user", content: message } satisfies ExplainGradeMessage];
+    const { submissionId, message, messages } = parsed.data;
     const admin = createAdminClient();
     const { data: submission, error: submissionError } = await userSupabase
       .from("submissions")

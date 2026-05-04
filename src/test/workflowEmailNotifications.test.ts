@@ -125,6 +125,28 @@ describe("workflow email notifications", () => {
     });
   });
 
+  it("treats malformed successful workflow email responses as non-duplicate sends", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        meta: 42,
+      },
+      error: null,
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "sent",
+      reason: null,
+    });
+  });
+
   it("reports invocation failures as failed workflow email dispatches", async () => {
     invokeMock.mockResolvedValue({
       data: null,

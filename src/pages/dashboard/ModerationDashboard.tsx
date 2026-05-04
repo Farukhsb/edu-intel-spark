@@ -21,8 +21,10 @@ import {
   getModerationOwnerAssignmentSummaries,
   matchesModerationQueueFilter,
   matchesModerationQueueSearch,
+  type GradeAuditRow,
   type ModerationQueueFilter,
   type ModerationQueueSort,
+  type ModerationReviewRow,
   getModerationQueueStats,
   insertModerationAuditEntry,
   sortModerationQueueCases,
@@ -186,6 +188,38 @@ const DEMO_MODERATION_CASES = [
   },
 ] as unknown as ModerationCaseView[];
 
+const createDemoModerationReview = (entry: {
+  id: string;
+  moderation_case_id: string;
+  submission_id: string;
+  reviewer_role: string;
+  action: string;
+  proposed_score: number | null;
+  proposed_feedback: string | null;
+  notes: string | null;
+  created_at: string;
+}): ModerationReviewRow => ({
+  ...entry,
+  reviewer_id: "demo-reviewer",
+  snapshot: {},
+});
+
+const createDemoGradeAuditLog = (entry: {
+  id: string;
+  event_type: string;
+  reason: string | null;
+  created_at: string;
+  submission_id: string;
+}): GradeAuditRow => ({
+  ...entry,
+  actor_role: "lecturer",
+  changed_by: "demo-lecturer",
+  grade_id: null,
+  moderation_case_id: null,
+  new_values: {},
+  previous_values: {},
+});
+
 const ModerationDashboard = () => {
   const { user, profile, isDemo } = useAuth();
   const navigate = useNavigate();
@@ -227,7 +261,7 @@ const ModerationDashboard = () => {
 
     setLoading(true);
     try {
-      const { cases: caseViews, lecturers: lecturerRows } = await fetchModerationCaseViews(supabase);
+      const { cases: caseViews, lecturers: lecturerRows } = await fetchModerationCaseViews(supabase, user.id);
       setLecturers(lecturerRows as Profile[]);
       setCases(caseViews);
       setModeratorDrafts(
@@ -734,7 +768,7 @@ const ModerationDashboard = () => {
             action === "approve"
               ? entry.reviews
               : [
-                  {
+                  createDemoModerationReview({
                     id: `demo-review-${Date.now()}`,
                     moderation_case_id: entry.moderationCase.id,
                     submission_id: entry.moderationCase.submission_id,
@@ -744,7 +778,7 @@ const ModerationDashboard = () => {
                     proposed_feedback: feedbackDraft || entry.moderationCase.final_agreed_feedback || entry.grade?.lecturer_feedback || entry.grade?.ai_feedback || null,
                     notes: noteDraft || null,
                     created_at: new Date().toISOString(),
-                  } as any,
+                  }),
                   ...entry.reviews,
                 ];
 
@@ -791,12 +825,13 @@ const ModerationDashboard = () => {
                 : entry.grade,
             reviews: nextReview,
             auditLog: [
-              {
+              createDemoGradeAuditLog({
                 id: `demo-audit-${Date.now()}`,
                 event_type: `moderation_${action}`,
                 reason: noteDraft || `Demo moderation action recorded: ${action}.`,
                 created_at: new Date().toISOString(),
-              } as any,
+                submission_id: entry.moderationCase.submission_id,
+              }),
               ...entry.auditLog,
             ],
           };

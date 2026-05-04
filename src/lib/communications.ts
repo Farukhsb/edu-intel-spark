@@ -92,6 +92,49 @@ type SupabaseLikeError = {
   hint?: string | null;
 };
 
+const CommunicationCategorySchema = z.enum([
+  "feedback-summary",
+  "at-risk-alert",
+  "grade-released",
+  "intervention-follow-up",
+  "submission-received",
+  "ai-grading-ready",
+  "integrity-check-ready",
+  "assignment-published",
+]);
+
+const CommunicationMessageRowSchema = z.object({
+  id: z.string(),
+  created_at: z.string(),
+  cleared: z.boolean().nullable(),
+  read: z.boolean().nullable(),
+  category: CommunicationCategorySchema,
+  recipient_name: z.string(),
+  recipient_email: z.string().nullable(),
+  recipient_id: z.string().nullable(),
+  subject: z.string(),
+  body: z.string(),
+  related_student_id: z.string().nullable(),
+  related_assignment_id: z.string().nullable(),
+});
+
+const CommunicationMessageLegacyRowSchema = CommunicationMessageRowSchema.omit({
+  cleared: true,
+  read: true,
+});
+
+const CommunicationMessageClearedOnlyRowSchema = CommunicationMessageRowSchema.omit({
+  read: true,
+});
+
+const CommunicationMessageReadOnlyRowSchema = CommunicationMessageRowSchema.omit({
+  cleared: true,
+});
+
+const WorkflowEmailResponseSchema = z.object({
+  reason: z.string().optional(),
+});
+
 const COMMUNICATION_MESSAGE_SELECT =
   "id, created_at, cleared, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
 
@@ -194,6 +237,20 @@ const normalizeReadOnlyMessage = (
   relatedAssignmentId: message.related_assignment_id || undefined,
 });
 
+const parseCommunicationMessageRows = <TRow>(
+  rows: unknown,
+  schema: z.ZodType<TRow>,
+) => {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.flatMap((row) => {
+    const parsed = schema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+};
+
 const findExistingCommunicationMessage = async (
   message: DraftCommunicationMessage,
 ) => {
@@ -245,7 +302,10 @@ const findExistingCommunicationMessage = async (
     if (missingRead && !missingCleared) {
       const fallbackResult = await fetchWithSelect(COMMUNICATION_MESSAGE_CLEARED_ONLY_SELECT);
       return {
-        data: (fallbackResult.data || []) as CommunicationMessageClearedOnlyRow[],
+        data: parseCommunicationMessageRows(
+          fallbackResult.data,
+          CommunicationMessageClearedOnlyRowSchema,
+        ),
         error: fallbackResult.error,
         mode: "cleared-only" as const,
       };
@@ -254,7 +314,10 @@ const findExistingCommunicationMessage = async (
     if (missingCleared && !missingRead) {
       const fallbackResult = await fetchWithSelect(COMMUNICATION_MESSAGE_READ_ONLY_SELECT);
       return {
-        data: (fallbackResult.data || []) as CommunicationMessageReadOnlyRow[],
+        data: parseCommunicationMessageRows(
+          fallbackResult.data,
+          CommunicationMessageReadOnlyRowSchema,
+        ),
         error: fallbackResult.error,
         mode: "read-only" as const,
       };
@@ -262,14 +325,17 @@ const findExistingCommunicationMessage = async (
 
     const fallbackResult = await fetchWithSelect(LEGACY_COMMUNICATION_MESSAGE_SELECT);
     return {
-      data: (fallbackResult.data || []) as CommunicationMessageLegacyRow[],
+      data: parseCommunicationMessageRows(
+        fallbackResult.data,
+        CommunicationMessageLegacyRowSchema,
+      ),
       error: fallbackResult.error,
       mode: "legacy" as const,
     };
   }
 
   return {
-    data: (data || []) as CommunicationMessageRow[],
+    data: parseCommunicationMessageRows(data, CommunicationMessageRowSchema),
     error,
     mode: "full" as const,
   };
@@ -363,10 +429,9 @@ export const dispatchCommunicationMessage = async (
       .select(LEGACY_COMMUNICATION_MESSAGE_SELECT)
       .single();
 
-    if (!legacyResult.error && legacyResult.data) {
-      const normalizedMessage = normalizeLegacyMessage(
-        legacyResult.data as CommunicationMessageLegacyRow,
-      );
+    const parsedLegacyMessage = CommunicationMessageLegacyRowSchema.safeParse(legacyResult.data);
+    if (!legacyResult.error && parsedLegacyMessage.success) {
+      const normalizedMessage = normalizeLegacyMessage(parsedLegacyMessage.data);
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("gradeai:communications-updated"));
@@ -410,7 +475,24 @@ export const dispatchCommunicationMessage = async (
     };
   }
 
-  const normalizedMessage = normalizeMessage(data as CommunicationMessageRow);
+  const parsedInsertedMessage = CommunicationMessageRowSchema.safeParse(data);
+
+  if (!parsedInsertedMessage.success) {
+    log.error("Communication message insert returned an unexpected row shape", parsedInsertedMessage.error, {
+      category: message.category,
+      recipientId: message.recipientId ?? null,
+      hasRecipientEmail: Boolean(message.recipientEmail),
+      relatedAssignmentId: message.relatedAssignmentId ?? null,
+      relatedStudentId: message.relatedStudentId ?? null,
+    });
+    return {
+      ok: false,
+      status: "failed",
+      message: null,
+    };
+  }
+
+  const normalizedMessage = normalizeMessage(parsedInsertedMessage.data);
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("gradeai:communications-updated"));
@@ -458,9 +540,8 @@ export const clearCommunicationMessage = async (id: string) => {
           window.dispatchEvent(new Event("gradeai:communications-updated"));
         }
 
-        return normalizeClearedOnlyMessage(
-          fallbackResult.data as CommunicationMessageClearedOnlyRow,
-        );
+        const parsedRow = CommunicationMessageClearedOnlyRowSchema.safeParse(fallbackResult.data);
+        return parsedRow.success ? normalizeClearedOnlyMessage(parsedRow.data) : null;
       }
 
       log.error("Failed to clear communication message after compatibility retry", fallbackResult.error, {
@@ -483,7 +564,8 @@ export const clearCommunicationMessage = async (id: string) => {
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
 
-  return normalizeMessage(data as CommunicationMessageRow);
+  const parsedRow = CommunicationMessageRowSchema.safeParse(data);
+  return parsedRow.success ? normalizeMessage(parsedRow.data) : null;
 };
 
 const updateCommunicationMessageReadState = async (id: string, read: boolean) => {
@@ -510,9 +592,8 @@ const updateCommunicationMessageReadState = async (id: string, read: boolean) =>
           window.dispatchEvent(new Event("gradeai:communications-updated"));
         }
 
-        return normalizeReadOnlyMessage(
-          fallbackResult.data as CommunicationMessageReadOnlyRow,
-        );
+        const parsedRow = CommunicationMessageReadOnlyRowSchema.safeParse(fallbackResult.data);
+        return parsedRow.success ? normalizeReadOnlyMessage(parsedRow.data) : null;
       }
 
       log.error("Failed to update communication message read state after compatibility retry", fallbackResult.error, {
@@ -537,7 +618,8 @@ const updateCommunicationMessageReadState = async (id: string, read: boolean) =>
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
 
-  return normalizeMessage(data as CommunicationMessageRow);
+  const parsedRow = CommunicationMessageRowSchema.safeParse(data);
+  return parsedRow.success ? normalizeMessage(parsedRow.data) : null;
 };
 
 export const buildSubmissionReceivedNotification = (input: {
@@ -675,12 +757,8 @@ export const dispatchWorkflowNotificationEmail = async (
     return { ok: false, status: "failed", reason: "invoke_failed" };
   }
 
-  const duplicate = Boolean(
-    data &&
-      typeof data === "object" &&
-      "reason" in data &&
-      (data as { reason?: string }).reason === "duplicate_notification",
-  );
+  const parsedResponse = WorkflowEmailResponseSchema.safeParse(data);
+  const duplicate = parsedResponse.success && parsedResponse.data.reason === "duplicate_notification";
 
   if (duplicate) {
     return { ok: true, status: "duplicate", reason: "duplicate_notification" };
@@ -776,7 +854,10 @@ export const loadVisibleCommunicationMessages = async (options: {
       }
 
       return getVisibleCommunicationMessages(
-        ((clearedOnlyResult.data || []) as CommunicationMessageClearedOnlyRow[]).map(
+        parseCommunicationMessageRows(
+          clearedOnlyResult.data,
+          CommunicationMessageClearedOnlyRowSchema,
+        ).map(
           normalizeClearedOnlyMessage,
         ),
         options,
@@ -798,7 +879,10 @@ export const loadVisibleCommunicationMessages = async (options: {
       }
 
       return getVisibleCommunicationMessages(
-        ((readOnlyResult.data || []) as CommunicationMessageReadOnlyRow[]).map(
+        parseCommunicationMessageRows(
+          readOnlyResult.data,
+          CommunicationMessageReadOnlyRowSchema,
+        ).map(
           normalizeReadOnlyMessage,
         ),
         options,
@@ -819,7 +903,10 @@ export const loadVisibleCommunicationMessages = async (options: {
     }
 
     return getVisibleCommunicationMessages(
-      ((legacyResult.data || []) as CommunicationMessageLegacyRow[]).map(
+      parseCommunicationMessageRows(
+        legacyResult.data,
+        CommunicationMessageLegacyRowSchema,
+      ).map(
         normalizeLegacyMessage,
       ),
       options,
@@ -834,7 +921,7 @@ export const loadVisibleCommunicationMessages = async (options: {
   }
 
   return getVisibleCommunicationMessages(
-    ((data || []) as CommunicationMessageRow[]).map(normalizeMessage),
+    parseCommunicationMessageRows(data, CommunicationMessageRowSchema).map(normalizeMessage),
     options
   ).slice(0, 6);
 };

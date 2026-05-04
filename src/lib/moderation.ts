@@ -1,5 +1,6 @@
 import type { Tables } from "@/integrations/supabase/types";
 import { parseStoredReviewPayload } from "@/lib/integrityReviews";
+import { z } from "zod";
 
 export const MODERATION_CONFIDENCE_THRESHOLD = 0.7;
 export const MODERATION_INTEGRITY_THRESHOLD = 55;
@@ -27,6 +28,21 @@ type GradeRow = Pick<
 type IntegrityReviewRow = Pick<Tables<"academic_integrity_reviews">, "decision" | "lecturer_note" | "updated_at"> | null;
 
 const boundaryThresholds = [0.4, 0.5, 0.6, 0.7];
+
+const ModerationDerivationCheckSchema = z
+  .object({
+    status: z.string().optional(),
+  })
+  .passthrough();
+
+const ModerationMathAnalysisSchema = z.object({
+  solver_signals: z.array(z.string()).optional(),
+  derivation_checks: z.array(ModerationDerivationCheckSchema).optional(),
+});
+
+const ModerationGradingMetadataSchema = z.object({
+  math_analysis: ModerationMathAnalysisSchema.optional(),
+});
 
 const numeric = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
 
@@ -93,26 +109,11 @@ export const evaluateModerationSignals = ({
     }
   }
 
-  const gradingMetadata =
-    grade?.grading_metadata && typeof grade.grading_metadata === "object"
-      ? (grade.grading_metadata as Record<string, unknown>)
-      : null;
-  const mathAnalysis =
-    gradingMetadata && gradingMetadata.math_analysis && typeof gradingMetadata.math_analysis === "object"
-      ? (gradingMetadata.math_analysis as Record<string, unknown>)
-      : null;
-  const solverSignals = Array.isArray(mathAnalysis?.solver_signals)
-    ? mathAnalysis?.solver_signals.filter((item): item is string => typeof item === "string")
-    : [];
-  const invalidDerivations = Array.isArray(mathAnalysis?.derivation_checks)
-    ? mathAnalysis.derivation_checks.filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          "status" in item &&
-          (item as { status?: string }).status === "invalid"
-      )
-    : [];
+  const parsedGradingMetadata = ModerationGradingMetadataSchema.safeParse(grade?.grading_metadata);
+  const mathAnalysis = parsedGradingMetadata.success ? parsedGradingMetadata.data.math_analysis : undefined;
+  const solverSignals = mathAnalysis?.solver_signals ?? [];
+  const invalidDerivations =
+    mathAnalysis?.derivation_checks?.filter((item) => item.status === "invalid") ?? [];
 
   if (solverSignals.length > 0 || invalidDerivations.length > 0) {
     signals.push({

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -188,6 +188,8 @@ const statusVariant = (status: CohortRecommendation["status"]) => {
   if (status === "reviewed") return "secondary";
   return "outline";
 };
+
+type BadgeVariant = NonNullable<BadgeProps["variant"]>;
 
 const formatStatusLabel = (value: string) =>
   value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -796,13 +798,13 @@ const CohortAnalytics = () => {
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-medium text-sm">{recommendation.title}</h3>
-                          <Badge variant={severityVariant(recommendation.severity) as any} className="text-xs">
+                          <Badge variant={severityVariant(recommendation.severity) as BadgeVariant} className="text-xs">
                             {recommendation.severity}
                           </Badge>
                           <Badge variant="outline" className="text-xs">
                             {recommendation.type}
                           </Badge>
-                          <Badge variant={statusVariant(recommendation.status) as any} className="text-xs">
+                          <Badge variant={statusVariant(recommendation.status) as BadgeVariant} className="text-xs">
                             {formatStatusLabel(recommendation.status)}
                           </Badge>
                         </div>

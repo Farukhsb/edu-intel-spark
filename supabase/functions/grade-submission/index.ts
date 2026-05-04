@@ -11,6 +11,8 @@ import {
 import { createResponse, extractOutputText, getModel, parseJsonText } from "../_shared/openai.ts";
 import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import { classifyAssignmentType, type AssignmentType } from "../_shared/text-analysis.ts";
+import { parseGradeSubmissionRequestPayload } from "../_shared/grade-submission-request.ts";
+import { safeParseGradeAIResponse, type GradeAIResponse } from "../_shared/grade-ai-response.ts";
 
 const CONFIDENCE_THRESHOLD = 0.7;
 const REGRADING_DRIFT_THRESHOLD_RATIO = 0.08;
@@ -19,18 +21,6 @@ const GRADING_PASSES = 1;
 const PASS_SPREAD_REVIEW_THRESHOLD_RATIO = 0.08;
 const PASS_SPREAD_REVIEW_THRESHOLD_MIN = 8;
 const GRADING_PROMPT_VERSION = "2026-04-24-v4";
-
-const GradeSubmissionRequestSchema = z
-  .object({
-    submissionIds: z.array(z.string().uuid()).max(50).optional(),
-    submissionId: z.string().uuid().optional(),
-    assignmentId: z.string().uuid().optional(),
-    force_regenerate: z.boolean().optional(),
-  })
-  .refine((value) => Boolean(value.submissionId) || Boolean(value.submissionIds?.length), {
-    message: "At least one of submissionId or submissionIds is required",
-    path: ["submissionIds"],
-  });
 
 type EvidenceCoverage = {
   dataset_selected: boolean;
@@ -116,7 +106,7 @@ type FingerprintGradeCluster = {
 };
 
 type GradingCandidate = {
-  gradeResult: Record<string, unknown>;
+  gradeResult: GradeAIResponse;
   normalized: ReturnType<typeof normalizeBreakdown>;
   modelScore: number | null;
   modelFeedback: string;
@@ -292,7 +282,7 @@ REGRADING CONSISTENCY RULES:
 }
 
 function buildGradingCandidate(
-  gradeResult: Record<string, unknown>,
+  gradeResult: GradeAIResponse,
   rubric: RubricCriterion[],
   assignmentMaxScore: number,
 ): GradingCandidate {
@@ -1062,9 +1052,11 @@ async function requestStructuredGrade({
   });
 
   try {
-    return parseJsonText(extractOutputText(aiData)) as Record<string, unknown>;
+    const parsed = safeParseGradeAIResponse(parseJsonText(extractOutputText(aiData)));
+    return parsed.success ? parsed.data : null;
   } catch {
-    return (aiData?.output?.[0]?.content?.[0]?.json ?? aiData?.output_parsed ?? null) as Record<string, unknown> | null;
+    const parsed = safeParseGradeAIResponse(aiData?.output?.[0]?.content?.[0]?.json ?? aiData?.output_parsed ?? null);
+    return parsed.success ? parsed.data : null;
   }
 }
 
@@ -1421,31 +1413,7 @@ serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
-    const rawBody = body && typeof body === "object" ? body as Record<string, unknown> : null;
-    const normalizedSubmissionIds = Array.isArray(rawBody?.submissionIds)
-      ? rawBody.submissionIds.filter((item): item is string => typeof item === "string")
-      : Array.isArray(rawBody?.submissions)
-        ? rawBody.submissions
-            .map((submission) =>
-              typeof submission === "string"
-                ? submission
-                : submission && typeof submission === "object" && typeof (submission as Record<string, unknown>).id === "string"
-                  ? (submission as Record<string, unknown>).id as string
-                  : null
-            )
-            .filter((item): item is string => Boolean(item))
-        : undefined;
-    const parsedRequest = GradeSubmissionRequestSchema.safeParse({
-      submissionIds: normalizedSubmissionIds,
-      submissionId: typeof rawBody?.submissionId === "string" ? rawBody.submissionId : undefined,
-      assignmentId:
-        typeof rawBody?.assignmentId === "string"
-          ? rawBody.assignmentId
-          : rawBody?.assignment && typeof rawBody.assignment === "object" && typeof (rawBody.assignment as Record<string, unknown>).id === "string"
-            ? (rawBody.assignment as Record<string, unknown>).id
-            : undefined,
-      force_regenerate: typeof rawBody?.force_regenerate === "boolean" ? rawBody.force_regenerate : undefined,
-    });
+    const parsedRequest = parseGradeSubmissionRequestPayload(body);
 
     if (!parsedRequest.success) {
       return new Response(

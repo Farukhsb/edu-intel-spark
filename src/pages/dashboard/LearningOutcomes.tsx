@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -63,6 +63,7 @@ const LearningOutcomes = () => {
 
   const statusColor = (s: string) => s === "above" ? "bg-success" : s === "approaching" ? "bg-warning" : "bg-destructive";
   const statusBadge = (s: string) => s === "above" ? "default" : s === "approaching" ? "secondary" : "destructive";
+  type BadgeVariant = NonNullable<BadgeProps["variant"]>;
   const statusLabel = (s: string) => s === "above" ? "Above" : s === "approaching" ? "Approaching" : "Below";
   const belowTargetOutcomes = outcomes.filter((outcome) => outcome.status !== "above");
   const decliningStudents = trajectories.filter((student) => student.trend === "declining");
@@ -298,7 +299,7 @@ const LearningOutcomes = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={statusBadge(lo.status) as any} className="text-xs">{statusLabel(lo.status)}</Badge>
+                      <Badge variant={statusBadge(lo.status) as BadgeVariant} className="text-xs">{statusLabel(lo.status)}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}

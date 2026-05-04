@@ -1,4 +1,5 @@
 import { logError, logWarn } from "./log.ts";
+import { z } from "npm:zod";
 
 export type IntegrityEvidenceItem = { label: string; value: string; score: number };
 
@@ -74,6 +75,11 @@ export interface IntegrityFlagLike {
     external_matches?: IntegrityEvidenceItem[];
   };
 }
+
+const ExistingNotePayloadSchema = z.object({
+  latestNote: z.string().catch(""),
+  history: z.array(z.unknown()).catch([]),
+});
 
 export const createIntegritySnapshot = (): IntegritySnapshot => ({
   totalScore: 0,
@@ -207,11 +213,8 @@ const parseExistingNotePayload = (raw: unknown) => {
   }
 
   try {
-    const parsed = JSON.parse(raw);
-    return {
-      latestNote: typeof parsed.latestNote === "string" ? parsed.latestNote : "",
-      history: Array.isArray(parsed.history) ? parsed.history : [],
-    };
+    const parsed = ExistingNotePayloadSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : { latestNote: "", history: [] as unknown[] };
   } catch {
     return { latestNote: "", history: [] as unknown[] };
   }

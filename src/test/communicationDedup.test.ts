@@ -200,4 +200,46 @@ describe("communication message dedupe", () => {
     });
     expect(mocks.insert).not.toHaveBeenCalled();
   });
+
+  it("ignores malformed existing rows and still inserts a valid new message", async () => {
+    mocks.limit.mockResolvedValueOnce({
+      data: [
+        {
+          id: "broken-message",
+          created_at: "2026-05-03T09:00:00.000Z",
+          cleared: false,
+          read: false,
+          category: "not-a-category",
+          recipient_name: "Sam Student",
+          recipient_email: "sam@student.test",
+          recipient_id: "student-1",
+          subject: "Feedback released",
+          body: "Your released result for Algorithms Essay is now available",
+          related_student_id: "student-1",
+          related_assignment_id: "assignment-1",
+        },
+      ],
+      error: null,
+    });
+
+    const result = await dispatchCommunicationMessage({
+      category: "grade-released",
+      recipientName: "Sam Student",
+      recipientEmail: "sam@student.test",
+      recipientId: "student-1",
+      subject: "Feedback released",
+      body: "Your released result for Algorithms Essay is now available",
+      relatedStudentId: "student-1",
+      relatedAssignmentId: "assignment-1",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: "created",
+      message: {
+        id: "message-1",
+      },
+    });
+    expect(mocks.insert).toHaveBeenCalledOnce();
+  });
 });

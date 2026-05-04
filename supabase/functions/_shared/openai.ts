@@ -1,6 +1,39 @@
 import type { AIResponse, AIResponseCriterion } from "@/types";
+import { z } from "npm:zod";
 
 const OPENAI_API_URL = "https://api.openai.com/v1";
+
+const AIResponseCriterionSchema: z.ZodType<AIResponseCriterion> = z
+  .object({
+    criterion_name: z.string(),
+    awarded_score: z.number(),
+    max_score: z.number(),
+    reason_for_score: z.string(),
+    evidence_from_submission: z.array(z.string()),
+    confidence_score: z.number(),
+    performance_band: z.string().nullable().optional(),
+    rubric_expectation: z.string().nullable().optional(),
+    improvement_actions: z.array(z.string()).nullable().optional(),
+    error_type: z.enum(["arithmetic_slip", "conceptual_flaw", "none"]).optional(),
+  })
+  .passthrough();
+
+const AIResponseSchema: z.ZodType<AIResponse> = z
+  .object({
+    total_score: z.number(),
+    overall_feedback: z.string(),
+    confidence_score: z.number(),
+    lecturer_review_required: z.boolean().optional(),
+    criteria: z.array(AIResponseCriterionSchema),
+    math_analysis: z
+      .object({
+        detected: z.boolean(),
+        summary: z.string().nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
 
 function getOpenAIApiKey() {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
@@ -102,7 +135,13 @@ export function extractOutputText(data: unknown): string {
 export function parseJsonText(text: string) {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  return JSON.parse((fenced?.[1] || trimmed).trim());
+  const candidate = (fenced?.[1] || trimmed).trim();
+
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    throw new Error("OpenAI returned invalid JSON content");
+  }
 }
 
 export function parseAIResponse(response: unknown): AIResponse {
@@ -115,17 +154,10 @@ export function parseAIResponse(response: unknown): AIResponse {
   const message = isRecord(firstChoice) && isRecord(firstChoice.message) ? firstChoice.message : null;
   const rawContent = typeof message?.content === "string" ? message.content : null;
 
-  let parsed: unknown;
-
   try {
-    parsed = rawContent ? JSON.parse(rawContent) : null;
+    const parsed = rawContent ? parseJsonText(rawContent) : null;
+    return AIResponseSchema.parse(parsed);
   } catch {
     throw new Error("AI grading failed due to invalid response format");
   }
-
-  if (!isAIResponse(parsed)) {
-    throw new Error("AI grading failed due to invalid response format");
-  }
-
-  return parsed as AIResponse;
 }

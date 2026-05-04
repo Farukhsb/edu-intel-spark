@@ -62,4 +62,27 @@ describe("moderation signal evaluation", () => {
 
     expect(result.triggerFlags).toContain("maths_concern");
   });
+
+  it("ignores malformed maths metadata without raising false moderation signals", () => {
+    const result = evaluateModerationSignals({
+      grade: {
+        ai_score: 65,
+        lecturer_score: 65,
+        lecturer_feedback: null,
+        grading_confidence: 0.88,
+        grading_metadata: {
+          math_analysis: {
+            solver_signals: [42, "valid signal"],
+            derivation_checks: "invalid-shape",
+          },
+        },
+        ai_breakdown: null,
+        ai_feedback: null,
+      },
+      integrityReview: null,
+      maxScore: 100,
+    });
+
+    expect(result.triggerFlags).not.toContain("maths_concern");
+  });
 });

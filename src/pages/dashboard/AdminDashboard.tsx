@@ -48,6 +48,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import { parseAdminDashboardSearchState } from "@/lib/schemas/navigation";
 import { toast } from "sonner";
 
 type AdminMetrics = {
@@ -1201,6 +1202,7 @@ const OverviewPage = ({
 const AdminDashboard = () => {
   const { profile } = useAuth();
   const [searchParams] = useSearchParams();
+  const adminSearchState = parseAdminDashboardSearchState(searchParams);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [metrics, setMetrics] = useState<AdminMetrics>(EMPTY_METRICS);
@@ -1215,17 +1217,12 @@ const AdminDashboard = () => {
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
   const [selectedUserPreview, setSelectedUserPreview] = useState<SelectedUserPreview>(null);
 
-  const activeView = useMemo<AdminView>(() => {
-    const view = searchParams.get("view");
-    return view === "users" || view === "system" || view === "assignments" || view === "submissions" || view === "audit"
-      ? view
-      : "overview";
-  }, [searchParams]);
+  const activeView = useMemo<AdminView>(() => adminSearchState.view, [adminSearchState.view]);
 
-  const activeUserFilter = useMemo(() => {
-    const filter = searchParams.get("filter");
-    return filter === "lecturer" || filter === "student" ? filter : null;
-  }, [searchParams]);
+  const activeUserFilter = useMemo(
+    () => (adminSearchState.userFilter === "lecturer" || adminSearchState.userFilter === "student" ? adminSearchState.userFilter : null),
+    [adminSearchState.userFilter],
+  );
 
   const loadAdminDashboard = async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
