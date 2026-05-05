@@ -244,8 +244,12 @@ describe("edge function hardening", () => {
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const runnerSource = readRepoFile("supabase/functions/_shared/integrity-provider-runners.ts");
 
-    expect(source).not.toContain("resolveMossRunnerConfig()");
-    expect(source).not.toContain("runMossSimilarityComparisons({");
+    expect(source).toContain("function resolveMossRunnerConfig()");
+    expect(source).toContain("const mossRunnerConfig = resolveMossRunnerConfig();");
+    expect(source).toContain("const shouldRunMossProvider = Boolean(mossRunnerConfig);");
+    expect(source).toContain("...await runMossSimilarityComparisons({");
+    expect(source).toContain('providerLabel: "moss"');
+    expect(source).toContain("MOSS similarity evidence could not be stored, but analysis completed.");
     expect(runnerSource).toContain('logInfo("moss_similarity_started"');
     expect(runnerSource).toContain('logInfo("moss_similarity_completed"');
     expect(runnerSource).toContain('logError("moss_similarity_failed"');
