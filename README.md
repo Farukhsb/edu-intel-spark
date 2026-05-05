@@ -203,11 +203,11 @@ An optional MOSS bridge is also available for code assignments. It is disabled b
 Required MOSS bridge secrets:
 
 - `MOSS_PROVIDER_ENABLED=true`
-- `MOSS_RUNNER_URL=https://...`
-- optional `MOSS_RUNNER_BEARER_TOKEN`
+- `MOSS_RUNNER_URL=https://your-runner/run-moss`
+- `MOSS_RUNNER_API_SECRET=your_shared_secret`
 - optional `MOSS_RUNNER_TIMEOUT_MS`
 
-The local HTTP runner scaffold for this bridge lives in [`tools/moss-runner`](tools/moss-runner/README.md).
+The standalone HTTP runner scaffold for this bridge lives in [`tools/moss-runner`](tools/moss-runner/README.md). In the current setup, GradeAI talks to a hosted runner over `x-api-key` auth rather than calling MOSS directly from the app.
 
 ## Key Engineering Decisions
 
@@ -258,13 +258,13 @@ Working well:
 
 Still improving:
 
-- broader live-environment verification
-- deeper live-environment verification of role boundaries and RLS behaviour
+- broader live-environment testing
+- more live verification of role boundaries and RLS behaviour
 - stricter TypeScript coverage
 - targeted recipient logic for assignment-published email notifications
 - final live email delivery validation after verified sender/API key setup
 - continued extraction of large page logic into smaller domain services
-- deeper operational logging and audit visibility
+- deeper operational history, alerting, and long-window audit visibility
 
 ## Recent Hardening and Improvements
 
@@ -285,6 +285,9 @@ Recent work has focused on making the product more reliable, safer to test, and 
 - improved route-level lazy loading and vendor bundle splitting
 - tightened the role model so admin is part of the real schema and public signup no longer trusts admin role input
 - added read-only admin oversight views for users, assignments, submissions, reporting, and system-level navigation
+- added an admin operational snapshot so backlog, moderation pressure, integrity risk, and grading failures are easier to see in one place
+- added local performance benchmarking and live read-path load testing for safer regression checks
+- added auth metadata role sync for admin role changes so Supabase auth metadata stays aligned with the database role model
 
 ## Documentation
 
@@ -371,6 +374,12 @@ Run unit and integration tests:
 npm run test
 ```
 
+Run local performance benchmarks:
+
+```bash
+npm run test:perf
+```
+
 Run coverage reporting:
 
 ```bash
@@ -389,6 +398,14 @@ Run Playwright browser tests:
 npx playwright install
 npm run test:e2e
 ```
+
+Run the live read-heavy load test against a deployed stack:
+
+```bash
+npm run test:load
+```
+
+The load test is intentionally conservative. It is meant to check read-path latency and access behaviour with scoped pilot accounts, not to simulate destructive grading or integrity writes.
 
 A useful local quality gate is:
 
