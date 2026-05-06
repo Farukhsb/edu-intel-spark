@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 
-GradeAI is an academic risk intelligence platform for higher education. It helps lecturers and institutions surface academic risk earlier by turning assessment activity, grading signals, integrity review, moderation, feedback release, cohort analytics, and intervention workflows into one connected picture.
+GradeAI is an academic risk intelligence platform for higher education and wider education settings. It helps lecturers, teachers, tutors, and institutions surface academic risk earlier by turning assessment activity, grading signals, integrity review, moderation, feedback release, cohort analytics, and intervention workflows into one connected picture.
 
-The platform is built on a simple premise: academic risk is easier to understand when assessment, feedback, integrity signals, and support actions are connected instead of scattered across separate tools. AI helps prepare evidence, summaries, and draft grading output, while academic judgement stays firmly with lecturers.
+The platform is built on a simple premise: academic risk is easier to understand when assessment, feedback, integrity signals, and support actions are connected instead of scattered across separate tools. AI helps prepare evidence, summaries, and draft grading output, while academic judgement stays firmly with educators.
 
 GradeAI is not a black-box auto-grading tool. It is designed to help educators see problems earlier, understand what is driving them, and act with more confidence through reviewable, evidence-led workflows.
 
@@ -19,7 +19,7 @@ student submits work
   -> student progress is tracked over time
 ```
 
-This is the product loop GradeAI is built around: assessment evidence becomes risk intelligence, and risk intelligence becomes timely lecturer-led action.
+This is the product loop GradeAI is built around: assessment evidence becomes risk intelligence, and risk intelligence becomes timely educator-led action.
 
 ## Why This Exists
 
@@ -27,7 +27,15 @@ Struggling students are often identified too late. The warning signs may already
 
 Assessment is central to this problem because it creates some of the clearest evidence of student progress. But marking, feedback, moderation, academic integrity review, analytics, and intervention records are often disconnected.
 
-GradeAI brings these parts together. The aim is not to automate academic judgement. The aim is to give lecturers clearer evidence and a more connected workflow for earlier support.
+GradeAI brings these parts together. The aim is not to automate academic judgement. The aim is to give educators clearer evidence and a more connected workflow for earlier support.
+
+## Where GradeAI Could Be Used
+
+Although GradeAI is currently framed around higher education workflows, the same problem exists across many education settings. Secondary schools, sixth-form colleges, further education colleges, polytechnics, training providers, and universities all need better ways to track assessment evidence, spot students who may be falling behind, manage feedback, review integrity concerns, and support learners before problems become harder to fix.
+
+The product is therefore intended to be adaptable across education levels. A university might use it for moderation, external examiner evidence, academic integrity review, and cohort-level analytics. A college or polytechnic might use it to track coursework, practical assignments, resubmissions, and learner support. A secondary school might use a more controlled version for teacher-reviewed feedback, progress monitoring, and early intervention.
+
+The core idea stays the same: GradeAI should support educators with clearer evidence and better workflows, while the institution keeps control of its data, policies, and final academic decisions.
 
 ## Academic Risk Intelligence
 
@@ -35,14 +43,14 @@ GradeAI treats academic risk as something institutions should be able to see ear
 
 Instead of waiting for end-of-term results, it reads day-to-day academic workflow data such as missing submissions, weak rubric performance, integrity concerns, repeated feedback patterns, release status, and cohort-level shifts to highlight where attention may be needed sooner.
 
-The goal is to help lecturers answer practical questions earlier:
+The goal is to help educators answer practical questions earlier:
 
 - Which students are showing early signs of academic risk?
 - Which assignments are generating weak outcomes or integrity concerns?
 - Which feedback patterns suggest recurring misunderstanding?
 - Which cases need moderation, review, or follow-up support?
 
-That makes GradeAI less about isolated grading automation and more about giving lecturers a live view of what is working, what is starting to drift, and where timely support could make the biggest difference.
+That makes GradeAI less about isolated grading automation and more about giving educators a live view of what is working, what is starting to drift, and where timely support could make the biggest difference.
 
 ## What GradeAI Does
 
@@ -51,7 +59,7 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - brings together assignment, submission, grading, integrity, moderation, and intervention data
 - highlights academic risk indicators from live workflow activity
 - shows where weak performance, missing work, or repeated issues are starting to build
-- supports earlier lecturer review before risk turns into failure, disengagement, or withdrawal
+- supports earlier educator review before risk turns into failure, disengagement, or withdrawal
 
 ### Assessment intelligence
 
@@ -59,7 +67,7 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - collect and review student submissions
 - run AI-assisted grading through backend Edge Functions
 - return criterion-level feedback, scores, evidence, and confidence signals
-- keep lecturer review at the centre before approval and release
+- keep educator review at the centre before approval and release
 
 ### Academic integrity and moderation
 
@@ -75,7 +83,7 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - support intervention notes and follow-up actions
 - give students released feedback and improvement guidance
 - keep provisional AI output away from students until work is approved and released
-- connect assessment evidence to practical lecturer follow-up
+- connect assessment evidence to practical educator follow-up
 
 ### Analytics and oversight
 
@@ -84,7 +92,7 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - assignment comparison
 - performance trends
 - integrity signal monitoring
-- rule-based recommendations for lecturer review
+- rule-based recommendations for educator review
 
 ### Workflow notifications
 
@@ -100,7 +108,7 @@ submission
   -> document extraction
   -> AI-assisted grading
   -> integrity and confidence signals
-  -> lecturer review
+  -> educator review
   -> moderation if required
   -> approval
   -> release
@@ -109,7 +117,7 @@ submission
   -> intervention / follow-up
 ```
 
-AI output is not treated as the final academic decision. Students only see feedback after it has passed through the lecturer review and release workflow.
+AI output is not treated as the final academic decision. Students only see feedback after it has passed through the educator review and release workflow.
 
 ## Platform Preview
 
@@ -141,17 +149,17 @@ Demo mode:
 
 Reusable synthetic assignment sets are used to demonstrate assignment briefs, rubric setup, AI-facing grading context, sample feedback, integrity review, and moderation examples.
 
-For real lecturers, sample assignment templates can prefill the assignment form, but they do not auto-create submissions, grades, integrity cases, or moderation records.
+For real lecturers or teachers, sample assignment templates can prefill the assignment form, but they do not auto-create submissions, grades, integrity cases, or moderation records.
 
 ## Key Product Areas
 
-### Lecturer workspace
+### Educator workspace
 
-Lecturers can identify students who may be struggling, review why a student or assessment has been flagged, create assignments, run AI-assisted grading and integrity checks, edit marks and feedback, manage moderation cases, and record intervention or follow-up actions.
+Educators can identify students who may be struggling, review why a student or assessment has been flagged, create assignments, run AI-assisted grading and integrity checks, edit marks and feedback, manage moderation cases, and record intervention or follow-up actions.
 
 ### Student workspace
 
-Students can submit work for open assignments, view released grades, read lecturer-approved feedback, use support tools to understand their performance, and track improvement-plan progress.
+Students can submit work for open assignments, view released grades, read educator-approved feedback, use support tools to understand their performance, and track improvement-plan progress.
 
 ### Institutional workflows
 
@@ -220,16 +228,16 @@ The production MOSS runner is hosted from a separate private repository. This pu
 
 GradeAI is built for education workflows where submissions, marks, feedback, integrity records, moderation decisions, and intervention notes may contain personal data. Because of that, the platform is designed with UK GDPR, GDPR-style data protection principles, institutional assessment rules, and academic governance expectations in mind.
 
-A key principle is that the university should remain in control of its own academic data. In a real deployment, the institution would decide where the database and storage live, who has access, how long records are kept, which providers are approved, and what policies apply to student submissions, marks, feedback, and integrity evidence. GradeAI is intended to sit on top of a controlled institutional backend rather than forcing academic records into an uncontrolled external database.
+A key principle is that the institution should remain in control of its own academic data. In a real deployment, the school, college, polytechnic, or university would decide where the database and storage live, who has access, how long records are kept, which providers are approved, and what policies apply to student submissions, marks, feedback, and integrity evidence. GradeAI is intended to sit on top of a controlled institutional backend rather than forcing academic records into an uncontrolled external database.
 
-This repository is a working prototype, not a claim of formal legal certification or institutional approval. Before any real university rollout, the institution would still need its own data protection review, DPIA where appropriate, data processing agreement, retention policy, and review of external providers and cross-border transfer arrangements.
+This repository is a working prototype, not a claim of formal legal certification or institutional approval. Before any real institutional rollout, the organisation would still need its own data protection review, DPIA where appropriate, data processing agreement, retention policy, and review of external providers and cross-border transfer arrangements.
 
 Current design controls include:
 
 - institution-controlled database and storage deployment model
-- role-based access between students, lecturers, moderators, admins, and external examiner-style views
+- role-based access between students, educators, moderators, admins, and external examiner-style views
 - Row-Level Security policies for database-level access control
-- lecturer approval before AI-assisted marks or feedback are released to students
+- educator approval before AI-assisted marks or feedback are released to students
 - student-facing views restricted to released feedback and approved assessment records
 - integrity and risk outputs treated as review evidence, not automatic misconduct or progression decisions
 - audit-oriented records for moderation, integrity findings, workflow events, and admin oversight
@@ -247,7 +255,7 @@ Education-specific concerns still requiring deployment-level governance include:
 - external processing boundaries for AI providers, email delivery, analytics, error monitoring, and the private MOSS runner
 - whether student work, marks, identifiers, or feedback may leave the institution's approved region or approved vendors
 
-GradeAI's intended position is decision-support, not automated academic decision-making. Lecturers remain responsible for reviewing evidence, approving marks, releasing feedback, and deciding whether integrity or support concerns need formal action under institutional policy.
+GradeAI's intended position is decision-support, not automated academic decision-making. Educators remain responsible for reviewing evidence, approving marks, releasing feedback, and deciding whether integrity or support concerns need formal action under institutional policy.
 
 ## Key Engineering Decisions
 
@@ -255,10 +263,10 @@ A few decisions shape how the platform works:
 
 - AI output is treated as draft support, not a final academic decision.
 - Students only see feedback after it has been approved and released.
-- Lecturer review remains central to grading, moderation, and integrity workflows.
+- Educator review remains central to grading, moderation, and integrity workflows.
 - Backend Edge Functions validate requests and check the authenticated user before sensitive operations.
 - Service-role access is limited to server-side functions with role and ownership checks.
-- Risk signals are explainable prompts for lecturer review, not automatic judgements about students.
+- Risk signals are explainable prompts for educator review, not automatic judgements about students.
 - Email notifications are controlled by feature flags and Supabase secrets so delivery can stay disabled until provider setup is complete.
 - Schema, RLS policies, workflow RPCs, and migrations are treated as part of the product, not just backend plumbing.
 
@@ -275,7 +283,7 @@ Current safeguards include:
 - application-level error boundaries show safe fallback messages rather than raw runtime error details
 - network and API failure paths are tested so failed requests do not leave users with misleading or stale academic data
 - integrity signals are presented as evidence for review, not proof of misconduct
-- risk indicators are presented as lecturer review prompts, not automated judgements
+- risk indicators are presented as educator review prompts, not automated judgements
 
 ## Current State
 
@@ -287,7 +295,7 @@ Working well:
 
 - core assignment and submission workflow
 - AI-assisted grading pipeline
-- lecturer review, approval, and release flow
+- educator review, approval, and release flow
 - student-facing released feedback
 - moderation workflow direction
 - citation-aware integrity review direction
