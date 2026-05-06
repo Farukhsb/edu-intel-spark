@@ -47,3 +47,4 @@ coverage/
 worktrees/
 supabase/manual_*.sql
 supabase/migrations_archive/
+tools/moss-runner/local/

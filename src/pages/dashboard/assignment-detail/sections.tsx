@@ -169,6 +169,7 @@ const getStudentWorkflowJourney = (status: SubmissionStatus | null) => {
 export const WorkflowActionsSection = ({
   isDemo,
   isLecturer,
+  submissionFileAccept,
   fileInputRef,
   bulkInputRef,
   handleStudentSubmit,
@@ -199,6 +200,7 @@ export const WorkflowActionsSection = ({
 }: {
   isDemo: boolean;
   isLecturer: boolean;
+  submissionFileAccept: string;
   fileInputRef: RefObject<HTMLInputElement>;
   bulkInputRef: RefObject<HTMLInputElement>;
   handleStudentSubmit: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -242,7 +244,7 @@ export const WorkflowActionsSection = ({
       )}
       {!isLecturer ? (
         <>
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleStudentSubmit} />
+          <input ref={fileInputRef} type="file" accept={submissionFileAccept} className="hidden" onChange={handleStudentSubmit} />
           <div className="space-y-3">
             {studentJourney && (
               <div className="rounded-xl border bg-muted/30 p-4">
@@ -294,7 +296,7 @@ export const WorkflowActionsSection = ({
             type="file"
             multiple
             className="hidden"
-            accept=".pdf,.doc,.docx,.txt,.zip,.py,.java,.cpp,.c,.js,.ts,.html,.css"
+            accept={submissionFileAccept}
             onChange={handleBulkUpload}
           />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

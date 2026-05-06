@@ -335,6 +335,32 @@ describe("AdminDashboard", () => {
     expect(screen.getAllByText("student@gradeai.test").length).toBeGreaterThan(0);
   });
 
+  it("can sync auth metadata for an existing user without changing the database role", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard?view=users&filter=student"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sync auth metadata" }));
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith("admin-set-user-role", {
+        body: {
+          targetUserId: "student-1",
+          syncOnly: true,
+        },
+      });
+    });
+
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Auth metadata synced for Sam Student.");
+  });
+
   it("uses observational wording in system health instead of claiming definitive live service health", async () => {
     render(
       <MemoryRouter
@@ -345,6 +371,8 @@ describe("AdminDashboard", () => {
       </MemoryRouter>,
     );
 
+    expect(await screen.findByRole("heading", { name: /Failure dashboard/i })).toBeInTheDocument();
+    expect(screen.getByText("Release backlog")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /System health/i })).toBeInTheDocument();
     expect(screen.getByText("Read snapshot succeeded")).toBeInTheDocument();
     expect(screen.getAllByText("No direct signal").length).toBeGreaterThan(0);

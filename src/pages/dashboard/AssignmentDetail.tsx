@@ -83,10 +83,47 @@ import type {
 } from "@/pages/dashboard/assignment-detail/types";
 import { useAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useAssignmentDetailData";
 
-const ALLOWED_SUBMISSION_TYPES = [
+const ALLOWED_SUBMISSION_TYPES = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
+  "text/plain",
+  "text/x-python",
+  "text/x-java-source",
+  "text/javascript",
+  "application/javascript",
+  "application/x-javascript",
+  "text/typescript",
+  "application/typescript",
+  "text/x-c",
+  "text/x-c++src",
+  "text/x-csharp",
+  "text/x-perl",
+  "text/x-pascal",
+  "text/x-haskell",
+  "text/x-verilog",
+  "text/x-vhdl",
+  "application/octet-stream",
+]);
+
+const ALLOWED_SUBMISSION_EXTENSIONS = new Set([
+  ".pdf",
+  ".docx",
+  ".txt",
+  ".py",
+  ".java",
+  ".js",
+  ".ts",
+  ".c",
+  ".cpp",
+  ".cs",
+  ".pl",
+  ".pas",
+  ".hs",
+  ".v",
+  ".vhd",
+]);
+
+const SUBMISSION_FILE_ACCEPT = Array.from(ALLOWED_SUBMISSION_EXTENSIONS).join(",");
 
 interface GradeSubmissionResult {
   submissionId: string;
@@ -128,6 +165,13 @@ const INTEGRITY_RUNTIME_WARNING_THRESHOLD = 30;
 const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
   const candidate = `${submission.file_name ?? ""} ${submission.file_url ?? ""}`.toLowerCase();
   return Boolean(submission.file_url?.trim()) && (candidate.includes(".pdf") || candidate.includes(".docx") || candidate.includes(".txt"));
+};
+
+const isAllowedSubmissionUpload = (file: File) => {
+  const normalizedType = file.type.trim().toLowerCase();
+  const normalizedName = file.name.trim().toLowerCase();
+  return ALLOWED_SUBMISSION_TYPES.has(normalizedType) ||
+    Array.from(ALLOWED_SUBMISSION_EXTENSIONS).some((extension) => normalizedName.endsWith(extension));
 };
 
 const AssignmentDetail = () => {
@@ -233,7 +277,7 @@ const AssignmentDetail = () => {
 
   const uploadFile = async (file: File, userId: string) => {
     if (!assignment) throw new Error("Missing assignment");
-    if (!ALLOWED_SUBMISSION_TYPES.includes(file.type)) {
+    if (!isAllowedSubmissionUpload(file)) {
       throw new Error("Unsupported file type");
     }
     const safeFileName = file.name.replace(/[\\/]/g, "_");
@@ -1731,6 +1775,7 @@ Please review the feedback in the platform and let me know if you would like to 
           <WorkflowActionsSection
             isDemo={isDemo}
             isLecturer={isLecturer}
+            submissionFileAccept={SUBMISSION_FILE_ACCEPT}
             fileInputRef={fileInputRef}
             bulkInputRef={bulkInputRef}
             handleStudentSubmit={handleStudentSubmit}

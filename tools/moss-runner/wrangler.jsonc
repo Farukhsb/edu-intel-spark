@@ -1,0 +1,31 @@
+{
+  "name": "gradeai-moss-runner",
+  "main": "worker.ts",
+  "compatibility_date": "2026-05-04",
+  "containers": [
+    {
+      "class_name": "MossRunnerContainer",
+      "image": "./Dockerfile",
+      "max_instances": 2
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MOSS_RUNNER",
+        "class_name": "MossRunnerContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "MossRunnerContainer"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

@@ -48,6 +48,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import {
+  buildOperationalMonitoringSnapshot,
+  type OperationalFailureCard,
+  type OperationalHealthItem,
+} from "@/lib/operationalMonitoring";
 import { parseAdminDashboardSearchState } from "@/lib/schemas/navigation";
 import { toast } from "sonner";
 
@@ -115,13 +120,6 @@ type AdminAuditRow = {
   target: string;
   detail: string;
   source: "admin" | "workflow";
-};
-
-type AdminHealthItem = {
-  label: string;
-  statusLabel: string;
-  tone: "healthy" | "warning" | "placeholder";
-  detail: string;
 };
 
 type ActivityItem = {
@@ -545,7 +543,7 @@ const OverviewCards = ({
 const SystemHealthSection = ({
   items,
 }: {
-  items: AdminHealthItem[];
+  items: OperationalHealthItem[];
 }) => (
   <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
     <Card className="border-border/70 shadow-sm">
@@ -610,16 +608,56 @@ const SystemHealthSection = ({
   </div>
 );
 
+const OperationalFailureSection = ({
+  cards,
+}: {
+  cards: OperationalFailureCard[];
+}) => (
+  <Card className="border-border/70 shadow-sm">
+    <CardHeader className="border-b border-border/60 pb-4">
+      <CardTitle className="text-base">Failure dashboard</CardTitle>
+      <CardDescription>Observed bottlenecks and failure-oriented workflow signals that deserve operational triage.</CardDescription>
+    </CardHeader>
+    <CardContent className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card) => (
+        <div key={card.title} className="rounded-xl border border-border/70 bg-background/80 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">{card.title}</p>
+            <Badge
+              variant="outline"
+              className={
+                card.tone === "healthy"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                  : card.tone === "warning"
+                    ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
+                    : "border-slate-500/30 bg-slate-500/10 text-slate-700"
+              }
+            >
+              {card.value}
+            </Badge>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{card.detail}</p>
+          <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{card.action}</p>
+        </div>
+      ))}
+    </CardContent>
+  </Card>
+);
+
 const UserManagementSection = ({
   users,
   onRequestRoleChange,
   changingUserId,
+  onSyncRoleMetadata,
+  syncingUserId,
   onViewUser,
   compact,
 }: {
   users: AdminUserRow[];
   onRequestRoleChange: (user: AdminUserRow, nextRole: "student" | "lecturer") => void;
   changingUserId: string | null;
+  onSyncRoleMetadata: (user: AdminUserRow) => void;
+  syncingUserId: string | null;
   onViewUser: (user: AdminUserRow) => void;
   compact?: boolean;
 }) => {
@@ -715,6 +753,14 @@ const UserManagementSection = ({
                             View
                           </Button>
                         ) : null}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={syncingUserId === user.id}
+                          onClick={() => onSyncRoleMetadata(user)}
+                        >
+                          {syncingUserId === user.id ? "Syncing..." : "Sync auth metadata"}
+                        </Button>
                         {user.role === "student" ? (
                           <Button
                             size="sm"
@@ -1166,6 +1212,7 @@ const RecentActivitySection = ({
 const OverviewPage = ({
   metrics,
   healthItems,
+  failureCards,
   users,
   assignments,
   moderationRows,
@@ -1173,10 +1220,13 @@ const OverviewPage = ({
   activityFeed,
   onRequestRoleChange,
   changingUserId,
+  onSyncRoleMetadata,
+  syncingUserId,
   onViewUser,
 }: {
   metrics: AdminMetrics;
-  healthItems: AdminHealthItem[];
+  healthItems: OperationalHealthItem[];
+  failureCards: OperationalFailureCard[];
   users: AdminUserRow[];
   assignments: AdminAssignmentRow[];
   moderationRows: AdminModerationRow[];
@@ -1184,12 +1234,23 @@ const OverviewPage = ({
   activityFeed: ActivityItem[];
   onRequestRoleChange: (user: AdminUserRow, nextRole: "student" | "lecturer") => void;
   changingUserId: string | null;
+  onSyncRoleMetadata: (user: AdminUserRow) => void;
+  syncingUserId: string | null;
   onViewUser: (user: AdminUserRow) => void;
 }) => (
   <div className="space-y-6">
     <OverviewCards metrics={metrics} />
+    <OperationalFailureSection cards={failureCards} />
     <SystemHealthSection items={healthItems} />
-    <UserManagementSection users={users} onRequestRoleChange={onRequestRoleChange} changingUserId={changingUserId} onViewUser={onViewUser} compact />
+    <UserManagementSection
+      users={users}
+      onRequestRoleChange={onRequestRoleChange}
+      changingUserId={changingUserId}
+      onSyncRoleMetadata={onSyncRoleMetadata}
+      syncingUserId={syncingUserId}
+      onViewUser={onViewUser}
+      compact
+    />
     <AssignmentOversightSection assignments={assignments} compact />
     <IntegrityModerationSection moderationRows={moderationRows} compact />
     <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -1206,7 +1267,8 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [metrics, setMetrics] = useState<AdminMetrics>(EMPTY_METRICS);
-  const [healthItems, setHealthItems] = useState<AdminHealthItem[]>([]);
+  const [healthItems, setHealthItems] = useState<OperationalHealthItem[]>([]);
+  const [failureCards, setFailureCards] = useState<OperationalFailureCard[]>([]);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [assignments, setAssignments] = useState<AdminAssignmentRow[]>([]);
   const [submissions, setSubmissions] = useState<AdminSubmissionRow[]>([]);
@@ -1215,6 +1277,7 @@ const AdminDashboard = () => {
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
   const [pendingRoleChange, setPendingRoleChange] = useState<PendingRoleChange>(null);
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
+  const [syncingUserId, setSyncingUserId] = useState<string | null>(null);
   const [selectedUserPreview, setSelectedUserPreview] = useState<SelectedUserPreview>(null);
 
   const activeView = useMemo<AdminView>(() => adminSearchState.view, [adminSearchState.view]);
@@ -1519,58 +1582,14 @@ const AdminDashboard = () => {
         });
       }
 
-      const healthSnapshot: AdminHealthItem[] = [
-        {
-          label: "AI grading service",
-          statusLabel: latestGradeRun ? "Observed activity" : "No direct signal",
-          tone: latestGradeRun ? "healthy" : "placeholder",
-          detail: latestGradeRun
-            ? `Latest grading evidence visible to admin was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}. This is an observed grading timestamp, not a live service heartbeat.`
-            : "Admin can see platform workflow, but direct grading-run telemetry is not yet exposed here.",
-        },
-        {
-          label: "Integrity checker",
-          statusLabel: moderationCaseRows.length > 0 ? "Observed cases" : "No recent cases",
-          tone: moderationCaseRows.length > 0 ? "healthy" : "placeholder",
-          detail:
-            moderationCaseRows.length > 0
-              ? `${highIntegrityRiskCases} elevated integrity case(s) are currently visible to admin. This reflects observed case data, not a provider heartbeat.`
-              : "No integrity or moderation case is currently visible in this snapshot, so provider health cannot be inferred from this page.",
-        },
-        {
-          label: "Supabase connection",
-          statusLabel: "Read snapshot succeeded",
-          tone: "healthy",
-          detail: "Profiles, assignments, submissions, and moderation tables loaded for this page refresh. This confirms dashboard reads, not full database health.",
-        },
-        {
-          label: "Email notifications",
-          statusLabel: emailNotificationsVisible ? "Records visible" : "No direct signal",
-          tone: emailNotificationsVisible ? "healthy" : "placeholder",
-          detail: emailNotificationsVisible
-            ? `${emailNotificationsCount} recent notification record(s) are visible from the communication log. This confirms records exist, not that delivery is enabled.`
-            : "Notification enablement and delivery health are not yet directly observable from the admin dashboard.",
-        },
-        {
-          label: "Last successful grading run",
-          statusLabel: latestGradeRun ? safeFormatDate(latestGradeRun, "MMM d, HH:mm", "Recorded") : "Not exposed",
-          tone: latestGradeRun ? "healthy" : "placeholder",
-          detail: latestGradeRun
-            ? "Latest grade creation timestamp is being used as an inferred grading activity signal."
-            : "A dedicated grading-run telemetry record would make this signal more reliable.",
-        },
-        {
-          label: "Failed grading attempts today",
-          statusLabel: aiGradingFailures == null ? "Pending" : String(aiGradingFailures),
-          tone: aiGradingFailures == null ? "placeholder" : aiGradingFailures > 0 ? "warning" : "healthy",
-          detail:
-            aiGradingFailures == null
-              ? "Failure counts remain placeholder until grading error events are exposed consistently to admins."
-              : aiGradingFailures > 0
-                ? "At least one workflow audit event suggests a grading failure today."
-                : "No grading failures were detected in the visible workflow audit entries today.",
-        },
-      ];
+      const monitoringSnapshot = buildOperationalMonitoringSnapshot({
+        latestGradeRun,
+        aiGradingFailures,
+        moderationRows: moderationCaseRows,
+        submissions: submissionRows,
+        emailNotificationsVisible,
+        emailNotificationsCount,
+      });
 
       setUsers(profileRows);
       setAssignments(assignmentRows);
@@ -1587,7 +1606,20 @@ const AdminDashboard = () => {
         aiGradingFailures,
         highIntegrityRiskCases: rpcMetrics?.high_integrity_risk_cases ?? highIntegrityRiskCases,
       });
-      setHealthItems(healthSnapshot);
+      setHealthItems(monitoringSnapshot.healthItems.map((item) => ({
+        ...item,
+        statusLabel:
+          item.label === "Last successful grading run" && latestGradeRun
+            ? safeFormatDate(latestGradeRun, "MMM d, HH:mm", "Recorded")
+            : item.statusLabel,
+        detail:
+          item.label === "AI grading service" && latestGradeRun
+            ? item.tone === "warning"
+              ? `${item.detail} The latest visible grade row was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}.`
+              : `Latest grading evidence visible to admin was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}. This is an observed grading timestamp, not a live service heartbeat.`
+            : item.detail,
+      })));
+      setFailureCards(monitoringSnapshot.failureCards);
       setActivityFeed(
         rpcActivityFeed ??
           buildActivityFeed({
@@ -1664,6 +1696,29 @@ const AdminDashboard = () => {
     setChangingUserId(null);
   };
 
+  const syncUserRoleMetadata = async (targetUser: AdminUserRow) => {
+    setSyncingUserId(targetUser.id);
+    try {
+      const { error } = await supabase.functions.invoke("admin-set-user-role", {
+        body: {
+          targetUserId: targetUser.id,
+          syncOnly: true,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Auth metadata synced for ${targetUser.fullName || "user"}.`);
+      await loadAdminDashboard({ silent: true });
+    } catch (error) {
+      log.error("Failed to sync auth metadata for user", error, {
+        targetUserId: targetUser.id,
+      });
+      toast.error(await getFunctionErrorMessage(error, "Auth metadata could not be synced."));
+    }
+    setSyncingUserId(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1688,7 +1743,14 @@ const AdminDashboard = () => {
       <DashboardHeader refreshing={refreshing} onRefresh={() => void loadAdminDashboard({ silent: true })} />
 
       {activeView === "users" ? (
-        <UserManagementSection users={visibleUsers} onRequestRoleChange={requestRoleChange} changingUserId={changingUserId} onViewUser={setSelectedUserPreview} />
+        <UserManagementSection
+          users={visibleUsers}
+          onRequestRoleChange={requestRoleChange}
+          changingUserId={changingUserId}
+          onSyncRoleMetadata={syncUserRoleMetadata}
+          syncingUserId={syncingUserId}
+          onViewUser={setSelectedUserPreview}
+        />
       ) : activeView === "assignments" ? (
         <AssignmentOversightSection assignments={assignments} />
       ) : activeView === "submissions" ? (
@@ -1700,6 +1762,7 @@ const AdminDashboard = () => {
         </div>
       ) : activeView === "system" ? (
         <div className="space-y-6">
+          <OperationalFailureSection cards={failureCards} />
           <SystemHealthSection items={healthItems} />
           <IntegrityModerationSection moderationRows={moderationRows} />
           <RecentActivitySection activityFeed={activityFeed} />
@@ -1708,6 +1771,7 @@ const AdminDashboard = () => {
         <OverviewPage
           metrics={metrics}
           healthItems={healthItems}
+          failureCards={failureCards}
           users={users}
           assignments={assignments}
           moderationRows={moderationRows}
@@ -1715,6 +1779,8 @@ const AdminDashboard = () => {
           activityFeed={activityFeed}
           onRequestRoleChange={requestRoleChange}
           changingUserId={changingUserId}
+          onSyncRoleMetadata={syncUserRoleMetadata}
+          syncingUserId={syncingUserId}
           onViewUser={setSelectedUserPreview}
         />
       )}
