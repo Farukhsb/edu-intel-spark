@@ -185,29 +185,36 @@ Important Edge Functions:
 
 ### Integrity provider modes
 
-`check-plagiarism` now supports two live backend integrity providers:
+`check-plagiarism` now supports provider-abstracted backend integrity checks:
 
 - `llm_legacy`
 - `internal_text_similarity`
 - `both` through `INTEGRITY_PROVIDER_MODE`
+- optional MOSS code-similarity evidence through the private runner bridge
 
 The lecturer-facing plagiarism workflow still keeps the established response shape, but `internal_text_similarity` is now part of the live backend decision path. It contributes pairwise similarity flags and risk scoring during `check-plagiarism`, and it also writes evidence rows to `public.integrity_findings` for audit and future provider-specific UI work.
 
-A hosted MOSS bridge is available for code assignments and can be enabled per environment. It keeps the visible plagiarism UI unchanged. When configured, it:
+GradeAI also includes a working provider-abstracted MOSS integration for code-based assignments. The main app does not call Stanford MOSS directly. Instead, the `check-plagiarism` Edge Function sends eligible code submissions to a separately hosted private MOSS runner over HTTPS using `x-api-key` authentication.
 
-- only runs for code-like file extensions
-- calls an external HTTP runner that performs the actual MOSS submission
+When configured, the MOSS provider:
+
+- only runs for supported code-like file extensions
+- sends eligible extracted source text to the private runner
+- lets the private runner perform the actual Stanford MOSS submission
 - stores code-similarity evidence in `public.integrity_findings` with `provider = 'moss'`
+- keeps the existing lecturer plagiarism UI stable
 - never blocks or replaces the existing plagiarism response path
 
-Required MOSS bridge secrets:
+This keeps the public GradeAI application separate from the private MOSS execution environment. The Stanford MOSS script, MOSS user ID, runner secrets, and production runner deployment stay outside this public repository.
+
+Required GradeAI-side MOSS bridge secrets:
 
 - `MOSS_PROVIDER_ENABLED=true`
 - `MOSS_RUNNER_URL=https://your-runner/run-moss`
 - `MOSS_RUNNER_API_SECRET=your_shared_secret`
 - optional `MOSS_RUNNER_TIMEOUT_MS`
 
-The standalone HTTP runner for this bridge lives in [`tools/moss-runner`](tools/moss-runner/README.md). In the current setup, GradeAI talks to a hosted Railway runner over `x-api-key` auth rather than calling MOSS directly from the app.
+The production MOSS runner is hosted from a separate private repository. This public repo documents the integration contract and expected environment variables only.
 
 ## Key Engineering Decisions
 
@@ -251,6 +258,7 @@ Working well:
 - student-facing released feedback
 - moderation workflow direction
 - citation-aware integrity review direction
+- provider-abstracted integrity pipeline with internal text similarity and private-runner MOSS support
 - cohort analytics and early support signals
 - GitHub Actions CI, tests, and build checks
 - backend hardening around CORS, lint, service-role usage, and secrets handling
