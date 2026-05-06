@@ -216,6 +216,39 @@ Required GradeAI-side MOSS bridge secrets:
 
 The production MOSS runner is hosted from a separate private repository. This public repo documents the integration contract and expected environment variables only.
 
+## Legal, Compliance, And Education Data Handling
+
+GradeAI is built for education workflows where submissions, marks, feedback, integrity records, moderation decisions, and intervention notes may contain personal data. Because of that, the platform is designed with UK GDPR, GDPR-style data protection principles, institutional assessment rules, and academic governance expectations in mind.
+
+A key principle is that the university should remain in control of its own academic data. In a real deployment, the institution would decide where the database and storage live, who has access, how long records are kept, which providers are approved, and what policies apply to student submissions, marks, feedback, and integrity evidence. GradeAI is intended to sit on top of a controlled institutional backend rather than forcing academic records into an uncontrolled external database.
+
+This repository is a working prototype, not a claim of formal legal certification or institutional approval. Before any real university rollout, the institution would still need its own data protection review, DPIA where appropriate, data processing agreement, retention policy, and review of external providers and cross-border transfer arrangements.
+
+Current design controls include:
+
+- institution-controlled database and storage deployment model
+- role-based access between students, lecturers, moderators, admins, and external examiner-style views
+- Row-Level Security policies for database-level access control
+- lecturer approval before AI-assisted marks or feedback are released to students
+- student-facing views restricted to released feedback and approved assessment records
+- integrity and risk outputs treated as review evidence, not automatic misconduct or progression decisions
+- audit-oriented records for moderation, integrity findings, workflow events, and admin oversight
+- feature flags and server-side secrets for email, AI, analytics, and external provider integrations
+- privacy-minimised analytics guidance, with academic content, names, and email addresses kept out of product analytics
+- demo mode using synthetic data rather than real academic records for reviewer walkthroughs
+
+Education-specific concerns still requiring deployment-level governance include:
+
+- clear student and staff notices explaining how the system is used
+- lawful basis for processing academic and support data
+- retention periods for submissions, marks, feedback, integrity findings, and intervention records
+- handling of data subject rights such as access, correction, deletion, and objection where applicable
+- institutional rules on AI-assisted marking, moderation, academic judgement, appeals, and academic misconduct procedures
+- external processing boundaries for AI providers, email delivery, analytics, error monitoring, and the private MOSS runner
+- whether student work, marks, identifiers, or feedback may leave the institution's approved region or approved vendors
+
+GradeAI's intended position is decision-support, not automated academic decision-making. Lecturers remain responsible for reviewing evidence, approving marks, releasing feedback, and deciding whether integrity or support concerns need formal action under institutional policy.
+
 ## Key Engineering Decisions
 
 A few decisions shape how the platform works:
@@ -262,7 +295,7 @@ Working well:
 - cohort analytics and early support signals
 - GitHub Actions CI, tests, and build checks
 - backend hardening around CORS, lint, service-role usage, and secrets handling
-- production-readiness documentation around security, testing, rollout, and monitoring
+- production-readiness documentation around security, testing, rollout, monitoring, and education data governance
 
 Still improving:
 
