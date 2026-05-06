@@ -175,6 +175,85 @@ function createUserSupabaseMock() {
   };
 }
 
+function createCodeUserSupabaseMock() {
+  return {
+    from(table: string) {
+      if (table === "assignments") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: ids.assignment,
+                  lecturer_id: ids.lecturer,
+                  title: "Essay 1",
+                  description: "Compare integrity signals",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "submissions") {
+        return {
+          select: () => ({
+            eq: () => {
+              const assignmentWideResult: Promise<{ data: Array<Record<string, string>>; error: null }> = Promise.resolve({
+                data: [
+                  {
+                    id: ids.submissionB,
+                    assignment_id: ids.assignment,
+                    student_id: ids.studentB,
+                    student_name: "Student B",
+                    student_email: "b@example.com",
+                    file_name: "b.py",
+                    file_url: "submission-b.py",
+                  },
+                  {
+                    id: ids.submissionC,
+                    assignment_id: ids.assignment,
+                    student_id: ids.studentC,
+                    student_name: "Student C",
+                    student_email: "c@example.com",
+                    file_name: "c.py",
+                    file_url: "submission-c.py",
+                  },
+                ],
+                error: null,
+              });
+
+              (assignmentWideResult as Promise<{ data: Array<Record<string, string>>; error: null }> & {
+                in: () => Promise<{ data: Array<Record<string, string>>; error: null }>;
+              }).in = async () => ({
+                data: [
+                  {
+                    id: ids.submissionC,
+                    assignment_id: ids.assignment,
+                    student_id: ids.studentC,
+                    student_name: "Student C",
+                    student_email: "c@example.com",
+                    file_name: "c.py",
+                    file_url: "submission-c.py",
+                  },
+                ],
+                error: null,
+              });
+
+              return assignmentWideResult as Promise<{ data: Array<Record<string, string>>; error: null }> & {
+                in: () => Promise<{ data: Array<Record<string, string>>; error: null }>;
+              };
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected user table ${table}`);
+    },
+  };
+}
+
 function createUserSupabaseMockWithAssignmentWideFailure() {
   let submissionsQueryCount = 0;
 
@@ -621,6 +700,11 @@ function createLargeCohortAdminSupabaseMock(cohortSize: number) {
 
 describe("check-plagiarism handler", () => {
   const originalProviderMode = process.env.INTEGRITY_PROVIDER_MODE;
+  const originalMossEnabled = process.env.MOSS_PROVIDER_ENABLED;
+  const originalMossRunnerUrl = process.env.MOSS_RUNNER_URL;
+  const originalMossRunnerApiSecret = process.env.MOSS_RUNNER_API_SECRET;
+  const originalMossRunnerBearer = process.env.MOSS_RUNNER_BEARER_TOKEN;
+  const originalMossRunnerTimeout = process.env.MOSS_RUNNER_TIMEOUT_MS;
 
   beforeEach(() => {
     resetRateLimitStore();
@@ -676,6 +760,93 @@ describe("check-plagiarism handler", () => {
     expect(payload.summary).toContain("1 submission(s) crossed");
     expect(adminSupabase.integrityFindingUpsert).toHaveBeenCalledTimes(1);
     expect(adminSupabase.reviewUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the optional MOSS bridge for code submissions without breaking the existing flow", async () => {
+    process.env.INTEGRITY_PROVIDER_MODE = "both";
+    process.env.MOSS_PROVIDER_ENABLED = "true";
+    process.env.MOSS_RUNNER_URL = "https://moss-runner.test/moss";
+    process.env.MOSS_RUNNER_API_SECRET = "runner-secret";
+    process.env.MOSS_RUNNER_TIMEOUT_MS = "5000";
+
+    const adminSupabase = createAdminSupabaseMock();
+    const openAiMock = vi.fn(async () => ({ flags: [], summary: "Legacy analysis completed." }));
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({
+        report_url: "https://moss.example/report/123",
+        findings: [
+          {
+            submission_id: ids.submissionC,
+            compared_submission_id: ids.submissionB,
+            similarity_score: 91,
+            severity: "high",
+            evidence_summary: "MOSS reported strong code overlap.",
+            matched_phrases: ["def reconcile_queue(items):"],
+            raw_metadata: { match_path: "/match-1.html" },
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const handler = createCheckPlagiarismHandler({
+      createAdminClient: () => adminSupabase,
+      requireLecturer: async () => ({
+        supabase: createCodeUserSupabaseMock(),
+        user: { id: ids.lecturer },
+      }),
+      jsonError: (error) =>
+        new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+      getCorsHeaders: () => ({ "Access-Control-Allow-Origin": "http://localhost:5173" }),
+      createCorsForbiddenResponse: () => new Response("forbidden", { status: 403 }),
+      createIntegrityResponseWithRetry: openAiMock,
+    });
+
+    const response = await handler(
+      new Request("https://gradeai.test/functions/v1/check-plagiarism", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer test-token",
+        },
+        body: JSON.stringify({
+          assignmentId: ids.assignment,
+          submissionIds: [ids.submissionC],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+
+    expect(openAiMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://moss-runner.test/moss",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "x-api-key": "runner-secret",
+        }),
+      }),
+    );
+    expect(payload.flags).toHaveLength(1);
+    expect(payload.flags[0]).toMatchObject({
+      submission_a_id: ids.submissionC,
+      submission_b_id: ids.submissionB,
+      integrity_type: "similarity",
+    });
+    expect(adminSupabase.integrityFindingUpsert).toHaveBeenCalled();
+    expect(adminSupabase.integrityFindingUpsert.mock.calls.flat().some((arg) =>
+      Array.isArray(arg) &&
+      arg.some((row) => row.provider === "moss")
+    )).toBe(true);
   });
 
   it("merges internal and AI similarity signals in both mode without duplicate pair flags", async () => {
@@ -1418,6 +1589,11 @@ describe("check-plagiarism handler", () => {
 
   afterEach(() => {
     process.env.INTEGRITY_PROVIDER_MODE = originalProviderMode;
+    process.env.MOSS_PROVIDER_ENABLED = originalMossEnabled;
+    process.env.MOSS_RUNNER_URL = originalMossRunnerUrl;
+    process.env.MOSS_RUNNER_API_SECRET = originalMossRunnerApiSecret;
+    process.env.MOSS_RUNNER_BEARER_TOKEN = originalMossRunnerBearer;
+    process.env.MOSS_RUNNER_TIMEOUT_MS = originalMossRunnerTimeout;
     vi.restoreAllMocks();
   });
 });
