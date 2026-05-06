@@ -180,10 +180,6 @@ Then point GradeAI at:
 MOSS_RUNNER_URL=https://your-runner.up.railway.app/run-moss
 ```
 
-## Hosting note
-
-This repo still contains the optional `worker.ts` and `wrangler.jsonc` files from an earlier Cloudflare Containers attempt, but the working deployed path is Railway. Treat the Railway setup above as the canonical host configuration unless you intentionally decide to revisit a Worker-container deployment later.
-
 ## Docker
 
 Build locally:

@@ -703,7 +703,6 @@ describe("check-plagiarism handler", () => {
   const originalMossEnabled = process.env.MOSS_PROVIDER_ENABLED;
   const originalMossRunnerUrl = process.env.MOSS_RUNNER_URL;
   const originalMossRunnerApiSecret = process.env.MOSS_RUNNER_API_SECRET;
-  const originalMossRunnerBearer = process.env.MOSS_RUNNER_BEARER_TOKEN;
   const originalMossRunnerTimeout = process.env.MOSS_RUNNER_TIMEOUT_MS;
 
   beforeEach(() => {
@@ -1592,7 +1591,6 @@ describe("check-plagiarism handler", () => {
     process.env.MOSS_PROVIDER_ENABLED = originalMossEnabled;
     process.env.MOSS_RUNNER_URL = originalMossRunnerUrl;
     process.env.MOSS_RUNNER_API_SECRET = originalMossRunnerApiSecret;
-    process.env.MOSS_RUNNER_BEARER_TOKEN = originalMossRunnerBearer;
     process.env.MOSS_RUNNER_TIMEOUT_MS = originalMossRunnerTimeout;
     vi.restoreAllMocks();
   });

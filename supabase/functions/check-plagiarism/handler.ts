@@ -233,7 +233,7 @@ function resolveMossRunnerConfig(): MossRunnerConfig | null {
 
   return {
     runnerUrl,
-    apiKey: readEnv("MOSS_RUNNER_API_SECRET")?.trim() || readEnv("MOSS_RUNNER_BEARER_TOKEN")?.trim() || null,
+    apiKey: readEnv("MOSS_RUNNER_API_SECRET")?.trim() || null,
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 20_000,
   };
 }

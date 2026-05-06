@@ -1,17 +1,12 @@
 {
-  "name": "gradeai-moss-runner-cloudflare",
+  "name": "gradeai-moss-runner",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "deploy": "wrangler deploy"
+    "start": "node server.js"
   },
   "dependencies": {
-    "@cloudflare/containers": "^0.0.19",
     "express": "^4.21.2",
     "multer": "^2.0.2"
-  },
-  "devDependencies": {
-    "wrangler": "^4.42.0"
   }
 }
