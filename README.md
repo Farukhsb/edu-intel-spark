@@ -193,7 +193,7 @@ Important Edge Functions:
 
 The lecturer-facing plagiarism workflow still keeps the established response shape, but `internal_text_similarity` is now part of the live backend decision path. It contributes pairwise similarity flags and risk scoring during `check-plagiarism`, and it also writes evidence rows to `public.integrity_findings` for audit and future provider-specific UI work.
 
-An optional MOSS bridge is also available for code assignments. It is disabled by default and does not change the visible plagiarism UI. When explicitly configured, it:
+A hosted MOSS bridge is available for code assignments and can be enabled per environment. It keeps the visible plagiarism UI unchanged. When configured, it:
 
 - only runs for code-like file extensions
 - calls an external HTTP runner that performs the actual MOSS submission
@@ -207,7 +207,7 @@ Required MOSS bridge secrets:
 - `MOSS_RUNNER_API_SECRET=your_shared_secret`
 - optional `MOSS_RUNNER_TIMEOUT_MS`
 
-The standalone HTTP runner scaffold for this bridge lives in [`tools/moss-runner`](tools/moss-runner/README.md). In the current setup, GradeAI talks to a hosted runner over `x-api-key` auth rather than calling MOSS directly from the app.
+The standalone HTTP runner for this bridge lives in [`tools/moss-runner`](tools/moss-runner/README.md). In the current setup, GradeAI talks to a hosted Railway runner over `x-api-key` auth rather than calling MOSS directly from the app.
 
 ## Key Engineering Decisions
 
@@ -258,8 +258,8 @@ Working well:
 
 Still improving:
 
-- broader live-environment testing
-- more live verification of role boundaries and RLS behaviour
+- broader live scenario coverage beyond the role, load, and integrity checks already completed
+- more live verification of less common role boundaries and RLS edge cases
 - stricter TypeScript coverage
 - targeted recipient logic for assignment-published email notifications
 - final live email delivery validation after verified sender/API key setup
