@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import type { RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
 import {
-  dispatchWorkflowNotificationEmail,
 } from "@/lib/communications";
 import { isStudentGradeVisible } from "@/lib/assessmentWorkflow";
 import {
@@ -453,25 +452,9 @@ const Assignments = () => {
             });
           }
 
-          const emailResult = await dispatchWorkflowNotificationEmail({
-            category: "assignment-published",
-            assignmentId: id,
-          }).catch(() => {
-            log.warn("Assignment publish notification email failed", {
-              assignmentId: id,
-            });
-            return { ok: false, status: "failed" as const, reason: "dispatch_rejected" };
-          });
-
-          publishWorkflowSummary.emailStatus = emailResult.status;
-
-          if (!emailResult.ok) {
-            log.warn("Assignment publish notification email failed", {
-              assignmentId: id,
-              status: emailResult.status,
-            });
-          }
         }
+
+        publishWorkflowSummary.emailStatus = "skipped";
 
         const publishFeedback = summarizeAssignmentPublishWorkflow(publishWorkflowSummary);
 

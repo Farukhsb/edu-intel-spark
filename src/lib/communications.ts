@@ -132,7 +132,10 @@ const CommunicationMessageReadOnlyRowSchema = CommunicationMessageRowSchema.omit
 });
 
 const WorkflowEmailResponseSchema = z.object({
+  success: z.boolean().optional(),
+  skipped: z.boolean().optional(),
   reason: z.string().optional(),
+  sentCount: z.number().optional(),
 });
 
 const COMMUNICATION_MESSAGE_SELECT =
@@ -726,6 +729,28 @@ export interface WorkflowEmailDispatchResult {
   reason?: string | null;
 }
 
+type FunctionErrorLike = {
+  message?: string;
+  context?: {
+    clone?: () => {
+      text: () => Promise<string>;
+    };
+  };
+};
+
+const readFunctionErrorResponse = async (error: FunctionErrorLike | null | undefined) => {
+  const response = error?.context;
+  if (!response?.clone) return null;
+
+  try {
+    const text = await response.clone().text();
+    const normalized = text.replace(/\s+/g, " ").trim();
+    return normalized.slice(0, 500) || null;
+  } catch {
+    return null;
+  }
+};
+
 export const dispatchWorkflowNotificationEmail = async (
   request: WorkflowEmailRequest,
 ): Promise<WorkflowEmailDispatchResult> => {
@@ -744,15 +769,38 @@ export const dispatchWorkflowNotificationEmail = async (
     return { ok: false, status: "invalid", reason: "invalid_request" };
   }
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token ?? null;
+  const safeRequestContext = {
+    category: request.category as WorkflowEmailCategory,
+    assignmentId: request.assignmentId,
+    submissionId: "submissionId" in request ? request.submissionId : null,
+  };
+
+  if (!accessToken) {
+    log.warn("Workflow notification email could not be sent because the browser session is missing", {
+      ...safeRequestContext,
+    });
+    return { ok: false, status: "failed", reason: "missing_session" };
+  }
+
+  log.info("Workflow notification email invoke started", safeRequestContext);
+
   const { data, error } = await supabase.functions.invoke("send-workflow-notification-email", {
     body: parsed.data,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 
   if (error) {
+    const functionResponse = await readFunctionErrorResponse(error as FunctionErrorLike);
     log.warn("Workflow notification email did not send", {
-      category: request.category as WorkflowEmailCategory,
-      assignmentId: request.assignmentId,
-      submissionId: "submissionId" in request ? request.submissionId : null,
+      ...safeRequestContext,
+      errorMessage: error.message ?? null,
+      functionResponse,
     });
     return { ok: false, status: "failed", reason: "invoke_failed" };
   }
@@ -761,10 +809,22 @@ export const dispatchWorkflowNotificationEmail = async (
   const duplicate = parsedResponse.success && parsedResponse.data.reason === "duplicate_notification";
 
   if (duplicate) {
+    log.info("Workflow notification email invoke succeeded", {
+      ...safeRequestContext,
+      outcome: "duplicate",
+      reason: "duplicate_notification",
+    });
     return { ok: true, status: "duplicate", reason: "duplicate_notification" };
   }
 
-  return { ok: true, status: "sent", reason: null };
+  const reason = parsedResponse.success ? parsedResponse.data.reason ?? null : null;
+  log.info("Workflow notification email invoke succeeded", {
+    ...safeRequestContext,
+    outcome: "sent",
+    reason,
+  });
+
+  return { ok: true, status: "sent", reason };
 };
 
 export const sendWorkflowNotificationEmail = async (request: WorkflowEmailRequest) => {
@@ -830,6 +890,14 @@ export const loadVisibleCommunicationMessages = async (options: {
   email?: string | null;
   fullName?: string | null;
 }) => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("communication_messages")
     .select(COMMUNICATION_MESSAGE_SELECT)

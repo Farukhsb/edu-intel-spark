@@ -22,7 +22,6 @@ import {
   buildGradeReleasedNotification,
   buildIntegrityCheckReadyNotification,
   buildSubmissionReceivedNotification,
-  dispatchWorkflowNotificationEmail,
   type DraftCommunicationMessage,
   queueCommunicationMessage,
 } from "@/lib/communications";
@@ -355,26 +354,6 @@ const AssignmentDetail = () => {
           workflow: "submission",
         },
       );
-      if (insertedSubmission?.id) {
-        void dispatchWorkflowNotificationEmail({
-          category: "submission-received",
-          assignmentId: assignment.id,
-          submissionId: insertedSubmission.id,
-        }).then((result) => {
-          if (!result.ok) {
-            log.warn("Submission notification email failed", {
-              assignmentId: assignment.id,
-              submissionId: insertedSubmission.id,
-              status: result.status,
-            });
-          }
-        }).catch(() => {
-          log.warn("Submission notification email failed", {
-            assignmentId: assignment.id,
-            submissionId: insertedSubmission.id,
-          });
-        });
-      }
       toast.success("Submission uploaded successfully");
       await reloadSubmissions();
     } catch (error: unknown) {
@@ -742,14 +721,7 @@ const AssignmentDetail = () => {
           return Boolean(result);
         },
         sendEmail: async () => {
-          if (!assignment) return false;
-
-          const emailResult = await dispatchWorkflowNotificationEmail({
-            category: "grade-released",
-            assignmentId: assignment.id,
-            submissionId: sub.id,
-          });
-          return emailResult.ok;
+          return true;
         },
       });
 
@@ -1314,24 +1286,6 @@ Please review the feedback in the platform and let me know if you would like to 
       toast.error("Could not save release note");
       return;
     }
-    void dispatchWorkflowNotificationEmail({
-      category: "grade-released",
-      assignmentId: assignment.id,
-      submissionId: sub.id,
-    }).then((emailResult) => {
-      if (!emailResult.ok) {
-        log.warn("Grade release notification email failed", {
-          assignmentId: assignment.id,
-          submissionId: sub.id,
-          status: emailResult.status,
-        });
-      }
-    }).catch(() => {
-      log.warn("Grade release notification email failed", {
-        assignmentId: assignment.id,
-        submissionId: sub.id,
-      });
-    });
     toast.success("Grade release note saved");
   };
 
@@ -1403,13 +1357,7 @@ Please review the feedback in the platform and let me know if you would like to 
         return Boolean(savedNotification);
       },
       sendEmail: async () => {
-        const emailResult = await dispatchWorkflowNotificationEmail({
-          category: "grade-released",
-          assignmentId: assignment.id,
-          submissionId: sub.id,
-        });
-
-        return emailResult.ok;
+        return true;
       },
     });
 
