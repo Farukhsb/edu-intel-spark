@@ -173,6 +173,52 @@ const isAllowedSubmissionUpload = (file: File) => {
     Array.from(ALLOWED_SUBMISSION_EXTENSIONS).some((extension) => normalizedName.endsWith(extension));
 };
 
+const loadTargetedStudentProfiles = async (assignmentId: string) => {
+  const [cohortResult, departmentResult] = await Promise.all([
+    supabase
+      .from("assignment_cohorts")
+      .select("cohort_id")
+      .eq("assignment_id", assignmentId),
+    supabase
+      .from("assignment_departments")
+      .select("department_id")
+      .eq("assignment_id", assignmentId),
+  ]);
+
+  if (cohortResult.error) throw cohortResult.error;
+  if (departmentResult.error) throw departmentResult.error;
+
+  const cohortIds = Array.from(
+    new Set((cohortResult.data || []).map((row) => row.cohort_id).filter(Boolean)),
+  );
+  const departmentIds = Array.from(
+    new Set((departmentResult.data || []).map((row) => row.department_id).filter(Boolean)),
+  );
+
+  if (cohortIds.length === 0 && departmentIds.length === 0) {
+    return [];
+  }
+
+  let query = supabase
+    .from("profiles")
+    .select("id, full_name, email, role, cohort_id, department_id")
+    .eq("role", "student");
+
+  if (cohortIds.length > 0 && departmentIds.length > 0) {
+    query = query.or(
+      `cohort_id.in.(${cohortIds.join(",")}),department_id.in.(${departmentIds.join(",")})`,
+    );
+  } else if (cohortIds.length > 0) {
+    query = query.in("cohort_id", cohortIds);
+  } else {
+    query = query.in("department_id", departmentIds);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { role, user, profile, isDemo } = useAuth();
@@ -382,23 +428,36 @@ const AssignmentDetail = () => {
     let linked = 0;
     let unmatched = 0;
 
-    const { data: studentProfiles, error: studentProfilesError } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, role")
-      .eq("role", "student");
+    let studentProfiles: Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      role: string | null;
+      cohort_id: string | null;
+      department_id: string | null;
+    }> = [];
 
-    if (studentProfilesError) {
-      log.error("Bulk upload failed to load student profiles", studentProfilesError, {
+    try {
+      studentProfiles = await loadTargetedStudentProfiles(assignment.id);
+    } catch (studentProfilesError) {
+      log.error("Bulk upload failed to load targeted student profiles", studentProfilesError, {
         assignmentId: assignment.id,
       });
-      toast.error("Could not load student profiles for bulk upload");
+      toast.error("Could not load targeted student profiles for bulk upload");
       setUploading(false);
       e.target.value = "";
       return;
     }
 
     const profileMatches = new Map(
-      ((studentProfiles || []) as Array<{ id: string; full_name: string | null; email: string | null; role: string | null }>)
+      (studentProfiles as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+        role: string | null;
+        cohort_id: string | null;
+        department_id: string | null;
+      }>)
         .flatMap((profile) => {
           const keys = new Set<string>();
           const normalizedEmail = normalizeStudentKey(profile.email);

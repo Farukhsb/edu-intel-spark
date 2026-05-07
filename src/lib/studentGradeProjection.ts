@@ -21,6 +21,28 @@ const SUBMISSION_FIELDS = "id, assignment_id, file_name, file_url, status, submi
 const GRADE_FIELDS = "submission_id, final_score, ai_score, final_feedback, ai_feedback, ai_breakdown";
 const ASSIGNMENT_FIELDS = "id, title, module_code, max_score";
 
+const sanitizeGradeVisibility = <T extends {
+  submission_status: string;
+  final_score: number | null;
+  ai_score: number | null;
+  final_feedback: string | null;
+  ai_feedback: string | null;
+  ai_breakdown: StudentGradeProjectionRow["ai_breakdown"];
+}>(row: T): T => {
+  if (row.submission_status === "released") {
+    return row;
+  }
+
+  return {
+    ...row,
+    final_score: null,
+    ai_score: null,
+    final_feedback: null,
+    ai_feedback: null,
+    ai_breakdown: null,
+  };
+};
+
 const buildProjectionFromFallbackRows = ({
   submissions,
   grades,
@@ -56,7 +78,7 @@ const buildProjectionFromFallbackRows = ({
     const grade = gradeMap.get(submission.id);
     const assignment = assignmentMap.get(submission.assignment_id);
 
-    return {
+    return sanitizeGradeVisibility({
       submission_id: submission.id,
       assignment_id: submission.assignment_id,
       assignment_title: assignment?.title ?? null,
@@ -71,7 +93,7 @@ const buildProjectionFromFallbackRows = ({
       final_feedback: grade?.final_feedback ?? null,
       ai_feedback: grade?.ai_feedback ?? null,
       ai_breakdown: grade?.ai_breakdown ?? null,
-    };
+    });
   });
 };
 
@@ -135,7 +157,7 @@ export const fetchStudentGradeProjection = async (userId?: string) => {
   const { data, error } = await supabase.rpc("get_student_submission_grade_projection");
   if (!error) {
     return {
-      data: (data || []) as StudentGradeProjectionRow[],
+      data: ((data || []) as StudentGradeProjectionRow[]).map((row) => sanitizeGradeVisibility(row)),
       error: null,
     };
   }
