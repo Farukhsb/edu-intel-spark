@@ -1,20 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invokeMock, warnMock } = vi.hoisted(() => ({
-  invokeMock: vi.fn(),
-  warnMock: vi.fn(),
-}));
+const { supabaseMock, getSessionMock, invokeMock, infoMock, warnMock } = vi.hoisted(() => {
+  const getSessionMock = vi.fn();
+  const invokeMock = vi.fn();
+
+  return {
+    getSessionMock,
+    invokeMock,
+    infoMock: vi.fn(),
+    warnMock: vi.fn(),
+    supabaseMock: {
+      auth: {
+        getSession: getSessionMock,
+      },
+      functions: {
+        invoke: invokeMock,
+      },
+    },
+  };
+});
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    functions: {
-      invoke: invokeMock,
-    },
-  },
+  supabase: supabaseMock,
 }));
 
 vi.mock("@/lib/logger", () => ({
   log: {
+    info: infoMock,
     warn: warnMock,
   },
 }));
@@ -36,7 +48,16 @@ const forbiddenContentPattern = /score|feedback text|private feedback|plagiarism
 describe("workflow email notifications", () => {
   beforeEach(() => {
     invokeMock.mockReset();
+    getSessionMock.mockReset();
+    infoMock.mockReset();
     warnMock.mockReset();
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "test-access-token",
+        },
+      },
+    });
   });
 
   it("keeps assignment-published email content safe", () => {
@@ -102,6 +123,27 @@ describe("workflow email notifications", () => {
     expect(warnMock).toHaveBeenCalled();
   });
 
+  it("does not invoke the edge function when no browser session is available", async () => {
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: null,
+      },
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "assignment-published",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: "failed",
+      reason: "missing_session",
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(warnMock).toHaveBeenCalled();
+  });
+
   it("reports duplicate workflow emails without treating them as failures", async () => {
     invokeMock.mockResolvedValue({
       data: {
@@ -118,10 +160,25 @@ describe("workflow email notifications", () => {
       submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
     });
 
+    expect(invokeMock).toHaveBeenCalledWith("send-workflow-notification-email", {
+      body: {
+        category: "grade-released",
+        assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+        submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+      },
+      headers: {
+        Authorization: "Bearer test-access-token",
+      },
+    });
     expect(result).toEqual({
       ok: true,
       status: "duplicate",
       reason: "duplicate_notification",
+    });
+    expect(infoMock).toHaveBeenCalledWith("Workflow notification email invoke started", {
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
     });
   });
 
@@ -144,6 +201,36 @@ describe("workflow email notifications", () => {
       ok: true,
       status: "sent",
       reason: null,
+    });
+  });
+
+  it("keeps safe skip reasons when the edge function intentionally skips delivery", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        skipped: true,
+        reason: "recipient_missing",
+      },
+      error: null,
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "sent",
+      reason: "recipient_missing",
+    });
+    expect(infoMock).toHaveBeenCalledWith("Workflow notification email invoke succeeded", {
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+      outcome: "sent",
+      reason: "recipient_missing",
     });
   });
 
