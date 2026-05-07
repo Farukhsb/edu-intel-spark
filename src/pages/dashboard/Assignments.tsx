@@ -14,10 +14,11 @@ import { toast } from "sonner";
 import type { RubricCriterion } from "@/components/RubricBuilder";
 import { safeFormatDate } from "@/lib/date";
 import {
+  queueCommunicationMessage,
 } from "@/lib/communications";
 import { isStudentGradeVisible } from "@/lib/assessmentWorkflow";
 import {
-  buildAssignmentPublishedNotificationRows,
+  buildAssignmentPublishedNotifications,
   filterAssignments,
   getLecturerAssignmentCatalogReadiness,
   getAssignmentOverviewStats,
@@ -415,19 +416,21 @@ const Assignments = () => {
                 assignmentId: id,
               });
             } else {
-              const rows = buildAssignmentPublishedNotificationRows({
-                senderId: user.id,
+              const notifications = buildAssignmentPublishedNotifications({
                 assignmentId: id,
                 assignmentTitle: assignmentToPublish.title,
                 students: (studentProfiles || []) as StudentNotificationProfile[],
               });
 
-              if (rows.length > 0) {
-                const { error: notificationError } = await supabase
-                  .from("communication_messages")
-                  .insert(rows);
+              if (notifications.length > 0) {
+                const notificationResults = await Promise.allSettled(
+                  notifications.map((notification) => queueCommunicationMessage(notification)),
+                );
+                const persistedCount = notificationResults.filter(
+                  (result) => result.status === "fulfilled" && Boolean(result.value),
+                ).length;
 
-                if (notificationError) {
+                if (persistedCount === 0) {
                   publishWorkflowSummary.recipientStatus = "loaded";
                   publishWorkflowSummary.bellStatus = "failed";
                   log.warn("Assignment publish bell notifications did not persist", {
@@ -435,10 +438,17 @@ const Assignments = () => {
                   });
                 } else {
                   publishWorkflowSummary.recipientStatus = "loaded";
-                  publishWorkflowSummary.bellStatus = "sent";
+                  publishWorkflowSummary.bellStatus =
+                    persistedCount === notifications.length ? "sent" : "failed";
 
                   if (typeof window !== "undefined") {
                     window.dispatchEvent(new Event("gradeai:communications-updated"));
+                  }
+
+                  if (persistedCount !== notifications.length) {
+                    log.warn("Assignment publish bell notifications partially persisted", {
+                      assignmentId: id,
+                    });
                   }
                 }
               } else {

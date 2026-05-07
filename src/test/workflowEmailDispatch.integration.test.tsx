@@ -171,14 +171,36 @@ describe("workflow email dispatch wiring", () => {
       if (table === "assignment_cohorts" || table === "assignment_departments") {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+            eq: vi
+              .fn()
+              .mockResolvedValue(
+                table === "assignment_cohorts"
+                  ? { data: [{ cohort_id: "200" }], error: null }
+                  : { data: [], error: null },
+              ),
           })),
         };
       }
 
-      if (table === "communication_messages") {
+      if (table === "profiles") {
         return {
-          insert: vi.fn().mockResolvedValue({ error: null }),
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              in: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: "student-1",
+                    full_name: "Student One",
+                    email: "student1@example.com",
+                    role: "student",
+                    cohort_id: "200",
+                    department_id: "Computer Science",
+                  },
+                ],
+                error: null,
+              }),
+            })),
+          })),
         };
       }
 
@@ -196,6 +218,7 @@ describe("workflow email dispatch wiring", () => {
     await waitFor(() => {
       expect(mocks.assignmentsData.refreshAssignments).toHaveBeenCalled();
     });
+    expect(mocks.queueCommunicationMessage).toHaveBeenCalled();
     expect(mocks.dispatchWorkflowNotificationEmail).not.toHaveBeenCalled();
   });
 

@@ -1,4 +1,7 @@
-import { buildAssignmentPublishedNotification } from "@/lib/communications";
+import {
+  buildAssignmentPublishedNotification,
+  type DraftCommunicationMessage,
+} from "@/lib/communications";
 import {
   canReleaseStatus,
   isGradedWorkflowStatus,
@@ -78,33 +81,42 @@ export const normalizeAssignment = <
   target_departments: assignment.target_departments ?? [],
 });
 
-export const buildAssignmentPublishedNotificationRows = (input: {
-  senderId: string;
+export const buildAssignmentPublishedNotifications = (input: {
   assignmentId: string;
   assignmentTitle: string;
   students: StudentNotificationProfile[];
-}) =>
+}): DraftCommunicationMessage[] =>
   input.students.map((student) => {
-    const draft = buildAssignmentPublishedNotification({
+    return buildAssignmentPublishedNotification({
       studentName: student.full_name || student.email || "Student",
       studentEmail: student.email,
       studentId: student.id,
       assignmentId: input.assignmentId,
       assignmentTitle: input.assignmentTitle,
     });
-
-    return {
-      sender_id: input.senderId,
-      category: draft.category,
-      recipient_name: draft.recipientName,
-      recipient_email: draft.recipientEmail,
-      recipient_id: draft.recipientId ?? null,
-      subject: draft.subject,
-      body: draft.body,
-      related_student_id: draft.relatedStudentId ?? null,
-      related_assignment_id: draft.relatedAssignmentId ?? null,
-    };
   });
+
+export const buildAssignmentPublishedNotificationRows = (input: {
+  senderId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  students: StudentNotificationProfile[];
+}) =>
+  buildAssignmentPublishedNotifications({
+    assignmentId: input.assignmentId,
+    assignmentTitle: input.assignmentTitle,
+    students: input.students,
+  }).map((draft) => ({
+    sender_id: input.senderId,
+    category: draft.category,
+    recipient_name: draft.recipientName,
+    recipient_email: draft.recipientEmail,
+    recipient_id: draft.recipientId ?? null,
+    subject: draft.subject,
+    body: draft.body,
+    related_student_id: draft.relatedStudentId ?? null,
+    related_assignment_id: draft.relatedAssignmentId ?? null,
+  }));
 
 export const buildAssignmentSubmissionStats = (
   assignments: AssignmentCatalogItem[],
