@@ -97,8 +97,8 @@ That makes GradeAI less about isolated grading automation and more about giving 
 ### Workflow notifications
 
 - in-app workflow notifications
-- email notification backend for assignment, submission, and grade-release events
-- email delivery is feature-flagged and remains optional until sender and provider setup are ready
+- backend email notification infrastructure exists for assignment, submission, and grade-release events
+- live app flows are currently bell-first, with workflow email dispatch disabled until sender and provider setup are intentionally re-enabled
 
 ## How The Workflow Fits Together
 
@@ -310,8 +310,6 @@ Still improving:
 - broader live scenario coverage beyond the role, load, and integrity checks already completed
 - more live verification of less common role boundaries and RLS edge cases
 - stricter TypeScript coverage
-- targeted recipient logic for assignment-published email notifications
-- final live email delivery validation after verified sender/API key setup
 - continued extraction of large page logic into smaller domain services
 - deeper operational history, alerting, and long-window audit visibility
 
@@ -476,11 +474,7 @@ Or run the relevant SQL migrations in the Supabase SQL Editor.
 
 High-trust workflows depend on the database layer, not just the UI. That includes RLS policies, recommendation action RPCs, moderation tables, audit logging triggers, integrity review constraints, and in-app workflow notifications.
 
-Recent assignment visibility work depends on the related targeting migrations being applied together. They persist cohort and department targeting, enforce student assignment visibility through targeting-aware RLS, and provide the safe student-grade assignment metadata lookup used by `StudentGrades`.
-
-If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. Schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
-
-These migrations do three connected things:
+Recent assignment visibility work depends on the related targeting migrations being applied together. Those migrations do three connected things:
 - persist assignment cohort and department targeting
 - enforce student assignment visibility and submission access through targeting-aware RLS
 - provide the safe student-grade assignment metadata lookup used by `StudentGrades`
@@ -500,6 +494,20 @@ Those migrations do four connected things:
 - allow safe refresh of `internal_text_similarity` evidence rows
 - close service-role permission gaps discovered during live grading and plagiarism checks
 - dedupe and stabilise repeated integrity evidence writes across reruns
+
+The current grading and notification hardening also depends on these newer migrations:
+
+- `20260508004500_fix_submission_targeting_policy_private_helper.sql`
+- `20260508011500_fix_lecturer_submission_update_policy.sql`
+- `20260508013000_fix_communication_message_update_policy.sql`
+- `20260508020000_reset_communication_message_policies.sql`
+
+Those migrations do four connected things:
+
+- repair targeted submission access to use the private helper boundary correctly
+- restore lecturer submission updates needed for grading-state transitions
+- remove recursive `communication_messages` policy behavior
+- stabilise bell-notification clear/update paths under RLS
 
 If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
@@ -537,7 +545,7 @@ npx supabase functions deploy bulk-create-students
 npx supabase functions deploy send-workflow-notification-email
 ```
 
-For workflow email notifications, these Supabase secrets are expected when live email delivery is ready:
+For workflow email notifications, these Supabase secrets are expected when live email delivery is intentionally re-enabled:
 
 ```bash
 EMAIL_NOTIFICATIONS_ENABLED=true
@@ -552,13 +560,13 @@ Before sender verification and API key setup are complete, keep email delivery d
 EMAIL_NOTIFICATIONS_ENABLED=false
 ```
 
-Current email-backed workflow events are:
+The backend is prepared for these workflow email categories:
 
 - `assignment-published`
 - `submission-received`
 - `grade-released`
 
-The bell notification remains the primary in-app record. Email delivery is a non-blocking mirror of those safe workflow events.
+The bell notification is the active workflow record. Email delivery should only be turned back on as an optional non-blocking mirror after provider, sender, and recipient-flow validation are complete.
 
 Analytics is disabled by default. If you explicitly enable PostHog for a controlled test, keep it privacy-minimised and avoid sending academic content, names, or email addresses.
 
