@@ -1,3 +1,4 @@
+import type { RubricCriterion } from "@/components/RubricBuilder";
 import {
   buildAssignmentPublishedNotification,
   type DraftCommunicationMessage,
@@ -20,7 +21,7 @@ export interface AssignmentCatalogItem {
   due_date: string | null;
   status: "draft" | "published" | "closed";
   created_at: string;
-  rubric: unknown[] | null;
+  rubric: RubricCriterion[] | null;
   cohorts: string[];
   departments: string[];
   target_cohorts: string[];

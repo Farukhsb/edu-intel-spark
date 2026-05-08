@@ -8,7 +8,7 @@ import { env } from "@/lib/env";
 import { parseAppRole, type AppRole, type PublicSignupRole } from "@/lib/roles";
 import type { User } from "@supabase/supabase-js";
 
-interface Profile {
+export interface Profile {
   id: string;
   full_name: string | null;
   email: string | null;

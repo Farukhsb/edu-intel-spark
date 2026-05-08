@@ -113,7 +113,7 @@ export const AssignmentsScreen = ({
               setRubric={(value) => updateFormField("rubric", typeof value === "function" ? value(formState.rubric) : value)}
               setTitle={(value) => updateFormField("title", typeof value === "function" ? value(formState.title) : value)}
               summarizeSelection={summarizeSelection}
-              targetCohorts={targetCohorts as Array<{ value: string; label: string }>}
+              targetCohorts={[...targetCohorts]}
               title={formState.title}
               toggleCohort={toggleCohort}
               toggleDepartment={toggleDepartment}

@@ -40,6 +40,7 @@ interface BuildAssignmentDetailScreenPropsArgs {
   plagiarismFlags: NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["plagiarismFlags"];
   plagiarismSummary: NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["plagiarismSummary"];
   reloadSubmissions: () => Promise<void>;
+  searchPathname: string;
   submissions: AssignmentDetailSubmission[];
   viewState: ReturnType<typeof useAssignmentDetailViewState>;
   automatedActions: ReturnType<typeof useAutomatedAssessmentActions>;
@@ -60,6 +61,7 @@ export const buildAssignmentDetailScreenProps = ({
   plagiarismFlags,
   plagiarismSummary,
   reloadSubmissions,
+  searchPathname,
   submissions,
   viewState,
 }: BuildAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps => ({
@@ -80,6 +82,7 @@ export const buildAssignmentDetailScreenProps = ({
   isDemo,
   ...buildFocusStateProps({
     navigate,
+    searchPathname,
     viewState,
   }),
   readinessCardProps: buildReadinessCardProps({

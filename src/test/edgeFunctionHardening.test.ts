@@ -144,6 +144,8 @@ describe("edge function hardening", () => {
     expect(source).toContain("name: z.string().trim().min(1)");
     expect(source).toContain("cohort_id: z.string().trim().min(1)");
     expect(source).toContain("department_id: z.string().trim().min(1)");
+    expect(source).toContain("inviteUserByEmail");
+    expect(source).not.toContain("results.push({ name, email, password, success: true })");
   });
 
   it("removes fairness adjustment boilerplate from visible AI feedback", () => {

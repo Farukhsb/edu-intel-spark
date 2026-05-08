@@ -7,8 +7,9 @@ import { initPostHog } from "./lib/posthog";
 initSentry();
 
 const scheduleAnalyticsInit = () => {
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(() => {
+  const idleCallback = window.requestIdleCallback;
+  if (typeof idleCallback === "function") {
+    idleCallback(() => {
       void initPostHog();
     });
     return;

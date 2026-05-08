@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchStudentGradeProjectionFallbackDataset } from "@/lib/data/academic";
+import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 
 export interface StudentGradeProjectionRow {
   submission_id: string;
@@ -15,8 +16,29 @@ export interface StudentGradeProjectionRow {
   ai_score: number | null;
   final_feedback: string | null;
   ai_feedback: string | null;
-  ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
+  ai_breakdown: Array<{
+    criterion: string;
+    score: number;
+    max_score: number;
+    feedback?: string;
+    comment?: string;
+  }> | null;
 }
+
+const toStudentGradeBreakdown = (
+  value: unknown,
+): StudentGradeProjectionRow["ai_breakdown"] => {
+  const parsed = safeParseGradeBreakdown(value);
+  return parsed.success
+    ? parsed.data.map((item) => ({
+        criterion: item.criterion,
+        score: item.score,
+        max_score: item.max_score,
+        feedback: item.feedback,
+        comment: item.comment,
+      }))
+    : null;
+};
 
 const sanitizeGradeVisibility = <T extends {
   submission_status: string;
@@ -59,7 +81,7 @@ const buildProjectionFromFallbackRows = ({
     ai_score: number | null;
     final_feedback: string | null;
     ai_feedback: string | null;
-    ai_breakdown: StudentGradeProjectionRow["ai_breakdown"];
+    ai_breakdown: unknown;
   }>;
   assignments: Array<{
     id: string;
@@ -89,7 +111,7 @@ const buildProjectionFromFallbackRows = ({
       ai_score: grade?.ai_score ?? null,
       final_feedback: grade?.final_feedback ?? null,
       ai_feedback: grade?.ai_feedback ?? null,
-      ai_breakdown: grade?.ai_breakdown ?? null,
+      ai_breakdown: toStudentGradeBreakdown(grade?.ai_breakdown ?? null),
     });
   });
 };
@@ -123,7 +145,12 @@ export const fetchStudentGradeProjection = async (userId?: string) => {
   const { data, error } = await supabase.rpc("get_student_submission_grade_projection");
   if (!error) {
     return {
-      data: ((data || []) as StudentGradeProjectionRow[]).map((row) => sanitizeGradeVisibility(row)),
+      data: ((data || []) as StudentGradeProjectionRow[]).map((row) =>
+        sanitizeGradeVisibility({
+          ...row,
+          ai_breakdown: toStudentGradeBreakdown(row.ai_breakdown),
+        }),
+      ),
       error: null,
     };
   }

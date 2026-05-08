@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { log } from "@/lib/logger";
 import { formatSubmissionStatus, type ModerationAction } from "@/lib/moderation";
 import {
@@ -20,6 +21,7 @@ import {
 import { toast } from "sonner";
 
 const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
+const asJson = (value: unknown): Json => value as Json;
 
 type UseModerationActionsArgs = {
   bulkAssignableFilteredCases: ModerationCaseView[];
@@ -71,7 +73,7 @@ export const useModerationActions = ({
     newValues: Record<string, unknown>,
     reason: string,
   ) => {
-    if (!userId) return;
+    if (!userId || !item.submission) return;
 
     const { error } = await insertModerationAuditEntry(
       supabase,
@@ -82,8 +84,8 @@ export const useModerationActions = ({
         changedBy: userId,
         eventType,
         actorRole: profileRole ?? "lecturer",
-        previousValues,
-        newValues,
+        previousValues: asJson(previousValues),
+        newValues: asJson(newValues),
         reason,
       }),
     );

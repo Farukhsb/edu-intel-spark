@@ -2,6 +2,7 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   buildGradeReleasedNotification,
   queueCommunicationMessage,
@@ -16,6 +17,7 @@ import { log } from "@/lib/logger";
 import { evaluateModerationSignals } from "@/lib/moderation";
 import {
   buildModerationAuditPayload,
+  type GradeRow,
   buildModerationCasePayload,
   insertModerationAuditEntry,
   upsertModerationCase,
@@ -46,6 +48,25 @@ interface UseLecturerAssessmentActionsArgs {
   submissions: AssignmentDetailSubmission[];
   user: LecturerAssessmentUser | null;
 }
+
+const asJson = (value: unknown): Json => value as Json;
+const toGradeRow = (grade: Grade): GradeRow => ({
+  id: grade.id,
+  submission_id: grade.submission_id,
+  ai_score: grade.ai_score,
+  ai_feedback: grade.ai_feedback,
+  ai_breakdown: asJson(grade.ai_breakdown),
+  assignment_type: grade.assignment_type ?? null,
+  grading_confidence: grade.grading_confidence ?? null,
+  grading_metadata: asJson(grade.grading_metadata ?? {}),
+  lecturer_score: grade.lecturer_score,
+  lecturer_feedback: grade.lecturer_feedback,
+  final_score: grade.final_score,
+  final_feedback: grade.final_feedback,
+  created_at: "",
+  reviewed_at: null,
+  reviewed_by: null,
+});
 
 export const useLecturerAssessmentActions = ({
   assignment,
@@ -80,8 +101,8 @@ export const useLecturerAssessmentActions = ({
     moderationCaseId?: string | null;
     eventType: string;
     actorRole: string;
-    previousValues?: Record<string, unknown>;
-    newValues?: Record<string, unknown>;
+    previousValues?: Json;
+    newValues?: Json;
     reason?: string;
   }) => {
     if (!user) return;
@@ -121,7 +142,7 @@ export const useLecturerAssessmentActions = ({
     if (!assignment || !user) return null;
 
     const moderationResult = evaluateModerationSignals({
-      grade,
+      grade: toGradeRow(grade),
       integrityReview: integrityReviews[submission.id] ?? null,
       maxScore: assignment.max_score,
     });
@@ -150,14 +171,16 @@ export const useLecturerAssessmentActions = ({
       throw error;
     }
 
-    setModerationCases((current) => ({ ...current, [submission.id]: data }));
+    if (data) {
+      setModerationCases((current) => ({ ...current, [submission.id]: data }));
+    }
     return data;
   };
 
   const shouldRequireModeration = (submissionId: string, grade: Grade) =>
     !!assignment &&
     evaluateModerationSignals({
-      grade,
+      grade: toGradeRow(grade),
       integrityReview: integrityReviews[submissionId] ?? null,
       maxScore: assignment.max_score,
     }).needsModeration;
@@ -547,7 +570,7 @@ Please review the feedback in the platform and let me know if you would like to 
         .eq("id", existingGrade.id);
 
       const moderationCheck = evaluateModerationSignals({
-        grade,
+        grade: toGradeRow(grade),
         integrityReview: integrityReviews[reviewSubmission.id] ?? null,
         maxScore: assignment?.max_score ?? 100,
       });
@@ -562,8 +585,12 @@ Please review the feedback in the platform and let me know if you would like to 
         });
         moderationCaseId = moderationCase?.id ?? null;
 
+        if (!moderationCase?.id) {
+          throw new Error("Moderation case could not be created");
+        }
+
         await supabase.from("moderation_reviews").insert({
-          moderation_case_id: moderationCase?.id,
+          moderation_case_id: moderationCase.id,
           submission_id: reviewSubmission.id,
           reviewer_id: user.id,
           reviewer_role: "first_marker",
@@ -576,12 +603,12 @@ Please review the feedback in the platform and let me know if you would like to 
           proposed_score: Number.isFinite(nextScore) ? nextScore : null,
           proposed_feedback: nextFeedback,
           notes: nextFeedback,
-          snapshot: {
+          snapshot: asJson({
             ai_score: existingGrade.ai_score,
             lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
             confidence_score: grade.grading_confidence ?? null,
             trigger_flags: moderationCheck.triggerFlags,
-          },
+          }),
         });
         nextStatus = "moderation_pending";
       }

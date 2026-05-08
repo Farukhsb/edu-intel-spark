@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import type { Json, Tables, TablesInsert } from "@/integrations/supabase/types";
 import type { CohortRecommendation, RecommendationStatus } from "@/lib/cohortRecommendations";
 
 export type PersistedRecommendationRow = Tables<"analytics_recommendations">;
@@ -14,6 +14,8 @@ const normalizeStatus = (value: string | null | undefined): RecommendationStatus
 
   return "open";
 };
+
+const asJson = (value: unknown): Json => value as Json;
 
 const toRecommendationRow = (
   lecturerId: string,
@@ -30,8 +32,8 @@ const toRecommendationRow = (
   explanation: recommendation.explanation,
   severity: recommendation.severity,
   confidence: recommendation.confidence,
-  recommended_actions: recommendation.recommendedActions,
-  evidence: recommendation.evidence,
+  recommended_actions: asJson(recommendation.recommendedActions),
+  evidence: asJson(recommendation.evidence),
   status: normalizeStatus(persisted?.status),
   created_at: persisted?.created_at ?? recommendation.createdAt,
 });
@@ -99,9 +101,9 @@ export async function persistRecommendationAction(params: {
     p_payload: {
       ruleCode: recommendation.ruleCode,
       assignmentId: recommendation.assignmentId ?? null,
-      evidence: recommendation.evidence,
+      evidence: asJson(recommendation.evidence),
       nextStatus,
-    },
+    } as Json,
   });
 
   if (error) throw error;

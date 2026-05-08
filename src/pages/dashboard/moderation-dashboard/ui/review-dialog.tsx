@@ -30,11 +30,14 @@ import {
   getModerationEscalationSummary,
   getModerationReleaseState,
   type ModerationCaseView,
+  type SubmissionRow,
 } from "@/lib/moderationWorkflow";
 
 import type { ModerationProfile } from "../types";
 
 const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
+const coerceSubmissionStatus = (value: string): SubmissionRow["status"] =>
+  value as SubmissionRow["status"];
 
 type ModerationReviewDialogProps = {
   feedbackDraft: string;
@@ -184,7 +187,7 @@ export const ModerationReviewDialog = ({
                         <p>Status: {formatSubmissionStatus(selectedCase.moderationCase.status)}</p>
                         <p className="mt-1">Release state: {getModerationReleaseState({
                           moderationCase: selectedCase.moderationCase,
-                          submissionStatus: selectedCase.submission?.status ?? selectedCase.moderationCase.status,
+                          submissionStatus: selectedCase.submission?.status ?? coerceSubmissionStatus(selectedCase.moderationCase.status),
                         }).badge}</p>
                         <p className="mt-1">
                           Trigger flags: {(selectedCase.moderationCase.trigger_flags as string[]).join(", ") || "none"}
@@ -199,7 +202,7 @@ export const ModerationReviewDialog = ({
                         {(() => {
                           const releaseState = getModerationReleaseState({
                             moderationCase: selectedCase.moderationCase,
-                            submissionStatus: selectedCase.submission?.status ?? selectedCase.moderationCase.status,
+                            submissionStatus: selectedCase.submission?.status ?? coerceSubmissionStatus(selectedCase.moderationCase.status),
                           });
 
                           return (

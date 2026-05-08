@@ -89,26 +89,31 @@ const ResetPassword = () => {
         return;
       }
 
-      let error = null;
-
       if (code) {
-        ({ error } = await supabase.auth.exchangeCodeForSession(code));
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          markReady(false);
+          return;
+        }
       } else if (tokenHash) {
-        ({ error } = await supabase.auth.verifyOtp({
+        const { error } = await supabase.auth.verifyOtp({
           type: "recovery",
           token_hash: tokenHash,
-        }));
+        });
+        if (error) {
+          markReady(false);
+          return;
+        }
       } else if (accessToken && refreshToken) {
-        ({ error } = await supabase.auth.setSession({
+        const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
-        }));
+        });
+        if (error) {
+          markReady(false);
+          return;
+        }
       } else {
-        markReady(false);
-        return;
-      }
-
-      if (error) {
         markReady(false);
         return;
       }

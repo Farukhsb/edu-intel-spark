@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Tables, TablesInsert } from "@/integrations/supabase/types";
+import type { Database, Json, Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { canReleaseStatus, getApprovalBlockReason } from "@/lib/assessmentWorkflow";
 import { fetchModerationCaseViewDataset } from "@/lib/data/moderation";
 import type { ModerationAction } from "@/lib/moderation";
@@ -53,8 +53,8 @@ interface ModerationAuditPayloadInput {
   actorRole: string;
   gradeId?: string | null;
   moderationCaseId?: string | null;
-  previousValues?: Record<string, unknown>;
-  newValues?: Record<string, unknown>;
+  previousValues?: Json;
+  newValues?: Json;
   reason?: string | null;
 }
 
@@ -133,6 +133,8 @@ interface ModerationBulkApproveEligibilityInput {
 }
 
 const toMap = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
+const coerceSubmissionStatus = (value: string): SubmissionRow["status"] =>
+  value as SubmissionRow["status"];
 
 export const getModerationQueueStats = (cases: ModerationCaseView[]) => ({
   pending: cases.filter((item) => item.moderationCase.status === "moderation_pending").length,
@@ -154,7 +156,7 @@ export const getModerationOwnerAssignmentSummaries = (
 
     const releaseState = getModerationReleaseState({
       moderationCase: item.moderationCase,
-      submissionStatus: item.submission?.status ?? item.moderationCase.status,
+      submissionStatus: item.submission?.status ?? coerceSubmissionStatus(item.moderationCase.status),
     });
     const approvedReadyCount = releaseState.tone === "ready" ? 1 : 0;
     const escalatedCount = item.moderationCase.status === "escalated" ? 1 : 0;
@@ -298,7 +300,7 @@ export async function fetchModerationCaseViews(
     auditBySubmission.set(entry.submission_id, current);
   }
 
-  const cases = moderationCases.map((moderationCase) => ({
+  const cases: ModerationCaseView[] = moderationCases.map((moderationCase) => ({
     moderationCase,
     submission: submissionsById.get(moderationCase.submission_id) || null,
     grade: moderationCase.grade_id ? gradesById.get(moderationCase.grade_id) || null : null,
@@ -308,7 +310,7 @@ export async function fetchModerationCaseViews(
     integrityReview: integrityBySubmission.get(moderationCase.submission_id) || null,
     reviews: reviewsByCase.get(moderationCase.id) || [],
     auditLog: auditBySubmission.get(moderationCase.submission_id) || [],
-  }) satisfies ModerationCaseView[]);
+  }));
 
   return { cases, lecturers };
 }
@@ -455,7 +457,7 @@ export const matchesModerationQueueFilter = ({
       item.moderationCase.lecturer_id === userId &&
       getModerationReleaseState({
         moderationCase: item.moderationCase,
-        submissionStatus: item.submission?.status ?? item.moderationCase.status,
+        submissionStatus: item.submission?.status ?? coerceSubmissionStatus(item.moderationCase.status),
       }).tone === "approval"
     );
   }
@@ -468,7 +470,7 @@ export const matchesModerationQueueFilter = ({
     return (
       getModerationReleaseState({
         moderationCase: item.moderationCase,
-        submissionStatus: item.submission?.status ?? item.moderationCase.status,
+        submissionStatus: item.submission?.status ?? coerceSubmissionStatus(item.moderationCase.status),
       }).tone === "ready"
     );
   }
@@ -502,7 +504,7 @@ export const matchesModerationQueueSearch = ({
 const getModerationPriorityRank = (item: ModerationCaseView) => {
   const releaseState = getModerationReleaseState({
     moderationCase: item.moderationCase,
-    submissionStatus: item.submission?.status ?? item.moderationCase.status,
+    submissionStatus: item.submission?.status ?? coerceSubmissionStatus(item.moderationCase.status),
   });
 
   if (item.moderationCase.status === "escalated") return 0;
@@ -587,7 +589,7 @@ export const buildModerationActionPlan = ({
   const resolvedFeedback =
     feedbackDraft || moderationCase.final_agreed_feedback || grade?.lecturer_feedback || grade?.ai_feedback || null;
 
-  const nextCasePatch: Partial<Tables<"moderation_cases">["Update"]> = {};
+  const nextCasePatch: Partial<TablesUpdate<"moderation_cases">> = {};
   let nextSubmissionStatus: SubmissionRow["status"] = submissionStatus;
 
   if (action === "agree" || action === "adjust") {

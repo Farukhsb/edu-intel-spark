@@ -6,7 +6,7 @@ import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detai
 import { useLecturerWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useLecturerWorkflowController";
 import { useStudentWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useStudentWorkflowController";
 import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui";
-import type { Profile } from "@/integrations/supabase/types";
+import type { Profile } from "@/contexts/AuthContext";
 import type { User } from "@supabase/supabase-js";
 
 type AssignmentDetailControllerArgs = {
@@ -133,8 +133,8 @@ export const useAssignmentDetailController = ({
       submissions,
       viewState: {
         ...viewState,
-        searchPathname: location.pathname,
       },
+      searchPathname: location.pathname,
     }),
   };
 };

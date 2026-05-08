@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, CheckCircle, AlertTriangle, Loader2, Download } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertTriangle, Loader2, Download, Mail } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,8 +23,8 @@ interface ParsedStudent {
 interface UploadResult {
   name: string;
   email: string;
-  password?: string;
   success: boolean;
+  invite_sent?: boolean;
   error?: string;
 }
 
@@ -292,19 +292,6 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
     if (uploadResults.some(r => !r.success)) toast.error(`${uploadResults.filter(r => !r.success).length} failed`);
   };
 
-  const downloadCredentials = () => {
-    const successful = results.filter(r => r.success);
-    if (successful.length === 0) { toast.error("No successful accounts to export"); return; }
-    const csv = "Name,Email,Temporary Password\n" + successful.map(r => `"${r.name}","${r.email}","${r.password}"`).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `student_credentials_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const downloadTemplate = () => {
     const csv = "name,email,cohort,department\nJohn Doe,john@uni.ac.uk,200,Computer Science\nJane Smith,jane@uni.ac.uk,300,Mathematics";
     const blob = new Blob([csv], { type: "text/csv" });
@@ -341,14 +328,14 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
       <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Bulk Student Upload</DialogTitle>
-          <DialogDescription>Create student accounts from a CSV, review issues, then export credentials once.</DialogDescription>
+          <DialogDescription>Create student accounts from a CSV, review issues, and send password-setup emails without exposing plaintext credentials.</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-3 gap-2 text-xs">
           {[
             { id: "upload", label: "1. Upload" },
             { id: "preview", label: "2. Review" },
-            { id: "done", label: "3. Export" },
+            { id: "done", label: "3. Invite" },
           ].map((item) => (
             <div
               key={item.id}
@@ -473,11 +460,19 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
               </p>
             </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-              <strong>Important:</strong> Download the credentials CSV now. Temporary passwords are only shown in this session.
+              <strong>Important:</strong> No passwords are shown or exported. Students must use the email invite to set their password securely.
             </div>
-            <Button onClick={downloadCredentials} className="w-full">
-              <Download className="mr-2 h-4 w-4" /> Download Credentials CSV
-            </Button>
+            <div className="rounded-lg border p-4">
+              <div className="flex items-start gap-3">
+                <Mail className="mt-0.5 h-4 w-4 text-primary" />
+                <div className="space-y-1 text-sm">
+                  <p className="font-medium">Password setup emails sent</p>
+                  <p className="text-muted-foreground">
+                    Each successful student account now relies on an email invite and password-setup link instead of a temporary password file.
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border p-2">
               {results.map((r, i) => (
                 <div key={i} className="flex items-center justify-between text-sm px-2 py-1 rounded bg-muted/50">
@@ -487,6 +482,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
                     <span className="text-muted-foreground">{r.email}</span>
                   </div>
                   {r.error && <span className="text-xs text-destructive truncate max-w-[200px]">{r.error}</span>}
+                  {!r.error && r.invite_sent && <Badge variant="outline">Invite sent</Badge>}
                 </div>
               ))}
             </div>

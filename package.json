@@ -16,7 +16,8 @@
     "test:load": "node tools/load-test/run.mjs",
     "test:perf": "vitest run src/test/workflowPerformance.test.ts",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

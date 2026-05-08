@@ -5,6 +5,7 @@ import type { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-
 
 interface BuildFocusStatePropsArgs {
   navigate: NavigateFunction;
+  searchPathname: string;
   viewState: ReturnType<typeof useAssignmentDetailViewState>;
 }
 
@@ -20,6 +21,7 @@ type FocusStateProps = Pick<
 
 export const buildFocusStateProps = ({
   navigate,
+  searchPathname,
   viewState,
 }: BuildFocusStatePropsArgs): FocusStateProps => ({
   assignmentNotificationFocusState: viewState.assignmentNotificationFocusState,
@@ -29,9 +31,9 @@ export const buildFocusStateProps = ({
   onClearModerationFocus: () => {
     viewState.setStatusFilter("all");
     viewState.setSelected(new Set());
-    navigate(viewState.searchPathname, { replace: true });
+    navigate(searchPathname, { replace: true });
   },
   onClearNotificationFocus: () => {
-    navigate(viewState.searchPathname, { replace: true });
+    navigate(searchPathname, { replace: true });
   },
 });

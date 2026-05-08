@@ -22,6 +22,7 @@ import {
   getModerationReleaseState,
   type ModerationCaseView,
   type ModerationQueueFilter,
+  type SubmissionRow,
 } from "@/lib/moderationWorkflow";
 import { Scale } from "lucide-react";
 
@@ -29,6 +30,9 @@ import type {
   ModerationBulkApprovalSummary,
   ModerationProfile,
 } from "../types";
+
+const coerceSubmissionStatus = (value: string): SubmissionRow["status"] =>
+  value as SubmissionRow["status"];
 
 type ModerationQueueSectionProps = {
   assignmentFocusTitle: string | null;
@@ -240,6 +244,7 @@ export const ModerationQueueSection = ({
         </p>
       ) : (
         cases.map((item) => {
+          const assignmentId = item.assignment?.id ?? null;
           const latestModeratorReview = getLatestModeratorReview(item.reviews);
           const disagreement = getModerationDisagreementSummary({
             moderationCase: item.moderationCase,
@@ -261,7 +266,7 @@ export const ModerationQueueSection = ({
           });
           const releaseState = getModerationReleaseState({
             moderationCase: item.moderationCase,
-            submissionStatus: item.submission?.status ?? item.moderationCase.status,
+            submissionStatus: item.submission?.status ?? coerceSubmissionStatus(item.moderationCase.status),
           });
 
           return (
@@ -370,11 +375,11 @@ export const ModerationQueueSection = ({
                   >
                     Review case
                   </Button>
-                  {releaseState.tone === "ready" && item.assignment && (
+                  {releaseState.tone === "ready" && assignmentId && (
                     <Button
                       data-testid={`moderation-open-release-${item.moderationCase.id}`}
                       size="sm"
-                      onClick={() => onOpenReleaseWorkflow(item.assignment.id)}
+                      onClick={() => onOpenReleaseWorkflow(assignmentId)}
                     >
                       Open release workflow
                     </Button>

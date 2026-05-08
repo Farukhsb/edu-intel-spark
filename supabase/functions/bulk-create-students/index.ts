@@ -14,6 +14,22 @@ type StudentInput = {
   department_id?: string;
 };
 
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+
+function getPasswordSetupRedirectUrl() {
+  const configuredAppUrl =
+    Deno.env.get("APP_URL")?.trim() ||
+    Deno.env.get("SITE_URL")?.trim() ||
+    Deno.env.get("PUBLIC_APP_URL")?.trim() ||
+    "";
+
+  if (!configuredAppUrl) {
+    return undefined;
+  }
+
+  return `${trimTrailingSlash(configuredAppUrl)}/reset-password`;
+}
+
 const StudentInputSchema = z.object({
   email: z.string().trim().email(),
   name: z.string().trim().min(1),
@@ -28,10 +44,6 @@ const BulkCreateStudentsRequestSchema = z.object({
   department: z.string().trim().min(1).optional(),
   students: z.array(StudentInputSchema).min(1).max(500),
 });
-
-function generateTemporaryPassword() {
-  return `GradeAI_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-}
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -80,6 +92,7 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createAdminClient();
+    const passwordSetupRedirectTo = getPasswordSetupRedirectUrl();
     const results = [];
 
     for (const student of students as StudentInput[]) {
@@ -98,17 +111,14 @@ serve(async (req) => {
         continue;
       }
 
-      const password = generateTemporaryPassword();
-      const { error } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
+      const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        data: {
           full_name: name,
           role: "student",
           cohort_id: cohortId,
           department_id: departmentId,
         },
+        redirectTo: passwordSetupRedirectTo,
       });
 
       if (error) {
@@ -116,7 +126,7 @@ serve(async (req) => {
         continue;
       }
 
-      results.push({ name, email, password, success: true });
+      results.push({ name, email, success: true, invite_sent: true });
     }
 
     const successCount = results.filter((result) => result.success).length;

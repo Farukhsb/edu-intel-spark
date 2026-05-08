@@ -1,5 +1,6 @@
 import type { RubricCriterion } from "@/components/RubricBuilder";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   buildAssignmentPublishedNotifications,
   type AssignmentCatalogItem,
@@ -9,6 +10,8 @@ import { queueCommunicationMessage } from "@/lib/communications";
 import { summarizeAssignmentPublishWorkflow, type AssignmentPublishWorkflowSummary } from "@/lib/assignmentPublishWorkflow";
 import { log } from "@/lib/logger";
 import type { AssignmentDataItem } from "@/pages/dashboard/assignments/useAssignmentsData";
+
+const asJson = (value: unknown): Json => value as Json;
 
 const loadAssignmentTargetIds = async (
   assignmentId: string,
@@ -121,7 +124,7 @@ export const saveAssignmentDraft = async ({
         module_code: moduleCode.trim() || null,
         max_score: Number(maxScore) || 100,
         due_date: dueDate || null,
-        rubric: rubric.length > 0 ? rubric : null,
+        rubric: rubric.length > 0 ? asJson(rubric) : null,
       })
       .eq("id", assignmentId);
 
@@ -142,7 +145,7 @@ export const saveAssignmentDraft = async ({
       due_date: dueDate || null,
       lecturer_id: userId,
       status: "draft" as const,
-      rubric: rubric.length > 0 ? rubric : null,
+      rubric: rubric.length > 0 ? asJson(rubric) : null,
     }])
     .select("id")
     .single();
@@ -276,4 +279,3 @@ export const setAssignmentStatus = async (
 
   if (error) throw error;
 };
-

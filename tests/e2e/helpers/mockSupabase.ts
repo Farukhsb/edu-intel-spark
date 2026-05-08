@@ -265,8 +265,8 @@ const handleFunctionInvoke = async (route: Route, state: MockSupabaseState) => {
       return {
         name: student.name,
         email,
-        password: `TempPass!${index + 1}`,
         success: true,
+        invite_sent: true,
       };
     });
 

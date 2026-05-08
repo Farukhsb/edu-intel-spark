@@ -10,6 +10,7 @@ import type {
   Grade,
   IntegrityReview,
   ModerationCase,
+  PlagiarismFlag,
 } from "@/pages/dashboard/assignment-detail/types";
 
 interface LecturerWorkflowUser {
@@ -26,14 +27,9 @@ interface UseLecturerWorkflowControllerArgs {
   role: string | null;
   selected: Set<string>;
   setModerationCases: Dispatch<SetStateAction<Record<string, ModerationCase>>>;
-  setPlagiarismFlags: Dispatch<SetStateAction<Record<string, unknown>>>;
+  setPlagiarismFlags: Dispatch<SetStateAction<PlagiarismFlag[]>>;
   setPlagiarismSummary: Dispatch<
-    SetStateAction<{
-      generatedAt?: string | null;
-      status?: string | null;
-      totalFlagged?: number | null;
-      totalScanned?: number | null;
-    } | null>
+    SetStateAction<string>
   >;
   setSelected: Dispatch<SetStateAction<Set<string>>>;
   submissions: AssignmentDetailSubmission[];

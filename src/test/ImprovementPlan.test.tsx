@@ -4,6 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ImprovementPlan from "@/pages/dashboard/ImprovementPlan";
 
+const hasTextContent = (expected: RegExp | string) => (_: string, element: Element | null) => {
+  const text = element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  if (typeof expected === "string") {
+    return text.includes(expected);
+  }
+
+  return expected.test(text);
+};
+
 const renderWithRouter = (
   ui: React.ReactNode,
   initialEntries:
@@ -246,11 +255,13 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.queryByText("No improvement plan yet")).not.toBeInTheDocument();
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
     expect(screen.getByText("Priority 1 - CS101: Testing")).toBeInTheDocument();
-    expect(screen.getByText("Strong recovery opportunity | 15 min review")).toBeInTheDocument();
+    expect(screen.getAllByText(hasTextContent(/Strong recovery opportunity\s*\|\s*15 min review/i)).length).toBeGreaterThan(0);
     expect(screen.getByText("Weakest criterion: Testing (50% loss)")).toBeInTheDocument();
     expect(
-      screen.getByText(/Feedback:\s*BST deletion and traversal logic are not demonstrated with test output\./i),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        hasTextContent(/Feedback:\s*BST deletion and traversal logic are not demonstrated with test output\./i),
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText("In your CS101 submission, your bst deletion and traversal logic are not visibly demonstrated, so the marker could not verify it clearly."),
     ).toBeInTheDocument();
@@ -410,8 +421,10 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.getByText(/Focused on the most important fixes to recover weaker submissions/i)).toBeInTheDocument();
     expect(screen.getByText("Recovery plan")).toBeInTheDocument();
     expect(
-      screen.getByText(/Feedback:\s*Your discussion is descriptive and does not clearly evaluate the fairness risks\./i),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        hasTextContent(/Feedback:\s*Your discussion is descriptive and does not clearly evaluate the fairness risks\./i),
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(/For resubmission, rewrite (analysis|ai fairness risk) so it compares at least two viewpoints/i),
     ).toBeInTheDocument();

@@ -117,7 +117,7 @@ export const useAssignmentDetailViewState = ({
   const integrityCard = useMemo(() => {
     const basePresentation = deriveIntegrityCardPresentation({
       flags: plagiarismFlags,
-      summary: plagiarismSummary,
+      summary: plagiarismSummary ?? "",
     });
 
     return {

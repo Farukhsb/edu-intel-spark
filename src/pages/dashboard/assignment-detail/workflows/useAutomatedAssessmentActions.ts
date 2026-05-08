@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   buildAIGradingReadyNotification,
   buildIntegrityCheckReadyNotification,
@@ -78,6 +79,7 @@ const GRADABLE_TEXT_EXTENSIONS = [
 const GRADABLE_FILE_LABEL = "PDF, DOCX, TXT, or supported code file";
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
+const asJson = (value: unknown): Json => value as Json;
 
 const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
   const candidate = `${submission.file_name ?? ""} ${submission.file_url ?? ""}`.toLowerCase();
@@ -95,7 +97,7 @@ interface UseAutomatedAssessmentActionsArgs {
   role: string | null;
   selected: Set<string>;
   setPlagiarismFlags: React.Dispatch<React.SetStateAction<AcademicIntegrityFlag[]>>;
-  setPlagiarismSummary: React.Dispatch<React.SetStateAction<string | null>>;
+  setPlagiarismSummary: React.Dispatch<React.SetStateAction<string>>;
   setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
   submissions: AssignmentDetailSubmission[];
   user: { id: string } | null;
@@ -245,7 +247,7 @@ export const useAutomatedAssessmentActions = ({
               ai_breakdown: validatedGrade.data.ai_breakdown,
               assignment_type: result.assignmentType ?? null,
               grading_confidence: validatedGrade.data.grading_confidence ?? null,
-              grading_metadata: result.gradingMetadata ?? {},
+              grading_metadata: asJson(result.gradingMetadata ?? {}),
             }, { onConflict: "submission_id" });
           } catch (gradeError) {
             log.error("Failed to write grade", gradeError, {

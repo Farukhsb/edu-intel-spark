@@ -29,6 +29,9 @@ import {
 } from "./types";
 import { humanizeToken } from "./utils";
 
+const toActivityTone = (value: string): ActivityItem["tone"] =>
+  value === "warning" || value === "success" ? value : "neutral";
+
 const EMPTY_METRICS: AdminMetrics = {
   totalUsers: 0,
   activeLecturers: 0,
@@ -416,10 +419,7 @@ export const useAdminDashboardController = () => {
             createdAt: row.created_at,
             title: row.title,
             detail: row.detail,
-            tone:
-              row.tone === "warning" || row.tone === "success"
-                ? row.tone
-                : ("neutral" as const),
+            tone: toActivityTone(row.tone),
           }));
 
       if (recentActivityRes.error) {
