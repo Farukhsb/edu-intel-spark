@@ -14,6 +14,14 @@ type StudentInput = {
   department_id?: string;
 };
 
+type ProfileVerification = {
+  email: string;
+  full_name: string | null;
+  cohort_id: string | null;
+  department_id: string | null;
+  must_change_password: boolean;
+};
+
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
 function getPasswordSetupRedirectUrl() {
@@ -21,6 +29,7 @@ function getPasswordSetupRedirectUrl() {
     Deno.env.get("APP_URL")?.trim() ||
     Deno.env.get("SITE_URL")?.trim() ||
     Deno.env.get("PUBLIC_APP_URL")?.trim() ||
+    Deno.env.get("APP_BASE_URL")?.trim() ||
     "";
 
   if (!configuredAppUrl) {
@@ -66,6 +75,44 @@ async function markPasswordChangeRequired(
   }
 
   throw new Error("The student account was invited, but the password-change requirement could not be applied.");
+}
+
+async function fetchVerifiedProfile(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  options: { userId?: string; email: string },
+) {
+  let lastProfile: ProfileVerification | null = null;
+
+  for (let attempt = 0; attempt < PROFILE_FLAG_RETRY_COUNT; attempt++) {
+    let query = supabaseAdmin
+      .from("profiles")
+      .select("email, full_name, cohort_id, department_id, must_change_password");
+
+    if (options.userId) {
+      query = query.eq("id", options.userId);
+    } else {
+      query = query.eq("email", options.email).eq("role", "student");
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      lastProfile = data as ProfileVerification;
+      if (data.must_change_password) {
+        return lastProfile;
+      }
+    }
+
+    if (attempt < PROFILE_FLAG_RETRY_COUNT - 1) {
+      await wait(PROFILE_FLAG_RETRY_DELAY_MS);
+    }
+  }
+
+  return lastProfile;
 }
 
 const StudentInputSchema = z.object({
@@ -169,6 +216,19 @@ serve(async (req) => {
           userId: inviteData.user?.id,
           email,
         });
+
+        const verifiedProfile = await fetchVerifiedProfile(supabaseAdmin, {
+          userId: inviteData.user?.id,
+          email,
+        });
+
+        results.push({
+          name,
+          email,
+          success: true,
+          invite_sent: true,
+          verified_profile: verifiedProfile,
+        });
       } catch (flagError) {
         logError("Failed to mark invited student for password change", flagError, {
           function: "bulk-create-students",
@@ -183,8 +243,6 @@ serve(async (req) => {
         });
         continue;
       }
-
-      results.push({ name, email, success: true, invite_sent: true });
     }
 
     const successCount = results.filter((result) => result.success).length;

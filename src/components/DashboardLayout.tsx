@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
@@ -155,11 +154,10 @@ const lecturerSections = [
     ],
   },
   {
-    label: "Admin",
-    description: "Setup and operational tools",
+    label: "Workspace",
+    description: "Personal settings and account controls",
     defaultOpen: false,
     links: [
-      { to: "/dashboard/bulk-upload-students", label: "Bulk Upload Students", icon: Users, isAction: true },
       { to: "/dashboard/settings", label: "Settings", icon: Settings },
     ],
   },
@@ -529,20 +527,12 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   const renderNavLink = (link: (typeof lecturerSections)[number]["links"][number] | (typeof adminSections)[number]["links"][number] | typeof studentLinks[number]) => {
     const isActive = isLinkActive(link.to);
-    const isActionLink = "isAction" in link && !!link.isAction;
 
     return (
       <Link
         key={link.to}
-        to={isActionLink ? "#" : link.to}
+        to={link.to}
         onClick={(event) => {
-          if (isActionLink) {
-            event.preventDefault();
-            setSidebarOpen(false);
-            setSearchQuery("");
-            return;
-          }
-
           setSidebarOpen(false);
           setSearchQuery("");
         }}
@@ -643,18 +633,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                   </button>
                   {isExpanded && (
                     <div className="space-y-1 pb-1">
-                      {section.links.map((link) =>
-                        "isAction" in link && link.isAction ? (
-                          <div key={link.to} className="rounded-xl border border-dashed border-sidebar-border/80 bg-sidebar-accent/25 p-2">
-                            <BulkStudentUpload
-                              triggerClassName="w-full justify-start rounded-lg border-0 bg-transparent px-2 py-2 text-sm font-medium text-sidebar-foreground/78 shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                              compact
-                            />
-                          </div>
-                        ) : (
-                          renderNavLink(link)
-                        ),
-                      )}
+                      {section.links.map((link) => renderNavLink(link))}
                     </div>
                   )}
                 </div>

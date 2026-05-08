@@ -16,18 +16,16 @@ type RateLimitResult = {
 };
 
 type SharedRateLimitAdminClient = {
-  schema: (schema: string) => {
-    rpc: (
-      fn: string,
-      args: Record<string, unknown>,
-    ) => Promise<{
-      data: Array<{
-        allowed: boolean;
-        retry_after_seconds: number;
-      }> | null;
-      error: { message?: string } | null;
-    }>;
-  };
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<{
+      allowed: boolean;
+      retry_after_seconds: number;
+    }> | null;
+    error: { message?: string } | null;
+  }>;
 };
 
 type SharedRateLimitOptions = RateLimitOptions & {
@@ -128,9 +126,7 @@ async function applySharedScopeRateLimit(
   limit: number,
   windowMs: number,
 ): Promise<RateLimitResult> {
-  const { data, error } = await adminClient
-    .schema("private")
-    .rpc("consume_edge_rate_limit", {
+  const { data, error } = await adminClient.rpc("consume_edge_rate_limit", {
       p_scope: scope,
       p_identifier: identityKey,
       p_limit: limit,
@@ -158,7 +154,7 @@ export async function applySharedRateLimit(
   req: Request,
   options: SharedRateLimitOptions,
 ): Promise<RateLimitResult> {
-  if (typeof adminClient.schema !== "function") {
+  if (typeof adminClient.rpc !== "function") {
     const globalResult = applyRateLimit(req, {
       scope: GLOBAL_EDGE_RATE_LIMIT_SCOPE,
       limit: options.globalLimit ?? 20,

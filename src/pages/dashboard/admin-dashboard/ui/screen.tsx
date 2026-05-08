@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,6 +83,7 @@ const DashboardHeader = ({
         </div>
       </div>
       <div className="flex items-center gap-3">
+        <BulkStudentUpload />
         <Button variant="outline" onClick={onRefresh} disabled={refreshing}>
           {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
           Refresh snapshot

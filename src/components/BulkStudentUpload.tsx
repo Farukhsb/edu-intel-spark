@@ -25,6 +25,7 @@ interface UploadResult {
   email: string;
   success: boolean;
   invite_sent?: boolean;
+  verified_profile?: CreatedStudentVerification | null;
   error?: string;
 }
 
@@ -270,20 +271,11 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
       return;
     }
 
-    const successfulEmails = uploadResults
-      .filter((result) => result.success)
-      .map((result) => result.email.toLowerCase());
-
-    if (successfulEmails.length > 0) {
-      const { data: profileRows, error: verificationError } = await supabase
-        .from("profiles")
-        .select("email, full_name, cohort_id, department_id, must_change_password")
-        .in("email", successfulEmails);
-
-      if (!verificationError) {
-        setVerifiedProfiles((profileRows || []) as CreatedStudentVerification[]);
-      }
-    }
+    setVerifiedProfiles(
+      uploadResults
+        .filter((result) => result.success && result.verified_profile)
+        .map((result) => result.verified_profile as CreatedStudentVerification),
+    );
 
     setResults(uploadResults);
     setStep("done");
@@ -467,9 +459,9 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
               <div className="flex items-start gap-3">
                 <Mail className="mt-0.5 h-4 w-4 text-primary" />
                 <div className="space-y-1 text-sm">
-                  <p className="font-medium">Password setup emails sent</p>
+                  <p className="font-medium">Password setup invites requested</p>
                   <p className="text-muted-foreground">
-                    Each successful student account now relies on an email invite and password-setup link instead of a temporary password file.
+                    Each successful student account now relies on an email invite and password-setup link instead of a temporary password file. Delivery still depends on the student's mailbox provider.
                   </p>
                 </div>
               </div>
@@ -483,7 +475,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
                     <span className="text-muted-foreground">{r.email}</span>
                   </div>
                   {r.error && <span className="text-xs text-destructive truncate max-w-[200px]">{r.error}</span>}
-                  {!r.error && r.invite_sent && <Badge variant="outline">Invite sent</Badge>}
+                  {!r.error && r.invite_sent && <Badge variant="outline">Invite requested</Badge>}
                 </div>
               ))}
             </div>
@@ -496,7 +488,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
                       <span>{profile.full_name || profile.email}</span>
                       <span>{profile.cohort_id || "-"}</span>
                       <span>{profile.department_id || "-"}</span>
-                      <span>{profile.must_change_password ? "Change required" : "Ready"}</span>
+                      <span>{profile.must_change_password ? "Password setup required" : "Profile active"}</span>
                     </div>
                   ))}
                 </div>

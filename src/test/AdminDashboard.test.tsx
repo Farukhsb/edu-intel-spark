@@ -443,4 +443,18 @@ describe("AdminDashboard", () => {
     expect(await screen.findByText("target-file.pdf")).toBeInTheDocument();
     expect(screen.queryByText("essay-12.pdf")).not.toBeInTheDocument();
   });
+
+  it("shows bulk student upload in the admin dashboard header", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /GradeAI Admin Dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bulk Upload Students" })).toBeInTheDocument();
+  });
 });
