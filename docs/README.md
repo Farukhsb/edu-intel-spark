@@ -56,6 +56,14 @@ This document is especially useful for showing that the project goes beyond a pr
 
 ## User and Workflow Documentation
 
+### User Guide
+
+**File:** [`USER_GUIDE.md`](USER_GUIDE.md)
+
+Use this for a practical first-time walkthrough of the platform across lecturer, student, moderator, and admin roles.
+
+It includes a worked assignment-creation example with a sample rubric so new users can understand how GradeAI is meant to be used in practice.
+
 ### Lecturer Guide
 
 **File:** [`Lecturer-Guide.md`](Lecturer-Guide.md)
@@ -119,12 +127,6 @@ Records the database migration baseline and helps reviewers understand the datab
 **File:** [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 
 A concise evidence-facing summary for reviewers. It explains what GradeAI is, the problem it addresses, what was built, the technical architecture, product evidence, and personal contribution.
-
-### Presentation Script
-
-**File:** [`support/PRESENTATION_SCRIPT.md`](support/PRESENTATION_SCRIPT.md)
-
-A supporting script for explaining the project verbally to reviewers, assessors, or technical contacts.
 
 ## Screenshots
 
