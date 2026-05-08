@@ -8,15 +8,14 @@ import {
   DashboardDemoBanner,
   DashboardEmptyState,
   DashboardLoadingState,
-  DashboardPageIntro,
 } from "@/components/dashboard/PageStates";
 import { useAuth } from "@/contexts/AuthContext";
 import { safeFormatDate } from "@/lib/date";
 import type { CommunicationMessage } from "@/lib/communications";
-import { getImprovementPlanReadiness, type PlanModule } from "@/lib/improvementPlan";
+import { getImprovementPlanReadiness } from "@/lib/improvementPlan";
 import {
+  ImprovementPlanHero,
   ImprovementPlanModuleCard,
-  ImprovementPlanOverview,
   ImprovementPlanResourcesSection,
 } from "@/pages/dashboard/improvement-plan/sections";
 import { useImprovementPlanData } from "@/pages/dashboard/improvement-plan/useImprovementPlanData";
@@ -26,6 +25,7 @@ const ImprovementPlan = () => {
   const { user, isDemo } = useAuth();
   const [expandedCompletedModules, setExpandedCompletedModules] = useState<Record<string, boolean>>({});
   const [expandedCompletedCards, setExpandedCompletedCards] = useState<Record<string, boolean>>({});
+  const [activeWorkspaceView, setActiveWorkspaceView] = useState<"modules" | "completed" | "open">("modules");
   const notification = (location.state as { notification?: CommunicationMessage } | null)?.notification;
   const { plan, resources, loading, overallTasks, toggleTask } = useImprovementPlanData({
     userId: user?.id,
@@ -45,6 +45,60 @@ const ImprovementPlan = () => {
     resources,
     overallTasks,
   });
+  const activePlan = plan.filter((module) => module.tasks.some((task) => !task.done));
+  const modulesWithCompletedTasks = plan.filter((module) => module.tasks.some((task) => task.done));
+  const activeModuleNames = new Set(activePlan.map((module) => module.module));
+  const activeResources = resources.filter((resource) => activeModuleNames.has(resource.module));
+  const firstModuleWithCompletedTasks = modulesWithCompletedTasks[0] ?? null;
+  const modulesForCurrentView =
+    activeWorkspaceView === "completed"
+      ? modulesWithCompletedTasks
+      : activeWorkspaceView === "open"
+        ? activePlan.filter((module) => module.tasks.some((task) => !task.done))
+        : activePlan;
+  const viewContent = {
+    modules: {
+      title: "Module plans",
+      description: "Review the active modules that still need attention before your next submission.",
+      emptyTitle: "No active module plans",
+      emptyDescription: "New module plans will appear here when released results create a fresh improvement signal.",
+    },
+    completed: {
+      title: "Completed tasks",
+      description: "Review the tasks you have already marked as done so you can carry that progress forward.",
+      emptyTitle: "No completed tasks yet",
+      emptyDescription: "Completed tasks will appear here after you mark an improvement step as done.",
+    },
+    open: {
+      title: "Open tasks",
+      description: "Focus on the improvement tasks that still need attention before your next submission.",
+      emptyTitle: "No open tasks remain",
+      emptyDescription: "You have cleared the current open tasks in this workspace.",
+    },
+  }[activeWorkspaceView];
+
+  const showModules = () => {
+    setActiveWorkspaceView("modules");
+  };
+
+  const showCompletedTasks = () => {
+    setActiveWorkspaceView("completed");
+    setExpandedCompletedModules(
+      Object.fromEntries(
+        modulesWithCompletedTasks.map((module) => [module.module, true]),
+      ),
+    );
+    if (firstModuleWithCompletedTasks) {
+      setExpandedCompletedCards((current) => ({
+        ...current,
+        [firstModuleWithCompletedTasks.module]: true,
+      }));
+    }
+  };
+
+  const showOpenTasks = () => {
+    setActiveWorkspaceView("open");
+  };
 
   const toggleCompletedSection = (moduleName: string) => {
     setExpandedCompletedModules((current) => ({
@@ -131,7 +185,7 @@ const ImprovementPlan = () => {
                     document.getElementById("best-next-moves")?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                 >
-                  Review best next moves
+                  Review improvement plan
                 </Button>
               </div>
             )}
@@ -143,46 +197,53 @@ const ImprovementPlan = () => {
         <DashboardDemoBanner label="Viewing demo improvement plan data" />
       )}
 
-      <DashboardPageIntro
-        eyebrow="Personalised study support"
-        title="Improvement Plan"
-        description="Focus first on the weakest criteria from your released work, track what you have already completed, and keep the next submission priorities visible."
-      />
-
-      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
-        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
-          <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
-            <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Based on your current support tasks, recurring weak criteria, and recommended next moves.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
-            <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              This is the improvement area most likely to matter before your next submission.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
-            <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Use this as your immediate study step instead of trying to fix every weak area at once.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <ImprovementPlanOverview
+      <ImprovementPlanHero
+        module={activePlan[0] ?? null}
+        readiness={readiness}
         modulesCount={plan.length}
         completed={overallTasks.completed}
         total={overallTasks.total}
-        progress={overallTasks.progress}
+        activeView={activeWorkspaceView}
+        onViewModules={showModules}
+        onViewCompletedTasks={showCompletedTasks}
+        onViewOpenTasks={showOpenTasks}
       />
 
-      {plan.map((module) => {
+      <Card className="border-dashed bg-muted/20">
+        <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Current view:</span>
+          <Badge variant="secondary">
+            {activeWorkspaceView === "modules"
+              ? "Modules"
+              : activeWorkspaceView === "completed"
+                ? "Completed tasks"
+                : "Open tasks"}
+          </Badge>
+          <span>
+            {activeWorkspaceView === "modules"
+              ? "Browse each active module plan."
+              : activeWorkspaceView === "completed"
+                ? "Showing modules that contain completed tasks."
+                : "Showing modules with open tasks that still need attention."}
+          </span>
+        </CardContent>
+      </Card>
+
+      <Card id="improvement-workspace-view">
+        <CardHeader>
+          <CardTitle className="text-base">{viewContent.title}</CardTitle>
+          <CardDescription>{viewContent.description}</CardDescription>
+        </CardHeader>
+      </Card>
+
+      {modulesForCurrentView.length === 0 ? (
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle className="text-base">{viewContent.emptyTitle}</CardTitle>
+            <CardDescription>{viewContent.emptyDescription}</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : modulesForCurrentView.map((module) => {
         const isCompletedSectionExpanded = expandedCompletedModules[module.module] ?? false;
         const isCompletedCardExpanded = expandedCompletedCards[module.module] ?? false;
 
@@ -191,7 +252,7 @@ const ImprovementPlan = () => {
             key={module.module}
             module={module}
             expandedCompletedCard={isCompletedCardExpanded}
-            expandedCompletedSection={isCompletedSectionExpanded}
+            expandedCompletedSection={activeWorkspaceView === "completed" ? true : isCompletedSectionExpanded}
             onToggleCompletedCard={toggleCompletedCard}
             onToggleCompletedSection={toggleCompletedSection}
             onToggleTask={toggleTask}
@@ -199,7 +260,9 @@ const ImprovementPlan = () => {
         );
       })}
 
-      <ImprovementPlanResourcesSection resources={resources} />
+      {activeWorkspaceView !== "completed" && modulesForCurrentView.length > 0 ? (
+        <ImprovementPlanResourcesSection resources={activeResources} />
+      ) : null}
     </div>
   );
 };
