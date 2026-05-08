@@ -186,7 +186,7 @@ Migration history note:
 The previous migration-history reconciliation work is documented separately in:
 
 ```text
-docs/SUPABASE_MIGRATION_HISTORY_RECONCILIATION_PLAN.md
+docs/archive/SUPABASE_MIGRATION_HISTORY_RECONCILIATION_PLAN.md
 ```
 
 A new database has been created, and the old migration-history blocker should be treated as resolved for the current operational baseline. Keep the reconciliation document for audit/history, but use the new database as the clean baseline going forward.

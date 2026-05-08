@@ -90,6 +90,14 @@ Documents role-boundary checks used to confirm that users only see what they are
 
 This is important evidence for security and trust review.
 
+### Live Regression Checklist
+
+**File:** [`LIVE_REGRESSION_CHECKLIST.md`](LIVE_REGRESSION_CHECKLIST.md)
+
+Use this for a short cross-role smoke test after workflow, grading, notification, or architecture changes.
+
+It is intentionally shorter than the full testing checklist and more practical for quick demo or pilot validation.
+
 ## Role, Data, and Migration Notes
 
 ### Role Model Alignment
@@ -112,17 +120,9 @@ Records the database migration baseline and helps reviewers understand the datab
 
 A concise evidence-facing summary for reviewers. It explains what GradeAI is, the problem it addresses, what was built, the technical architecture, product evidence, and personal contribution.
 
-### GTV Evidence Summary: Production Hardening
-
-**File:** [`GTV_EVIDENCE_SUMMARY_GRADEAI_HARDENING.md`](GTV_EVIDENCE_SUMMARY_GRADEAI_HARDENING.md)
-
-A Global Talent evidence-oriented summary focused on the production-hardening work completed on GradeAI.
-
-This document is useful for explaining technical ability, responsible AI integration, and engineering judgement in an evidence pack.
-
 ### Presentation Script
 
-**File:** [`PRESENTATION_SCRIPT.md`](PRESENTATION_SCRIPT.md)
+**File:** [`support/PRESENTATION_SCRIPT.md`](support/PRESENTATION_SCRIPT.md)
 
 A supporting script for explaining the project verbally to reviewers, assessors, or technical contacts.
 
