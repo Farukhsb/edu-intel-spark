@@ -271,7 +271,7 @@ describe("ExplainGrade", () => {
     expect(screen.getByText("74%")).toBeInTheDocument();
     expect(screen.getByText("Strongest Areas")).toBeInTheDocument();
     expect(screen.getByText("Best Improvement Route")).toBeInTheDocument();
-    expect(screen.getByText("Critical Essay â€” 74% is closest to improving through Structure")).toBeInTheDocument();
+    expect(screen.getByText("Critical Essay \u2014 74% is closest to improving through Structure")).toBeInTheDocument();
     expect(screen.getByText("Use the Structure guidance to work toward 1st")).toBeInTheDocument();
     expect(screen.getByText("Next Submission Action Plan")).toBeInTheDocument();
     expect(screen.getByText("Keep This Strength")).toBeInTheDocument();
@@ -380,9 +380,9 @@ describe("ExplainGrade", () => {
         score: 67,
       }),
     ).toEqual({
-      label: "Data Structures Assignment â€” 67%",
+      label: "Data Structures Assignment \u2014 67%",
       assessment: "Data Structures Assignment",
-      secondaryLabel: "Nkechi Onwumere CV.docx Â· Released 29 Apr 2026",
+      secondaryLabel: "Nkechi Onwumere CV.docx \u00b7 Released 29 Apr 2026",
     });
 
     expect(
@@ -392,7 +392,7 @@ describe("ExplainGrade", () => {
         score: 58,
       }),
     ).toMatchObject({
-      label: "fallback-report.pdf â€” 58%",
+      label: "fallback-report.pdf \u2014 58%",
       assessment: "fallback-report.pdf",
       secondaryLabel: null,
     });
@@ -404,7 +404,7 @@ describe("ExplainGrade", () => {
         score: 41,
       }),
     ).toMatchObject({
-      label: "Released grade â€” 41%",
+      label: "Released grade \u2014 41%",
       assessment: "Released grade",
     });
   });
@@ -471,7 +471,7 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Data Structures Assignment")).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment â€” 67%");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment \u2014 67%");
     expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx");
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
     expect(screen.queryByText(/abdullahi faruk/i)).not.toBeInTheDocument();
