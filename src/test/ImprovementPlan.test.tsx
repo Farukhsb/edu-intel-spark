@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ImprovementPlan from "@/pages/dashboard/ImprovementPlan";
 
+// Workspace view changes are covered here so completed/open/module modes stay aligned with the student UI.
 const hasTextContent = (expected: RegExp | string) => (_: string, element: Element | null) => {
   const text = element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
   if (typeof expected === "string") {
