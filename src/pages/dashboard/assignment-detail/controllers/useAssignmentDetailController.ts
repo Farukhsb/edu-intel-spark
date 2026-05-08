@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useAssignmentDetailData";
-import { useAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
+import { buildAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
 import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import { useLecturerWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useLecturerWorkflowController";
 import { useStudentWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useStudentWorkflowController";
@@ -115,7 +115,7 @@ export const useAssignmentDetailController = ({
     assignment,
     loading,
     navigate,
-    screenProps: useAssignmentDetailScreenProps({
+    screenProps: buildAssignmentDetailScreenProps({
       assignment,
       automatedActions,
       currentUserId,

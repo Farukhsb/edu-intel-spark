@@ -22,7 +22,7 @@ import type {
   ModerationCase,
 } from "@/pages/dashboard/assignment-detail/types";
 
-interface UseAssignmentDetailScreenPropsArgs {
+interface BuildAssignmentDetailScreenPropsArgs {
   assignment: AssignmentDetailAssignment;
   currentUserId: string | null;
   demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
@@ -45,7 +45,7 @@ interface UseAssignmentDetailScreenPropsArgs {
   automatedActions: ReturnType<typeof useAutomatedAssessmentActions>;
 }
 
-export const useAssignmentDetailScreenProps = ({
+export const buildAssignmentDetailScreenProps = ({
   assignment,
   automatedActions,
   currentUserId,
@@ -62,7 +62,7 @@ export const useAssignmentDetailScreenProps = ({
   reloadSubmissions,
   submissions,
   viewState,
-}: UseAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps => ({
+}: BuildAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps => ({
   demoAssignmentSet,
   heroCardProps: buildHeroCardProps({
     assignment,
