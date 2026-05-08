@@ -102,6 +102,10 @@ describe("ImprovementPlan explanation validation", () => {
   beforeEach(() => {
     mocks.authState.isDemo = true;
     mocks.authState.user = { id: "student-1" };
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
   afterEach(() => {
@@ -112,7 +116,7 @@ describe("ImprovementPlan explanation validation", () => {
   it("renders suggested focus areas without a misleading refresh action", () => {
     renderWithRouter(<ImprovementPlan />);
 
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Current position")).toBeInTheDocument();
     expect(screen.getByText("Active support position")).toBeInTheDocument();
     expect(
       screen.getByText("CS205: Dynamic Programming Structure is still the highest-priority improvement area"),
@@ -120,7 +124,7 @@ describe("ImprovementPlan explanation validation", () => {
     expect(
       screen.getByText("Complete Complete Big-O analysis worksheet before the next submission window"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Best Next Moves" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Improvement plan" })).toBeInTheDocument();
     expect(
       screen.getByText(/Focused on the weakest repeated criteria so you know which skills to strengthen for future assignments/i),
     ).toBeInTheDocument();
@@ -135,9 +139,9 @@ describe("ImprovementPlan explanation validation", () => {
     renderWithRouter(<ImprovementPlan />);
 
     expect(screen.getByText("Priority 1 - CS205: Dynamic Programming Structure")).toBeInTheDocument();
-    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+    expect(screen.getAllByText("Needs attention").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/(Good|Strong|High) recovery opportunity \| (short|12 min|15 min|20 min) review/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Future improvement plan").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading", { name: "Improvement plan" }).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
         /Based on (direct criterion feedback from graded work|repeated low criterion scores with some supporting feedback|limited evidence from current graded work, so this guidance is intentionally broad)\./,
@@ -164,6 +168,19 @@ describe("ImprovementPlan explanation validation", () => {
 
     expect(screen.getByText("Review lecturer feedback before next lab")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /hide completed tasks/i })).toBeInTheDocument();
+  });
+
+  it("uses the hero action buttons to jump to module sections and reveal completed tasks", () => {
+    renderWithRouter(<ImprovementPlan />);
+
+    fireEvent.click(screen.getByRole("button", { name: /view completed tasks/i }));
+
+    expect(screen.getByText("Review lecturer feedback before next lab")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /hide completed tasks/i }).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /view open tasks/i }));
+
+    expect(screen.getByText("Complete Big-O analysis worksheet")).toBeInTheDocument();
   });
 
   it("shows a focused support handoff when opened from an intervention notification", () => {
@@ -194,7 +211,7 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.getByText("Opened from support notice")).toBeInTheDocument();
     expect(screen.getByText("Start Here")).toBeInTheDocument();
     expect(screen.getByText("First Open Task")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Review best next moves" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review improvement plan" })).toBeInTheDocument();
   });
 
   it("builds a plan for a real student using assignment metadata RPC", async () => {
@@ -428,10 +445,10 @@ describe("ImprovementPlan explanation validation", () => {
     expect(
       screen.getByText(/For resubmission, rewrite (analysis|ai fairness risk) so it compares at least two viewpoints/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/What to fix to recover this submission/i)).toBeInTheDocument();
+    expect(screen.getByText(/What to do next/i)).toBeInTheDocument();
   });
 
-  it("collapses a fully completed real module plan by default", async () => {
+  it("removes a fully completed real module plan from the active workspace", async () => {
     mocks.authState.isDemo = false;
     mocks.supabase.rpc.mockResolvedValue({
       data: [
@@ -474,10 +491,17 @@ describe("ImprovementPlan explanation validation", () => {
 
     renderWithRouter(<ImprovementPlan />);
 
-    expect(await screen.findByText("Completed module plan")).toBeInTheDocument();
-    expect(screen.getAllByText("Testing").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /show completed plan/i })).toBeInTheDocument();
-    expect(screen.queryByText("What to improve before your next submission")).not.toBeInTheDocument();
-    expect(screen.queryByText("All current tasks are completed for this module.")).not.toBeInTheDocument();
+    expect(await screen.findByText("Current improvement tasks complete")).toBeInTheDocument();
+    expect(screen.getByText(/completed module plans are hidden from the active workspace/i)).toBeInTheDocument();
+    expect(screen.queryByText("Completed module plan")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /show completed plan/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("No open tasks remain for this module.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /view completed tasks/i }));
+
+    expect(await screen.findByText("Showing modules that contain completed tasks.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Testing" })).toBeInTheDocument();
+    expect(screen.getByText("No open tasks remain for this module.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /hide module details/i })).toBeInTheDocument();
   });
 });
