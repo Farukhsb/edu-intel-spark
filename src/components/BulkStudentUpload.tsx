@@ -33,6 +33,7 @@ interface CreatedStudentVerification {
   full_name: string | null;
   cohort_id: string | null;
   department_id: string | null;
+  must_change_password: boolean;
 }
 
 interface BulkStudentUploadProps {
@@ -276,7 +277,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
     if (successfulEmails.length > 0) {
       const { data: profileRows, error: verificationError } = await supabase
         .from("profiles")
-        .select("email, full_name, cohort_id, department_id")
+        .select("email, full_name, cohort_id, department_id, must_change_password")
         .in("email", successfulEmails);
 
       if (!verificationError) {
@@ -456,7 +457,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
               <p className="text-xs text-muted-foreground">Verified in profiles</p>
               <p className="text-2xl font-semibold">{verifiedCount}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Confirms newly created students were written to the app profile table.
+                Confirms newly created students were written to the app profile table and flagged for a mandatory password change.
               </p>
             </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
@@ -495,6 +496,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
                       <span>{profile.full_name || profile.email}</span>
                       <span>{profile.cohort_id || "-"}</span>
                       <span>{profile.department_id || "-"}</span>
+                      <span>{profile.must_change_password ? "Change required" : "Ready"}</span>
                     </div>
                   ))}
                 </div>

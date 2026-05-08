@@ -4,6 +4,7 @@ import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, HttpError, jsonError, requireAdmin } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { logError } from "../_shared/log.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 const RoleChangeRequestSchema = z.object({
   targetUserId: z.string().uuid(),
@@ -22,6 +23,16 @@ serve(async (req) => {
     }
 
     const { supabase, user } = await requireAdmin(req);
+    const rateLimit = await applySharedRateLimit(createAdminClient(), req, {
+      scope: "admin-set-user-role",
+      limit: 15,
+      windowMs: 60_000,
+      userId: user.id,
+    });
+
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
+    }
 
     const body = await req.json().catch(() => null);
     const parsed = RoleChangeRequestSchema.safeParse(body);

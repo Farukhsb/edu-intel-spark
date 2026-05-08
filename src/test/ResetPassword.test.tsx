@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   toast: vi.fn(),
+  authState: {
+    completePasswordChange: vi.fn(),
+  },
   auth: {
     getSession: vi.fn(),
     onAuthStateChange: vi.fn(),
@@ -15,6 +18,10 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({
     toast: mocks.toast,
   }),
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => mocks.authState,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({

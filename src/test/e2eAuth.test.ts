@@ -71,6 +71,7 @@ describe("e2eAuth", () => {
         avatar_url: null,
         cohort_id: null,
         department_id: "cs",
+        must_change_password: false,
       },
     });
   });

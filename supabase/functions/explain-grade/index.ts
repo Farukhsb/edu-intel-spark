@@ -11,7 +11,7 @@ import {
   buildWeaknessRankingResponse,
   hasWeaknessIntent,
 } from "../_shared/explain-grade-prompt.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 function createSseResponse(content: string, corsHeaders: HeadersInit) {
   const encoder = new TextEncoder();
@@ -39,7 +39,8 @@ serve(async (req) => {
 
   try {
     const { supabase: userSupabase, user } = await requireUser(req);
-    const rateLimit = applyRateLimit(req, {
+    const admin = createAdminClient();
+    const rateLimit = await applySharedRateLimit(admin, req, {
       scope: "explain-grade",
       limit: 12,
       windowMs: 60_000,
@@ -66,7 +67,6 @@ serve(async (req) => {
     }
 
     const { submissionId, message, messages } = parsed.data;
-    const admin = createAdminClient();
     const { data: submission, error: submissionError } = await userSupabase
       .from("submissions")
       .select("id, assignment_id, student_id, student_name, student_email, file_name, status")

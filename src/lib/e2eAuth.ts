@@ -15,6 +15,7 @@ export interface E2EAuthProfile {
   avatar_url: string | null;
   cohort_id: string | null;
   department_id: string | null;
+  must_change_password: boolean;
 }
 
 interface E2EAuthState {
@@ -38,6 +39,7 @@ const E2EAuthStateSchema = z.object({
     avatar_url: z.string().nullable().optional(),
     cohort_id: z.string().nullable().optional(),
     department_id: z.string().nullable().optional(),
+    must_change_password: z.boolean().optional(),
   }),
 });
 
@@ -74,6 +76,7 @@ export const readE2EAuthState = (): E2EAuthState | null => {
         avatar_url: parsed.data.profile.avatar_url ?? null,
         cohort_id: parsed.data.profile.cohort_id ?? null,
         department_id: parsed.data.profile.department_id ?? null,
+        must_change_password: parsed.data.profile.must_change_password ?? false,
       },
     };
   } catch (error) {

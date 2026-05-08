@@ -62,6 +62,7 @@ describe("edge function hardening", () => {
 
   it("keeps auth checks before rate limiting on newly limited functions", () => {
     for (const file of [
+      "supabase/functions/admin-set-user-role/index.ts",
       "supabase/functions/bulk-create-students/index.ts",
       "supabase/functions/send-workflow-notification-email/index.ts",
     ]) {
@@ -71,7 +72,10 @@ describe("edge function hardening", () => {
         source.indexOf("requireLecturer(req)"),
         source.indexOf("requireUser(req)"),
       );
-      const rateLimitIndex = source.indexOf("applyRateLimit(req");
+      const rateLimitIndex = Math.max(
+        source.indexOf("applyRateLimit(req"),
+        source.indexOf("applySharedRateLimit("),
+      );
 
       expect(authIndex).toBeGreaterThan(-1);
       expect(rateLimitIndex).toBeGreaterThan(-1);

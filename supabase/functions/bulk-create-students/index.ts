@@ -4,7 +4,7 @@ import { createAdminClient, jsonError, requireAdmin, HttpError } from "../_share
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 type StudentInput = {
   name: string;
@@ -28,6 +28,44 @@ function getPasswordSetupRedirectUrl() {
   }
 
   return `${trimTrailingSlash(configuredAppUrl)}/reset-password`;
+}
+
+const PROFILE_FLAG_RETRY_COUNT = 5;
+const PROFILE_FLAG_RETRY_DELAY_MS = 400;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function markPasswordChangeRequired(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  options: { userId?: string; email: string },
+) {
+  for (let attempt = 0; attempt < PROFILE_FLAG_RETRY_COUNT; attempt++) {
+    let query = supabaseAdmin
+      .from("profiles")
+      .update({ must_change_password: true });
+
+    if (options.userId) {
+      query = query.eq("id", options.userId);
+    } else {
+      query = query.eq("email", options.email).eq("role", "student");
+    }
+
+    const { data, error } = await query.select("id").maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data?.id) {
+      return;
+    }
+
+    if (attempt < PROFILE_FLAG_RETRY_COUNT - 1) {
+      await wait(PROFILE_FLAG_RETRY_DELAY_MS);
+    }
+  }
+
+  throw new Error("The student account was invited, but the password-change requirement could not be applied.");
 }
 
 const StudentInputSchema = z.object({
@@ -54,7 +92,8 @@ serve(async (req) => {
 
   try {
     const { user } = await requireAdmin(req);
-    const rateLimit = applyRateLimit(req, {
+    const supabaseAdmin = createAdminClient();
+    const rateLimit = await applySharedRateLimit(supabaseAdmin, req, {
       scope: "bulk-create-students",
       limit: 20,
       windowMs: 60_000,
@@ -91,7 +130,6 @@ serve(async (req) => {
       throw new HttpError(400, "Upload is limited to 200 students per request");
     }
 
-    const supabaseAdmin = createAdminClient();
     const passwordSetupRedirectTo = getPasswordSetupRedirectUrl();
     const results = [];
 
@@ -111,7 +149,7 @@ serve(async (req) => {
         continue;
       }
 
-      const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      const { data: inviteData, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
         data: {
           full_name: name,
           role: "student",
@@ -123,6 +161,26 @@ serve(async (req) => {
 
       if (error) {
         results.push({ name, email, success: false, error: error.message });
+        continue;
+      }
+
+      try {
+        await markPasswordChangeRequired(supabaseAdmin, {
+          userId: inviteData.user?.id,
+          email,
+        });
+      } catch (flagError) {
+        logError("Failed to mark invited student for password change", flagError, {
+          function: "bulk-create-students",
+          email,
+          userId: inviteData.user?.id ?? null,
+        });
+        results.push({
+          name,
+          email,
+          success: false,
+          error: flagError instanceof Error ? flagError.message : "Password-change requirement could not be applied",
+        });
         continue;
       }
 

@@ -16,6 +16,7 @@ export interface Profile {
   avatar_url: string | null;
   cohort_id: string | null;
   department_id: string | null;
+  must_change_password: boolean;
 }
 
 const PROFILE_FETCH_RETRY_COUNT = 5;
@@ -28,6 +29,7 @@ interface AuthContextType {
   loading: boolean;
   profileError: string | null;
   isDemo: boolean;
+  mustChangePassword: boolean;
   signUp: (
     email: string,
     password: string,
@@ -38,6 +40,8 @@ interface AuthContextType {
   ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  completePasswordChange: (password: string) => Promise<void>;
+  refreshProfile: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   resendVerification: () => Promise<void>;
   enterDemo: (demoRole: AppRole) => void;
@@ -60,6 +64,7 @@ const DEMO_LECTURER_PROFILE: Profile = {
   avatar_url: null,
   cohort_id: null,
   department_id: null,
+  must_change_password: false,
 };
 
 const DEMO_STUDENT_PROFILE: Profile = {
@@ -70,6 +75,7 @@ const DEMO_STUDENT_PROFILE: Profile = {
   avatar_url: null,
   cohort_id: "200",
   department_id: "Computer Science",
+  must_change_password: false,
 };
 
 const createDemoUser = (profile: Profile | null): User =>
@@ -98,6 +104,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       avatar_url: string | null;
       cohort_id: string | null;
       department_id: string | null;
+      must_change_password: boolean | null;
     } | null = null;
 
     for (let attempt = 0; attempt < PROFILE_FETCH_RETRY_COUNT; attempt++) {
@@ -131,6 +138,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         avatar_url: data.avatar_url,
         cohort_id: data.cohort_id ?? null,
         department_id: data.department_id ?? null,
+        must_change_password: data.must_change_password ?? false,
       });
       setProfileError(null);
       posthog.identify(userId);
@@ -182,6 +190,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, [isDemo, location.pathname, navigate]);
 
+  const refreshProfile = async () => {
+    if (!user || isDemo) return;
+    await fetchProfile(user.id, user.email);
+  };
+
   const signUp = async (
     email: string,
     password: string,
@@ -218,6 +231,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         avatar_url: null,
         cohort_id: role === "student" ? (cohortId || null) : null,
         department_id: departmentId || null,
+        must_change_password: false,
       });
     }
 
@@ -249,6 +263,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await supabase.auth.signOut();
     setProfile(null);
     setProfileError(null);
+  };
+
+  const completePasswordChange = async (password: string) => {
+    if (!user) {
+      throw new Error("You must be signed in to update your password.");
+    }
+
+    const { error: authError } = await supabase.auth.updateUser({ password });
+    if (authError) throw authError;
+
+    const { error: profileUpdateError } = await supabase
+      .from("profiles")
+      .update({ must_change_password: false })
+      .eq("id", user.id);
+
+    if (profileUpdateError) {
+      throw new Error("Your password was updated, but the account security check could not be completed. Please sign in again and try once more.");
+    }
+
+    setProfile((current) => (current ? { ...current, must_change_password: false } : current));
   };
 
   const resetPassword = async (email: string) => {
@@ -284,9 +318,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         profileError,
         isDemo,
+        mustChangePassword: profile?.must_change_password ?? false,
         signUp,
         signIn,
         signOut: handleSignOut,
+        completePasswordChange,
+        refreshProfile,
         resetPassword,
         resendVerification,
         enterDemo,

@@ -7,7 +7,7 @@ import {
   logDocumentExtractionResult,
 } from "../_shared/document-extraction.ts";
 import { createResponse, extractOutputText, parseJsonText } from "../_shared/openai.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import {
   assessExtractionQuality,
   computeBaselineDeviation,
@@ -1009,7 +1009,8 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
     try {
       const startedAt = Date.now();
       const { supabase: userSupabase, user } = await deps.requireLecturer(req);
-    const rateLimit = applyRateLimit(req, {
+    const supabaseAdmin = deps.createAdminClient();
+    const rateLimit = await applySharedRateLimit(supabaseAdmin, req, {
       scope: "check-plagiarism",
       limit: 5,
       windowMs: 60_000,
@@ -1076,7 +1077,6 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
       });
     }
 
-    const supabaseAdmin = deps.createAdminClient();
     const { data: assignment, error: assignmentError } = await userSupabase
       .from("assignments")
       .select("id, lecturer_id, title, description")

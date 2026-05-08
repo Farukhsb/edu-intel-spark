@@ -698,6 +698,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          must_change_password: boolean
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
         }
@@ -709,6 +710,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          must_change_password?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
         }
@@ -720,6 +722,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          must_change_password?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
         }

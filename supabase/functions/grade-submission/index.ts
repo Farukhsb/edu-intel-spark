@@ -8,7 +8,7 @@ import {
   extractSubmissionDocument,
 } from "../_shared/document-extraction.ts";
 import { getModel } from "../_shared/openai.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import { parseGradeSubmissionRequestPayload } from "../_shared/grade-submission-request.ts";
 import {
   type CachedGradeResult,
@@ -95,7 +95,8 @@ serve(async (req) => {
 
   try {
     const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);
-    const rateLimit = applyRateLimit(req, {
+    const supabaseAdmin = createAdminClient();
+    const rateLimit = await applySharedRateLimit(supabaseAdmin, req, {
       scope: "grade-submission",
       limit: 5,
       windowMs: 60_000,
@@ -140,7 +141,6 @@ serve(async (req) => {
       throw new HttpError(400, "Missing assignment or submissions data");
     }
 
-    const supabaseAdmin = createAdminClient();
     const actorIsAdmin = actorRoles.includes("admin");
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");

@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getResetPasswordReadiness } from "@/lib/resetPasswordReadiness";
+import { useAuth } from "@/contexts/AuthContext";
 
 const getHashParams = () => {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
@@ -32,6 +33,7 @@ const getRecoveryParams = () => {
 const ResetPassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { completePasswordChange } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -161,26 +163,28 @@ const ResetPassword = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({ password });
-
-    setLoading(false);
-
-    if (error) {
+    try {
+      await completePasswordChange(password);
+    } catch (error) {
+      setLoading(false);
+      const errorMessage = error instanceof Error ? error.message : "Password reset failed";
       const isWeakOrCompromised =
-        error.message.toLowerCase().includes("weak") ||
-        error.message.toLowerCase().includes("compromised") ||
-        error.message.toLowerCase().includes("hibp") ||
-        error.status === 422;
+        errorMessage.toLowerCase().includes("weak") ||
+        errorMessage.toLowerCase().includes("compromised") ||
+        errorMessage.toLowerCase().includes("hibp") ||
+        (typeof error === "object" && error !== null && "status" in error && error.status === 422);
 
       toast({
         title: isWeakOrCompromised ? "Password not secure enough" : "Password reset failed",
         description: isWeakOrCompromised
           ? "This password has appeared in a data breach and cannot be used. Please choose a stronger, unique password."
-          : error.message,
+          : errorMessage,
         variant: "destructive",
       });
       return;
     }
+
+    setLoading(false);
 
     setIsRecovered(true);
     toast({

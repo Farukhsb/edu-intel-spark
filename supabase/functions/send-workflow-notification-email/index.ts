@@ -8,7 +8,7 @@ import {
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logWarn } from "../_shared/log.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import {
   formatAssignmentPublishedEmail,
   formatGradeReleasedEmail,
@@ -16,7 +16,6 @@ import {
   getAppBaseUrl,
   sendEmail,
 } from "../_shared/email.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 const RequestSchema = z.discriminatedUnion("category", [
   z.object({
@@ -197,7 +196,8 @@ serve(async (req) => {
 
   try {
     const { user } = await requireUser(req);
-    const rateLimit = applyRateLimit(req, {
+    const admin = createAdminClient();
+    const rateLimit = await applySharedRateLimit(admin, req, {
       scope: "send-workflow-notification-email",
       limit: 120,
       windowMs: 60_000,
@@ -211,7 +211,6 @@ serve(async (req) => {
       return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
     }
 
-    const admin = createAdminClient();
     const rawBody = await req.json().catch(() => null);
     const parsed = RequestSchema.safeParse(rawBody);
 
