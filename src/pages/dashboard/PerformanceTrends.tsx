@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type AtRiskStudent, computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
+import { fetchLecturerPerformanceDataset } from "@/lib/data/student";
 import { log } from "@/lib/logger";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import {
@@ -28,10 +28,6 @@ import {
   PerformanceFiltersBar,
   StudentSupportSummaryCard,
 } from "@/pages/dashboard/performance-trends/sections";
-
-const ASSIGNMENT_FIELDS = "id, title, module_code";
-const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, submitted_at";
-const GRADE_FIELDS = "submission_id, ai_score, final_score";
 
 type DemoAssessmentTrend = {
   module: string;
@@ -168,14 +164,7 @@ const PerformanceTrends = () => {
 
     const fetchLiveData = async () => {
       try {
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .from("assignments")
-          .select(ASSIGNMENT_FIELDS)
-          .eq("lecturer_id", user.id);
-
-        if (assignmentsError) throw assignmentsError;
-
-        const assignments = assignmentsData || [];
+        const { assignments, submissions, grades } = await fetchLecturerPerformanceDataset(user.id);
         if (assignments.length === 0) {
           setModules([]);
           setAssessmentTrends([]);
@@ -189,14 +178,6 @@ const PerformanceTrends = () => {
         const moduleSet = new Set(assignments.map((assignment) => assignment.module_code).filter(Boolean) as string[]);
         setModules(Array.from(moduleSet));
 
-        const { data: submissionsData, error: submissionsError } = await supabase
-          .from("submissions")
-          .select(SUBMISSION_FIELDS)
-          .in("assignment_id", assignmentIds);
-
-        if (submissionsError) throw submissionsError;
-
-        const submissions = submissionsData || [];
         if (submissions.length === 0) {
           setAssessmentTrends([]);
           setGradeDist(EMPTY_GRADE_DIST);
@@ -204,19 +185,6 @@ const PerformanceTrends = () => {
           setLoading(false);
           return;
         }
-
-        const submissionIds = submissions.map((submission) => submission.id);
-        let grades: Array<{ submission_id: string; ai_score: number | null; final_score: number | null }> = [];
-        if (submissionIds.length > 0) {
-          const { data: gradesData, error: gradesError } = await supabase
-            .from("grades")
-            .select(GRADE_FIELDS)
-            .in("submission_id", submissionIds);
-
-          if (gradesError) throw gradesError;
-          grades = gradesData || [];
-        }
-
         const projection = buildPerformanceProjection({
           assignments,
           submissions,

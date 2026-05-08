@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { computeRisk } from "@/lib/studentRisk";
+import { fetchLecturerStudentProfileDataset } from "@/lib/data/student";
 import { safeFormatDate } from "@/lib/date";
 import { dispatchCommunicationMessage } from "@/lib/communications";
 import { log } from "@/lib/logger";
@@ -37,10 +38,6 @@ import {
   StudentProfileSummaryCards,
   StudentRiskReasonsCard,
 } from "@/pages/dashboard/student-profile/sections";
-
-const ASSIGNMENT_FIELDS = "id, title, module_code, due_date, max_score";
-const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
-const GRADE_FIELDS = "submission_id, ai_score, final_score";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -133,29 +130,12 @@ const StudentProfile = () => {
       }
 
       try {
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .from("assignments")
-          .select(ASSIGNMENT_FIELDS)
-          .eq("lecturer_id", user.id);
-
-        if (assignmentsError) throw assignmentsError;
-
-        const assignments = (assignmentsData || []) as StudentAssignment[];
+        const { assignments, submissions: allSubmissions, grades } = await fetchLecturerStudentProfileDataset(user.id);
         if (assignments.length === 0) {
           setStudent(null);
           setLoading(false);
           return;
         }
-
-        const assignmentIds = assignments.map((assignment) => assignment.id);
-        const { data: submissionsData, error: submissionsError } = await supabase
-          .from("submissions")
-          .select(SUBMISSION_FIELDS)
-          .in("assignment_id", assignmentIds);
-
-        if (submissionsError) throw submissionsError;
-
-        const allSubmissions = (submissionsData || []) as StudentSubmission[];
         const matchingSubmissions = matchStudentSubmissions({
           submissions: allSubmissions,
           studentId: decodedStudentId,
@@ -166,14 +146,6 @@ const StudentProfile = () => {
           setLoading(false);
           return;
         }
-
-        const submissionIds = matchingSubmissions.map((submission) => submission.id);
-        const { data: gradesData, error: gradesError } = await supabase
-          .from("grades")
-          .select(GRADE_FIELDS)
-          .in("submission_id", submissionIds);
-
-        if (gradesError) throw gradesError;
 
         const sortedSubmissions = [...matchingSubmissions].sort(
           (left, right) => new Date(left.submitted_at).getTime() - new Date(right.submitted_at).getTime(),
@@ -203,7 +175,7 @@ const StudentProfile = () => {
           buildStudentInsightData({
             assignments,
             submissions: allSubmissions,
-            grades: gradesData || [],
+            grades,
             decodedStudentId,
             studentRecordId: linkedStudentRecordId,
             computeRisk,

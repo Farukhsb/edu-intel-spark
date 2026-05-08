@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getAssignmentNotificationFocusState } from "@/pages/dashboard/assignment-detail/notificationFocus";
+import { getAssignmentNotificationFocusState } from "@/pages/dashboard/assignment-detail/domain";
 import type { AssignmentDetailSubmission } from "@/pages/dashboard/assignment-detail/types";
 
 const buildSubmission = (

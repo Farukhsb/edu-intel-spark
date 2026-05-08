@@ -168,12 +168,13 @@ describe("edge function hardening", () => {
 
   it("keeps explicit browser auth headers for direct edge-function fetch calls", () => {
     const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
+    const automationHookSource = readRepoFile("src/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions.ts");
     const explainGradeSource = readRepoFile("src/pages/dashboard/ExplainGrade.tsx");
 
-    expect(assignmentDetailSource).toContain("PLAGIARISM_CHECK_URL");
-    expect(assignmentDetailSource).toContain("supabase.auth.getSession()");
-    expect(assignmentDetailSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
-    expect(assignmentDetailSource).toContain("Authorization: `Bearer ${session.access_token}`");
+    expect(automationHookSource).toContain("PLAGIARISM_CHECK_URL");
+    expect(automationHookSource).toContain("supabase.auth.getSession()");
+    expect(automationHookSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
+    expect(automationHookSource).toContain("Authorization: `Bearer ${session.access_token}`");
 
     expect(explainGradeSource).toContain("supabase.auth.getSession()");
     expect(explainGradeSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
@@ -186,6 +187,7 @@ describe("edge function hardening", () => {
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const bootstrapSource = readRepoFile("supabase/functions/check-plagiarism/bootstrap.ts");
     const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
+    const automationHookSource = readRepoFile("src/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions.ts");
     const configSource = readRepoFile("supabase/config.toml");
 
     expect(entrySource).toContain("registerCheckPlagiarismEntrypoint");
@@ -231,8 +233,11 @@ describe("edge function hardening", () => {
     expect(source).toContain('logWarn("check-plagiarism completed_with_limitations"');
     expect(source).toContain("analysisLimitedSubmissionCount");
     expect(source).toContain("warningCategories: categorizeIntegrityWarnings(warnings)");
-    expect(assignmentDetailSource).toContain("const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;");
-    expect(assignmentDetailSource).toContain("const batchSize = MAX_INTEGRITY_REQUEST_SUBMISSIONS;");
+    const readinessStateSource = readRepoFile(
+      "src/pages/dashboard/assignment-detail/state/useAssignmentDetailReadinessState.ts",
+    );
+    expect(readinessStateSource).toContain("const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;");
+    expect(automationHookSource).toContain("const batchSize = MAX_INTEGRITY_REQUEST_SUBMISSIONS;");
     expect(configSource).toContain("[functions.check-plagiarism]");
     expect(configSource).toContain("verify_jwt = true");
     expect(configSource).toContain("[functions.grade-submission]");

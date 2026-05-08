@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-import type { AssignmentDetailSubmission, Grade } from "./types";
+import type { AssignmentDetailSubmission, Grade } from "@/pages/dashboard/assignment-detail/types";
 
 interface SubmissionReviewDialogProps {
   assignmentMaxScore: number;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getModerationReleaseHandoffState } from "@/pages/dashboard/assignment-detail/moderationReleaseHandoff";
+import { getModerationReleaseHandoffState } from "@/pages/dashboard/assignment-detail/domain";
 import type { AssignmentDetailSubmission } from "@/pages/dashboard/assignment-detail/types";
 
 const buildSubmission = (

@@ -1070,7 +1070,7 @@ async function fetchSubmissionContent(
   }
 
   if (!isSupportedSubmissionFile(sub.file_name, normalizedPath)) {
-    throw new Error("Submission file type is not supported. Upload a readable PDF, DOCX, or TXT file.");
+    throw new Error("Submission file type is not supported. Upload a readable PDF, DOCX, TXT, or supported code file.");
   }
 
   const { data: fileData, error: dlError } = await supabaseAdmin.storage
@@ -1131,7 +1131,38 @@ function normalizeSubmissionStoragePath(fileUrl: string | null | undefined) {
 
 function isSupportedSubmissionFile(fileName: string | null | undefined, fileUrl: string | null | undefined) {
   const candidate = `${fileName ?? ""} ${fileUrl ?? ""}`.toLowerCase();
-  return candidate.includes(".pdf") || candidate.includes(".docx") || candidate.includes(".txt");
+  return [
+    ".pdf",
+    ".docx",
+    ".txt",
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".java",
+    ".c",
+    ".cpp",
+    ".cc",
+    ".cs",
+    ".go",
+    ".php",
+    ".rb",
+    ".rs",
+    ".swift",
+    ".kt",
+    ".kts",
+    ".scala",
+    ".sql",
+    ".html",
+    ".css",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".sh",
+    ".md",
+  ].some((extension) => candidate.includes(extension));
 }
 
 function buildSystemPrompt(assignmentType: AssignmentType, rubricLength: number, maxScore: number) {
@@ -1413,6 +1444,7 @@ serve(async (req) => {
     }
 
     const body = await req.json().catch(() => null);
+    const rawBody = body && typeof body === "object" ? body as Record<string, unknown> : null;
     const parsedRequest = parseGradeSubmissionRequestPayload(body);
 
     if (!parsedRequest.success) {

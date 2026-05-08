@@ -99,4 +99,40 @@ describe("logger", () => {
       assignmentId: "assignment-2",
     });
   });
+
+  it("preserves safe metadata for object-shaped Supabase errors", async () => {
+    vi.stubEnv("VITE_APP_ENV", "production");
+
+    const { log } = await import("@/lib/logger");
+
+    log.error(
+      "Bulk upload failed for file",
+      {
+        message: 'new row violates row-level security policy for table "submissions"',
+        code: "42501",
+        status: 403,
+        hint: "Check the current RLS policy for targeted student submissions.",
+      },
+      {
+        assignmentId: "assignment-3",
+        fileName: "student-a.pdf",
+      },
+    );
+
+    expect(sentryMock.captureAppError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "SupabaseError",
+        message: "Bulk upload failed for file",
+      }),
+      expect.objectContaining({
+        message: "Bulk upload failed for file",
+        errorName: "SupabaseError",
+        errorCode: "42501",
+        errorStatus: 403,
+        errorHint: "Check the current RLS policy for targeted student submissions.",
+        assignmentId: "assignment-3",
+        fileName: "student-a.pdf",
+      }),
+    );
+  });
 });

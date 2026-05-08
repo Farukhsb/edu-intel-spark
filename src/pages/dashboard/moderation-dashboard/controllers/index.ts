@@ -1,0 +1,1 @@
+export { useModerationDashboardController } from "./useModerationDashboardController";

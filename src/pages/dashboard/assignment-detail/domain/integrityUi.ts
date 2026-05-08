@@ -1,4 +1,4 @@
-import type { PlagiarismFlag } from "./types";
+import type { PlagiarismFlag } from "@/pages/dashboard/assignment-detail/types";
 
 type IntegrityToastTone = "success" | "warning";
 type IntegrityCardTone = "clear" | "limited" | "flagged";

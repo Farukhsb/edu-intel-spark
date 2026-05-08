@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, FileText, Loader2, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
 import type {
@@ -17,11 +17,6 @@ import type {
   ExternalExaminerProfileRow,
   ExternalExaminerSubmissionRow,
 } from "@/types/academic";
-
-const ASSIGNMENT_FIELDS = "id, title, module_code";
-const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
-const GRADE_FIELDS = "submission_id, ai_score, lecturer_score, final_score, ai_feedback, lecturer_feedback, final_feedback, reviewed_at, reviewed_by";
-const PROFILE_FIELDS = "id, full_name, email";
 
 const EXPORTABLE_STATUSES = new Set(["moderated", "approved", "released"]);
 
@@ -131,17 +126,8 @@ const ExternalExaminerExport = () => {
 
     const fetchData = async () => {
       try {
-        const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }, { data: profilesRaw }] = await Promise.all([
-          supabase.from("assignments").select(ASSIGNMENT_FIELDS),
-          supabase.from("submissions").select(SUBMISSION_FIELDS),
-          supabase.from("grades").select(GRADE_FIELDS),
-          supabase.from("profiles").select(PROFILE_FIELDS),
-        ]);
-
-        const assignmentRows = (assignmentsRaw ?? []) as ExternalExaminerAssignmentRow[];
-        const submissionRows = (subsRaw ?? []) as ExternalExaminerSubmissionRow[];
-        const gradeRows = (gradesRaw ?? []) as ExternalExaminerGradeRow[];
-        const profileRows = (profilesRaw ?? []) as ExternalExaminerProfileRow[];
+        const { assignments: assignmentRows, submissions: submissionRows, grades: gradeRows, profiles: profileRows } =
+          await fetchExternalExaminerDataset();
 
         setAssignments(
           assignmentRows.map((row) => ({

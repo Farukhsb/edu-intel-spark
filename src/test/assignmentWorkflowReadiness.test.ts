@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getLecturerAssignmentWorkflowReadiness,
   getStudentAssignmentWorkflowReadiness,
-} from "@/pages/dashboard/assignment-detail/workflowReadiness";
+} from "@/pages/dashboard/assignment-detail/domain";
 
 describe("assignment workflow readiness", () => {
   it("derives lecturer workflow readiness from moderation, release, and review states", () => {

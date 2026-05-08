@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables, TablesInsert } from "@/integrations/supabase/types";
 import { canReleaseStatus, getApprovalBlockReason } from "@/lib/assessmentWorkflow";
+import { fetchModerationCaseViewDataset } from "@/lib/data/moderation";
 import type { ModerationAction } from "@/lib/moderation";
 
 export type ModerationCaseRow = Tables<"moderation_cases">;
@@ -130,8 +131,6 @@ interface ModerationBulkApproveEligibilityInput {
   item: ModerationCaseView;
   userId: string | null | undefined;
 }
-
-const unique = <T>(values: T[]) => Array.from(new Set(values));
 
 const toMap = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
 
@@ -271,79 +270,29 @@ export async function fetchModerationCaseViews(
   supabase: SupabaseClient<Database>,
   lecturerId: string
 ): Promise<FetchModerationCaseViewsResult> {
-  const [{ data: moderationCaseRows, error: caseError }, { data: lecturerRows, error: lecturerError }] =
-    await Promise.all([
-      supabase
-        .from("moderation_cases")
-        .select("*")
-        .or(`lecturer_id.eq.${lecturerId},moderator_id.eq.${lecturerId}`)
-        .order("updated_at", { ascending: false }),
-      supabase.from("profiles").select("*").eq("role", "lecturer"),
-    ]);
-
-  if (caseError) throw caseError;
-  if (lecturerError) throw lecturerError;
-
-  const moderationCases = (moderationCaseRows || []) as ModerationCaseRow[];
-  const lecturers = (lecturerRows || []) as ProfileRow[];
+  const dataset = await fetchModerationCaseViewDataset(supabase, lecturerId);
+  const moderationCases = dataset.moderationCases as ModerationCaseRow[];
+  const lecturers = dataset.lecturers as ProfileRow[];
 
   if (moderationCases.length === 0) {
     return { cases: [], lecturers };
   }
 
-  const submissionIds = moderationCases.map((item) => item.submission_id);
-  const assignmentIds = unique(moderationCases.map((item) => item.assignment_id));
-  const gradeIds = moderationCases.map((item) => item.grade_id).filter(Boolean) as string[];
-  const profileIds = unique(
-    moderationCases.flatMap((item) => [item.first_marker_id, item.moderator_id].filter(Boolean) as string[])
-  );
-  const caseIds = moderationCases.map((item) => item.id);
-
-  const [
-    { data: submissionRows, error: submissionError },
-    { data: assignmentRows, error: assignmentError },
-    gradeResult,
-    profileResult,
-    { data: integrityRows, error: integrityError },
-    { data: reviewRows, error: reviewError },
-    { data: auditRows, error: auditError },
-  ] = await Promise.all([
-    supabase.from("submissions").select("*").in("id", submissionIds),
-    supabase.from("assignments").select("*").in("id", assignmentIds),
-    gradeIds.length > 0
-      ? supabase.from("grades").select("*").in("id", gradeIds)
-      : Promise.resolve({ data: [], error: null }),
-    profileIds.length > 0
-      ? supabase.from("profiles").select("*").in("id", profileIds)
-      : Promise.resolve({ data: [], error: null }),
-    supabase.from("academic_integrity_reviews").select("*").in("submission_id", submissionIds),
-    supabase.from("moderation_reviews").select("*").in("moderation_case_id", caseIds).order("created_at", { ascending: false }),
-    supabase.from("grade_audit_log").select("*").in("submission_id", submissionIds).order("created_at", { ascending: false }),
-  ]);
-
-  if (submissionError) throw submissionError;
-  if (assignmentError) throw assignmentError;
-  if (gradeResult.error) throw gradeResult.error;
-  if (profileResult.error) throw profileResult.error;
-  if (integrityError) throw integrityError;
-  if (reviewError) throw reviewError;
-  if (auditError) throw auditError;
-
-  const submissionsById = toMap((submissionRows || []) as SubmissionRow[]);
-  const assignmentsById = toMap((assignmentRows || []) as AssignmentRow[]);
-  const gradesById = toMap((gradeResult.data || []) as GradeRow[]);
-  const profilesById = toMap((profileResult.data || []) as ProfileRow[]);
+  const submissionsById = toMap(dataset.submissions as SubmissionRow[]);
+  const assignmentsById = toMap(dataset.assignments as AssignmentRow[]);
+  const gradesById = toMap(dataset.grades as GradeRow[]);
+  const profilesById = toMap(dataset.profiles as ProfileRow[]);
   const integrityBySubmission = new Map(
-    ((integrityRows || []) as IntegrityReviewRow[]).map((row) => [row.submission_id, row] as const)
+    (dataset.integrityReviews as IntegrityReviewRow[]).map((row) => [row.submission_id, row] as const)
   );
   const reviewsByCase = new Map<string, ModerationReviewRow[]>();
-  for (const review of (reviewRows || []) as ModerationReviewRow[]) {
+  for (const review of dataset.moderationReviews as ModerationReviewRow[]) {
     const current = reviewsByCase.get(review.moderation_case_id) || [];
     current.push(review);
     reviewsByCase.set(review.moderation_case_id, current);
   }
   const auditBySubmission = new Map<string, GradeAuditRow[]>();
-  for (const entry of (auditRows || []) as GradeAuditRow[]) {
+  for (const entry of dataset.auditLog as GradeAuditRow[]) {
     const current = auditBySubmission.get(entry.submission_id) || [];
     current.push(entry);
     auditBySubmission.set(entry.submission_id, current);

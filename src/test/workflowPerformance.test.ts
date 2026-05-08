@@ -145,6 +145,16 @@ describe("workflow performance harness", () => {
   });
 
   it("keeps operational snapshot generation cheap under broad admin datasets", () => {
+    const moderationRows = Array.from({ length: 1200 }, (_, index) => ({
+      status: index % 4 === 0 ? "escalated" : "moderation_pending",
+      createdAt: `2026-04-${String((index % 28) + 1).padStart(2, "0")}T10:00:00.000Z`,
+      updatedAt: `2026-05-${String((index % 4) + 1).padStart(2, "0")}T10:00:00.000Z`,
+      integrityRiskScore: index % 3 === 0 ? 82 : 38,
+    }));
+    const submissions = Array.from({ length: 4200 }, (_, index) => ({
+      status: index % 5 === 0 ? "approved" : "released",
+    }));
+
     const result = runPerformanceBenchmark({
       label: "operational-snapshot",
       iterations: 30,
@@ -152,15 +162,8 @@ describe("workflow performance harness", () => {
         buildOperationalMonitoringSnapshot({
           latestGradeRun: "2026-05-04T08:00:00.000Z",
           aiGradingFailures: 1,
-          moderationRows: Array.from({ length: 1200 }, (_, index) => ({
-            status: index % 4 === 0 ? "escalated" : "moderation_pending",
-            createdAt: `2026-04-${String((index % 28) + 1).padStart(2, "0")}T10:00:00.000Z`,
-            updatedAt: `2026-05-${String((index % 4) + 1).padStart(2, "0")}T10:00:00.000Z`,
-            integrityRiskScore: index % 3 === 0 ? 82 : 38,
-          })),
-          submissions: Array.from({ length: 4200 }, (_, index) => ({
-            status: index % 5 === 0 ? "approved" : "released",
-          })),
+          moderationRows,
+          submissions,
           emailNotificationsVisible: true,
           emailNotificationsCount: 10,
           now: new Date("2026-05-04T12:00:00.000Z").getTime(),

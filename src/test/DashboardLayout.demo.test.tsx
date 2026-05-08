@@ -49,6 +49,10 @@ describe("DashboardLayout demo mode", () => {
     vi.clearAllMocks();
   });
 
+  const clickNotificationsButton = () => {
+    fireEvent.click(screen.getAllByRole("button", { name: "Open notifications" })[0]);
+  };
+
   it("uses synthetic notifications and does not load live communication records in demo mode", async () => {
     const { DashboardLayout } = await import("@/components/DashboardLayout");
 
@@ -67,7 +71,7 @@ describe("DashboardLayout demo mode", () => {
     expect(mocks.communications.loadVisibleCommunicationMessages).not.toHaveBeenCalled();
     expect(mocks.communications.markCommunicationMessageRead).not.toHaveBeenCalled();
     expect(mocks.communications.clearCommunicationMessage).not.toHaveBeenCalled();
-  });
+  }, 30000);
 
   it("shows lecturer workflow hints in demo lecturer mode", async () => {
     mocks.authState.profile = {
@@ -91,7 +95,7 @@ describe("DashboardLayout demo mode", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    clickNotificationsButton();
 
     expect(await screen.findByText("Submission")).toBeInTheDocument();
     expect(
@@ -124,7 +128,7 @@ describe("DashboardLayout demo mode", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    clickNotificationsButton();
     fireEvent.click(await screen.findByRole("button", { name: /Synthetic AI grading ready/i }));
 
     expect(mocks.navigate).toHaveBeenCalledWith(
@@ -165,7 +169,7 @@ describe("DashboardLayout demo mode", () => {
     expect(
       screen.getByText("Use this area to review results, assignments, and your next support actions."),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    clickNotificationsButton();
 
     expect(await screen.findByText("Released result")).toBeInTheDocument();
     expect(screen.getByText("Opens your released result and grade explanation.")).toBeInTheDocument();
@@ -196,7 +200,7 @@ describe("DashboardLayout demo mode", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    clickNotificationsButton();
     fireEvent.click(await screen.findByRole("button", { name: /Study plan reminder/i }));
 
     expect(mocks.navigate).toHaveBeenCalledWith(

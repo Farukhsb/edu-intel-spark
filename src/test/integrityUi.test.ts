@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildIntegrityClientOutcome,
   deriveIntegrityCardPresentation,
-} from "@/pages/dashboard/assignment-detail/integrityUi";
+} from "@/pages/dashboard/assignment-detail/domain";
 import type { PlagiarismFlag } from "@/pages/dashboard/assignment-detail/types";
 
 const SAMPLE_FLAG: PlagiarismFlag = {

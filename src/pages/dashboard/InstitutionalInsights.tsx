@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowRight, Award, Building2, Download, Users } from "lu
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { fetchInstitutionalInsightsDataset } from "@/lib/data/academic";
 import { log } from "@/lib/logger";
 import {
   EMPTY_ACCREDITATION,
@@ -16,10 +17,6 @@ import {
   DashboardEmptyState,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
-
-const ASSIGNMENT_FIELDS = "id, title, module_code";
-const SUBMISSION_FIELDS = "id, assignment_id";
-const GRADE_FIELDS = "submission_id, ai_score, final_score";
 
 type DepartmentStat = {
   dept: string;
@@ -68,44 +65,15 @@ const InstitutionalInsights = () => {
 
     const fetchData = async () => {
       try {
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .from("assignments")
-          .select(ASSIGNMENT_FIELDS)
-          .eq("lecturer_id", user.id);
+        const { assignments, submissions, grades } = await fetchInstitutionalInsightsDataset(user.id);
 
-        if (assignmentsError) throw assignmentsError;
-
-        const assignments = assignmentsData || [];
-        const assignmentIds = assignments.map((assignment) => assignment.id);
-
-        if (assignmentIds.length === 0) {
+        if (assignments.length === 0) {
           setHasRealData(false);
           setDepartmentStats([]);
           setLowPerforming([]);
           setAccreditation(EMPTY_ACCREDITATION);
           setLoading(false);
           return;
-        }
-
-        const { data: submissionsData, error: submissionsError } = await supabase
-          .from("submissions")
-          .select(SUBMISSION_FIELDS)
-          .in("assignment_id", assignmentIds);
-
-        if (submissionsError) throw submissionsError;
-
-        const submissions = submissionsData || [];
-        const submissionIds = submissions.map((submission) => submission.id);
-
-        let grades: Array<{ submission_id: string; ai_score: number | null; final_score: number | null }> = [];
-        if (submissionIds.length > 0) {
-          const { data: gradesData, error: gradesError } = await supabase
-            .from("grades")
-            .select(GRADE_FIELDS)
-            .in("submission_id", submissionIds);
-
-          if (gradesError) throw gradesError;
-          grades = gradesData || [];
         }
 
         const assignmentById = new Map(assignments.map((assignment) => [assignment.id, assignment]));

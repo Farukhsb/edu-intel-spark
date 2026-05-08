@@ -369,6 +369,8 @@ Relationship shape:
 
 RLS remains the strongest authorization boundary in the product.
 
+For the current workflow-to-policy map, use [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md). That document is the fastest way to trace a page or workflow back to the tables, RPCs, Edge Functions, and latest policy source files it depends on.
+
 The common access shape is:
 
 - students access only their own records and released student-visible outcomes

@@ -38,7 +38,15 @@ Use this to understand how GradeAI approaches authentication, role boundaries, d
 
 This matters because the platform handles student submissions, grades, feedback, academic integrity signals, and intervention records.
 
-### 5. Production Hardening Summary
+### 5. Authorization Reference
+
+**File:** [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
+
+Use this when you need the fastest route from a critical workflow to the exact tables, RPCs, Edge Functions, and current RLS policies it depends on.
+
+This is the most audit-friendly map of the current authorization surface.
+
+### 6. Production Hardening Summary
 
 **File:** [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
 
@@ -132,9 +140,10 @@ For a technical reviewer, read the documents in this order:
 2. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 3. [`TRUST_MODEL.md`](TRUST_MODEL.md)
 4. [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
-5. [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
-6. [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
-7. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
+5. [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
+6. [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
+7. [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
+8. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 
 For a non-technical reviewer or assessor, start with:
 

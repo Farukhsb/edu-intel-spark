@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchStudentGradeProjectionFallbackDataset } from "@/lib/data/academic";
 
 export interface StudentGradeProjectionRow {
   submission_id: string;
@@ -16,10 +17,6 @@ export interface StudentGradeProjectionRow {
   ai_feedback: string | null;
   ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
 }
-
-const SUBMISSION_FIELDS = "id, assignment_id, file_name, file_url, status, submitted_at, student_id";
-const GRADE_FIELDS = "submission_id, final_score, ai_score, final_feedback, ai_feedback, ai_breakdown";
-const ASSIGNMENT_FIELDS = "id, title, module_code, max_score";
 
 const sanitizeGradeVisibility = <T extends {
   submission_status: string;
@@ -98,56 +95,25 @@ const buildProjectionFromFallbackRows = ({
 };
 
 const fetchStudentGradeProjectionFallback = async (userId?: string) => {
-  const submissionsQuery = supabase.from("submissions").select(SUBMISSION_FIELDS);
-  const submissionsResponse = userId
-    ? await submissionsQuery.eq("student_id", userId)
-    : await submissionsQuery;
-
-  if (submissionsResponse.error) {
+  const fallback = await fetchStudentGradeProjectionFallbackDataset(userId);
+  if (fallback.error) {
     return {
       data: [] as StudentGradeProjectionRow[],
-      error: submissionsResponse.error,
+      error: fallback.error,
     };
   }
-
-  const submissions = submissionsResponse.data ?? [];
-  if (submissions.length === 0) {
+  if (fallback.submissions.length === 0) {
     return {
       data: [] as StudentGradeProjectionRow[],
       error: null,
     };
   }
 
-  const submissionIds = submissions.map((submission) => submission.id);
-  const assignmentIds = [...new Set(submissions.map((submission) => submission.assignment_id))];
-
-  const [
-    gradesResponse,
-    assignmentsResponse,
-  ] = await Promise.all([
-    supabase.from("grades").select(GRADE_FIELDS).in("submission_id", submissionIds),
-    supabase.from("assignments").select(ASSIGNMENT_FIELDS).in("id", assignmentIds),
-  ]);
-
-  if (gradesResponse.error) {
-    return {
-      data: [] as StudentGradeProjectionRow[],
-      error: gradesResponse.error,
-    };
-  }
-
-  if (assignmentsResponse.error) {
-    return {
-      data: [] as StudentGradeProjectionRow[],
-      error: assignmentsResponse.error,
-    };
-  }
-
   return {
     data: buildProjectionFromFallbackRows({
-      submissions,
-      grades: gradesResponse.data ?? [],
-      assignments: assignmentsResponse.data ?? [],
+      submissions: fallback.submissions,
+      grades: fallback.grades,
+      assignments: fallback.assignments,
     }),
     error: null,
   };
