@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { safeFormatDate } from "@/lib/date";
+import { parseStoredReviewPayload } from "@/lib/integrityReviews";
 import type { AssignmentDetailSubmission } from "@/pages/dashboard/assignment-detail/types";
 import { useSubmissionFileActions } from "@/pages/dashboard/assignment-detail/workflows/useSubmissionFileActions";
 import {
@@ -131,6 +132,13 @@ export const ModerationReviewDialog = ({
                 item: selectedCase,
                 userId,
               });
+              const integrityPayload = selectedCase.integrityReview
+                ? parseStoredReviewPayload({
+                    lecturer_note: selectedCase.integrityReview.lecturer_note,
+                    updated_at: selectedCase.integrityReview.updated_at,
+                    decision: selectedCase.integrityReview.decision,
+                  })
+                : null;
               const rubricItems = asEvidenceList(selectedCase.assignment?.rubric);
               const aiBreakdown = asEvidenceList(selectedCase.grade?.ai_breakdown);
               const hasSubmissionFile = Boolean(selectedCase.submission?.file_url?.trim());
@@ -314,9 +322,25 @@ export const ModerationReviewDialog = ({
                                         <p className="whitespace-pre-wrap">{selectedCase.integrityReview.evidence_summary}</p>
                                       </div>
                                     )}
-                                    {selectedCase.integrityReview.lecturer_note && (
+                                    {integrityPayload?.latestNote && (
                                       <div className="rounded-lg border bg-muted/20 p-3 text-muted-foreground">
-                                        <p className="whitespace-pre-wrap">{selectedCase.integrityReview.lecturer_note}</p>
+                                        <p className="whitespace-pre-wrap">{integrityPayload.latestNote}</p>
+                                      </div>
+                                    )}
+                                    {integrityPayload && integrityPayload.history.length > 0 && (
+                                      <div className="space-y-2">
+                                        <p className="text-xs font-medium text-muted-foreground">Integrity review history</p>
+                                        <div className="space-y-2">
+                                          {integrityPayload.history.slice(0, 3).map((entry) => (
+                                            <div key={entry.id} className="rounded-lg border bg-muted/10 p-3 text-xs text-muted-foreground">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <Badge variant="outline">{formatJsonLabel(entry.decision)}</Badge>
+                                                <span>{safeFormatDate(entry.createdAt, "MMM d, yyyy HH:mm")}</span>
+                                              </div>
+                                              <p className="mt-2 whitespace-pre-wrap">{entry.note}</p>
+                                            </div>
+                                          ))}
+                                        </div>
                                       </div>
                                     )}
                                   </>
