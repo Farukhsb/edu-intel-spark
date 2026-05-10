@@ -1,6 +1,4 @@
-import type { ComponentProps } from "react";
-
-import { SubmissionReviewDialog } from "@/pages/dashboard/assignment-detail/ui";
+import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui";
 import type { useLecturerAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows";
 import type { Grade } from "@/pages/dashboard/assignment-detail/types";
 
@@ -16,7 +14,7 @@ export const buildReviewDialogProps = ({
   grades,
   isDemo,
   lecturerActions,
-}: BuildReviewDialogPropsArgs): ComponentProps<typeof SubmissionReviewDialog> => ({
+}: BuildReviewDialogPropsArgs): SubmissionReviewDialogProps => ({
   assignmentMaxScore,
   editFeedback: lecturerActions.editFeedback,
   editScore: lecturerActions.editScore,

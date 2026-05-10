@@ -10,5 +10,5 @@ export {
   AssignmentReadinessCard,
   AssignmentRubricCard,
 } from "./presentation";
-export { SubmissionReviewDialog } from "./review-dialog";
+export type { SubmissionReviewDialogProps } from "./review-dialog";
 export { SubmissionListSection, WorkflowActionsSection } from "./sections";

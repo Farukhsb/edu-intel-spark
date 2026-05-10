@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import { Suspense, lazy, type ComponentProps } from "react";
 
 import {
   AssignmentDemoBanner,
@@ -10,12 +10,18 @@ import {
   AssignmentReadinessCard,
   AssignmentRubricCard,
 } from "@/pages/dashboard/assignment-detail/ui/presentation";
-import { SubmissionReviewDialog } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
 import {
   SubmissionListSection,
   WorkflowActionsSection,
 } from "@/pages/dashboard/assignment-detail/ui/sections";
+import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
 import type { WorkflowRubricCriterion } from "@/types/academic";
+
+const SubmissionReviewDialog = lazy(() =>
+  import("@/pages/dashboard/assignment-detail/ui/review-dialog").then((module) => ({
+    default: module.SubmissionReviewDialog,
+  })),
+);
 
 type DemoAssignmentSet = {
   label: string;
@@ -42,7 +48,7 @@ export interface AssignmentDetailScreenProps {
   onClearQueueFocus: () => void;
   onClearModerationFocus: () => void;
   onClearNotificationFocus: () => void;
-  reviewDialogProps: ComponentProps<typeof SubmissionReviewDialog>;
+  reviewDialogProps: SubmissionReviewDialogProps;
   rubric: WorkflowRubricCriterion[];
   submissionListProps: ComponentProps<typeof SubmissionListSection>;
   workflowActionsProps: ComponentProps<typeof WorkflowActionsSection>;
@@ -132,6 +138,10 @@ export const AssignmentDetailScreen = ({
       </div>
     </div>
 
-    <SubmissionReviewDialog {...reviewDialogProps} />
+    {reviewDialogProps.open ? (
+      <Suspense fallback={null}>
+        <SubmissionReviewDialog {...reviewDialogProps} />
+      </Suspense>
+    ) : null}
   </div>
 );

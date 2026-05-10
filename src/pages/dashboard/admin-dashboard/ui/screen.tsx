@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction } from "react";
+import { Suspense, lazy, type Dispatch, type SetStateAction } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +57,12 @@ import { SystemHealthSection } from "./system-health-section";
 import { UserManagementSection } from "./user-management-section";
 import { formatCount, maybeWrapNavigationCard, toStatusBadgeClass, ROLE_BADGE_STYLES } from "./shared";
 
+const BulkStudentUpload = lazy(() =>
+  import("@/components/BulkStudentUpload").then((module) => ({
+    default: module.BulkStudentUpload,
+  })),
+);
+
 const DashboardHeader = ({
   refreshing,
   onRefresh,
@@ -83,7 +88,15 @@ const DashboardHeader = ({
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <BulkStudentUpload />
+        <Suspense
+          fallback={
+            <Button variant="outline" disabled>
+              Bulk Student Upload
+            </Button>
+          }
+        >
+          <BulkStudentUpload />
+        </Suspense>
         <Button variant="outline" onClick={onRefresh} disabled={refreshing}>
           {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
           Refresh snapshot

@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import type { AssignmentDetailSubmission, Grade } from "@/pages/dashboard/assignment-detail/types";
 
-interface SubmissionReviewDialogProps {
+export interface SubmissionReviewDialogProps {
   assignmentMaxScore: number;
   editFeedback: string;
   editScore: string;
