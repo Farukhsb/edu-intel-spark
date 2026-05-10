@@ -77,6 +77,8 @@ const GRADABLE_TEXT_EXTENSIONS = [
   ".md",
 ] as const;
 const GRADABLE_FILE_LABEL = "PDF, DOCX, TXT, or supported code file";
+const EXTRACTION_FAILURE_MESSAGE =
+  "We could not read this document. Please upload a readable PDF, DOCX, TXT, or supported code file.";
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
 const asJson = (value: unknown): Json => value as Json;
@@ -87,6 +89,95 @@ const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
     Boolean(submission.file_url?.trim()) &&
     GRADABLE_TEXT_EXTENSIONS.some((extension) => candidate.includes(extension))
   );
+};
+
+const isExtractionFailure = (message: string | null | undefined) =>
+  typeof message === "string" && message.includes(EXTRACTION_FAILURE_MESSAGE);
+
+type LastGradingRunSummary = {
+  attemptedCount: number;
+  detail: string;
+  extractionFailureCount: number;
+  failedCount: number;
+  headline: string;
+  invalidResultCount: number;
+  recoveryActions: string[];
+  serviceFailureCount: number;
+  skippedCount: number;
+  successCount: number;
+};
+
+export type SubmissionGradingRecoveryIssue = {
+  detail: string;
+  headline: string;
+  recoveryLabel: string;
+  type: "missing_file" | "extraction_failure" | "invalid_result" | "service_failure";
+};
+
+const buildLastGradingRunSummary = ({
+  attemptedCount,
+  extractionFailureCount,
+  failedCount,
+  invalidResultCount,
+  serviceFailureCount,
+  skippedCount,
+  successCount,
+}: Omit<LastGradingRunSummary, "headline" | "recoveryActions">): LastGradingRunSummary | null => {
+  if (failedCount === 0 && skippedCount === 0) {
+    return null;
+  }
+
+  const recoveryActions: string[] = [];
+  const detailParts: string[] = [];
+
+  if (skippedCount > 0) {
+    detailParts.push(
+      `${skippedCount} selected submission${skippedCount === 1 ? " was" : "s were"} skipped before grading because no readable ${GRADABLE_FILE_LABEL} was attached.`,
+    );
+    recoveryActions.push(`Ask the student to upload a readable ${GRADABLE_FILE_LABEL}.`);
+  }
+
+  if (extractionFailureCount > 0) {
+    detailParts.push(
+      `${extractionFailureCount} submission${extractionFailureCount === 1 ? "" : "s"} could not be read by the grading service.`,
+    );
+    recoveryActions.push("Retry AI grading after confirming the uploaded files open correctly.");
+  }
+
+  if (invalidResultCount > 0) {
+    detailParts.push(
+      `${invalidResultCount} grading result${invalidResultCount === 1 ? " was" : "s were"} incomplete and need manual follow-up.`,
+    );
+  }
+
+  if (serviceFailureCount > 0) {
+    detailParts.push(
+      `${serviceFailureCount} submission${serviceFailureCount === 1 ? "" : "s"} failed because the grading service did not complete cleanly.`,
+    );
+    if (!recoveryActions.includes("Retry AI grading after confirming the uploaded files open correctly.")) {
+      recoveryActions.push("Retry AI grading once the service is available again.");
+    }
+  }
+
+  if (!recoveryActions.includes("Continue with manual review if the retry still fails so release work does not stall.")) {
+    recoveryActions.push("Continue with manual review if the retry still fails so release work does not stall.");
+  }
+
+  return {
+    attemptedCount,
+    detail: detailParts.join(" "),
+    extractionFailureCount,
+    failedCount,
+    headline:
+      successCount > 0
+        ? `${failedCount + skippedCount} of ${attemptedCount + skippedCount} selected submissions still need attention`
+        : "Last grading run needs attention before the workflow can move on",
+    invalidResultCount,
+    recoveryActions,
+    serviceFailureCount,
+    skippedCount,
+    successCount,
+  };
 };
 
 interface UseAutomatedAssessmentActionsArgs {
@@ -120,6 +211,10 @@ export const useAutomatedAssessmentActions = ({
   const [grading, setGrading] = useState(false);
   const [gradingCount, setGradingCount] = useState(0);
   const [gradingElapsed, setGradingElapsed] = useState(0);
+  const [lastGradingRunSummary, setLastGradingRunSummary] = useState<LastGradingRunSummary | null>(null);
+  const [lastSubmissionRecoveryIssues, setLastSubmissionRecoveryIssues] = useState<
+    Record<string, SubmissionGradingRecoveryIssue>
+  >({});
   const gradingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleAIGrade = async () => {
@@ -154,6 +249,8 @@ export const useAutomatedAssessmentActions = ({
       return;
     }
 
+    setLastGradingRunSummary(null);
+    setLastSubmissionRecoveryIssues({});
     setGrading(true);
     setGradingCount(gradableSubmissions.length);
     setGradingElapsed(0);
@@ -206,8 +303,12 @@ export const useAutomatedAssessmentActions = ({
       }
 
       const resultMap = new Map(results.map((result) => [result.submissionId, result]));
+      const nextRecoveryIssues: Record<string, SubmissionGradingRecoveryIssue> = {};
       let successCount = 0;
       let failCount = 0;
+      let extractionFailureCount = 0;
+      let invalidResultCount = 0;
+      let serviceFailureCount = 0;
       const failureMessages = new Set<string>();
 
       for (const submission of gradableSubmissions) {
@@ -217,7 +318,14 @@ export const useAutomatedAssessmentActions = ({
             await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
           } catch {}
           failCount++;
+          invalidResultCount++;
           failureMessages.add("A grading result was missing for one submission.");
+          nextRecoveryIssues[submission.id] = {
+            headline: "Incomplete grading result",
+            detail: "The grading service returned no usable result for this submission. Retry the batch or continue with manual follow-up.",
+            recoveryLabel: "Select for retry",
+            type: "invalid_result",
+          };
           continue;
         }
 
@@ -235,7 +343,14 @@ export const useAutomatedAssessmentActions = ({
               await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
             } catch {}
             failCount++;
+            invalidResultCount++;
             failureMessages.add("A grading result could not be validated.");
+            nextRecoveryIssues[submission.id] = {
+              headline: "Incomplete grading result",
+              detail: "The grading output could not be validated, so this submission stayed in its previous workflow state.",
+              recoveryLabel: "Select for retry",
+              type: "invalid_result",
+            };
             continue;
           }
 
@@ -262,6 +377,31 @@ export const useAutomatedAssessmentActions = ({
         } else {
           if (typeof result.error === "string" && result.error.trim()) {
             failureMessages.add(result.error.trim());
+            if (isExtractionFailure(result.error)) {
+              extractionFailureCount++;
+              nextRecoveryIssues[submission.id] = {
+                headline: "Readable file needed",
+                detail: "The grading service could not read this document. Check that the file opens correctly and ask for a clearer upload if needed.",
+                recoveryLabel: "Needs re-upload",
+                type: "extraction_failure",
+              };
+            } else {
+              serviceFailureCount++;
+              nextRecoveryIssues[submission.id] = {
+                headline: "Retry AI grading",
+                detail: result.error.trim(),
+                recoveryLabel: "Select for retry",
+                type: "service_failure",
+              };
+            }
+          } else {
+            serviceFailureCount++;
+            nextRecoveryIssues[submission.id] = {
+              headline: "Retry AI grading",
+              detail: "The grading service did not complete cleanly for this submission.",
+              recoveryLabel: "Select for retry",
+              type: "service_failure",
+            };
           }
           try {
             await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
@@ -284,15 +424,69 @@ export const useAutomatedAssessmentActions = ({
         );
         toast.success(`${successCount} submission(s) graded successfully`);
       }
+      for (const submission of preflightFailures) {
+        nextRecoveryIssues[submission.id] = {
+          headline: "Readable file needed",
+          detail: `No readable ${GRADABLE_FILE_LABEL} was attached, so this submission was skipped before grading.`,
+          recoveryLabel: "Needs re-upload",
+          type: "missing_file",
+        };
+      }
+      setLastSubmissionRecoveryIssues(nextRecoveryIssues);
+      setLastGradingRunSummary(
+        buildLastGradingRunSummary({
+          attemptedCount: gradableSubmissions.length,
+          extractionFailureCount,
+          failedCount: failCount,
+          invalidResultCount,
+          serviceFailureCount,
+          skippedCount: preflightFailures.length,
+          successCount,
+        }),
+      );
       if (failCount > 0) {
         const extractionFailure = Array.from(failureMessages).find((message) =>
-          message.includes("We could not read this document. Please upload a readable PDF, DOCX, TXT, or supported code file."),
+          isExtractionFailure(message),
         );
         const firstFailure = Array.from(failureMessages)[0];
         toast.error(extractionFailure || firstFailure || `${failCount} submission(s) failed to grade`);
       }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
+      const nextRecoveryIssues = Object.fromEntries(
+        [
+          ...preflightFailures.map((submission) => [
+            submission.id,
+            {
+              headline: "Readable file needed",
+              detail: `No readable ${GRADABLE_FILE_LABEL} was attached, so this submission was skipped before grading.`,
+              recoveryLabel: "Needs re-upload",
+              type: "missing_file" as const,
+            },
+          ]),
+          ...gradableSubmissions.map((submission) => [
+            submission.id,
+            {
+              headline: "Retry AI grading",
+              detail: "The grading request failed before a usable result was returned. Retry the batch or continue with manual follow-up.",
+              recoveryLabel: "Select for retry",
+              type: "service_failure" as const,
+            },
+          ]),
+        ],
+      );
+      setLastSubmissionRecoveryIssues(nextRecoveryIssues);
+      setLastGradingRunSummary(
+        buildLastGradingRunSummary({
+          attemptedCount: gradableSubmissions.length,
+          extractionFailureCount: 0,
+          failedCount: gradableSubmissions.length,
+          invalidResultCount: 0,
+          serviceFailureCount: gradableSubmissions.length,
+          skippedCount: preflightFailures.length,
+          successCount: 0,
+        }),
+      );
       for (const submission of gradableSubmissions) {
         try {
           await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
@@ -451,5 +645,7 @@ export const useAutomatedAssessmentActions = ({
     gradingElapsed,
     handleAIGrade,
     handlePlagiarismCheck,
+    lastGradingRunSummary,
+    lastSubmissionRecoveryIssues,
   };
 };

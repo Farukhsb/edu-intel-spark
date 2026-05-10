@@ -83,6 +83,7 @@ export const useLecturerAssessmentActions = ({
 }: UseLecturerAssessmentActionsArgs) => {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewSubmission, setReviewSubmission] = useState<AssignmentDetailSubmission | null>(null);
+  const [reviewGradeOverride, setReviewGradeOverride] = useState<Grade | null>(null);
   const [editScore, setEditScore] = useState("");
   const [editFeedback, setEditFeedback] = useState("");
 
@@ -528,12 +529,80 @@ Please review the feedback in the platform and let me know if you would like to 
     toast.success("Grade released to student");
   };
 
-  const openReview = (submission: AssignmentDetailSubmission) => {
+  const openReview = (submission: AssignmentDetailSubmission, gradeOverride?: Grade | null) => {
     setReviewSubmission(submission);
-    const grade = grades[submission.id];
+    const grade = gradeOverride ?? grades[submission.id] ?? null;
+    setReviewGradeOverride(gradeOverride ?? null);
     setEditScore(grade?.lecturer_score?.toString() ?? grade?.ai_score?.toString() ?? "");
     setEditFeedback(grade?.lecturer_feedback ?? grade?.ai_feedback ?? "");
     setReviewOpen(true);
+  };
+
+  const startManualReview = async (submission: AssignmentDetailSubmission) => {
+    if (isDemo) {
+      toast.info("Manual review is disabled in demo mode");
+      return;
+    }
+    if (!user) return;
+
+    try {
+      let grade = grades[submission.id] ?? null;
+
+      if (!grade) {
+        const { data, error } = await supabase
+          .from("grades")
+          .insert({
+            submission_id: submission.id,
+            ai_score: null,
+            ai_feedback: null,
+            ai_breakdown: asJson([]),
+            assignment_type: "manual_review",
+            grading_confidence: null,
+            grading_metadata: asJson({
+              manual_review_started_at: new Date().toISOString(),
+              manual_review_started_by: user.id,
+            }),
+            lecturer_score: null,
+            lecturer_feedback: null,
+            final_score: null,
+            final_feedback: null,
+          })
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          throw error ?? new Error("Manual review draft could not be created");
+        }
+
+        grade = data as Grade;
+      }
+
+      if (submission.status === "submitted" || submission.status === "ai_grading") {
+        await supabase.from("submissions").update({ status: "under_review" as const }).eq("id", submission.id);
+        await logModerationAuditEvent({
+          submissionId: submission.id,
+          gradeId: grade.id,
+          eventType: "manual_review_started",
+          actorRole: "lecturer",
+          previousValues: { status: submission.status },
+          newValues: { status: "under_review" },
+          reason: "Lecturer bypassed AI grading and entered manual review.",
+        });
+      }
+
+      await reloadSubmissions();
+      openReview(
+        submission.status === "submitted" || submission.status === "ai_grading"
+          ? { ...submission, status: "under_review" }
+          : submission,
+        grade,
+      );
+    } catch (error) {
+      log.error("Manual review start failed", error, {
+        submissionId: submission.id,
+      });
+      toast.error("Could not start manual review");
+    }
   };
 
   const saveReview = async () => {
@@ -542,7 +611,7 @@ Please review the feedback in the platform and let me know if you would like to 
       return;
     }
     if (!reviewSubmission || !user) return;
-    const existingGrade = grades[reviewSubmission.id];
+    const existingGrade = reviewGradeOverride ?? grades[reviewSubmission.id] ?? null;
     const previousSubmission = submissions.find((submission) => submission.id === reviewSubmission.id);
     const nextScore = editScore === "" ? null : Number(editScore);
     const nextFeedback = editFeedback || null;
@@ -556,18 +625,20 @@ Please review the feedback in the platform and let me know if you would like to 
       : null;
 
     if (!grade) {
-      toast.error("No AI grade found");
+      toast.error("No grade record found");
       return;
     }
 
     try {
-      await supabase
-        .from("grades")
-        .update({
-          lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
-          lecturer_feedback: nextFeedback,
-        })
-        .eq("id", existingGrade.id);
+      if (existingGrade?.id) {
+        await supabase
+          .from("grades")
+          .update({
+            lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
+            lecturer_feedback: nextFeedback,
+          })
+          .eq("id", existingGrade.id);
+      }
 
       const moderationCheck = evaluateModerationSignals({
         grade: toGradeRow(grade),
@@ -649,6 +720,7 @@ Please review the feedback in the platform and let me know if you would like to 
       toast.error("Failed to save review");
     }
     setReviewOpen(false);
+    setReviewGradeOverride(null);
   };
 
   return {
@@ -662,10 +734,12 @@ Please review the feedback in the platform and let me know if you would like to 
     queueFeedbackSummary,
     queueGradeReleaseNotification,
     reviewOpen,
+    reviewGradeOverride,
     reviewSubmission,
     saveReview,
     setEditFeedback,
     setEditScore,
     setReviewOpen,
+    startManualReview,
   };
 };

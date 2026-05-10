@@ -81,9 +81,9 @@ export const LecturerOverviewRecentSubmissionsSection = ({
                       size="sm"
                       variant="ghost"
                       className="h-8 px-2 text-xs"
-                      onClick={() => navigate(`/dashboard/assignments/${submission.assignment_id}`)}
+                      onClick={() => navigate(submission.workflowHref)}
                     >
-                      Review
+                      {submission.workflowLabel}
                     </Button>
                   </div>
                 </div>

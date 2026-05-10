@@ -352,10 +352,14 @@ describe("ModerationDashboard moderator integration", () => {
       "This case is still unresolved and needs owner or senior review before final approval.",
     );
     expect(caseRow).toHaveTextContent("Escalated dispute");
+    expect(caseRow).toHaveTextContent("Escalated dispute needs owner or senior review");
 
     fireEvent.click(within(caseRow).getByTestId("moderation-review-open-case-1"));
 
     const dialog = await screen.findByTestId("moderation-review-dialog");
+    expect(within(dialog).getByTestId("moderation-dialog-next-step")).toHaveTextContent(
+      "Escalated dispute needs owner or senior review",
+    );
     expect(within(dialog).getByText("Escalated after the moderator changed the outcome.")).toBeInTheDocument();
     expect(
       within(dialog).getByText(
@@ -412,10 +416,14 @@ describe("ModerationDashboard moderator integration", () => {
 
     const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
     expect(caseRow).toHaveTextContent("Owner approval required");
+    expect(caseRow).toHaveTextContent("Assignment owner approval required");
 
     fireEvent.click(within(caseRow).getByTestId("moderation-review-open-case-1"));
 
     const dialog = await screen.findByTestId("moderation-review-dialog");
+    expect(within(dialog).getByTestId("moderation-dialog-next-step")).toHaveTextContent(
+      "Assignment owner approval required",
+    );
     expect(within(dialog).getByText("Owner approval required")).toBeInTheDocument();
     expect(
       within(dialog).getByText(
@@ -469,10 +477,14 @@ describe("ModerationDashboard moderator integration", () => {
 
     const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
     expect(caseRow).toHaveTextContent("Ready for release");
+    expect(caseRow).toHaveTextContent("Release the approved outcome");
 
     fireEvent.click(within(caseRow).getByTestId("moderation-review-open-case-1"));
 
     const dialog = await screen.findByTestId("moderation-review-dialog");
+    expect(within(dialog).getByTestId("moderation-dialog-next-step")).toHaveTextContent(
+      "Release the approved outcome",
+    );
     expect(within(dialog).getByText("Ready for release")).toBeInTheDocument();
     expect(
       within(dialog).getByText(

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssignmentFormDialog } from "@/pages/dashboard/assignments/assignment-form-dialog";
+import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
 import type { useAssignmentsController } from "@/pages/dashboard/assignments/useAssignmentsController";
 
 type AssignmentsScreenProps = ReturnType<typeof useAssignmentsController>;
@@ -264,6 +265,13 @@ export const AssignmentsScreen = ({
           {sortedAssignments.map((rawAssignment) => {
             const assignment = normalizeAssignment(rawAssignment);
             const stats = submissionStats[assignment.id];
+            const lecturerWorkflowTarget =
+              role === "lecturer"
+                ? getAssignmentWorkflowTargetFromStats({
+                    assignmentId: assignment.id,
+                    stats,
+                  })
+                : null;
             const studentState = role === "student" ? studentWorkflow[assignment.id] : undefined;
             const studentJourney = role === "student" ? getStudentAssignmentJourney(studentState?.status) : null;
             const StatusIcon = statusIcon(assignment.status);
@@ -412,9 +420,9 @@ export const AssignmentsScreen = ({
                         </Button>
                       )}
                       <Button size="sm" variant="outline" asChild>
-                        <Link to={`/dashboard/assignments/${assignment.id}`}>
+                        <Link to={role === "lecturer" ? lecturerWorkflowTarget?.href ?? `/dashboard/assignments/${assignment.id}` : `/dashboard/assignments/${assignment.id}`}>
                           {role === "lecturer"
-                            ? "Open Workflow"
+                            ? lecturerWorkflowTarget?.label ?? "Open Workflow"
                             : studentState
                               ? "Open Submission Window"
                               : "Open Assignment"}

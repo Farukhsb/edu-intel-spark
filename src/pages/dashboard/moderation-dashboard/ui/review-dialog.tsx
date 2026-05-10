@@ -28,6 +28,7 @@ import {
   canPerformModerationAction,
   getModerationDisagreementSummary,
   getModerationEscalationSummary,
+  getModerationNextStep,
   getModerationReleaseState,
   type ModerationCaseView,
   type SubmissionRow,
@@ -103,6 +104,10 @@ export const ModerationReviewDialog = ({
                     latestModeratorReview,
                   })
                 : null;
+            const nextStep = getModerationNextStep({
+              item: selectedCase,
+              userId,
+            });
 
             return (
               <>
@@ -198,6 +203,10 @@ export const ModerationReviewDialog = ({
 
                   <Card>
                     <CardContent className="space-y-4 p-4">
+                      <div className="rounded-lg border bg-muted/20 p-3 text-sm" data-testid="moderation-dialog-next-step">
+                        <p className="font-medium">{nextStep.headline}</p>
+                        <p className="mt-1 text-muted-foreground">{nextStep.detail}</p>
+                      </div>
                       <div className="rounded-lg border bg-muted/20 p-3 text-sm">
                         {(() => {
                           const releaseState = getModerationReleaseState({

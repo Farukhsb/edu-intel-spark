@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { log } from "@/lib/logger";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  getAssignmentWorkflowTargetFromStats,
+  type AssignmentWorkflowStatsLike,
+} from "@/lib/assignmentWorkflowNavigation";
 import { deriveAccreditationMetrics, type NSSMetric, type QAAMetric, type TEFIndicator } from "@/lib/accreditationMetrics";
 import { fetchAccreditationDataset } from "@/lib/data/academic";
 import {
@@ -27,6 +31,103 @@ const exportQAAReport = (qaaMetrics: QAAMetric[], summary: { overallCompliance: 
   URL.revokeObjectURL(url);
 };
 
+type AccreditationWorkflowTarget = {
+  href: string;
+  label: string;
+} | null;
+
+const PENDING_REVIEW_STATUSES = new Set([
+  "submitted",
+  "ai_grading",
+  "ai_graded",
+  "first_review",
+  "moderation_pending",
+  "moderation_in_progress",
+  "escalated",
+  "under_review",
+]);
+
+const GRADED_WORKFLOW_STATUSES = new Set([
+  "ai_graded",
+  "first_review",
+  "moderation_pending",
+  "moderation_in_progress",
+  "moderated",
+  "escalated",
+  "under_review",
+  "approved",
+  "released",
+]);
+
+const buildAccreditationWorkflowTarget = ({
+  assignments,
+  submissions,
+  grades,
+}: {
+  assignments: Array<{ id: string }>;
+  submissions: Array<{ id: string; assignment_id: string; status?: string | null }>;
+  grades: Array<{ submission_id: string }>;
+}): AccreditationWorkflowTarget => {
+  if (assignments.length === 0 || submissions.length === 0) return null;
+
+  const gradeSubmissionIds = new Set(grades.map((grade) => grade.submission_id));
+  const assignmentStats = new Map<string, AssignmentWorkflowStatsLike>();
+
+  assignments.forEach((assignment) => {
+    assignmentStats.set(assignment.id, {
+      total: 0,
+      needsReview: 0,
+      graded: 0,
+      approved: 0,
+      released: 0,
+    });
+  });
+
+  submissions.forEach((submission) => {
+    const stats = assignmentStats.get(submission.assignment_id);
+    if (!stats) return;
+
+    stats.total += 1;
+    const status = submission.status ?? "";
+
+    if (PENDING_REVIEW_STATUSES.has(status)) {
+      stats.needsReview += 1;
+    }
+
+    if (status === "approved") {
+      stats.approved += 1;
+    }
+
+    if (status === "released") {
+      stats.released += 1;
+    }
+
+    if (GRADED_WORKFLOW_STATUSES.has(status) || gradeSubmissionIds.has(submission.id)) {
+      stats.graded += 1;
+    }
+  });
+
+  const rankedAssignments = [...assignmentStats.entries()]
+    .map(([assignmentId, stats]) => ({
+      assignmentId,
+      stats,
+      pressure:
+        stats.needsReview * 100 +
+        Math.max(stats.approved - stats.released, 0) * 10 +
+        Math.max(stats.graded - stats.approved, 0),
+    }))
+    .filter((entry) => entry.pressure > 0)
+    .sort((left, right) => right.pressure - left.pressure);
+
+  const topAssignment = rankedAssignments[0];
+  if (!topAssignment) return null;
+
+  return getAssignmentWorkflowTargetFromStats({
+    assignmentId: topAssignment.assignmentId,
+    stats: topAssignment.stats,
+  });
+};
+
 export const useAccreditationDashboardController = () => {
   const { isDemo } = useAuth();
   const navigate = useNavigate();
@@ -37,6 +138,7 @@ export const useAccreditationDashboardController = () => {
   const [nssMetrics, setNssMetrics] = useState<NSSMetric[]>([]);
   const [tefIndicators, setTefIndicators] = useState<TEFIndicator[]>([]);
   const [feedbackTurnaround, setFeedbackTurnaround] = useState({ avg: 0, target: 15, compliant: 0, total: 0 });
+  const [pendingWorkflowTarget, setPendingWorkflowTarget] = useState<AccreditationWorkflowTarget>(null);
 
   useEffect(() => {
     if (isDemo) {
@@ -44,6 +146,7 @@ export const useAccreditationDashboardController = () => {
       setNssMetrics(DEMO_NSS_METRICS);
       setTefIndicators(DEMO_TEF_INDICATORS);
       setFeedbackTurnaround(DEMO_FEEDBACK_TURNAROUND);
+      setPendingWorkflowTarget(null);
       setLoadError(false);
       setLoading(false);
       return;
@@ -64,12 +167,20 @@ export const useAccreditationDashboardController = () => {
         setNssMetrics(derived.nssMetrics);
         setTefIndicators(derived.tefIndicators);
         setFeedbackTurnaround(derived.feedbackTurnaround);
+        setPendingWorkflowTarget(
+          buildAccreditationWorkflowTarget({
+            assignments,
+            submissions,
+            grades,
+          }),
+        );
         setLoadError(false);
       } catch (error) {
         log.error("Failed to fetch accreditation data", error);
         setQaaMetrics([]);
         setNssMetrics([]);
         setTefIndicators([]);
+        setPendingWorkflowTarget(null);
         setLoadError(true);
       }
       setLoading(false);
@@ -128,7 +239,8 @@ export const useAccreditationDashboardController = () => {
     statusIcon,
     tefColor,
     exportQAAReport: () => exportQAAReport(qaaMetrics, summary),
-    openPendingSubmissions: () => navigate("/dashboard/assignments?view=needs-review"),
+    pendingWorkflowTarget,
+    openPendingSubmissions: () => navigate(pendingWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review"),
     openAtRiskCohort: () => navigate("/dashboard/performance?risk=high-plus"),
     openLearningOutcomes: () => navigate("/dashboard/learning-outcomes"),
   };

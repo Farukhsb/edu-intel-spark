@@ -54,9 +54,11 @@ export const SubmissionReviewDialog = ({
         <div className="space-y-4 pt-2">
           <Card className="bg-muted/40">
             <CardContent className="space-y-2 p-4">
-              <p className="text-xs font-medium text-muted-foreground">AI Score</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                {grade.ai_score != null ? "AI Score" : "Manual review mode"}
+              </p>
               <p className="text-lg font-bold font-display">
-                {grade.ai_score}/{assignmentMaxScore}
+                {grade.ai_score != null ? `${grade.ai_score}/${assignmentMaxScore}` : "No AI draft score"}
               </p>
               <div className="flex flex-wrap gap-2">
                 {grade.assignment_type && <Badge variant="outline">{grade.assignment_type}</Badge>}
@@ -81,9 +83,13 @@ export const SubmissionReviewDialog = ({
                   ))}
                 </div>
               )}
-              <p className="pt-1 text-xs font-medium text-muted-foreground">AI Feedback</p>
+              <p className="pt-1 text-xs font-medium text-muted-foreground">
+                {grade.ai_feedback ? "AI Feedback" : "Lecturer starting point"}
+              </p>
               <div className="max-h-56 overflow-y-auto rounded-md bg-background/80 p-3">
-                <p className="whitespace-pre-wrap text-sm">{grade.ai_feedback || "N/A"}</p>
+                <p className="whitespace-pre-wrap text-sm">
+                  {grade.ai_feedback || "No AI feedback is available for this submission. Enter your own score and feedback below to continue with manual review."}
+                </p>
               </div>
               {(grade.ai_breakdown?.length ?? 0) > 0 && (
                 <div className="space-y-1 pt-2">

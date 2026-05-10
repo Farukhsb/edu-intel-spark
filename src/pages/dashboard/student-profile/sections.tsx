@@ -27,7 +27,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { safeFormatDate } from "@/lib/date";
-import type { InterventionEntry, ManualInterventionStatus, ManualInterventionType } from "@/lib/interventions";
+import {
+  isInterventionOverdue,
+  type InterventionEntry,
+  type ManualInterventionStatus,
+  type ManualInterventionType,
+} from "@/lib/interventions";
 import type { StudentAssignment, StudentInsightData } from "@/lib/studentProfile";
 
 export const StudentProfileBackButton = ({ onBack }: { onBack: () => void }) => (
@@ -330,7 +335,13 @@ export const StudentInterventionFormCard = ({
   </Card>
 );
 
-export const StudentInterventionHistoryCard = ({ interventions }: { interventions: InterventionEntry[] }) => (
+export const StudentInterventionHistoryCard = ({
+  interventions,
+  onUpdateStatus,
+}: {
+  interventions: InterventionEntry[];
+  onUpdateStatus: (interventionId: string, nextStatus: ManualInterventionStatus) => void;
+}) => (
   <Card>
     <CardHeader>
       <CardTitle className="text-base">Intervention History</CardTitle>
@@ -349,6 +360,9 @@ export const StudentInterventionHistoryCard = ({ interventions }: { intervention
               <Badge variant={entry.status === "resolved" ? "default" : "secondary"} className="capitalize">
                 {entry.status}
               </Badge>
+              {isInterventionOverdue(entry) && (
+                <Badge variant="destructive">Follow-up overdue</Badge>
+              )}
               <span className="text-xs text-muted-foreground">
                 Logged {safeFormatDate(entry.createdAt, "MMM d, yyyy HH:mm")}
               </span>
@@ -359,6 +373,17 @@ export const StudentInterventionHistoryCard = ({ interventions }: { intervention
                 Follow up on {safeFormatDate(entry.followUpDate, "MMM d, yyyy")}
               </p>
             )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {entry.status === "ongoing" ? (
+                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(entry.id, "resolved")}>
+                  Mark resolved
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(entry.id, "ongoing")}>
+                  Reopen follow-up
+                </Button>
+              )}
+            </div>
           </div>
         ))
       )}

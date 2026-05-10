@@ -144,6 +144,7 @@ export const ModerationDashboardScreen = ({
       onBulkApproveModeration={onBulkApproveModeration}
       selectedBulkApprovalSummaries={selectedBulkApprovalSummaries}
       saving={saving}
+      userId={userId}
     />
 
     <ModerationReviewDialog

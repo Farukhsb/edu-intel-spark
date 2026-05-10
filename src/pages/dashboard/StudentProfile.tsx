@@ -13,12 +13,14 @@ import {
   fetchStudentInterventions,
   getInterventionErrorText,
   getStudentInterventionReadiness,
+  isInterventionOverdue,
   insertManualIntervention,
   normalizeManualInterventionStatus,
   normalizeManualInterventionType,
   type InterventionEntry,
   type ManualInterventionStatus,
   type ManualInterventionType,
+  updateStudentInterventionStatus,
 } from "@/lib/interventions";
 import {
   buildStudentInsightData,
@@ -392,6 +394,31 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
     toast[feedback.level](feedback.message);
   };
 
+  const handleUpdateInterventionStatus = async (
+    interventionId: string,
+    nextStatus: ManualInterventionStatus,
+  ) => {
+    if (isDemo) {
+      setInterventions((current) =>
+        current.map((entry) => (entry.id === interventionId ? { ...entry, status: nextStatus } : entry)),
+      );
+      toast.success(nextStatus === "resolved" ? "Demo intervention resolved." : "Demo intervention reopened.");
+      return;
+    }
+
+    const { data, error } = await updateStudentInterventionStatus(supabase, interventionId, nextStatus);
+
+    if (error) {
+      toast.error(getInterventionErrorText(error) || "Could not update intervention status");
+      return;
+    }
+
+    setInterventions((current) =>
+      current.map((entry) => (entry.id === interventionId && data ? data : entry)),
+    );
+    toast.success(nextStatus === "resolved" ? "Intervention resolved" : "Intervention reopened");
+  };
+
   if (loading) {
     return <DashboardLoadingState />;
   }
@@ -409,11 +436,13 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
   }
 
   const openInterventions = interventions.filter((entry) => entry.status === "ongoing").length;
+  const overdueInterventions = interventions.filter((entry) => isInterventionOverdue(entry)).length;
   const interventionReadiness = getStudentInterventionReadiness({
     riskLevel: student.riskLevel,
     recommendation: student.recommendation,
     missedAssignmentsCount: student.missedAssignments.length,
     openInterventions,
+    overdueInterventions,
     latestIntervention: interventions[0] || null,
   });
 
@@ -492,7 +521,10 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
         />
       </div>
 
-      <StudentInterventionHistoryCard interventions={interventions} />
+      <StudentInterventionHistoryCard
+        interventions={interventions}
+        onUpdateStatus={(interventionId, nextStatus) => void handleUpdateInterventionStatus(interventionId, nextStatus)}
+      />
     </div>
   );
 };

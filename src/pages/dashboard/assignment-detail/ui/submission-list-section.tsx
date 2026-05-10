@@ -8,6 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { getSubmissionDisplayState } from "@/lib/assessmentWorkflow";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import type { AssignmentQueueFocusValue } from "@/lib/schemas/navigation";
+import type { ModerationReleaseHandoffState } from "@/pages/dashboard/assignment-detail/domain";
 import type {
   AssignmentDetailAssignment,
   AssignmentDetailBreakdown,
@@ -16,6 +18,7 @@ import type {
   ModerationCase,
   SubmissionStatus,
 } from "@/pages/dashboard/assignment-detail/types";
+import type { SubmissionGradingRecoveryIssue } from "@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions";
 
 const statusConfig: Record<
   SubmissionStatus,
@@ -101,12 +104,14 @@ const SubmissionCardItem = ({
   openSubmissionFile,
   openModeration,
   openReview,
+  startManualReview,
   approveSubmission,
   releaseSubmission,
   loadSubmissions,
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
+  gradingRecoveryIssue,
 }: {
   submission: AssignmentDetailSubmission;
   assignment: AssignmentDetailAssignment;
@@ -119,12 +124,14 @@ const SubmissionCardItem = ({
   openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
   openModeration: () => void;
   openReview: (submission: AssignmentDetailSubmission) => void;
+  startManualReview: (submission: AssignmentDetailSubmission) => Promise<void>;
   approveSubmission: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   releaseSubmission: (submission: AssignmentDetailSubmission) => Promise<void>;
   loadSubmissions: () => Promise<void>;
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
+  gradingRecoveryIssue?: SubmissionGradingRecoveryIssue;
 }) => {
   const submissionDisplay = getSubmissionDisplayState({
     status: submission.status,
@@ -197,7 +204,39 @@ const SubmissionCardItem = ({
                   Open moderation
                 </Button>
               )}
+              {gradingRecoveryIssue && gradingRecoveryIssue.type !== "missing_file" && isLecturer && (
+                <Button
+                  size="sm"
+                  variant="link"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => toggleSelect(submission.id)}
+                >
+                  {gradingRecoveryIssue.recoveryLabel}
+                </Button>
+              )}
+              {gradingRecoveryIssue && isLecturer && (
+                <Button
+                  size="sm"
+                  variant="link"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => void startManualReview(submission)}
+                >
+                  Start manual review
+                </Button>
+              )}
             </div>
+
+            {gradingRecoveryIssue && (
+              <div className="rounded-xl border border-amber-300/60 bg-amber-50/70 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="border-amber-300 text-[10px] uppercase tracking-wide text-amber-800">
+                    Recovery
+                  </Badge>
+                  <p className="text-xs font-medium text-amber-950">{gradingRecoveryIssue.headline}</p>
+                </div>
+                <p className="mt-2 text-xs text-amber-900">{gradingRecoveryIssue.detail}</p>
+              </div>
+            )}
 
             {(grade?.ai_breakdown?.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-1 pt-1">
@@ -331,15 +370,22 @@ export const SubmissionListSection = ({
   moderationCases,
   assignment,
   isDemo,
+  gradingRecoveryIssues,
   openSubmissionFile,
   openModeration,
   openReview,
+  startManualReview,
   approveSubmission,
   releaseSubmission,
   loadSubmissions,
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
+  moderationReleaseHandoffState,
+  activeQueueFocus,
+  focusQueue,
+  clearQueueFocus,
+  copyQueueLink,
 }: {
   submissions: AssignmentDetailSubmission[];
   filteredSubmissions: AssignmentDetailSubmission[];
@@ -351,71 +397,201 @@ export const SubmissionListSection = ({
   moderationCases: Record<string, ModerationCase>;
   assignment: AssignmentDetailAssignment;
   isDemo: boolean;
+  gradingRecoveryIssues: Record<string, SubmissionGradingRecoveryIssue>;
   openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
   openModeration: () => void;
   openReview: (submission: AssignmentDetailSubmission) => void;
+  startManualReview: (submission: AssignmentDetailSubmission) => Promise<void>;
   approveSubmission: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   releaseSubmission: (submission: AssignmentDetailSubmission) => Promise<void>;
   loadSubmissions: () => Promise<void>;
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
-}) => (
-  <Card className="shadow-sm">
-    <CardHeader className="pb-3">
-      <CardTitle className="text-base">Submissions</CardTitle>
-    </CardHeader>
-    <CardContent>
-      {submissions.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <p className="text-sm font-medium">No submissions yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Student uploads will appear here once work is submitted to this assignment.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {isLecturer && (
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3">
-              <Checkbox
-                checked={selected.size === filteredSubmissions.length && filteredSubmissions.length > 0}
-                onCheckedChange={toggleAll}
-              />
-              <span className="text-xs text-muted-foreground">Select all visible submissions</span>
-            </div>
-          )}
+  moderationReleaseHandoffState: ModerationReleaseHandoffState;
+  activeQueueFocus: AssignmentQueueFocusValue | null;
+  focusQueue: (focus: AssignmentQueueFocusValue) => void;
+  clearQueueFocus: () => void;
+  copyQueueLink: (focus: AssignmentQueueFocusValue) => void;
+}) => {
+  const manualReviewSubmissions = submissions.filter((submission) => submission.status === "under_review");
+  const visibleManualReviewCount = filteredSubmissions.filter(
+    (submission) => submission.status === "under_review",
+  ).length;
+  const showingManualReviewQueue = activeQueueFocus === "manual-review";
+  const releaseReadySubmissions = submissions.filter((submission) => submission.status === "approved");
+  const releasedSubmissions = submissions.filter((submission) => submission.status === "released");
+  const handoffFocusStatus = moderationReleaseHandoffState.statusFilter;
+  const showingHandoffQueue =
+    (activeQueueFocus === "release-ready" && handoffFocusStatus === "approved") ||
+    (activeQueueFocus === "released-results" && handoffFocusStatus === "released");
+  const visibleHandoffCount = filteredSubmissions.filter(
+    (submission) => submission.status === handoffFocusStatus,
+  ).length;
+  const shouldShowReleaseHandoffBanner =
+    releaseReadySubmissions.length > 0 || releasedSubmissions.length > 0;
+  const releaseHandoffTitle =
+    moderationReleaseHandoffState.kind === "released"
+      ? "Released results queue"
+      : "Release-ready queue";
+  const releaseHandoffDetail =
+    moderationReleaseHandoffState.kind === "released"
+      ? `${releasedSubmissions.length} submission${releasedSubmissions.length === 1 ? "" : "s"} already moved through moderation and have been released to students.`
+      : `${releaseReadySubmissions.length} approved submission${releaseReadySubmissions.length === 1 ? "" : "s"} still need final release to students.`;
 
-          {filteredSubmissions.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-8 text-center">
-              <p className="text-sm font-medium">No submissions match this view</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Adjust the status filter or search query to see more work.
-              </p>
-            </div>
-          ) : filteredSubmissions.map((submission) => (
-            <SubmissionCardItem
-              key={submission.id}
-              submission={submission}
-              assignment={assignment}
-              grade={grades[submission.id]}
-              moderationCase={moderationCases[submission.id]}
-              isLecturer={isLecturer}
-              isDemo={isDemo}
-              isSelected={selected.has(submission.id)}
-              toggleSelect={toggleSelect}
-              openSubmissionFile={openSubmissionFile}
-              openModeration={openModeration}
-              openReview={openReview}
-              approveSubmission={approveSubmission}
-              releaseSubmission={releaseSubmission}
-              loadSubmissions={loadSubmissions}
-              queueFeedbackSummary={queueFeedbackSummary}
-              queueGradeReleaseNotification={queueGradeReleaseNotification}
-              openReleasedResult={openReleasedResult}
-            />
-          ))}
-        </div>
-      )}
-    </CardContent>
-  </Card>
-);
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Submissions</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {submissions.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-8 text-center">
+            <p className="text-sm font-medium">No submissions yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Student uploads will appear here once work is submitted to this assignment.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {isLecturer && manualReviewSubmissions.length > 0 && (
+              <div
+                data-testid="manual-review-queue-banner"
+                className="rounded-xl border border-amber-300/60 bg-amber-50/70 p-4"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Manual review queue</p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      {manualReviewSubmissions.length} submission
+                      {manualReviewSubmissions.length === 1 ? "" : "s"} bypassed AI grading and still need a lecturer-owned score and feedback.
+                    </p>
+                    <p className="mt-2 text-xs text-slate-600">
+                      {showingManualReviewQueue
+                        ? `${visibleManualReviewCount} manual-review submission${visibleManualReviewCount === 1 ? "" : "s"} visible in the current queue.`
+                        : "Focus this queue to clear manual fallbacks before they become a release bottleneck."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => copyQueueLink("manual-review")}
+                    >
+                      Copy queue link
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={showingManualReviewQueue ? "outline" : "default"}
+                      onClick={() =>
+                        showingManualReviewQueue
+                          ? clearQueueFocus()
+                          : focusQueue("manual-review")
+                      }
+                    >
+                      {showingManualReviewQueue ? "Return to full queue" : "Focus manual review queue"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {isLecturer && shouldShowReleaseHandoffBanner && (
+              <div
+                data-testid="moderation-release-queue-banner"
+                className="rounded-xl border border-sky-300/60 bg-sky-50/70 p-4"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{releaseHandoffTitle}</p>
+                    <p className="mt-1 text-sm text-slate-700">{releaseHandoffDetail}</p>
+                    <p className="mt-2 text-xs text-slate-600">
+                      {showingHandoffQueue
+                        ? `${visibleHandoffCount} submission${visibleHandoffCount === 1 ? "" : "s"} visible in the current ${moderationReleaseHandoffState.kind === "released" ? "released-results" : "release-ready"} queue.`
+                        : moderationReleaseHandoffState.description}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        copyQueueLink(
+                          moderationReleaseHandoffState.kind === "released"
+                            ? "released-results"
+                            : "release-ready",
+                        )
+                      }
+                    >
+                      Copy queue link
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={showingHandoffQueue ? "outline" : "default"}
+                      onClick={() =>
+                        showingHandoffQueue
+                          ? clearQueueFocus()
+                          : focusQueue(
+                              moderationReleaseHandoffState.kind === "released"
+                                ? "released-results"
+                                : "release-ready",
+                            )
+                      }
+                    >
+                      {showingHandoffQueue
+                        ? "Return to full queue"
+                        : moderationReleaseHandoffState.kind === "released"
+                          ? "Focus released results"
+                          : "Focus release-ready queue"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isLecturer && (
+              <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3">
+                <Checkbox
+                  checked={selected.size === filteredSubmissions.length && filteredSubmissions.length > 0}
+                  onCheckedChange={toggleAll}
+                />
+                <span className="text-xs text-muted-foreground">Select all visible submissions</span>
+              </div>
+            )}
+
+            {filteredSubmissions.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-8 text-center">
+                <p className="text-sm font-medium">No submissions match this view</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Adjust the status filter or search query to see more work.
+                </p>
+              </div>
+            ) : filteredSubmissions.map((submission) => (
+              <SubmissionCardItem
+                key={submission.id}
+                submission={submission}
+                assignment={assignment}
+                grade={grades[submission.id]}
+                gradingRecoveryIssue={gradingRecoveryIssues[submission.id]}
+                moderationCase={moderationCases[submission.id]}
+                isLecturer={isLecturer}
+                isDemo={isDemo}
+                isSelected={selected.has(submission.id)}
+                toggleSelect={toggleSelect}
+                openSubmissionFile={openSubmissionFile}
+                openModeration={openModeration}
+                openReview={openReview}
+                startManualReview={startManualReview}
+                approveSubmission={approveSubmission}
+                releaseSubmission={releaseSubmission}
+                loadSubmissions={loadSubmissions}
+                queueFeedbackSummary={queueFeedbackSummary}
+                queueGradeReleaseNotification={queueGradeReleaseNotification}
+                openReleasedResult={openReleasedResult}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};

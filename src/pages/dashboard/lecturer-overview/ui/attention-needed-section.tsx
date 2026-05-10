@@ -4,12 +4,14 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-import type { LecturerOverviewStats } from "../types";
+import type { LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
 
 export const LecturerOverviewAttentionNeededSection = ({
   stats,
+  primaryWorkflowTarget,
 }: {
   stats: LecturerOverviewStats;
+  primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
 }) => {
   const navigate = useNavigate();
 
@@ -49,8 +51,12 @@ export const LecturerOverviewAttentionNeededSection = ({
         </div>
 
         <div className="flex gap-2 pt-1">
-          <Button size="sm" className="flex-1" onClick={() => navigate("/dashboard/assignments?view=needs-review")}>
-            Review queue
+          <Button
+            size="sm"
+            className="flex-1"
+            onClick={() => navigate(primaryWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review")}
+          >
+            {primaryWorkflowTarget?.label ?? "Review queue"}
           </Button>
           <Button
             size="sm"

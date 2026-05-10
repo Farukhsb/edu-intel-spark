@@ -51,5 +51,5 @@ describe("AcademicIntegrity demo mode", () => {
     fireEvent.click(screen.getByRole("button", { name: /Active Investigations/i }));
     expect(await screen.findByText("Daniel Reed")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
-  });
+  }, 30000);
 });

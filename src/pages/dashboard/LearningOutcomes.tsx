@@ -28,6 +28,7 @@ import {
   type OutcomeRow,
   type StudentTrajectory,
 } from "@/lib/learningOutcomes";
+import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation";
 
 const LearningOutcomes = () => {
   const { isDemo, user } = useAuth();
@@ -74,6 +75,12 @@ const LearningOutcomes = () => {
     outcomes,
     trajectories,
   });
+  const assignmentWorkflowTarget = selectedAssignment !== "all"
+    ? getAssignmentWorkflowTarget({
+      assignmentId: selectedAssignment,
+      status: "ai_graded",
+    })
+    : null;
 
   const exportOutcomeSnapshot = () => {
     const lines = [
@@ -239,14 +246,16 @@ const LearningOutcomes = () => {
           <button
             type="button"
             className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-            onClick={() => navigate("/dashboard/assignments?view=needs-review")}
+            onClick={() => navigate(assignmentWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review")}
           >
             <p className="text-sm font-medium">Tighten pending feedback</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Go straight to the submissions queue and push rubric-specific feedback into live marking.
+              {assignmentWorkflowTarget
+                ? "Open this assignment's grading workflow and turn weak rubric signals into live marking action."
+                : "Go straight to the submissions queue and push rubric-specific feedback into live marking."}
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              Open pending queue <ArrowRight className="h-3.5 w-3.5" />
+              {assignmentWorkflowTarget ? assignmentWorkflowTarget.label : "Open pending queue"} <ArrowRight className="h-3.5 w-3.5" />
             </span>
           </button>
           <button

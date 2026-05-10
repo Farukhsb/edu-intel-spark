@@ -97,6 +97,7 @@ export const buildAssignmentDetailScreenProps = ({
   rubric: assignment.rubric ?? [],
   submissionListProps: buildSubmissionListProps({
     assignment,
+    automatedActions,
     fileActions,
     grades,
     isDemo,
@@ -104,6 +105,7 @@ export const buildAssignmentDetailScreenProps = ({
     moderationCases,
     navigate,
     reloadSubmissions,
+    searchPathname,
     submissions,
     viewState,
   }),

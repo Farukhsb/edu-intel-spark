@@ -1,6 +1,7 @@
 import type { SubmissionStatus } from "@/pages/dashboard/assignment-detail/types";
 
 export interface AssignmentWorkflowReadiness {
+  manualReviewCount: number;
   postureLabel: string;
   likelyChallenge: string;
   bestNextAction: string;
@@ -23,13 +24,17 @@ export const getLecturerAssignmentWorkflowReadiness = ({
   const count = (status: SubmissionStatus) => statuses.filter((value) => value === status).length;
   const moderationCount =
     count("moderation_pending") + count("moderation_in_progress") + count("escalated");
-  const reviewCount = count("submitted") + count("ai_graded") + count("first_review") + count("under_review");
+  const manualReviewCount = count("under_review");
+  const reviewCount = count("submitted") + count("ai_graded") + count("first_review") + manualReviewCount;
   const releasedCount = count("released");
 
   return {
+    manualReviewCount,
     postureLabel:
       moderationCount > 0
         ? "Active review position"
+        : manualReviewCount > 0
+          ? "Manual review position"
         : hasReleaseReady || hasApprovable
           ? "Release handoff position"
           : reviewCount > 0
@@ -41,6 +46,8 @@ export const getLecturerAssignmentWorkflowReadiness = ({
       integrityRuntimeWarning ||
       (moderationCount > 0
         ? `${formatCount(moderationCount, "submission")} still in moderation or escalation`
+        : manualReviewCount > 0
+          ? `${formatCount(manualReviewCount, "submission")} diverted into manual review`
         : hasReleaseReady
           ? `${formatCount(count("approved"), "approved submission")} ready to release`
           : reviewCount > 0
@@ -51,6 +58,8 @@ export const getLecturerAssignmentWorkflowReadiness = ({
     bestNextAction:
       moderationCount > 0
         ? "Open moderation-linked submissions and clear blocked review cases"
+        : manualReviewCount > 0
+          ? "Complete manual-review submissions before they become the next release bottleneck"
         : hasReleaseReady
           ? "Release approved submissions and send release notes"
           : hasApprovable
@@ -68,6 +77,7 @@ export const getStudentAssignmentWorkflowReadiness = ({
 }): AssignmentWorkflowReadiness => {
   if (!currentStatus) {
     return {
+      manualReviewCount: 0,
       postureLabel: "Ready to submit position",
       likelyChallenge: "No submission has entered the workflow yet",
       bestNextAction: "Upload your work to start grading and review",
@@ -76,6 +86,7 @@ export const getStudentAssignmentWorkflowReadiness = ({
 
   if (currentStatus === "released") {
     return {
+      manualReviewCount: 0,
       postureLabel: "Released result position",
       likelyChallenge: "Your released feedback is now available to review",
       bestNextAction: "Open the released result and review the feedback summary",
@@ -84,6 +95,7 @@ export const getStudentAssignmentWorkflowReadiness = ({
 
   if (currentStatus === "approved") {
     return {
+      manualReviewCount: 0,
       postureLabel: "Awaiting release position",
       likelyChallenge: "Your submission is approved but not yet released to students",
       bestNextAction: "Wait for final grade release and check back for the released result",
@@ -96,6 +108,7 @@ export const getStudentAssignmentWorkflowReadiness = ({
     currentStatus === "escalated"
   ) {
     return {
+      manualReviewCount: 0,
       postureLabel: "Moderation in progress position",
       likelyChallenge: "Your submission is still in moderation before final release",
       bestNextAction: "Wait for the moderation workflow to complete before checking again",
@@ -103,6 +116,7 @@ export const getStudentAssignmentWorkflowReadiness = ({
   }
 
   return {
+    manualReviewCount: 0,
     postureLabel: "Assessment in progress position",
     likelyChallenge: "Your submission is still moving through grading and review",
     bestNextAction: "Check back later for the final released result",

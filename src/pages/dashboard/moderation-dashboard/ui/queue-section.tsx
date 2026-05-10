@@ -19,6 +19,7 @@ import {
 import {
   getModerationDisagreementSummary,
   getModerationEscalationSummary,
+  getModerationNextStep,
   getModerationReleaseState,
   type ModerationCaseView,
   type ModerationQueueFilter,
@@ -64,6 +65,7 @@ type ModerationQueueSectionProps = {
   selectableCaseIds: string[];
   selectedBulkApprovalSummaries: ModerationBulkApprovalSummary[];
   selectedCaseIds: string[];
+  userId?: string | null;
 };
 
 export const ModerationQueueSection = ({
@@ -92,6 +94,7 @@ export const ModerationQueueSection = ({
   selectableCaseIds,
   selectedBulkApprovalSummaries,
   selectedCaseIds,
+  userId,
 }: ModerationQueueSectionProps) => (
   <Card>
     <CardHeader>
@@ -264,6 +267,10 @@ export const ModerationQueueSection = ({
             integrityReview: item.integrityReview,
             maxScore: item.assignment?.max_score ?? 100,
           });
+          const nextStep = getModerationNextStep({
+            item,
+            userId,
+          });
           const releaseState = getModerationReleaseState({
             moderationCase: item.moderationCase,
             submissionStatus: item.submission?.status ?? coerceSubmissionStatus(item.moderationCase.status),
@@ -355,6 +362,10 @@ export const ModerationQueueSection = ({
                           Bulk approval ready
                         </Badge>
                       )}
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-3 text-xs" data-testid={`moderation-next-step-${item.moderationCase.id}`}>
+                      <p className="font-medium">{nextStep.headline}</p>
+                      <p className="mt-1 text-muted-foreground">{nextStep.detail}</p>
                     </div>
                   </div>
                 </div>

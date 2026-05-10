@@ -5,7 +5,7 @@ import { LecturerOverviewScreen, useLecturerOverviewController } from "@/pages/d
 const LecturerOverview = () => {
   const {
     profile,
-    state: { loading, stats, recent, gradeDistribution, totalScored, readiness, heroSummary },
+    state: { loading, stats, recent, gradeDistribution, totalScored, readiness, heroSummary, primaryWorkflowTarget },
     actions: { exportCsv, exportPdf },
   } = useLecturerOverviewController();
 
@@ -26,6 +26,7 @@ const LecturerOverview = () => {
       totalScored={totalScored}
       readiness={readiness}
       heroSummary={heroSummary}
+      primaryWorkflowTarget={primaryWorkflowTarget}
       onExportCsv={exportCsv}
       onExportPdf={exportPdf}
     />

@@ -2,6 +2,8 @@ import {
   canReleaseStatus,
   getApprovalBlockReason,
   getAssessmentSummary,
+  getLecturerSelectionGuidance,
+  getLecturerWorkflowLaneSummary,
   getSelectedWorkflowActionState,
   getSubmissionDisplayState,
   isApprovableWorkflowStatus,
@@ -67,6 +69,41 @@ describe("assessment workflow rules", () => {
       hasRegradable: true,
       hasApprovable: true,
       hasReleaseReady: true,
+    });
+  });
+
+  it("summarizes workflow lanes consistently for lecturer operations", () => {
+    expect(
+      getLecturerWorkflowLaneSummary([
+        "submitted",
+        "ai_grading",
+        "ai_graded",
+        "moderation_pending",
+        "approved",
+        "released",
+      ]),
+    ).toEqual({
+      intakeCount: 1,
+      aiInProgressCount: 1,
+      firstReviewCount: 1,
+      manualReviewCount: 0,
+      moderationCount: 1,
+      releaseReadyCount: 1,
+      releasedCount: 1,
+    });
+  });
+
+  it("guides selected submissions toward the clearest next lecturer action", () => {
+    expect(getLecturerSelectionGuidance(["approved"])).toEqual({
+      headline: "Release-ready submissions selected",
+      detail:
+        "1 approved submission is ready for student release. Release them only after the final feedback and score look correct.",
+    });
+
+    expect(getLecturerSelectionGuidance(["ai_graded"])).toEqual({
+      headline: "First-review work is selected",
+      detail:
+        "These submissions already have AI output. Open the review surface, confirm or adjust the score and feedback, and let the workflow decide whether moderation is needed.",
     });
   });
 

@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
 
-import type { LecturerOverviewStats } from "../types";
+import type { LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
 
 export const LecturerOverviewPrimaryStatsSection = ({
   stats,
+  primaryWorkflowTarget,
 }: {
   stats: LecturerOverviewStats;
+  primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
 }) => {
   const navigate = useNavigate();
 
@@ -58,7 +60,7 @@ export const LecturerOverviewPrimaryStatsSection = ({
             className={`border ${item.accent} shadow-sm ${clickable ? "cursor-pointer transition-colors hover:bg-muted/30" : ""}`}
             onClick={
               isReviewCard
-                ? () => navigate("/dashboard/assignments?view=needs-review")
+                ? () => navigate(primaryWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review")
                 : isRiskCard
                   ? () => navigate("/dashboard/performance?risk=high-plus&scoreBand=lt40")
                   : undefined

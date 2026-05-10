@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
-import { getSelectedWorkflowActionState } from "@/lib/assessmentWorkflow";
+import {
+  getLecturerSelectionGuidance,
+  getLecturerWorkflowLaneSummary,
+  getSelectedWorkflowActionState,
+} from "@/lib/assessmentWorkflow";
 import { parseAssignmentDetailSearchState } from "@/lib/schemas/navigation";
 import {
   getAssignmentNotificationFocusState,
   getModerationReleaseHandoffState,
 } from "@/pages/dashboard/assignment-detail/domain";
+import type {
+  AssignmentNotificationFocusValue,
+  AssignmentQueueFocusValue,
+} from "@/lib/schemas/navigation";
 import type {
   AssignmentDetailSubmission,
   SubmissionStatus,
@@ -23,6 +31,16 @@ interface UseAssignmentDetailListStateResult {
   isLecturer: boolean;
   moderationReleaseFocus: boolean;
   moderationReleaseHandoffState: ReturnType<typeof getModerationReleaseHandoffState>;
+  notificationFocus: AssignmentNotificationFocusValue | null;
+  queueFocus: AssignmentQueueFocusValue | null;
+  queueFocusState: {
+    description: string;
+    selectedSubmissionIds: string[];
+    statusFilter: "all" | SubmissionStatus;
+    title: string;
+  } | null;
+  selectedWorkflowGuidance: ReturnType<typeof getLecturerSelectionGuidance>;
+  workflowLaneSummary: ReturnType<typeof getLecturerWorkflowLaneSummary>;
   searchQuery: string;
   selected: Set<string>;
   selectedWorkflowState: ReturnType<typeof getSelectedWorkflowActionState>;
@@ -44,7 +62,11 @@ export const useAssignmentDetailListState = ({
   const [statusFilter, setStatusFilter] = useState<"all" | SubmissionStatus>("all");
   const isLecturer = role === "lecturer";
 
-  const { moderationReleaseFocus, notificationFocus: assignmentNotificationFocus } = useMemo(
+  const {
+    moderationReleaseFocus,
+    notificationFocus: assignmentNotificationFocus,
+    queueFocus,
+  } = useMemo(
     () => parseAssignmentDetailSearchState(new URLSearchParams(search)),
     [search],
   );
@@ -58,6 +80,44 @@ export const useAssignmentDetailListState = ({
     () => getAssignmentNotificationFocusState(assignmentNotificationFocus, submissions),
     [assignmentNotificationFocus, submissions],
   );
+  const queueFocusState = useMemo(() => {
+    if (!queueFocus) return null;
+
+    const buildState = (
+      nextStatusFilter: "all" | SubmissionStatus,
+      title: string,
+      description: string,
+    ) => ({
+      statusFilter: nextStatusFilter,
+      title,
+      description,
+      selectedSubmissionIds: submissions
+        .filter((submission) => submission.status === nextStatusFilter)
+        .map((submission) => submission.id),
+    });
+
+    if (queueFocus === "manual-review") {
+      return buildState(
+        "under_review",
+        "Opened from manual review queue",
+        "The submission list is focused on AI-bypassed work that still needs a lecturer-owned score and feedback.",
+      );
+    }
+
+    if (queueFocus === "release-ready") {
+      return buildState(
+        "approved",
+        "Opened from release-ready queue",
+        "The submission list is focused on approved submissions that are ready to release to students.",
+      );
+    }
+
+    return buildState(
+      "released",
+      "Opened from released results queue",
+      "The submission list is focused on submissions that already moved through moderation and were released to students.",
+    );
+  }, [queueFocus, submissions]);
 
   const notificationFocusedSubmissionIds = assignmentNotificationFocusState?.visibleSubmissionIds;
 
@@ -86,6 +146,13 @@ export const useAssignmentDetailListState = ({
   }, [isLecturer, moderationReleaseFocus, moderationReleaseHandoffState]);
 
   useEffect(() => {
+    if (!queueFocusState || !isLecturer) return;
+
+    setStatusFilter(queueFocusState.statusFilter);
+    setSelected(new Set(queueFocusState.selectedSubmissionIds));
+  }, [isLecturer, queueFocusState]);
+
+  useEffect(() => {
     if (!assignmentNotificationFocusState || !isLecturer) return;
 
     setStatusFilter(assignmentNotificationFocusState.statusFilter);
@@ -98,6 +165,18 @@ export const useAssignmentDetailListState = ({
       .map((submission) => submission.status);
     return getSelectedWorkflowActionState(selectedStatuses);
   }, [selected, submissions]);
+
+  const selectedWorkflowGuidance = useMemo(() => {
+    const selectedStatuses = submissions
+      .filter((submission) => selected.has(submission.id))
+      .map((submission) => submission.status);
+    return getLecturerSelectionGuidance(selectedStatuses);
+  }, [selected, submissions]);
+
+  const workflowLaneSummary = useMemo(
+    () => getLecturerWorkflowLaneSummary(submissions.map((submission) => submission.status)),
+    [submissions],
+  );
 
   const toggleSelect = (submissionId: string) => {
     setSelected((current) => {
@@ -125,6 +204,11 @@ export const useAssignmentDetailListState = ({
     isLecturer,
     moderationReleaseFocus,
     moderationReleaseHandoffState,
+    notificationFocus: assignmentNotificationFocus,
+    queueFocus,
+    queueFocusState,
+    selectedWorkflowGuidance,
+    workflowLaneSummary,
     searchQuery,
     selected,
     selectedWorkflowState,

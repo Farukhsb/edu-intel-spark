@@ -44,14 +44,26 @@ describe("navigation schemas", () => {
     expect(moderation).toEqual({
       moderationReleaseFocus: true,
       notificationFocus: null,
+      queueFocus: null,
     });
     expect(notification).toEqual({
       moderationReleaseFocus: false,
       notificationFocus: "ai-results",
+      queueFocus: null,
+    });
+    expect(
+      parseAssignmentDetailSearchState(
+        new URLSearchParams("source=queue&focus=manual-review"),
+      ),
+    ).toEqual({
+      moderationReleaseFocus: false,
+      notificationFocus: null,
+      queueFocus: "manual-review",
     });
     expect(invalid).toEqual({
       moderationReleaseFocus: false,
       notificationFocus: null,
+      queueFocus: null,
     });
   });
 

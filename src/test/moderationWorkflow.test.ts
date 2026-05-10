@@ -7,6 +7,7 @@ import {
   canPerformModerationAction,
   getModerationDisagreementSummary,
   getModerationEscalationSummary,
+  getModerationNextStep,
   getModerationOwnerAssignmentSummaries,
   getModerationReleaseState,
   getModerationQueueStats,
@@ -495,6 +496,112 @@ describe("moderation workflow service", () => {
     ).toMatchObject({
       tone: "ready",
       badge: "Ready for release",
+    });
+  });
+
+  it("summarizes the next operational moderation step for key states", () => {
+    const pendingUnassigned = {
+      moderationCase: {
+        id: "case-pending",
+        submission_id: "submission-pending",
+        assignment_id: "assignment-1",
+        grade_id: "grade-1",
+        lecturer_id: "owner-1",
+        first_marker_id: "marker-1",
+        moderator_id: null,
+        status: "moderation_pending",
+        trigger_flags: [],
+        trigger_summary: null,
+        confidence_score: null,
+        integrity_risk_score: null,
+        ai_score_snapshot: null,
+        first_marker_score: 68,
+        moderator_score: null,
+        final_agreed_score: null,
+        final_agreed_feedback: null,
+        moderated_at: null,
+        approved_at: null,
+        created_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-21T10:00:00.000Z",
+      },
+      submission: { status: "moderation_pending" } as never,
+      grade: null,
+      assignment: null,
+      firstMarker: null,
+      moderator: null,
+      integrityReview: null,
+      reviews: [],
+      auditLog: [],
+    } satisfies ModerationCaseView;
+
+    const inProgressAssigned = {
+      ...pendingUnassigned,
+      moderationCase: {
+        ...pendingUnassigned.moderationCase,
+        id: "case-progress",
+        moderator_id: "moderator-1",
+        status: "moderation_in_progress",
+      },
+      submission: { status: "moderation_in_progress" } as never,
+    } satisfies ModerationCaseView;
+
+    const moderatedAwaitingApproval = {
+      ...inProgressAssigned,
+      moderationCase: {
+        ...inProgressAssigned.moderationCase,
+        id: "case-approved-waiting",
+        status: "moderated",
+        moderator_score: 66,
+        final_agreed_score: 66,
+        final_agreed_feedback: "Feedback",
+      },
+      submission: { status: "moderated" } as never,
+    } satisfies ModerationCaseView;
+
+    const approvedReady = {
+      ...moderatedAwaitingApproval,
+      moderationCase: {
+        ...moderatedAwaitingApproval.moderationCase,
+        id: "case-ready",
+        approved_at: "2026-04-22T10:00:00.000Z",
+      },
+      submission: { status: "approved" } as never,
+    } satisfies ModerationCaseView;
+
+    const escalated = {
+      ...moderatedAwaitingApproval,
+      moderationCase: {
+        ...moderatedAwaitingApproval.moderationCase,
+        id: "case-escalated",
+        status: "escalated",
+      },
+      submission: { status: "escalated" } as never,
+    } satisfies ModerationCaseView;
+
+    expect(getModerationNextStep({ item: pendingUnassigned, userId: "owner-1" })).toMatchObject({
+      headline: "Assign a moderator",
+      actor: "owner",
+      tone: "warning",
+    });
+    expect(getModerationNextStep({ item: inProgressAssigned, userId: "moderator-1" })).toMatchObject({
+      headline: "Complete the moderation decision",
+      actor: "moderator",
+      tone: "progress",
+    });
+    expect(getModerationNextStep({ item: moderatedAwaitingApproval, userId: "owner-1" })).toMatchObject({
+      headline: "Assignment owner approval required",
+      actor: "owner",
+      tone: "warning",
+    });
+    expect(getModerationNextStep({ item: approvedReady, userId: "owner-1" })).toMatchObject({
+      headline: "Release the approved outcome",
+      actor: "owner",
+      tone: "ready",
+    });
+    expect(getModerationNextStep({ item: escalated, userId: "owner-1" })).toMatchObject({
+      headline: "Escalated dispute needs owner or senior review",
+      actor: "senior_review",
+      tone: "blocked",
     });
   });
 

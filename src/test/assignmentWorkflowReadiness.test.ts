@@ -19,11 +19,28 @@ describe("assignment workflow readiness", () => {
     expect(readiness.bestNextAction).toBe("Open moderation-linked submissions and clear blocked review cases");
   });
 
+  it("surfaces manual-review pressure separately from the generic review lane", () => {
+    const readiness = getLecturerAssignmentWorkflowReadiness({
+      statuses: ["under_review", "released"],
+      hasReleaseReady: false,
+      hasApprovable: false,
+      integrityRuntimeWarning: null,
+    });
+
+    expect(readiness.manualReviewCount).toBe(1);
+    expect(readiness.postureLabel).toBe("Manual review position");
+    expect(readiness.likelyChallenge).toBe("1 submission diverted into manual review");
+    expect(readiness.bestNextAction).toBe(
+      "Complete manual-review submissions before they become the next release bottleneck",
+    );
+  });
+
   it("derives student workflow readiness from the current submission state", () => {
     const readiness = getStudentAssignmentWorkflowReadiness({
       currentStatus: "released",
     });
 
+    expect(readiness.manualReviewCount).toBe(0);
     expect(readiness.postureLabel).toBe("Released result position");
     expect(readiness.likelyChallenge).toBe("Your released feedback is now available to review");
     expect(readiness.bestNextAction).toBe("Open the released result and review the feedback summary");

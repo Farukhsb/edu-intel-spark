@@ -186,12 +186,16 @@ export const AssignmentFocusCard = ({
   clearLabel,
   description,
   onClear,
+  onShare,
+  shareLabel,
   testId,
   title,
 }: {
   clearLabel: string;
   description: string;
   onClear: () => void;
+  onShare?: () => void;
+  shareLabel?: string;
   testId: string;
   title: string;
 }) => (
@@ -201,9 +205,16 @@ export const AssignmentFocusCard = ({
         <p className="text-sm font-medium">{title}</p>
         <p className="mt-1 text-xs text-muted-foreground">{description}</p>
       </div>
-      <Button type="button" variant="outline" size="sm" onClick={onClear}>
-        {clearLabel}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        {onShare && shareLabel ? (
+          <Button type="button" variant="outline" size="sm" onClick={onShare}>
+            {shareLabel}
+          </Button>
+        ) : null}
+        <Button type="button" variant="outline" size="sm" onClick={onClear}>
+          {clearLabel}
+        </Button>
+      </div>
     </CardContent>
   </Card>
 );

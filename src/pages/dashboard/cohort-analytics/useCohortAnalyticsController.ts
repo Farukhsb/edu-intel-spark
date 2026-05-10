@@ -18,6 +18,7 @@ import {
 import { buildRecommendationInterventionRows, insertRecommendationInterventions } from "@/lib/interventions";
 import { parseStoredReviewPayload } from "@/lib/integrityReviews";
 import { log } from "@/lib/logger";
+import { buildAbsoluteAppUrl, copyTextToClipboard } from "@/lib/clipboard";
 import { toast } from "sonner";
 import { DEMO_ASSIGNMENTS, DEMO_RECOMMENDATIONS, EMPTY_GRADE_DIST } from "./demoData";
 import type {
@@ -52,6 +53,69 @@ export const statusVariant = (status: CohortRecommendation["status"]): BadgeVari
 
 export const formatStatusLabel = (value: string) =>
   value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+
+export interface RecommendationActionSummary {
+  headline: string;
+  detail: string;
+  primaryLabel: string;
+}
+
+export const getRecommendationActionSummary = (
+  recommendation: CohortRecommendation,
+): RecommendationActionSummary => {
+  const affectedStudentCount = recommendation.evidence.affectedStudentIds?.length ?? 0;
+  const namedStudents = recommendation.evidence.affectedStudentNames?.length ?? 0;
+
+  if (recommendation.type === "student risk") {
+    if (recommendation.status === "actioned") {
+      return {
+        headline: "Intervention loop is live",
+        detail:
+          affectedStudentCount > 0
+            ? `Intervention records were created for ${affectedStudentCount} student${affectedStudentCount === 1 ? "" : "s"}. Open the performance queue and confirm each follow-up is scheduled, contacted, or resolved.`
+            : "This risk recommendation has been actioned. Open the performance queue and confirm the next student-support step is scheduled.",
+        primaryLabel: "Open follow-up queue",
+      };
+    }
+
+    return {
+      headline: "Intervention candidates ready",
+      detail:
+        namedStudents > 0
+          ? `${namedStudents} named student${namedStudents === 1 ? "" : "s"} can be moved straight into the intervention loop from this recommendation.`
+          : "This recommendation is ready to create intervention records for the highest-risk students in the cohort.",
+      primaryLabel: "Create intervention loop",
+    };
+  }
+
+  if (recommendation.type === "integrity alerts") {
+    return {
+      headline: recommendation.status === "actioned" ? "Integrity follow-up opened" : "Integrity review required",
+      detail:
+        recommendation.status === "actioned"
+          ? "Continue in the integrity queue and record whether each flagged submission is cleared, investigated, or escalated."
+          : "Open the integrity queue, inspect the flagged submissions, and decide whether to investigate or clear them.",
+      primaryLabel: recommendation.status === "actioned" ? "Open integrity queue" : "Open integrity review",
+    };
+  }
+
+  if (recommendation.assignmentId) {
+    return {
+      headline: recommendation.status === "actioned" ? "Assignment remediation in progress" : "Assignment review required",
+      detail:
+        recommendation.status === "actioned"
+          ? "Return to the assignment workflow and confirm that the weak grading pattern has been reviewed and the next lecturer action is tracked."
+          : "Open the assignment workflow, inspect the weak pattern, and decide whether to regrade, moderate, or release support guidance first.",
+      primaryLabel: recommendation.status === "actioned" ? "Open assignment workflow" : "Review assignment workflow",
+    };
+  }
+
+  return {
+    headline: "Recommendation follow-up",
+    detail: "Open the linked workflow and record the next operational action instead of leaving this recommendation as a passive alert.",
+    primaryLabel: recommendation.status === "actioned" ? "Continue follow-up" : "Open workflow",
+  };
+};
 
 export const getRecommendationRoute = (recommendation: CohortRecommendation) => {
   if (recommendation.type === "student risk") return "/dashboard/performance?risk=high-plus";
@@ -387,6 +451,12 @@ export const useCohortAnalyticsController = () => {
       return;
     }
 
+    if (recommendation.status === "actioned") {
+      setActingId(null);
+      navigate(getRecommendationRoute(recommendation));
+      return;
+    }
+
     if (targetIds.length > 0 && !isDemo) {
       const interventionTargets = targetIds
         .slice(0, 5)
@@ -452,6 +522,18 @@ export const useCohortAnalyticsController = () => {
     navigate(getRecommendationRoute(recommendation));
   };
 
+  const handleCopyWorkflowLink = async (recommendation: CohortRecommendation) => {
+    const copied = await copyTextToClipboard(
+      buildAbsoluteAppUrl(getRecommendationRoute(recommendation)),
+    );
+    if (copied) {
+      toast.success("Workflow link copied.");
+      return;
+    }
+
+    toast.error("Could not copy the workflow link.");
+  };
+
   return {
     loading,
     modules,
@@ -465,5 +547,6 @@ export const useCohortAnalyticsController = () => {
     handleReview,
     handleDismiss,
     handleCreateIntervention,
+    handleCopyWorkflowLink,
   };
 };

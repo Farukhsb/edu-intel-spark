@@ -44,9 +44,13 @@ interface UseAssignmentDetailViewStateResult {
   moderationReleaseFocus: boolean;
   moderationReleaseHandoffState: ReturnType<typeof useAssignmentDetailListState>["moderationReleaseHandoffState"];
   onClearIntegrityCard: () => void;
+  notificationFocus: ReturnType<typeof useAssignmentDetailListState>["notificationFocus"];
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
+  queueFocus: ReturnType<typeof useAssignmentDetailListState>["queueFocus"];
+  queueFocusState: ReturnType<typeof useAssignmentDetailListState>["queueFocusState"];
   searchQuery: string;
   selected: Set<string>;
+  selectedWorkflowGuidance: ReturnType<typeof useAssignmentDetailListState>["selectedWorkflowGuidance"];
   selectedWorkflowState: ReturnType<typeof useAssignmentDetailListState>["selectedWorkflowState"];
   setSearchQuery: ReturnType<typeof useAssignmentDetailListState>["setSearchQuery"];
   setSelected: ReturnType<typeof useAssignmentDetailListState>["setSelected"];
@@ -56,6 +60,7 @@ interface UseAssignmentDetailViewStateResult {
   summary: ReturnType<typeof getAssessmentSummary>;
   toggleAll: ReturnType<typeof useAssignmentDetailListState>["toggleAll"];
   toggleSelect: ReturnType<typeof useAssignmentDetailListState>["toggleSelect"];
+  workflowLaneSummary: ReturnType<typeof useAssignmentDetailListState>["workflowLaneSummary"];
   workflowReadiness: WorkflowReadinessState;
 }
 
@@ -78,8 +83,12 @@ export const useAssignmentDetailViewState = ({
     isLecturer,
     moderationReleaseFocus,
     moderationReleaseHandoffState,
+    notificationFocus,
+    queueFocus,
+    queueFocusState,
     searchQuery,
     selected,
+    selectedWorkflowGuidance,
     selectedWorkflowState,
     setSearchQuery,
     setSelected,
@@ -87,6 +96,7 @@ export const useAssignmentDetailViewState = ({
     statusFilter,
     toggleAll,
     toggleSelect,
+    workflowLaneSummary,
   } = useAssignmentDetailListState({
     role,
     search,
@@ -168,12 +178,16 @@ export const useAssignmentDetailViewState = ({
     isLecturer,
     moderationReleaseFocus,
     moderationReleaseHandoffState,
+    notificationFocus,
     onClearIntegrityCard: () => {
       setDismissedIntegrityCardSignature(integrityCardSignature);
     },
     openReleasedResult,
+    queueFocus,
+    queueFocusState,
     searchQuery,
     selected,
+    selectedWorkflowGuidance,
     selectedWorkflowState,
     setSearchQuery,
     setSelected,
@@ -183,6 +197,7 @@ export const useAssignmentDetailViewState = ({
     summary,
     toggleAll,
     toggleSelect,
+    workflowLaneSummary,
     workflowReadiness,
   };
 };

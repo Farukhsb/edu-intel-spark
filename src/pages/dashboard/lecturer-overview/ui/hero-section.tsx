@@ -5,16 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-import type { LecturerOverviewStats } from "../types";
+import type { LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
 
 export const LecturerOverviewHeroSection = ({
   profile,
   heroSummary,
   stats,
+  primaryWorkflowTarget,
 }: {
   profile: { full_name?: string | null } | null | undefined;
   heroSummary: string;
   stats: LecturerOverviewStats;
+  primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
 }) => {
   const navigate = useNavigate();
 
@@ -42,7 +44,11 @@ export const LecturerOverviewHeroSection = ({
         </div>
 
         <div className="flex flex-wrap gap-2 lg:justify-end">
-          <Button size="sm" className="shadow-sm" onClick={() => navigate("/dashboard/assignments?view=needs-review")}>
+          <Button
+            size="sm"
+            className="shadow-sm"
+            onClick={() => navigate(primaryWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review")}
+          >
             Review submissions
             <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
           </Button>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation";
 import { safeToLocaleDate } from "@/lib/date";
 import { exportLecturerOverviewPdf } from "@/lib/exportLecturerOverviewPdf";
 import { getLecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
@@ -11,6 +12,7 @@ import type {
   LecturerOverviewDistributionBand,
   LecturerOverviewRecentSubmission,
   LecturerOverviewStats,
+  LecturerOverviewWorkflowTarget,
 } from "./types";
 
 const ASSIGNMENT_FIELDS = "id, title, max_score";
@@ -50,6 +52,8 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     assignment_title: "Data Structures",
     score: 78,
     max_score: 100,
+    workflowHref: "/dashboard/assignments/demo-assignment-1?source=queue&focus=released-results",
+    workflowLabel: "Open released results",
   },
   {
     id: "d2",
@@ -61,6 +65,8 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     assignment_title: "Algorithms",
     score: 55,
     max_score: 100,
+    workflowHref: "/dashboard/assignments/demo-assignment-2?source=notification&focus=ai-results",
+    workflowLabel: "Open workflow",
   },
   {
     id: "d3",
@@ -72,6 +78,8 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     assignment_title: "Database Design",
     score: null,
     max_score: 100,
+    workflowHref: "/dashboard/assignments/demo-assignment-3?source=notification&focus=submission-review",
+    workflowLabel: "Open review queue",
   },
 ];
 
@@ -260,6 +268,10 @@ export const useLecturerOverviewController = () => {
       const recentSubs: LecturerOverviewRecentSubmission[] = allSubs.slice(0, 6).map((submission) => {
         const assignment = assignmentMap[submission.assignment_id];
         const grade = gradeMap[submission.id];
+        const workflowTarget = getAssignmentWorkflowTarget({
+          assignmentId: submission.assignment_id,
+          status: submission.status,
+        });
 
         return {
           id: submission.id,
@@ -271,6 +283,8 @@ export const useLecturerOverviewController = () => {
           assignment_title: assignment?.title || "Unknown",
           score: grade?.final_score ?? grade?.ai_score ?? null,
           max_score: assignment?.max_score || 100,
+          workflowHref: workflowTarget.href,
+          workflowLabel: workflowTarget.label,
         };
       });
       setRecent(recentSubs);
@@ -321,6 +335,30 @@ export const useLecturerOverviewController = () => {
     return "All submissions are up to date and no immediate interventions are currently flagged.";
   }, [stats.pendingCount, stats.atRisk]);
 
+  const primaryWorkflowTarget = useMemo<LecturerOverviewWorkflowTarget | null>(() => {
+    const pendingTarget = recent.find((submission) =>
+      [
+        "submitted",
+        "ai_grading",
+        "ai_graded",
+        "first_review",
+        "moderation_pending",
+        "moderation_in_progress",
+        "escalated",
+        "moderated",
+        "under_review",
+      ].includes(submission.status),
+    );
+
+    if (!pendingTarget) return null;
+
+    return {
+      href: pendingTarget.workflowHref,
+      label:
+        pendingTarget.status === "under_review" ? "Open manual review queue" : "Open assignment workflow",
+    };
+  }, [recent]);
+
   const exportCsv = () => {
     const rows = [["Student", "Assignment", "Score", "Max Score", "Status", "Submitted"]];
     recent.forEach((submission) =>
@@ -365,6 +403,7 @@ export const useLecturerOverviewController = () => {
       totalScored,
       readiness,
       heroSummary,
+      primaryWorkflowTarget,
     },
     actions: {
       exportCsv,
@@ -372,4 +411,3 @@ export const useLecturerOverviewController = () => {
     },
   };
 };
-

@@ -20,7 +20,9 @@ export const buildReviewDialogProps = ({
   assignmentMaxScore,
   editFeedback: lecturerActions.editFeedback,
   editScore: lecturerActions.editScore,
-  grade: lecturerActions.reviewSubmission ? grades[lecturerActions.reviewSubmission.id] ?? null : null,
+  grade:
+    lecturerActions.reviewGradeOverride ??
+    (lecturerActions.reviewSubmission ? grades[lecturerActions.reviewSubmission.id] ?? null : null),
   isDemo,
   onEditFeedbackChange: lecturerActions.setEditFeedback,
   onEditScoreChange: lecturerActions.setEditScore,

@@ -494,6 +494,92 @@ describe("StudentProfile", () => {
     expect(screen.getByText("Reviewed missed coursework and agreed next steps.")).toBeInTheDocument();
     expect(screen.getByText("ongoing")).toBeInTheDocument();
     expect(screen.getByText("resolved")).toBeInTheDocument();
+    expect(screen.getByText("Follow-up overdue")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mark resolved/i })).toBeInTheDocument();
+  });
+
+  it("lets the lecturer resolve an open intervention from history", async () => {
+    setupSupabase();
+    mocks.fetchStudentInterventions.mockResolvedValue({ data: defaultInterventions, error: null });
+    mocks.supabase.from.mockImplementation((table: string) => {
+      if (table === "assignments") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => Promise.resolve({ data: defaultAssignments, error: null })),
+          })),
+        };
+      }
+
+      if (table === "submissions") {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(() => Promise.resolve({ data: defaultSubmissions, error: null })),
+          })),
+        };
+      }
+
+      if (table === "grades") {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(() => Promise.resolve({ data: defaultGrades, error: null })),
+          })),
+        };
+      }
+
+      if (table === "profiles") {
+        return {
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn(() => Promise.resolve({ data: { id: studentRecordId }, error: null })),
+          })),
+        };
+      }
+
+      if (table === "student_interventions") {
+        return {
+          update: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              select: vi.fn(() => ({
+                single: vi.fn(() =>
+                  Promise.resolve({
+                    data: {
+                      id: "intervention-1",
+                      lecturer_id: "lecturer-1",
+                      student_id: studentRecordId,
+                      student_name: "Sam Student",
+                      student_email: "sam@example.edu",
+                      intervention_type: "email",
+                      status: "resolved",
+                      priority: "high",
+                      title: "Email intervention",
+                      notes: "Sent a check-in email with revision priorities.",
+                      follow_up_date: "2026-04-27T00:00:00.000Z",
+                      assignment_id: null,
+                      created_at: "2026-04-20T09:00:00.000Z",
+                      updated_at: "2026-05-10T10:00:00.000Z",
+                    },
+                    error: null,
+                  }),
+                ),
+              })),
+            })),
+          })),
+        };
+      }
+
+      return {
+        select: vi.fn(() => Promise.resolve({ data: [], error: null })),
+      };
+    });
+
+    renderStudentProfile();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mark resolved/i }));
+
+    await waitFor(() => {
+      expect(mocks.toast.success).toHaveBeenCalledWith("Intervention resolved");
+    });
+
+    expect(screen.getAllByText("resolved").length).toBeGreaterThan(0);
   });
 
   it("renders a safe empty intervention state when no records exist", async () => {

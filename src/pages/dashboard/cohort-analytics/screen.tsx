@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { DashboardEmptyState } from "@/components/dashboard/PageStates";
 import {
   formatStatusLabel,
+  getRecommendationActionSummary,
   severityVariant,
   statusVariant,
   useCohortAnalyticsController,
@@ -34,6 +35,7 @@ export const CohortAnalyticsScreen = ({
   handleReview,
   handleDismiss,
   handleCreateIntervention,
+  handleCopyWorkflowLink,
 }: CohortAnalyticsScreenProps) => (
   <div className="space-y-6 animate-fade-in">
     <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
@@ -186,7 +188,12 @@ export const CohortAnalyticsScreen = ({
         ) : (
           visibleRecommendations.map((recommendation) => (
             <Card key={recommendation.id} className="border-l-4 border-l-primary">
-              <CardContent className="p-5">
+              <CardContent className="space-y-4 p-5">
+                {(() => {
+                  const actionSummary = getRecommendationActionSummary(recommendation);
+
+                  return (
+                    <>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex gap-3">
                     <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -235,6 +242,13 @@ export const CohortAnalyticsScreen = ({
                           </div>
                         ))}
                       </div>
+                      <div className="rounded-lg border bg-muted/20 p-3" data-testid={`recommendation-action-summary-${recommendation.id}`}>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Operational handoff
+                        </p>
+                        <p className="mt-2 text-sm font-semibold">{actionSummary.headline}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{actionSummary.detail}</p>
+                      </div>
                     </div>
                   </div>
 
@@ -259,6 +273,15 @@ export const CohortAnalyticsScreen = ({
                     </Button>
                     <Button
                       size="sm"
+                      variant="outline"
+                      disabled={actingId === recommendation.id}
+                      onClick={() => void handleCopyWorkflowLink(recommendation)}
+                    >
+                      <ArrowRight className="mr-1.5 h-3.5 w-3.5" />
+                      Copy workflow link
+                    </Button>
+                    <Button
+                      size="sm"
                       disabled={actingId === recommendation.id}
                       onClick={() => void handleCreateIntervention(recommendation)}
                     >
@@ -267,10 +290,13 @@ export const CohortAnalyticsScreen = ({
                       ) : (
                         <TrendingDown className="mr-1.5 h-3.5 w-3.5" />
                       )}
-                      Create Intervention
+                      {actionSummary.primaryLabel}
                     </Button>
                   </div>
                 </div>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           ))

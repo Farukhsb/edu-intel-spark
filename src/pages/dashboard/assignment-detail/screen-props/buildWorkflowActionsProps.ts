@@ -49,6 +49,9 @@ export const buildWorkflowActionsProps = ({
   integrityRuntimeWarning: viewState.integrityRuntimeWarning,
   submissionsCount,
   handleAIGrade: automatedActions.handleAIGrade,
+  workflowLaneSummary: viewState.workflowLaneSummary,
+  workflowReadiness: viewState.workflowReadiness,
+  selectedWorkflowGuidance: viewState.selectedWorkflowGuidance,
   selectedWorkflowState: viewState.selectedWorkflowState,
   grading: automatedActions.grading,
   selectedSize: viewState.selected.size,
@@ -61,4 +64,5 @@ export const buildWorkflowActionsProps = ({
   exportReviewedReports: viewState.exportReviewedReports,
   gradingElapsed: automatedActions.gradingElapsed,
   gradingCount: automatedActions.gradingCount,
+  lastGradingRunSummary: automatedActions.lastGradingRunSummary,
 });

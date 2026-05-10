@@ -11,6 +11,7 @@ import type {
   LecturerOverviewDistributionBand,
   LecturerOverviewRecentSubmission,
   LecturerOverviewStats,
+  LecturerOverviewWorkflowTarget,
 } from "../types";
 
 export const LecturerOverviewScreen = ({
@@ -21,6 +22,7 @@ export const LecturerOverviewScreen = ({
   totalScored,
   readiness,
   heroSummary,
+  primaryWorkflowTarget,
   onExportCsv,
   onExportPdf,
 }: {
@@ -31,14 +33,20 @@ export const LecturerOverviewScreen = ({
   totalScored: number;
   readiness: LecturerOverviewReadiness;
   heroSummary: string;
+  primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
   onExportCsv: () => void;
   onExportPdf: () => Promise<void>;
 }) => {
   return (
     <div className="space-y-6 animate-fade-in">
-      <LecturerOverviewHeroSection profile={profile} heroSummary={heroSummary} stats={stats} />
+      <LecturerOverviewHeroSection
+        profile={profile}
+        heroSummary={heroSummary}
+        stats={stats}
+        primaryWorkflowTarget={primaryWorkflowTarget}
+      />
       <LecturerOverviewReadinessSection readiness={readiness} />
-      <LecturerOverviewPrimaryStatsSection stats={stats} />
+      <LecturerOverviewPrimaryStatsSection stats={stats} primaryWorkflowTarget={primaryWorkflowTarget} />
       <LecturerOverviewSecondaryStatsSection stats={stats} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
@@ -46,7 +54,7 @@ export const LecturerOverviewScreen = ({
 
         <div className="space-y-6">
           <LecturerOverviewGradeDistributionSection gradeDistribution={gradeDistribution} totalScored={totalScored} />
-          <LecturerOverviewAttentionNeededSection stats={stats} />
+          <LecturerOverviewAttentionNeededSection stats={stats} primaryWorkflowTarget={primaryWorkflowTarget} />
         </div>
       </div>
 

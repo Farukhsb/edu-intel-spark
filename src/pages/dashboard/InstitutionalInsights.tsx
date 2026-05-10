@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowRight, Award, Building2, Download, Users } from "lu
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
 import { fetchInstitutionalInsightsDataset } from "@/lib/data/academic";
 import { log } from "@/lib/logger";
 import {
@@ -26,6 +27,7 @@ type DepartmentStat = {
 };
 
 type LowPerformingAssessment = {
+  id: string;
   name: string;
   avgGrade: number;
   passRate: number;
@@ -113,6 +115,7 @@ const InstitutionalInsights = () => {
           .map((assignment) => {
             const average = assignment.scores.reduce((sum, score) => sum + score, 0) / assignment.scores.length;
             return {
+              id: assignment.id,
               name: assignment.title,
               avgGrade: Math.round(average),
               passRate: Math.round((assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100),
@@ -180,6 +183,18 @@ const InstitutionalInsights = () => {
   const weakestDepartment = [...departmentStats].sort((left, right) => left.passRate - right.passRate)[0];
   const weakestAssessment = lowPerforming[0];
   const weakestAccreditationMetric = [...accreditation].sort((left, right) => left.value - right.value)[0];
+  const weakestAssessmentWorkflowTarget = weakestAssessment
+    ? getAssignmentWorkflowTargetFromStats({
+        assignmentId: weakestAssessment.id,
+        stats: {
+          total: weakestAssessment.students,
+          needsReview: 0,
+          graded: weakestAssessment.students,
+          approved: 0,
+          released: 0,
+        },
+      })
+    : null;
   const reportingReadiness = getInstitutionalReportingReadiness({
     accreditation,
     lowPerforming,
@@ -315,14 +330,18 @@ const InstitutionalInsights = () => {
           <button
             type="button"
             className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-            onClick={() => navigate("/dashboard/assignments?view=needs-review")}
+            onClick={() =>
+              navigate(
+                weakestAssessmentWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review",
+              )
+            }
           >
             <p className="text-sm font-medium">Clear grading bottlenecks</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Pending grading and release work drags down completion, readiness, and feedback quality at the institutional level.
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              Open assignment queue <ArrowRight className="h-3.5 w-3.5" />
+              {weakestAssessmentWorkflowTarget?.label ?? "Open assignment queue"} <ArrowRight className="h-3.5 w-3.5" />
             </span>
           </button>
           <button

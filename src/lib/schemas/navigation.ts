@@ -9,6 +9,11 @@ const AssignmentNotificationFocusSchema = z.enum([
   "integrity-review",
   "release-follow-up",
 ]);
+const AssignmentQueueFocusSchema = z.enum([
+  "manual-review",
+  "release-ready",
+  "released-results",
+]);
 const AssignmentStatusFilterSchema = z.enum(["draft", "published", "closed"]);
 const AssignmentListViewSchema = z.enum(["needs-review"]);
 const AdminViewSchema = z.enum(["overview", "users", "system", "assignments", "submissions", "audit"]);
@@ -18,6 +23,7 @@ const PerformanceScoreBandFilterSchema = z.enum(["all", "lt40", "40-49", "50-59"
 
 export type ExplainGradeSource = z.infer<typeof ExplainGradeSourceSchema>;
 export type AssignmentNotificationFocusValue = z.infer<typeof AssignmentNotificationFocusSchema>;
+export type AssignmentQueueFocusValue = z.infer<typeof AssignmentQueueFocusSchema>;
 export type AssignmentStatusFilterValue = z.infer<typeof AssignmentStatusFilterSchema>;
 export type AssignmentListViewValue = z.infer<typeof AssignmentListViewSchema>;
 export type AdminViewValue = z.infer<typeof AdminViewSchema>;
@@ -34,6 +40,7 @@ export interface ExplainGradeSearchState {
 export interface AssignmentDetailSearchState {
   moderationReleaseFocus: boolean;
   notificationFocus: AssignmentNotificationFocusValue | null;
+  queueFocus: AssignmentQueueFocusValue | null;
 }
 
 export interface AssignmentsSearchState {
@@ -74,11 +81,13 @@ export const parseAssignmentDetailSearchState = (
   const source = searchParams.get("source");
   const focus = searchParams.get("focus");
   const notificationFocus = AssignmentNotificationFocusSchema.safeParse(focus);
+  const queueFocus = AssignmentQueueFocusSchema.safeParse(focus);
 
   return {
     moderationReleaseFocus: source === "moderation" && focus === "release-ready",
     notificationFocus:
       source === "notification" && notificationFocus.success ? notificationFocus.data : null,
+    queueFocus: source === "queue" && queueFocus.success ? queueFocus.data : null,
   };
 };
 

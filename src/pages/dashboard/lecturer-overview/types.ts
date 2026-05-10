@@ -19,6 +19,13 @@ export interface LecturerOverviewRecentSubmission {
   assignment_title: string;
   score: number | null;
   max_score: number;
+  workflowHref: string;
+  workflowLabel: string;
+}
+
+export interface LecturerOverviewWorkflowTarget {
+  href: string;
+  label: string;
 }
 
 export type LecturerOverviewDistributionBand = {
@@ -26,4 +33,3 @@ export type LecturerOverviewDistributionBand = {
   count: number;
   fill: string;
 };
-

@@ -95,6 +95,11 @@ interface ModerationReleaseStateInput {
   submissionStatus: SubmissionRow["status"];
 }
 
+interface ModerationNextStepInput {
+  item: ModerationCaseView;
+  userId: string | null | undefined;
+}
+
 export type ModerationQueueFilter =
   | "all"
   | "assigned_to_me"
@@ -109,6 +114,13 @@ export interface ModerationOwnerAssignmentSummary {
   assignmentTitle: string;
   approvedReadyCount: number;
   escalatedCount: number;
+}
+
+export interface ModerationNextStepSummary {
+  actor: "moderator" | "owner" | "system" | "senior_review";
+  headline: string;
+  detail: string;
+  tone: "ready" | "warning" | "blocked" | "progress" | "resolved";
 }
 
 interface ModerationQueueFilterInput {
@@ -437,6 +449,92 @@ export const getModerationReleaseState = ({
     tone: "approval" as const,
     badge: "Owner approval required",
     detail: "This case is moderated but still needs assignment-owner approval before any grade release.",
+  };
+};
+
+export const getModerationNextStep = ({
+  item,
+  userId,
+}: ModerationNextStepInput): ModerationNextStepSummary => {
+  const submissionStatus = item.submission?.status ?? coerceSubmissionStatus(item.moderationCase.status);
+  const releaseState = getModerationReleaseState({
+    moderationCase: item.moderationCase,
+    submissionStatus,
+  });
+
+  if (releaseState.tone === "released") {
+    return {
+      actor: "system",
+      headline: "Released to student",
+      detail: "The moderated outcome is already visible to the student. Use the audit trail for any follow-up.",
+      tone: "resolved",
+    };
+  }
+
+  if (item.moderationCase.status === "escalated" || submissionStatus === "escalated") {
+    return {
+      actor: "senior_review",
+      headline: "Escalated dispute needs owner or senior review",
+      detail:
+        userId && item.moderationCase.lecturer_id === userId
+          ? "Review the disagreement, decide whether to rework the mark, and only release after the dispute is closed."
+          : "This case is blocked until the assignment owner or a senior reviewer resolves the dispute.",
+      tone: "blocked",
+    };
+  }
+
+  if (!item.moderationCase.moderator_id && item.moderationCase.status === "moderation_pending") {
+    return {
+      actor: "owner",
+      headline: "Assign a moderator",
+      detail: "Moderation cannot start until the assignment owner assigns this case to a moderator.",
+      tone: "warning",
+    };
+  }
+
+  if (item.moderationCase.status === "moderation_pending" || item.moderationCase.status === "moderation_in_progress") {
+    if (userId && item.moderationCase.moderator_id === userId) {
+      return {
+        actor: "moderator",
+        headline: "Complete the moderation decision",
+        detail: "Compare the evidence, record the rationale, and either agree, adjust, return, or escalate the mark.",
+        tone: "progress",
+      };
+    }
+
+    return {
+      actor: "moderator",
+      headline: "Waiting for moderator review",
+      detail: item.moderationCase.moderator_id
+        ? "The assigned moderator still needs to complete the case before the owner can approve or release it."
+        : "The case is queued for moderation but no moderator has accepted it yet.",
+      tone: "progress",
+    };
+  }
+
+  if (releaseState.tone === "approval") {
+    return {
+      actor: "owner",
+      headline: "Assignment owner approval required",
+      detail: "The moderator has finished. The assignment owner now needs to confirm the outcome before release.",
+      tone: "warning",
+    };
+  }
+
+  if (releaseState.tone === "ready") {
+    return {
+      actor: "owner",
+      headline: "Release the approved outcome",
+      detail: "Owner approval is complete. Open the assignment release workflow to publish the result to the student.",
+      tone: "ready",
+    };
+  }
+
+  return {
+    actor: "system",
+    headline: "Moderation follow-up required",
+    detail: "Review the latest moderation state and continue the case from the moderation queue.",
+    tone: "progress",
   };
 };
 

@@ -39,6 +39,7 @@ export const AccreditationDashboardScreen = ({
   statusIcon,
   tefColor,
   exportQAAReport,
+  pendingWorkflowTarget,
   openPendingSubmissions,
   openAtRiskCohort,
   openLearningOutcomes,
@@ -154,10 +155,12 @@ export const AccreditationDashboardScreen = ({
         <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openPendingSubmissions}>
           <p className="text-sm font-medium">Reduce feedback backlog</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            The fastest way to improve turnaround, moderation evidence, and grade release metrics is clearing the pending queue.
+            {pendingWorkflowTarget
+              ? "Open the assignment carrying the most workflow pressure and clear the backlog where it will move the metrics fastest."
+              : "The fastest way to improve turnaround, moderation evidence, and grade release metrics is clearing the pending queue."}
           </p>
           <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-            Open pending submissions <ArrowRight className="h-3.5 w-3.5" />
+            {pendingWorkflowTarget?.label ?? "Open pending submissions"} <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </button>
         <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openAtRiskCohort}>

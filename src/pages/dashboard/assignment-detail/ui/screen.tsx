@@ -36,6 +36,11 @@ export interface AssignmentDetailScreenProps {
   isLecturer: boolean;
   moderationReleaseFocus: boolean;
   moderationReleaseHandoffState: FocusState;
+  onCopyModerationFocus: () => void;
+  onCopyNotificationFocus: () => void;
+  onCopyQueueFocus: () => void;
+  queueFocusState: FocusState | null;
+  onClearQueueFocus: () => void;
   onClearModerationFocus: () => void;
   onClearNotificationFocus: () => void;
   reviewDialogProps: ComponentProps<typeof SubmissionReviewDialog>;
@@ -54,6 +59,11 @@ export const AssignmentDetailScreen = ({
   isLecturer,
   moderationReleaseFocus,
   moderationReleaseHandoffState,
+  onCopyModerationFocus,
+  onCopyNotificationFocus,
+  onCopyQueueFocus,
+  queueFocusState,
+  onClearQueueFocus,
   onClearModerationFocus,
   onClearNotificationFocus,
   reviewDialogProps,
@@ -85,6 +95,8 @@ export const AssignmentDetailScreen = ({
             clearLabel="Show all submissions"
             description={moderationReleaseHandoffState.description}
             onClear={onClearModerationFocus}
+            onShare={onCopyModerationFocus}
+            shareLabel="Copy focus link"
             testId="assignment-moderation-release-focus"
             title={moderationReleaseHandoffState.title}
           />
@@ -95,8 +107,22 @@ export const AssignmentDetailScreen = ({
             clearLabel="Clear notice focus"
             description={assignmentNotificationFocusState.description}
             onClear={onClearNotificationFocus}
+            onShare={onCopyNotificationFocus}
+            shareLabel="Copy notice link"
             testId="assignment-notification-focus"
             title={assignmentNotificationFocusState.title}
+          />
+        )}
+
+        {queueFocusState && isLecturer && (
+          <AssignmentFocusCard
+            clearLabel="Show all submissions"
+            description={queueFocusState.description}
+            onClear={onClearQueueFocus}
+            onShare={onCopyQueueFocus}
+            shareLabel="Copy queue link"
+            testId="assignment-queue-focus"
+            title={queueFocusState.title}
           />
         )}
 

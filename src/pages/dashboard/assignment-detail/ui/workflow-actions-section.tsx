@@ -23,6 +23,8 @@ import {
 import { safeFormatDate } from "@/lib/date";
 import { getStudentSubmissionAvailability } from "@/lib/assignmentVisibility";
 import { getSelectedWorkflowActionState } from "@/lib/assessmentWorkflow";
+import type { LecturerSelectionGuidance, LecturerWorkflowLaneSummary } from "@/lib/assessmentWorkflow";
+import type { WorkflowReadinessState } from "@/pages/dashboard/assignment-detail/domain";
 import type {
   AssignmentDetailSubmission,
   SubmissionStatus,
@@ -96,6 +98,9 @@ export const WorkflowActionsSection = ({
   integrityRuntimeWarning,
   submissionsCount,
   handleAIGrade,
+  workflowLaneSummary,
+  workflowReadiness,
+  selectedWorkflowGuidance,
   selectedWorkflowState,
   grading,
   selectedSize,
@@ -110,6 +115,7 @@ export const WorkflowActionsSection = ({
   exportReviewedReports,
   gradingElapsed,
   gradingCount,
+  lastGradingRunSummary,
 }: {
   isDemo: boolean;
   isLecturer: boolean;
@@ -127,6 +133,9 @@ export const WorkflowActionsSection = ({
   integrityRuntimeWarning: string | null;
   submissionsCount: number;
   handleAIGrade: () => void;
+  workflowLaneSummary: LecturerWorkflowLaneSummary;
+  workflowReadiness: WorkflowReadinessState;
+  selectedWorkflowGuidance: LecturerSelectionGuidance;
   selectedWorkflowState: WorkflowActionState;
   grading: boolean;
   selectedSize: number;
@@ -141,6 +150,18 @@ export const WorkflowActionsSection = ({
   exportReviewedReports: () => void;
   gradingElapsed: number;
   gradingCount: number;
+  lastGradingRunSummary: {
+    attemptedCount: number;
+    detail: string;
+    extractionFailureCount: number;
+    failedCount: number;
+    headline: string;
+    invalidResultCount: number;
+    recoveryActions: string[];
+    serviceFailureCount: number;
+    skippedCount: number;
+    successCount: number;
+  } | null;
 }) => {
   const studentJourney = !isLecturer ? getStudentWorkflowJourney(currentStudentSubmission?.status ?? null) : null;
 
@@ -252,6 +273,22 @@ export const WorkflowActionsSection = ({
                 {integrityRuntimeWarning}
               </div>
             ) : null}
+            {lastGradingRunSummary ? (
+              <div className="rounded-xl border border-amber-300/60 bg-amber-50/70 p-4 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">{lastGradingRunSummary.headline}</p>
+                <p className="mt-2 text-sm">{lastGradingRunSummary.detail}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <Badge variant="outline">{lastGradingRunSummary.successCount} graded</Badge>
+                  <Badge variant="outline">{lastGradingRunSummary.failedCount} failed</Badge>
+                  <Badge variant="outline">{lastGradingRunSummary.skippedCount} skipped</Badge>
+                </div>
+                <div className="mt-3 space-y-1 text-xs text-slate-600">
+                  {lastGradingRunSummary.recoveryActions.map((action) => (
+                    <p key={action}>{action}</p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_auto]">
               <div className="relative">
@@ -285,6 +322,46 @@ export const WorkflowActionsSection = ({
               <Button variant="outline" onClick={exportReviewedReports}>
                 Export reviewed reports
               </Button>
+            </div>
+
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Assignment workflow lanes</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {[
+                    { label: "Intake", count: workflowLaneSummary.intakeCount, helper: "Waiting to enter grading" },
+                    { label: "AI in progress", count: workflowLaneSummary.aiInProgressCount, helper: "Still processing" },
+                    { label: "First review", count: workflowLaneSummary.firstReviewCount, helper: "Needs human judgement" },
+                    { label: "Manual review", count: workflowLaneSummary.manualReviewCount, helper: "AI was bypassed" },
+                    { label: "Moderation", count: workflowLaneSummary.moderationCount, helper: "Blocked from normal release" },
+                    { label: "Release ready", count: workflowLaneSummary.releaseReadyCount, helper: "Approved and waiting" },
+                    { label: "Released", count: workflowLaneSummary.releasedCount, helper: "Student-visible" },
+                  ].map((lane) => (
+                    <div key={lane.label} className="rounded-lg border bg-background/80 p-3">
+                      <p className="text-xs text-muted-foreground">{lane.label}</p>
+                      <p className="mt-1 text-lg font-semibold">{lane.count}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{lane.helper}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next operational move</p>
+                <p className="mt-3 text-sm font-semibold">{selectedWorkflowGuidance.headline}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{selectedWorkflowGuidance.detail}</p>
+                <div className="mt-4 rounded-lg border bg-background/80 p-3">
+                  <p className="text-xs text-muted-foreground">Assignment pressure</p>
+                  <p className="mt-1 text-sm font-medium">{workflowReadiness.likelyChallenge}</p>
+                  <p className="mt-2 text-[11px] text-muted-foreground">{workflowReadiness.bestNextAction}</p>
+                  {workflowReadiness.manualReviewCount > 0 ? (
+                    <Badge variant="outline" className="mt-3">
+                      {workflowReadiness.manualReviewCount} manual review
+                      {workflowReadiness.manualReviewCount === 1 ? "" : "s"} open
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
             </div>
 
             {(grading || selectedSize > 0) && (

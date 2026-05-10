@@ -67,7 +67,9 @@ describe("AssignmentDetail demo data isolation", () => {
     expect(screen.getByText("AI in Higher Education Essay Workflow")).toBeInTheDocument();
     expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
     expect(screen.getByText("Active review position")).toBeInTheDocument();
-    expect(screen.getByText("Open moderation-linked submissions and clear blocked review cases")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Open moderation-linked submissions and clear blocked review cases").length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("Workflow Actions")).toBeInTheDocument();
     expect(screen.getByText("Rubric")).toBeInTheDocument();
     expect(screen.getByText("Integrity Check Results")).toBeInTheDocument();
@@ -124,7 +126,11 @@ describe("AssignmentDetail demo data isolation", () => {
 
     expect(await screen.findByTestId("assignment-moderation-release-focus")).toBeInTheDocument();
     expect(screen.getByText("Opened from moderation handoff after release")).toBeInTheDocument();
-    expect(screen.getByText("The earlier moderation handoff has already completed, so the list is focused on submissions that were released to students.")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "The earlier moderation handoff has already completed, so the list is focused on submissions that were released to students.",
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("No submissions match this view")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Show all submissions"));

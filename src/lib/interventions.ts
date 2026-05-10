@@ -193,17 +193,55 @@ export async function insertRecommendationInterventions(
   return { error };
 }
 
+export async function updateStudentInterventionStatus(
+  supabase: SupabaseClient<Database>,
+  interventionId: string,
+  status: ManualInterventionStatus,
+) {
+  const { data, error } = await supabase
+    .from("student_interventions")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", interventionId)
+    .select("id, lecturer_id, student_id, student_name, student_email, intervention_type, status, priority, title, notes, follow_up_date, assignment_id, created_at, updated_at")
+    .single();
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  return {
+    data: mapInterventionRow(data as StudentInterventionRow),
+    error: null,
+  };
+}
+
+export const isInterventionOverdue = (
+  intervention: Pick<InterventionEntry, "status" | "followUpDate">,
+  now = Date.now(),
+) => {
+  if (intervention.status !== "ongoing" || !intervention.followUpDate) {
+    return false;
+  }
+
+  return new Date(intervention.followUpDate).getTime() < now;
+};
+
 export const getStudentInterventionReadiness = ({
   riskLevel,
   recommendation,
   missedAssignmentsCount,
   openInterventions,
+  overdueInterventions,
   latestIntervention,
 }: {
   riskLevel: string | null | undefined;
   recommendation: string;
   missedAssignmentsCount: number;
   openInterventions: number;
+  overdueInterventions: number;
   latestIntervention: InterventionEntry | null;
 }): StudentInterventionReadiness => {
   const urgentRisk = riskLevel === "critical" || riskLevel === "high";
@@ -211,17 +249,23 @@ export const getStudentInterventionReadiness = ({
 
   return {
     postureLabel:
-      urgentRisk && openInterventions === 0
+      overdueInterventions > 0
+        ? "Follow-up overdue position"
+        : urgentRisk && openInterventions === 0
         ? "Immediate intervention position"
         : pendingFollowUp || missedAssignmentsCount > 0
           ? "Active follow-up position"
           : "Stabilisation position",
     likelyChallenge:
-      missedAssignmentsCount > 0
+      overdueInterventions > 0
+        ? `${overdueInterventions} intervention follow-up date${overdueInterventions === 1 ? " is" : "s are"} overdue`
+        : missedAssignmentsCount > 0
         ? `${missedAssignmentsCount} missed assignment${missedAssignmentsCount === 1 ? "" : "s"} still unresolved`
         : latestIntervention?.note || recommendation,
     bestNextAction:
-      openInterventions === 0
+      overdueInterventions > 0
+        ? "Review overdue interventions, confirm progress, and either resolve or reschedule them"
+        : openInterventions === 0
         ? "Log the first intervention and send a student support alert"
         : pendingFollowUp
           ? "Review the latest intervention and confirm follow-up progress"
