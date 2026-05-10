@@ -1,8 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseAIResponse, parseJsonText } from "../../supabase/functions/_shared/openai";
+import { createChatCompletion, createResponse, parseAIResponse, parseJsonText } from "../../supabase/functions/_shared/openai";
 
 describe("shared OpenAI helpers", () => {
+  const originalFetch = global.fetch;
+  const originalDeno = globalThis.Deno;
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    globalThis.Deno = {
+      env: {
+        get: (name: string) => {
+          if (name === "OPENAI_API_KEY") return "test-openai-key";
+          if (name === "OPENAI_REQUEST_TIMEOUT_MS") return "30000";
+          return undefined;
+        },
+      },
+    } as typeof Deno;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    globalThis.Deno = originalDeno;
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
   it("parses fenced JSON content", () => {
     expect(parseJsonText("```json\n{\"score\": 72}\n```")).toEqual({ score: 72 });
   });
@@ -57,5 +80,53 @@ describe("shared OpenAI helpers", () => {
         ],
       }),
     ).toThrow("AI grading failed due to invalid response format");
+  });
+
+  it("fails fast when the responses API call times out", async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn((_input, init) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => {
+          const abortError = Object.assign(new Error("Aborted"), { name: "AbortError" });
+          reject(abortError);
+        });
+      });
+    }) as typeof fetch;
+
+    const request = expect(
+      createResponse({
+        model: "gpt-4o-mini",
+        input: "Explain this grade",
+      }),
+    ).rejects.toThrow("OpenAI request timed out after 30000ms");
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    await request;
+  });
+
+  it("fails fast when the chat completions API call times out", async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn((_input, init) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => {
+          const abortError = Object.assign(new Error("Aborted"), { name: "AbortError" });
+          reject(abortError);
+        });
+      });
+    }) as typeof fetch;
+
+    const request = expect(
+      createChatCompletion({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "Explain this grade" }],
+      }),
+    ).rejects.toThrow("OpenAI request timed out after 30000ms");
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    await request;
   });
 });

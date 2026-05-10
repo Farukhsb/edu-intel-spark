@@ -42,7 +42,8 @@ interface GradeSubmissionInvokeData {
 
 const PLAGIARISM_CHECK_URL = `${env.VITE_SUPABASE_URL}/functions/v1/check-plagiarism`;
 const GRADE_SUBMISSION_URL = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;
-const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;
+const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;
+const LEGACY_INTEGRITY_REQUEST_COMPAT_LIMIT = 80;
 const INTEGRITY_RUNTIME_WARNING_THRESHOLD = 30;
 const GRADABLE_TEXT_EXTENSIONS = [
   ".pdf",
@@ -112,6 +113,76 @@ export type SubmissionGradingRecoveryIssue = {
   headline: string;
   recoveryLabel: string;
   type: "missing_file" | "extraction_failure" | "invalid_result" | "service_failure";
+};
+
+type GradePersistenceClient = {
+  from: (table: "grades" | "submissions") => {
+    upsert?: (
+      values: {
+        submission_id: string;
+        ai_score: number | null;
+        ai_feedback: string | null;
+        ai_breakdown: Json;
+        assignment_type: string | null;
+        grading_confidence: number | null;
+        grading_metadata: Json;
+      },
+      options: { onConflict: string },
+    ) => Promise<{ error: { message?: string } | null }>;
+    update?: (values: { status: SubmissionStatus }) => {
+      eq: (column: string, value: string) => Promise<{ error: { message?: string } | null }>;
+    };
+  };
+};
+
+type PersistGradedSubmissionResultArgs = {
+  gradingResult: GradeSubmissionResult;
+  submissionId: string;
+  supabaseClient?: GradePersistenceClient;
+  validatedGrade: {
+    ai_score: number | null;
+    ai_feedback: string | null;
+    ai_breakdown: GradeBreakdown[] | null;
+    grading_confidence: number | null;
+  };
+};
+
+export const persistGradedSubmissionResult = async ({
+  gradingResult,
+  submissionId,
+  supabaseClient = supabase as unknown as GradePersistenceClient,
+  validatedGrade,
+}: PersistGradedSubmissionResultArgs) => {
+  const gradesTable = supabaseClient.from("grades");
+  const submissionsTable = supabaseClient.from("submissions");
+
+  if (!gradesTable.upsert || !submissionsTable.update) {
+    throw new Error("The grading persistence client is not configured correctly.");
+  }
+
+  const { error: gradeWriteError } = await gradesTable.upsert(
+    {
+      submission_id: submissionId,
+      ai_score: validatedGrade.ai_score,
+      ai_feedback: validatedGrade.ai_feedback,
+      ai_breakdown: asJson(validatedGrade.ai_breakdown),
+      assignment_type: gradingResult.assignmentType ?? null,
+      grading_confidence: validatedGrade.grading_confidence ?? null,
+      grading_metadata: asJson(gradingResult.gradingMetadata ?? {}),
+    },
+    { onConflict: "submission_id" },
+  );
+
+  if (gradeWriteError) {
+    throw new Error(gradeWriteError.message || "The AI grade could not be saved.");
+  }
+
+  const nextStatus = gradingResult.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
+  const { error: submissionWriteError } = await submissionsTable.update({ status: nextStatus }).eq("id", submissionId);
+
+  if (submissionWriteError) {
+    throw new Error(submissionWriteError.message || "The submission workflow status could not be updated.");
+  }
 };
 
 const buildLastGradingRunSummary = ({
@@ -355,25 +426,35 @@ export const useAutomatedAssessmentActions = ({
           }
 
           try {
-            await supabase.from("grades").upsert({
-              submission_id: submission.id,
-              ai_score: validatedGrade.data.ai_score,
-              ai_feedback: validatedGrade.data.ai_feedback,
-              ai_breakdown: validatedGrade.data.ai_breakdown,
-              assignment_type: result.assignmentType ?? null,
-              grading_confidence: validatedGrade.data.grading_confidence ?? null,
-              grading_metadata: asJson(result.gradingMetadata ?? {}),
-            }, { onConflict: "submission_id" });
-          } catch (gradeError) {
-            log.error("Failed to write grade", gradeError, {
+            await persistGradedSubmissionResult({
+              gradingResult: result,
+              submissionId: submission.id,
+              validatedGrade: {
+                ai_score: validatedGrade.data.ai_score,
+                ai_feedback: validatedGrade.data.ai_feedback,
+                ai_breakdown: validatedGrade.data.ai_breakdown,
+                grading_confidence: validatedGrade.data.grading_confidence ?? null,
+              },
+            });
+            successCount++;
+          } catch (persistenceError) {
+            log.error("Failed to persist graded submission", persistenceError, {
               submissionId: submission.id,
             });
+            try {
+              await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
+            } catch {}
+            failCount++;
+            serviceFailureCount++;
+            failureMessages.add("The grading result was returned, but it could not be saved.");
+            nextRecoveryIssues[submission.id] = {
+              headline: "Retry AI grading",
+              detail:
+                "The grading service returned an answer, but the grade could not be saved cleanly. Retry the submission or continue with manual follow-up.",
+              recoveryLabel: "Select for retry",
+              type: "service_failure",
+            };
           }
-          try {
-            const nextStatus = result.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
-            await supabase.from("submissions").update({ status: nextStatus }).eq("id", submission.id);
-          } catch {}
-          successCount++;
         } else {
           if (typeof result.error === "string" && result.error.trim()) {
             failureMessages.add(result.error.trim());
@@ -520,7 +601,7 @@ export const useAutomatedAssessmentActions = ({
         return;
       }
 
-      if (submissions.length > MAX_INTEGRITY_REQUEST_SUBMISSIONS) {
+      if (submissions.length > LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD) {
         toast.warning(
           `This assignment has ${submissions.length} submissions. Integrity scanning will run in limited large-cohort mode and may skip full peerwise comparison.`,
         );
@@ -530,72 +611,42 @@ export const useAutomatedAssessmentActions = ({
         );
       }
 
-      const batchSize = MAX_INTEGRITY_REQUEST_SUBMISSIONS;
-      const collectedFlags: AcademicIntegrityFlag[] = [];
-      const collectedSummaries: string[] = [];
-      const collectedWarnings: string[] = [];
-      let failedBatches = 0;
-      let successfulBatches = 0;
+      const response = await fetch(PLAGIARISM_CHECK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          assignmentId: assignment.id,
+          ...(submissions.length <= LEGACY_INTEGRITY_REQUEST_COMPAT_LIMIT
+            ? { submissionIds: submissions.map((submission) => submission.id) }
+            : {}),
+        }),
+      });
 
-      for (let index = 0; index < submissions.length; index += batchSize) {
-        const batch = submissions.slice(index, index + batchSize);
-        const response = await fetch(PLAGIARISM_CHECK_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            assignmentId: assignment.id,
-            submissions: batch.map((submission) => ({
-              id: submission.id,
-              student_name: submission.student_name || submission.student_email || "Anonymous",
-              file_name: submission.file_name,
-              file_url: submission.file_url,
-            })),
-          }),
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: "Edge Function returned a non-2xx status code" }));
+        log.error("Plagiarism check failed", errorBody, {
+          assignmentId: assignment.id,
+          submissionCount: submissions.length,
         });
-
-        if (!response.ok) {
-          failedBatches += 1;
-          const errorBody = await response.json().catch(() => ({ error: "Edge Function returned a non-2xx status code" }));
-          log.error("Plagiarism batch failed", errorBody, {
-            batchStart: index,
-            batchSize: batch.length,
-          });
-          collectedWarnings.push(`A plagiarism analysis batch of ${batch.length} submission(s) failed and was skipped.`);
-          continue;
-        }
-
-        const data = await response.json();
-
-        const parsed = safeParseIntegrityBatchResponse(data);
-        if (!parsed.success) {
-          failedBatches += 1;
-          log.error("Invalid plagiarism payload received for AssignmentDetail", undefined, {
-            batchStart: index,
-            batchSize: batch.length,
-          });
-          collectedWarnings.push(`A plagiarism analysis batch of ${batch.length} submission(s) returned invalid data and was skipped.`);
-          continue;
-        }
-
-        successfulBatches += 1;
-        collectedFlags.push(...parsed.data.flags);
-
-        if (parsed.data.summary.trim()) {
-          collectedSummaries.push(parsed.data.summary.trim());
-        }
-
-        if (Array.isArray(parsed.data.warnings)) {
-          collectedWarnings.push(
-            ...parsed.data.warnings.filter((warning) => warning.trim().length > 0),
-          );
-        }
+        throw new Error(errorBody.error || "Plagiarism check failed");
       }
 
-      const uniqueFlags = collectedFlags.filter((flag, index, array) => {
+      const data = await response.json();
+      const parsed = safeParseIntegrityBatchResponse(data);
+
+      if (!parsed.success) {
+        log.error("Invalid plagiarism payload received for AssignmentDetail", undefined, {
+          assignmentId: assignment.id,
+          submissionCount: submissions.length,
+        });
+        throw new Error("Plagiarism check returned invalid data.");
+      }
+
+      const uniqueFlags = parsed.data.flags.filter((flag, index, array) => {
         return (
           array.findIndex(
             (candidate) =>
@@ -608,27 +659,27 @@ export const useAutomatedAssessmentActions = ({
 
       const outcome = buildIntegrityClientOutcome({
         flags: uniqueFlags,
-        summaries: collectedSummaries,
-        warnings: collectedWarnings,
-        failedBatches,
+        summaries: parsed.data.summary.trim() ? [parsed.data.summary.trim()] : [],
+        warnings: Array.isArray(parsed.data.warnings)
+          ? parsed.data.warnings.filter((warning) => warning.trim().length > 0)
+          : [],
+        failedBatches: 0,
       });
 
       setPlagiarismFlags(uniqueFlags);
       setPlagiarismSummary(outcome.summary);
 
-      if (successfulBatches > 0) {
-        await persistWorkflowNotification(
-          buildIntegrityCheckReadyNotification({
-            lecturerId: assignment.lecturer_id,
-            assignmentId: assignment.id,
-            assignmentTitle: assignment.title,
-          }),
-          {
-            assignmentId: assignment.id,
-            workflow: "integrity-check",
-          },
-        );
-      }
+      await persistWorkflowNotification(
+        buildIntegrityCheckReadyNotification({
+          lecturerId: assignment.lecturer_id,
+          assignmentId: assignment.id,
+          assignmentTitle: assignment.title,
+        }),
+        {
+          assignmentId: assignment.id,
+          workflow: "integrity-check",
+        },
+      );
 
       toast[outcome.toastTone](outcome.toastMessage);
     } catch (error: unknown) {

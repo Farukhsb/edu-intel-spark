@@ -1367,7 +1367,7 @@ describe("check-plagiarism handler", () => {
     expect(adminSupabase.reviewUpsert).not.toHaveBeenCalled();
   });
 
-  it("returns 400 for an invalid request body with no submission identifiers", async () => {
+  it("returns 400 for an invalid request body with no assignment identifier", async () => {
     process.env.INTEGRITY_PROVIDER_MODE = "internal_text_similarity";
 
     const adminSupabase = createAdminSupabaseMock();
@@ -1396,16 +1396,14 @@ describe("check-plagiarism handler", () => {
           "Content-Type": "application/json",
           Authorization: "Bearer test-token",
         },
-        body: JSON.stringify({
-          assignmentId: ids.assignment,
-        }),
+        body: JSON.stringify({}),
       }),
     );
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
       error: "Invalid request format",
-      message: "Please provide a valid submission ID or list of submission IDs.",
+      message: "Please provide the assignment that should be analyzed.",
     });
     expect(openAiMock).not.toHaveBeenCalled();
     expect(adminSupabase.integrityFindingUpsert).not.toHaveBeenCalled();
@@ -1507,6 +1505,53 @@ describe("check-plagiarism handler", () => {
       submission_b_id: ids.submissionB,
       integrity_type: "similarity",
     });
+    expect(payload.summary).toContain("1 submission(s) crossed");
+    expect(adminSupabase.integrityFindingUpsert).toHaveBeenCalledTimes(1);
+    expect(adminSupabase.reviewUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports assignment-level integrity checks without requiring client-side submission batches", async () => {
+    const adminSupabase = createAdminSupabaseMock();
+    const openAiMock = vi.fn();
+
+    const handler = createCheckPlagiarismHandler({
+      createAdminClient: () => adminSupabase,
+      requireLecturer: async () => ({
+        supabase: createUserSupabaseMock(),
+        user: { id: ids.lecturer },
+      }),
+      jsonError: (error) =>
+        new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }),
+      getCorsHeaders: () => ({ "Access-Control-Allow-Origin": "http://localhost:5173" }),
+      createCorsForbiddenResponse: () => new Response("forbidden", { status: 403 }),
+      createIntegrityResponseWithRetry: openAiMock,
+    });
+
+    const response = await handler(
+      new Request("https://gradeai.test/functions/v1/check-plagiarism", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer test-token",
+        },
+        body: JSON.stringify({
+          assignmentId: ids.assignment,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+
+    expect(openAiMock).not.toHaveBeenCalled();
+    expect(payload.flags).toHaveLength(1);
+    expect(payload.flags[0].integrity_type).toBe("similarity");
+    expect(new Set([payload.flags[0].submission_a_id, payload.flags[0].submission_b_id])).toEqual(
+      new Set([ids.submissionB, ids.submissionC]),
+    );
     expect(payload.summary).toContain("1 submission(s) crossed");
     expect(adminSupabase.integrityFindingUpsert).toHaveBeenCalledTimes(1);
     expect(adminSupabase.reviewUpsert).toHaveBeenCalledTimes(1);

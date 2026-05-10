@@ -84,9 +84,9 @@ const CheckPlagiarismRequestSchema = z
     submissionIds: z.array(z.string().uuid()).max(MAX_REQUESTED_SUBMISSION_IDS).optional(),
     assignmentId: z.string().uuid().optional(),
   })
-  .refine((value) => Boolean(value.submissionId) || Boolean(value.submissionIds?.length), {
-    message: "At least one of submissionId or submissionIds is required",
-    path: ["submissionIds"],
+  .refine((value) => Boolean(value.assignmentId), {
+    message: "assignmentId is required",
+    path: ["assignmentId"],
   });
 const includeValidationDetails = readEnv("ENV") === "development";
 
@@ -1048,10 +1048,13 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
     });
 
     if (!parsedRequest.success) {
+      const hasAssignmentError = parsedRequest.error.issues.some((issue) => issue.path.includes("assignmentId"));
       return new Response(
         JSON.stringify({
           error: "Invalid request format",
-          message: "Please provide a valid submission ID or list of submission IDs.",
+          message: hasAssignmentError
+            ? "Please provide the assignment that should be analyzed."
+            : "Please provide a valid submission ID or list of submission IDs.",
           ...(includeValidationDetails ? { details: parsedRequest.error.issues } : {}),
         }),
         {
@@ -1069,9 +1072,8 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
     const shouldRunMossProvider = Boolean(mossRunnerConfig);
     const requestedAssignmentId = parsedRequest.data.assignmentId ?? null;
     const requestedSubmissionIds = parsedRequest.data.submissionIds ?? (parsedRequest.data.submissionId ? [parsedRequest.data.submissionId] : []);
-    const requestedSubmissionIdSet = new Set(requestedSubmissionIds);
 
-    if (!requestedAssignmentId || requestedSubmissionIds.length === 0) {
+    if (!requestedAssignmentId) {
       return new Response(JSON.stringify({ flags: [], summary: "No submissions provided" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -1094,29 +1096,34 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
       throw new HttpError(403, "You do not have access to this assignment");
     }
 
-    const { data: submissions, error: submissionsError } = await userSupabase
-      .from("submissions")
-      .select("id, assignment_id, student_id, student_name, student_email, file_name, file_url")
-      .eq("assignment_id", requestedAssignmentId)
-      .in("id", requestedSubmissionIds);
+    let submissions: SubmissionRow[] = [];
+    if (requestedSubmissionIds.length > 0) {
+      const { data: requestedSubmissions, error: submissionsError } = await userSupabase
+        .from("submissions")
+        .select("id, assignment_id, student_id, student_name, student_email, file_name, file_url")
+        .eq("assignment_id", requestedAssignmentId)
+        .in("id", requestedSubmissionIds);
 
-    if (submissionsError) {
-      logError("check-plagiarism submissions query failed", submissionsError, {
-        assignmentId: requestedAssignmentId,
-        requestedSubmissionIds,
-      });
-      throw new Error("Failed to load submissions");
-    }
-    if (!submissions || submissions.length !== requestedSubmissionIds.length) {
-      logWarn("check-plagiarism inaccessible_requested_submissions", {
-        assignmentId: requestedAssignmentId,
-        requestedSubmissionCount: requestedSubmissionIds.length,
-        loadedSubmissionCount: submissions?.length ?? 0,
-      });
-      throw new HttpError(403, "One or more submissions are not accessible");
+      if (submissionsError) {
+        logError("check-plagiarism submissions query failed", submissionsError, {
+          assignmentId: requestedAssignmentId,
+          requestedSubmissionIds,
+        });
+        throw new Error("Failed to load submissions");
+      }
+      if (!requestedSubmissions || requestedSubmissions.length !== requestedSubmissionIds.length) {
+        logWarn("check-plagiarism inaccessible_requested_submissions", {
+          assignmentId: requestedAssignmentId,
+          requestedSubmissionCount: requestedSubmissionIds.length,
+          loadedSubmissionCount: requestedSubmissions?.length ?? 0,
+        });
+        throw new HttpError(403, "One or more submissions are not accessible");
+      }
+
+      submissions = requestedSubmissions;
     }
 
-    const { data: assignmentSubmissions, error: assignmentSubmissionsError } = shouldRunInternalProvider
+    const { data: assignmentSubmissions, error: assignmentSubmissionsError } = shouldRunInternalProvider || requestedSubmissionIds.length === 0
       ? await userSupabase
           .from("submissions")
           .select("id, assignment_id, student_id, student_name, student_email, file_name, file_url")
@@ -1130,6 +1137,19 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
       throw new Error("Failed to load assignment submissions");
     }
 
+    if (requestedSubmissionIds.length === 0) {
+      submissions = assignmentSubmissions ?? [];
+    }
+
+    if (submissions.length === 0) {
+      return new Response(JSON.stringify({ flags: [], summary: "No submissions provided" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const requestedSubmissionIdSet = new Set(
+      requestedSubmissionIds.length > 0 ? requestedSubmissionIds : submissions.map((submission) => submission.id),
+    );
     const comparisonSubmissions = assignmentSubmissions ?? submissions;
     const isSingleMode = submissions.length === 1;
     const warnings: string[] = [];

@@ -243,7 +243,9 @@ describe("edge function hardening", () => {
       "src/pages/dashboard/assignment-detail/state/useAssignmentDetailReadinessState.ts",
     );
     expect(readinessStateSource).toContain("const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;");
-    expect(automationHookSource).toContain("const batchSize = MAX_INTEGRITY_REQUEST_SUBMISSIONS;");
+    expect(automationHookSource).toContain("const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;");
+    expect(automationHookSource).toContain("body: JSON.stringify({");
+    expect(automationHookSource).toContain("assignmentId: assignment.id,");
     expect(configSource).toContain("[functions.check-plagiarism]");
     expect(configSource).toContain("verify_jwt = true");
     expect(configSource).toContain("[functions.grade-submission]");

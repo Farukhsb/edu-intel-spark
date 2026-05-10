@@ -2,6 +2,7 @@ import type { AIResponse, AIResponseCriterion } from "@/types";
 import { z } from "npm:zod";
 
 const OPENAI_API_URL = "https://api.openai.com/v1";
+const DEFAULT_OPENAI_TIMEOUT_MS = 30_000;
 
 const AIResponseCriterionSchema: z.ZodType<AIResponseCriterion> = z
   .object({
@@ -51,16 +52,44 @@ function getHeaders() {
   };
 }
 
+function getOpenAITimeoutMs() {
+  const configured = Number(Deno.env.get("OPENAI_REQUEST_TIMEOUT_MS") || DEFAULT_OPENAI_TIMEOUT_MS);
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_OPENAI_TIMEOUT_MS;
+  }
+
+  return configured;
+}
+
+async function openAiFetch(path: string, body: Record<string, unknown>) {
+  const timeoutMs = getOpenAITimeoutMs();
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(`${OPENAI_API_URL}${path}`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`OpenAI request timed out after ${timeoutMs}ms`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
 export function getModel(envName: string, fallback: string) {
   return Deno.env.get(envName) || fallback;
 }
 
 export async function createResponse(body: Record<string, unknown>) {
-  const response = await fetch(`${OPENAI_API_URL}/responses`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(body),
-  });
+  const response = await openAiFetch("/responses", body);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -71,11 +100,7 @@ export async function createResponse(body: Record<string, unknown>) {
 }
 
 export async function createChatCompletion(body: Record<string, unknown>) {
-  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(body),
-  });
+  const response = await openAiFetch("/chat/completions", body);
 
   return response;
 }
