@@ -8,7 +8,6 @@ describe("SubmissionListSection", () => {
     const toggleSelect = vi.fn();
     const startManualReview = vi.fn().mockResolvedValue(undefined);
     const focusQueue = vi.fn();
-    const copyQueueLink = vi.fn();
 
     render(
       <SubmissionListSection
@@ -112,7 +111,6 @@ describe("SubmissionListSection", () => {
         activeQueueFocus={null}
         focusQueue={focusQueue}
         clearQueueFocus={vi.fn()}
-        copyQueueLink={copyQueueLink}
       />,
     );
 
@@ -122,9 +120,6 @@ describe("SubmissionListSection", () => {
     expect(screen.getByText("Recovery")).toBeInTheDocument();
     expect(screen.getByText("Retry AI grading")).toBeInTheDocument();
     expect(screen.getByText("The grading service did not complete cleanly for this submission.")).toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Copy queue link" })[0]);
-    expect(copyQueueLink).toHaveBeenCalledWith("manual-review");
 
     fireEvent.click(screen.getByRole("button", { name: "Focus manual review queue" }));
     expect(focusQueue).toHaveBeenCalledWith("manual-review");
@@ -212,7 +207,6 @@ describe("SubmissionListSection", () => {
         activeQueueFocus="manual-review"
         focusQueue={vi.fn()}
         clearQueueFocus={clearQueueFocus}
-        copyQueueLink={vi.fn()}
       />,
     );
 
@@ -224,7 +218,6 @@ describe("SubmissionListSection", () => {
 
   it("surfaces a release-ready handoff queue and focuses approved submissions", () => {
     const focusQueue = vi.fn();
-    const copyQueueLink = vi.fn();
 
     render(
       <SubmissionListSection
@@ -297,14 +290,11 @@ describe("SubmissionListSection", () => {
         activeQueueFocus={null}
         focusQueue={focusQueue}
         clearQueueFocus={vi.fn()}
-        copyQueueLink={copyQueueLink}
       />,
     );
 
     expect(screen.getByTestId("moderation-release-queue-banner")).toBeInTheDocument();
     expect(screen.getByText("Release-ready queue")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Copy queue link" })[0]);
-    expect(copyQueueLink).toHaveBeenCalledWith("release-ready");
     fireEvent.click(screen.getByRole("button", { name: "Focus release-ready queue" }));
     expect(focusQueue).toHaveBeenCalledWith("release-ready");
   });
@@ -381,7 +371,6 @@ describe("SubmissionListSection", () => {
         activeQueueFocus="released-results"
         focusQueue={vi.fn()}
         clearQueueFocus={vi.fn()}
-        copyQueueLink={vi.fn()}
       />,
     );
 

@@ -19,10 +19,15 @@ type InsertCall = {
 const createSupabaseMock = () => {
   const updateCalls: UpdateCall[] = [];
   const insertCalls: InsertCall[] = [];
+  const createSignedUrl = vi.fn(async () => ({
+    data: { signedUrl: "https://signed.example.test/submission-1" },
+    error: null,
+  }));
 
   return {
     updateCalls,
     insertCalls,
+    createSignedUrl,
     from: vi.fn((table: string) => ({
       update: vi.fn((payload: Record<string, unknown>) => {
         updateCalls.push({ table, payload });
@@ -35,6 +40,11 @@ const createSupabaseMock = () => {
         return { error: null };
       }),
     })),
+    storage: {
+      from: vi.fn(() => ({
+        createSignedUrl,
+      })),
+    },
   };
 };
 
@@ -163,6 +173,38 @@ describe("ModerationDashboard moderator integration", () => {
     expect(caseRow).toHaveTextContent("Policy Case Study");
     expect(caseRow).toHaveTextContent("Morgan Moderator");
     expect(openButton).toBeEnabled();
+  }, 20000);
+
+  it("lets the assigned moderator open the underlying submission file from the evidence panel", async () => {
+    const supabaseMock = createSupabaseMock();
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    await renderModerationDashboard({
+      auth: {
+        user: { id: "moderator-1", email: "moderator@gradeai.test" },
+        profile: { id: "moderator-1", role: "lecturer" },
+      },
+      cases: [assignedCase],
+      supabase: supabaseMock,
+    });
+
+    const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
+    fireEvent.click(within(caseRow).getByTestId("moderation-review-open-case-1"));
+
+    const dialog = await screen.findByTestId("moderation-review-dialog");
+    fireEvent.click(within(dialog).getByText("Open submission file"));
+
+    await waitFor(() => {
+      expect(supabaseMock.storage.from).toHaveBeenCalledWith("submissions");
+      expect(supabaseMock.createSignedUrl).toHaveBeenCalledWith("student-1/assignment-1/essay.pdf", 60);
+      expect(openSpy).toHaveBeenCalledWith(
+        "https://signed.example.test/submission-1",
+        "_blank",
+        "noopener,noreferrer",
+      );
+    });
+
+    openSpy.mockRestore();
   }, 20000);
 
   it.each([

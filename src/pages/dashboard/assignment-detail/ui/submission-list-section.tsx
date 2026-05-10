@@ -385,7 +385,6 @@ export const SubmissionListSection = ({
   activeQueueFocus,
   focusQueue,
   clearQueueFocus,
-  copyQueueLink,
 }: {
   submissions: AssignmentDetailSubmission[];
   filteredSubmissions: AssignmentDetailSubmission[];
@@ -412,7 +411,6 @@ export const SubmissionListSection = ({
   activeQueueFocus: AssignmentQueueFocusValue | null;
   focusQueue: (focus: AssignmentQueueFocusValue) => void;
   clearQueueFocus: () => void;
-  copyQueueLink: (focus: AssignmentQueueFocusValue) => void;
 }) => {
   const manualReviewSubmissions = submissions.filter((submission) => submission.status === "under_review");
   const visibleManualReviewCount = filteredSubmissions.filter(
@@ -475,13 +473,6 @@ export const SubmissionListSection = ({
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => copyQueueLink("manual-review")}
-                    >
-                      Copy queue link
-                    </Button>
-                    <Button
-                      size="sm"
                       variant={showingManualReviewQueue ? "outline" : "default"}
                       onClick={() =>
                         showingManualReviewQueue
@@ -511,19 +502,6 @@ export const SubmissionListSection = ({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        copyQueueLink(
-                          moderationReleaseHandoffState.kind === "released"
-                            ? "released-results"
-                            : "release-ready",
-                        )
-                      }
-                    >
-                      Copy queue link
-                    </Button>
                     <Button
                       size="sm"
                       variant={showingHandoffQueue ? "outline" : "default"}

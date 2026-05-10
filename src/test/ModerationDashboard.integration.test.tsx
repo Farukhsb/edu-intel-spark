@@ -141,6 +141,100 @@ describe("ModerationDashboard integration", () => {
     expect(openButton).toBeEnabled();
   }, 20000);
 
+  it("shows moderation evidence context instead of only scores and notes", async () => {
+    await renderModerationDashboard({
+      auth: {
+        user: { id: "moderator-1", email: "moderator@gradeai.test" },
+        profile: { id: "moderator-1", role: "lecturer" },
+      },
+      cases: [
+        {
+          ...baseCase,
+          moderationCase: {
+            ...baseCase.moderationCase,
+            moderator_id: "moderator-1",
+            status: "moderation_in_progress",
+            integrity_risk_score: 61,
+          },
+          submission: {
+            id: "submission-1",
+            assignment_id: "assignment-1",
+            student_name: "Sarah Student",
+            student_email: "sarah@student.test",
+            student_id: "student-1",
+            file_name: "essay.pdf",
+            file_type: "application/pdf",
+            file_url: "student-1/assignment-1/essay.pdf",
+            status: "moderation_in_progress",
+            submitted_at: "2026-04-22T09:00:00.000Z",
+            uploaded_by: "student-1",
+          },
+          assignment: {
+            id: "assignment-1",
+            title: "Policy Case Study",
+            description: "Policy analysis",
+            due_date: "2026-04-20T09:00:00.000Z",
+            file_url: null,
+            lecturer_id: "lecturer-1",
+            max_score: 100,
+            module_code: "POL305",
+            rubric: [
+              {
+                criterion: "Argument quality",
+                description: "Use evidence to defend the policy position.",
+                max_score: 40,
+              },
+            ],
+            status: "published",
+            created_at: "2026-04-22T10:00:00.000Z",
+            updated_at: "2026-04-22T10:00:00.000Z",
+          },
+          integrityReview: {
+            id: "integrity-1",
+            submission_id: "submission-1",
+            lecturer_id: "lecturer-1",
+            review_type: "plagiarism_screen",
+            decision: "review_required",
+            evidence_summary: "High overlap with one source paragraph.",
+            lecturer_note: "Check whether the citation is adequate.",
+            created_at: "2026-04-22T10:00:00.000Z",
+            updated_at: "2026-04-22T10:00:00.000Z",
+          } as never,
+          grade: {
+            ...baseCase.grade,
+            ai_feedback: "AI found a solid structure but weak evidence.",
+            lecturer_feedback: "Marker noted the same weakness in supporting evidence.",
+            ai_breakdown: [
+              {
+                criterion: "Argument quality",
+                score: 24,
+                max_score: 40,
+                evidence_snippet: "The policy claim is stated, but evidence is thin.",
+                confidence_score: 0.64,
+                review_required: true,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
+    fireEvent.click(within(caseRow).getByTestId("moderation-review-open-case-1"));
+
+    const dialog = await screen.findByTestId("moderation-review-dialog");
+    expect(within(dialog).getByText("Submission Evidence")).toBeInTheDocument();
+    expect(within(dialog).getByText("Open submission file")).toBeInTheDocument();
+    expect(within(dialog).getByText("Rubric")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("Argument quality").length).toBeGreaterThan(0);
+    expect(within(dialog).getByText("Marking Evidence")).toBeInTheDocument();
+    expect(within(dialog).getByText("AI rationale")).toBeInTheDocument();
+    expect(within(dialog).getByText("First marker rationale")).toBeInTheDocument();
+    expect(within(dialog).getByText("Integrity Context")).toBeInTheDocument();
+    expect(within(dialog).getByText("High overlap with one source paragraph.")).toBeInTheDocument();
+    expect(within(dialog).getByText("AI breakdown")).toBeInTheDocument();
+  }, 20000);
+
   it("filters the queue into assigned, approval, escalated, and release-ready views", async () => {
     await renderModerationDashboard({
       auth: {

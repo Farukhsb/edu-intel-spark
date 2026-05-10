@@ -38,7 +38,6 @@ export interface AssignmentDetailScreenProps {
   moderationReleaseHandoffState: FocusState;
   onCopyModerationFocus: () => void;
   onCopyNotificationFocus: () => void;
-  onCopyQueueFocus: () => void;
   queueFocusState: FocusState | null;
   onClearQueueFocus: () => void;
   onClearModerationFocus: () => void;
@@ -61,7 +60,6 @@ export const AssignmentDetailScreen = ({
   moderationReleaseHandoffState,
   onCopyModerationFocus,
   onCopyNotificationFocus,
-  onCopyQueueFocus,
   queueFocusState,
   onClearQueueFocus,
   onClearModerationFocus,
@@ -119,8 +117,6 @@ export const AssignmentDetailScreen = ({
             clearLabel="Show all submissions"
             description={queueFocusState.description}
             onClear={onClearQueueFocus}
-            onShare={onCopyQueueFocus}
-            shareLabel="Copy queue link"
             testId="assignment-queue-focus"
             title={queueFocusState.title}
           />
