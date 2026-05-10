@@ -30,6 +30,7 @@ interface AuthContextType {
   profileError: string | null;
   isDemo: boolean;
   mustChangePassword: boolean;
+  pendingVerificationEmail: string | null;
   signUp: (
     email: string,
     password: string,
@@ -92,6 +93,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -161,6 +163,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        setPendingVerificationEmail(null);
         setUser(session.user);
         fetchProfile(session.user.id, session.user.email).finally(() => setLoading(false));
       } else {
@@ -176,6 +179,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (session?.user) {
+        setPendingVerificationEmail(null);
         setUser(session.user);
         fetchProfile(session.user.id, session.user.email).finally(() => setLoading(false));
       } else {
@@ -223,6 +227,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const hasActiveSession = Boolean(data.session);
 
     if (hasActiveSession) {
+      setPendingVerificationEmail(null);
       setProfile({
         id: data.user.id,
         full_name: fullName,
@@ -233,6 +238,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         department_id: departmentId || null,
         must_change_password: false,
       });
+    } else {
+      setPendingVerificationEmail(email);
     }
 
     return {
@@ -243,6 +250,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    setPendingVerificationEmail(null);
   };
 
   const handleSignOut = async () => {
@@ -251,6 +259,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
       setProfile(null);
       setProfileError(null);
+      setPendingVerificationEmail(null);
       setLoading(false);
       return;
     }
@@ -258,11 +267,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (isDemo) {
       setIsDemo(false);
       setProfile(null);
+      setPendingVerificationEmail(null);
       return;
     }
     await supabase.auth.signOut();
     setProfile(null);
     setProfileError(null);
+    setPendingVerificationEmail(null);
   };
 
   const completePasswordChange = async (password: string) => {
@@ -296,6 +307,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const resendVerification = async () => {
+    if (!pendingVerificationEmail) {
+      throw new Error("No pending verification email is available. Create your account again or contact support.");
+    }
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingVerificationEmail,
+    });
+    if (error) throw error;
   };
 
   const enterDemo = (demoRole: AppRole) => {
@@ -319,6 +339,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profileError,
         isDemo,
         mustChangePassword: profile?.must_change_password ?? false,
+        pendingVerificationEmail,
         signUp,
         signIn,
         signOut: handleSignOut,

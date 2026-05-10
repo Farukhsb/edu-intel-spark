@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseStoredReviewPayload } from "@/lib/integrityReviews";
+import { getIntegrityReviewSummary, parseStoredReviewPayload } from "@/lib/integrityReviews";
 
 describe("integrityReviews", () => {
   it("keeps valid stored review payloads and drops invalid snapshot shapes", () => {
@@ -78,5 +78,41 @@ describe("integrityReviews", () => {
       ],
       integritySnapshot: null,
     });
+  });
+
+  it("derives a shared integrity review summary for risk and flagging decisions", () => {
+    const highRiskSummary = getIntegrityReviewSummary({
+      lecturer_note: JSON.stringify({
+        latestNote: "Investigate the overlap",
+        history: [],
+        integritySnapshot: {
+          totalScore: 76,
+          aiWritingScore: 22,
+          similarityScore: 76,
+          riskLevel: "high",
+          evidence: {
+            aiWriting: [],
+            similarity: [{ label: "Peer overlap", value: "Substantial", score: 76 }],
+          },
+          flags: ["peer overlap"],
+        },
+      }),
+      updated_at: "2026-05-10T10:00:00.000Z",
+      decision: "pending",
+    });
+
+    const decisionFlaggedSummary = getIntegrityReviewSummary({
+      lecturer_note: "Manual escalation without snapshot",
+      updated_at: "2026-05-10T11:00:00.000Z",
+      decision: "misconduct-concern",
+    });
+
+    expect(highRiskSummary.riskScore).toBe(76);
+    expect(highRiskSummary.flagged).toBe(true);
+    expect(highRiskSummary.payload.latestNote).toBe("Investigate the overlap");
+
+    expect(decisionFlaggedSummary.riskScore).toBe(0);
+    expect(decisionFlaggedSummary.flagged).toBe(true);
+    expect(decisionFlaggedSummary.payload.latestNote).toBe("Manual escalation without snapshot");
   });
 });

@@ -1,5 +1,5 @@
 import type { Tables } from "@/integrations/supabase/types";
-import { parseStoredReviewPayload } from "@/lib/integrityReviews";
+import { getIntegrityReviewSummary } from "@/lib/integrityReviews";
 import { z } from "zod";
 
 export const MODERATION_CONFIDENCE_THRESHOLD = 0.7;
@@ -127,13 +127,9 @@ export const evaluateModerationSignals = ({
 
   let integrityRiskScore = 0;
   if (integrityReview) {
-    const payload = parseStoredReviewPayload(integrityReview);
-    integrityRiskScore = payload.integritySnapshot?.totalScore || 0;
-    if (
-      integrityRiskScore >= MODERATION_INTEGRITY_THRESHOLD ||
-      integrityReview.decision === "investigate" ||
-      integrityReview.decision === "misconduct-concern"
-    ) {
+    const integritySummary = getIntegrityReviewSummary(integrityReview, MODERATION_INTEGRITY_THRESHOLD);
+    integrityRiskScore = integritySummary.riskScore;
+    if (integritySummary.flagged) {
       signals.push({
         code: "integrity_risk",
         label: "Integrity risk",

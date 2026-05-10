@@ -125,7 +125,7 @@ serve(async (req) => {
     }
 
     const { assignmentId, submissionId, submissionIds, force_regenerate } = parsedRequest.data;
-    const gradingModel = getModel("OPENAI_GRADING_MODEL", "gpt-5.4-mini");
+    const gradingModel = getModel("OPENAI_GRADING_MODEL", "gpt-4o-mini");
     const forceRegenerate = force_regenerate ?? false;
     const regradeReason =
       typeof rawBody?.regrade_reason === "string" && rawBody.regrade_reason.trim()

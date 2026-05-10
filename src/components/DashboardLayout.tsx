@@ -6,6 +6,7 @@ import {
   Menu, MessageSquare, Moon, Search, Settings, Shield, Sun, Target, TrendingUp, University,
   Upload, Users, FileOutput,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -114,6 +115,19 @@ const DEMO_STUDENT_NOTIFICATIONS: CommunicationMessage[] = [
 const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
 const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 
+type SidebarLink = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+type SidebarSection = {
+  label: string;
+  description: string;
+  defaultOpen: boolean;
+  links: readonly SidebarLink[];
+};
+
 const lecturerSections = [
   {
     label: "Core",
@@ -161,7 +175,7 @@ const lecturerSections = [
       { to: "/dashboard/settings", label: "Settings", icon: Settings },
     ],
   },
-] as const;
+] as const satisfies readonly SidebarSection[];
 
 const adminSections = [
   {
@@ -203,7 +217,7 @@ const adminSections = [
       { to: "/dashboard/settings", label: "Settings", icon: Settings },
     ],
   },
-] as const;
+] as const satisfies readonly SidebarSection[];
 
 const studentLinks = [
   { to: "/dashboard", label: "My Grades", icon: GraduationCap },
@@ -211,15 +225,15 @@ const studentLinks = [
   { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
   { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
-];
+] as const satisfies readonly SidebarLink[];
 
 const defaultLecturerSectionState = Object.fromEntries(
   lecturerSections.map((section) => [section.label, section.defaultOpen]),
-) as Record<(typeof lecturerSections)[number]["label"], boolean>;
+) as Record<string, boolean>;
 
 const defaultAdminSectionState = Object.fromEntries(
   adminSections.map((section) => [section.label, section.defaultOpen]),
-) as Record<(typeof adminSections)[number]["label"], boolean>;
+) as Record<string, boolean>;
 
 const getNotificationCategoryLabel = (category: CommunicationMessage["category"]) => {
   switch (category) {
@@ -277,15 +291,17 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   });
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
-  const [openSections, setOpenSections] = useState(() => {
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window === "undefined") return defaultSectionState;
 
     try {
       const stored = window.localStorage.getItem(sidebarStateKey);
       if (!stored) return defaultSectionState;
 
-      const parsed = JSON.parse(stored) as Partial<typeof defaultSectionState>;
-      return { ...defaultSectionState, ...parsed };
+      const parsed = JSON.parse(stored) as Partial<Record<string, boolean>>;
+      return Object.fromEntries(
+        Object.entries({ ...defaultSectionState, ...parsed }).map(([key, value]) => [key, Boolean(value)]),
+      );
     } catch {
       return defaultSectionState;
     }
@@ -468,7 +484,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate("/dashboard");
   };
 
-  const lecturerLinks = roleSections.flatMap((section) => section.links);
+  const lecturerLinks: SidebarLink[] = roleSections.flatMap((section) => [...section.links]);
   const links = isLecturerEquivalent ? lecturerLinks : studentLinks;
 
   const handleSignOut = async () => {
@@ -525,7 +541,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     setOpenSections((current) => ({ ...current, [label]: !current[label] }));
   };
 
-  const renderNavLink = (link: (typeof lecturerSections)[number]["links"][number] | (typeof adminSections)[number]["links"][number] | typeof studentLinks[number]) => {
+  const renderNavLink = (link: SidebarLink) => {
     const isActive = isLinkActive(link.to);
 
     return (

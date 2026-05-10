@@ -122,7 +122,7 @@ const buildLastGradingRunSummary = ({
   serviceFailureCount,
   skippedCount,
   successCount,
-}: Omit<LastGradingRunSummary, "headline" | "recoveryActions">): LastGradingRunSummary | null => {
+}: Omit<LastGradingRunSummary, "headline" | "detail" | "recoveryActions">): LastGradingRunSummary | null => {
   if (failedCount === 0 && skippedCount === 0) {
     return null;
   }

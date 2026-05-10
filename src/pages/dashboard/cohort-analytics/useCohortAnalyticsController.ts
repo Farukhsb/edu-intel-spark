@@ -16,7 +16,7 @@ import {
   upsertGeneratedRecommendations,
 } from "@/lib/recommendationPersistence";
 import { buildRecommendationInterventionRows, insertRecommendationInterventions } from "@/lib/interventions";
-import { parseStoredReviewPayload } from "@/lib/integrityReviews";
+import { getIntegrityReviewSummary } from "@/lib/integrityReviews";
 import { log } from "@/lib/logger";
 import { buildAbsoluteAppUrl, copyTextToClipboard } from "@/lib/clipboard";
 import { toast } from "sonner";
@@ -283,10 +283,7 @@ export const useCohortAnalyticsController = () => {
 
         const flaggedIntegrityCaseIds = new Set<string>();
         const flaggedIntegrityCases = integrityReviews.filter((review) => {
-          const payload = parseStoredReviewPayload(review);
-          const totalScore = payload.integritySnapshot?.totalScore || 0;
-          const flagged =
-            totalScore >= 55 || review.decision === "investigate" || review.decision === "misconduct-concern";
+          const flagged = getIntegrityReviewSummary(review).flagged;
           if (flagged) flaggedIntegrityCaseIds.add(review.submission_id);
           return flagged;
         });

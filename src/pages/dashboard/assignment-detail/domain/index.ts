@@ -4,6 +4,7 @@ export {
 } from "./integrityUi";
 export type { IntegrityCardPresentation } from "./integrityUi";
 export { getModerationReleaseHandoffState } from "./moderationReleaseHandoff";
+export type { ModerationReleaseHandoffState } from "./moderationReleaseHandoff";
 export { getAssignmentNotificationFocusState } from "./notificationFocus";
 export {
   getLecturerAssignmentWorkflowReadiness,

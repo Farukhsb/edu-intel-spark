@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { safeFormatDate } from "@/lib/date";
-import { parseStoredReviewPayload } from "@/lib/integrityReviews";
+import { getIntegrityReviewSummary } from "@/lib/integrityReviews";
 import type { AssignmentDetailSubmission } from "@/pages/dashboard/assignment-detail/types";
 import { useSubmissionFileActions } from "@/pages/dashboard/assignment-detail/workflows/useSubmissionFileActions";
 import {
@@ -133,11 +133,11 @@ export const ModerationReviewDialog = ({
                 userId,
               });
               const integrityPayload = selectedCase.integrityReview
-                ? parseStoredReviewPayload({
+                ? getIntegrityReviewSummary({
                     lecturer_note: selectedCase.integrityReview.lecturer_note,
                     updated_at: selectedCase.integrityReview.updated_at,
                     decision: selectedCase.integrityReview.decision,
-                  })
+                  }).payload
                 : null;
               const rubricItems = asEvidenceList(selectedCase.assignment?.rubric);
               const aiBreakdown = asEvidenceList(selectedCase.grade?.ai_breakdown);
@@ -375,9 +375,9 @@ export const ModerationReviewDialog = ({
                                           {breakdown.review_required ? " - lecturer review required" : ""}
                                         </p>
                                       )}
-                                      {breakdown.evidence_snippet && (
+                                      {typeof breakdown.evidence_snippet === "string" && breakdown.evidence_snippet.length > 0 && (
                                         <p className="mt-2 text-muted-foreground">
-                                          {String(breakdown.evidence_snippet)}
+                                          {breakdown.evidence_snippet}
                                         </p>
                                       )}
                                     </div>
@@ -612,7 +612,11 @@ export const ModerationReviewDialog = ({
                                   {safeFormatDate(entry.created_at, "MMM d, yyyy HH:mm")}
                                 </span>
                               </div>
-                              {entry.reason && <p className="mt-2 text-sm">{entry.reason}</p>}
+                              {entry.reason && (
+                                <p className="mt-2 text-sm">
+                                  {typeof entry.reason === "string" ? entry.reason : String(entry.reason)}
+                                </p>
+                              )}
                             </div>
                           ))
                         )}

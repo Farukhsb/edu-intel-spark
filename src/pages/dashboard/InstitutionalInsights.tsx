@@ -94,9 +94,9 @@ const InstitutionalInsights = () => {
           }
         });
 
-        const assignmentScores: Record<string, { title: string; scores: number[]; students: number }> = {};
+        const assignmentScores: Record<string, { id: string; title: string; scores: number[]; students: number }> = {};
         assignments.forEach((assignment) => {
-          assignmentScores[assignment.id] = { title: assignment.title, scores: [], students: 0 };
+          assignmentScores[assignment.id] = { id: assignment.id, title: assignment.title, scores: [], students: 0 };
         });
 
         submissions.forEach((submission) => {

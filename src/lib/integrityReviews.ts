@@ -48,6 +48,12 @@ export interface StoredReviewPayload {
   integritySnapshot: IntegritySnapshot | null;
 }
 
+export interface IntegrityReviewSummary {
+  payload: StoredReviewPayload;
+  riskScore: number;
+  flagged: boolean;
+}
+
 const IntegrityDecisionSchema = z.enum(["pending", "clear", "investigate", "misconduct-concern"]);
 
 const IntegrityHistoryEntrySchema = z.object({
@@ -134,6 +140,22 @@ export const parseStoredReviewPayload = (
   }
 
   return { latestNote: "", history: [], integritySnapshot: null };
+};
+
+export const getIntegrityReviewSummary = (
+  review: Pick<{ lecturer_note: string | null; updated_at: string; decision: string }, "lecturer_note" | "updated_at" | "decision">,
+  threshold = 55,
+): IntegrityReviewSummary => {
+  const payload = parseStoredReviewPayload(review);
+  const riskScore = payload.integritySnapshot?.totalScore || 0;
+  const flagged =
+    riskScore >= threshold || review.decision === "investigate" || review.decision === "misconduct-concern";
+
+  return {
+    payload,
+    riskScore,
+    flagged,
+  };
 };
 
 export const serializeReviewPayload = (

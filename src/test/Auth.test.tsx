@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
     signIn: vi.fn(),
     signUp: vi.fn(),
     resetPassword: vi.fn(),
+    resendVerification: vi.fn(),
+    pendingVerificationEmail: null as string | null,
   },
 }));
 
@@ -36,6 +38,7 @@ describe("Auth", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    mocks.authState.pendingVerificationEmail = null;
   });
 
   it("renders the sign-in access readiness framing", () => {
@@ -61,16 +64,18 @@ describe("Auth", () => {
     expect(screen.getByRole("tab", { name: "Sign Up" })).toBeInTheDocument();
   });
 
-  it("switches to recovery readiness when forgot password is opened", () => {
+  it("switches to recovery readiness when forgot password is opened", async () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Auth />
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    });
 
-    expect(screen.getByText("Account recovery position")).toBeInTheDocument();
+    expect(await screen.findByText("Account recovery position")).toBeInTheDocument();
     expect(
       screen.getByText(
         "Password recovery needs the same institutional email identity used for your academic workflow",
@@ -82,5 +87,30 @@ describe("Auth", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /back to login/i })).toBeInTheDocument();
+  });
+
+  it("shows pending verification messaging and resends the verification email", async () => {
+    mocks.authState.pendingVerificationEmail = "lecturer@example.edu";
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Auth />
+      </MemoryRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("tab", { name: "Sign Up" }));
+    });
+
+    expect(await screen.findByText("Email confirmation pending")).toBeInTheDocument();
+    expect(screen.getByText(/lecturer@example\.edu/)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Resend verification email" }));
+    });
+
+    await waitFor(() => {
+      expect(mocks.authState.resendVerification).toHaveBeenCalledTimes(1);
+    });
   });
 });

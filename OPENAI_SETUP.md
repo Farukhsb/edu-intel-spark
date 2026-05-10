@@ -8,9 +8,9 @@ Set these Supabase secrets instead:
 
 ```bash
 supabase secrets set OPENAI_API_KEY=your-openai-api-key
-supabase secrets set OPENAI_CHAT_MODEL=gpt-5.4-mini
-supabase secrets set OPENAI_GRADING_MODEL=gpt-5.4-mini
-supabase secrets set OPENAI_INTEGRITY_MODEL=gpt-5.4-mini
+supabase secrets set OPENAI_CHAT_MODEL=gpt-4o-mini
+supabase secrets set OPENAI_GRADING_MODEL=gpt-4o-mini
+supabase secrets set OPENAI_INTEGRITY_MODEL=gpt-4o-mini
 ```
 
 Redeploy the AI functions after setting the secrets:

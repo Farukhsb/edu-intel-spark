@@ -474,6 +474,85 @@ describe("ModerationDashboard moderator integration", () => {
     ).toBeInTheDocument();
   }, 20000);
 
+  it("allows the assignment owner to approve a moderated case and move it into the release-ready state", async () => {
+    const moderatedCase: ModerationCaseView = {
+      ...assignedCase,
+      moderationCase: {
+        ...assignedCase.moderationCase,
+        lecturer_id: "lecturer-1",
+        moderator_id: "moderator-1",
+        status: "moderated",
+        moderator_score: 67,
+        final_agreed_score: 67,
+        final_agreed_feedback: "Confirmed final feedback",
+      },
+      submission: assignedCase.submission
+        ? {
+            ...assignedCase.submission,
+            status: "moderated",
+          }
+        : assignedCase.submission,
+      reviews: [
+        {
+          id: "review-owner-approve",
+          moderation_case_id: "case-1",
+          submission_id: "submission-1",
+          reviewer_id: "moderator-1",
+          reviewer_role: "moderator",
+          action: "agree",
+          proposed_score: 67,
+          proposed_feedback: "Confirmed final feedback",
+          notes: "Moderator confirmed the first marker decision.",
+          snapshot: {},
+          created_at: "2026-04-22T12:00:00.000Z",
+        } as never,
+      ],
+    };
+
+    const supabaseMock = createSupabaseMock();
+    await renderModerationDashboard({
+      auth: {
+        user: { id: "lecturer-1", email: "lecturer@gradeai.test" },
+        profile: { id: "lecturer-1", role: "lecturer" },
+      },
+      cases: [moderatedCase],
+      supabase: supabaseMock,
+    });
+
+    const caseRow = await screen.findByTestId("moderation-case-case-1", {}, { timeout: 15000 });
+    fireEvent.click(within(caseRow).getByTestId("moderation-review-open-case-1"));
+
+    await screen.findByTestId("moderation-review-dialog");
+    expect(screen.getByTestId("moderation-action-approve")).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId("moderation-action-approve"));
+
+    await waitFor(() => {
+      expect(
+        supabaseMock.updateCalls.some(
+          (call) => call.table === "moderation_cases" && typeof call.payload.approved_at === "string",
+        ),
+      ).toBe(true);
+    });
+
+    expect(
+      supabaseMock.updateCalls.some(
+        (call) => call.table === "submissions" && call.payload.status === "approved",
+      ),
+    ).toBe(true);
+    expect(
+      supabaseMock.updateCalls.some(
+        (call) =>
+          call.table === "grades" &&
+          call.payload.final_score === 67 &&
+          call.payload.final_feedback === "Confirmed final feedback" &&
+          typeof call.payload.reviewed_at === "string" &&
+          call.payload.reviewed_by === "lecturer-1",
+      ),
+    ).toBe(true);
+    expect(supabaseMock.insertCalls.some((call) => call.table === "grade_audit_log")).toBe(true);
+  }, 20000);
+
   it("shows approved cases as ready for release", async () => {
     const approvedCase: ModerationCaseView = {
       ...assignedCase,

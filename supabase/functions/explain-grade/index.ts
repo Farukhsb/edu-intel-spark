@@ -105,7 +105,7 @@ serve(async (req) => {
       user.id,
       (status, errorMessage) => new HttpError(status, errorMessage),
     );
-    const chatModel = getModel("OPENAI_CHAT_MODEL", "gpt-5.4-mini");
+    const chatModel = getModel("OPENAI_CHAT_MODEL", "gpt-4o-mini");
     const latestUserQuestion = [...messages].reverse().find((entry) => entry.role === "user")?.content ?? message;
     if (hasWeaknessIntent(latestUserQuestion)) {
       return createSseResponse(

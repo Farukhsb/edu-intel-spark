@@ -97,7 +97,9 @@ export const useModerationActions = ({
     }
   };
 
-  const assignModerator = async (item: ModerationCaseView) => {
+  const assignModerator = async (item: ModerationCaseView | null) => {
+    if (!item) return;
+
     if (isDemo) {
       const moderatorId = moderatorDrafts[item.moderationCase.id];
       setCases((current) =>
