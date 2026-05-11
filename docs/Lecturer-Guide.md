@@ -2,7 +2,7 @@
 
 ## Purpose
 
-GradeAI is an academic workflow platform designed to help lecturers manage the full marking cycle in one place. It supports:
+GradeAI is an academic workflow platform designed to help lecturers manage the marking cycle in one place. It supports:
 
 - assignment creation and rubric setup
 - student submission handling
@@ -12,6 +12,22 @@ GradeAI is an academic workflow platform designed to help lecturers manage the f
 - early support signals and intervention tracking
 
 The goal is not to replace lecturer judgement. The goal is to reduce repetitive marking effort, surface useful evidence faster, and keep the final decision with the lecturer.
+
+## Getting Access
+
+Lecturer accounts should be created through the invite flow.
+
+The usual process is:
+
+1. An admin or authorised staff member adds the lecturer to GradeAI.
+2. The lecturer receives an invitation email.
+3. The lecturer opens the secure invite link.
+4. The lecturer sets their password and signs in.
+5. GradeAI routes the lecturer to the lecturer dashboard.
+
+Avoid sharing passwords or sending account credentials in a separate file. The invite flow is easier to manage and gives a clearer onboarding trail.
+
+If the invite email does not arrive, check spam/junk first, then ask the admin to resend the invite.
 
 ## What Lecturers Can Do
 
