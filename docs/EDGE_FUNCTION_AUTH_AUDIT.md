@@ -2,115 +2,113 @@
 
 Audit date: 2026-04-24
 
-## Purpose
+## Why this file exists
 
-This document records a focused authentication and authorization audit of GradeAI Supabase Edge Functions.
+This started as a short security note while checking the Supabase Edge Functions. I moved it into `docs/` because it is useful enough to keep, but it should read as an audit record rather than a scratchpad.
 
-The audit checks whether Edge Functions that disable Supabase gateway JWT verification still enforce authentication and role checks inside the function code before handling academic data, grading actions, integrity checks, or bulk student operations.
+The question I wanted to answer was simple:
 
-This document replaces the earlier root-level `SECURITY_NOTES.md` working note so the repository keeps security evidence in a clearer and more intentional documentation structure.
+> If an Edge Function has `verify_jwt = false`, is it still checking who the user is before doing anything sensitive?
 
-## Scope
+For GradeAI this matters because these functions can touch submissions, grading, integrity checks, and student onboarding.
 
-The audit covered local Edge Functions configured with `verify_jwt = false`:
+## Functions checked
+
+The review covered the local functions that currently use `verify_jwt = false`:
 
 - `check-plagiarism`
 - `grade-submission`
 - `explain-grade`
 - `bulk-create-students`
 
-It also reviewed the stale `student-ai-tutor` configuration entry that no longer had matching local function source.
+I also checked the old `student-ai-tutor` config entry because it was still listed even though the matching function source was no longer present.
 
-## Main Risk Reviewed
+## Main risk
 
-Disabling gateway JWT verification can be safe only when the function performs strict manual authentication and authorization checks internally.
+`verify_jwt = false` is not automatically wrong. It can be used where a function needs its own CORS handling or request handling.
 
-The key risk is that a function could accept requests without a trusted user identity, allowing unauthorized access to student submissions, grading workflows, integrity reports, or administrative operations.
+The risk is when a function disables gateway JWT checks and then forgets to do the same work inside the function. In that case, someone could call the function without a trusted user identity.
+
+For this project, the safe pattern is:
+
+1. read the `Authorization` header
+2. verify the Supabase user
+3. resolve the role on the server side
+4. check ownership or permission for the assignment, submission, grade, or student record
+5. fail closed if any of that cannot be proven
 
 ## Findings
 
 ### `check-plagiarism`
 
-Current status: acceptable with manual checks.
+Status: acceptable with the current manual checks.
 
-Observed controls:
+What I checked:
 
-- requires an `Authorization` header through the shared auth helper
-- calls `requireLecturer(req)`
-- verifies that the caller owns the assignment before processing
-- limits plagiarism and integrity actions to authorized lecturer workflows
+- it requires an `Authorization` header through the shared auth helper
+- it calls `requireLecturer(req)`
+- it checks that the lecturer owns the assignment before processing
+- it keeps integrity checking inside the lecturer workflow
 
 ### `grade-submission`
 
-Current status: acceptable with manual checks.
+Status: acceptable with the current manual checks.
 
-Observed controls:
+What I checked:
 
-- requires an `Authorization` header through the shared auth helper
-- calls `requireLecturer(req)`
-- verifies assignment ownership before grading
-- resolves roles again for admin-only force regrading paths
-- keeps AI grading inside lecturer-controlled review workflows
+- it requires an `Authorization` header through the shared auth helper
+- it calls `requireLecturer(req)`
+- it checks assignment ownership before grading
+- admin-only force regrading resolves roles again rather than trusting the frontend
+- grading output still goes through lecturer review before release
 
 ### `explain-grade`
 
-Current status: acceptable with manual checks.
+Status: acceptable with the current manual checks.
 
-Observed controls:
+What I checked:
 
-- requires an `Authorization` header through the shared auth helper
-- calls `requireUser(req)`
-- intended for authenticated users only
-- should only expose released or permitted explanation context according to the surrounding application workflow
+- it requires an `Authorization` header through the shared auth helper
+- it calls `requireUser(req)`
+- it is not intended to run for anonymous users
+- the surrounding workflow still needs to protect unreleased feedback and grades
 
 ### `bulk-create-students`
 
-Current status: acceptable with manual checks.
+Status: acceptable with the current manual checks.
 
-Observed controls:
+What I checked:
 
-- requires an `Authorization` header through the shared auth helper
-- calls `requireLecturer(req)`
-- restricts use to lecturer or admin callers
-- supports controlled onboarding rather than anonymous account creation
+- it requires an `Authorization` header through the shared auth helper
+- it calls `requireLecturer(req)`
+- it is restricted to lecturer/admin style onboarding flows
+- it does not support open anonymous account creation
 
-## Removed Stale Function Entry
+## Stale function config removed
 
 ### `student-ai-tutor`
 
-The `student-ai-tutor` entry was removed from Supabase configuration because:
+This entry was removed from the Supabase config because there was no matching local source in `supabase/functions/student-ai-tutor` and no current frontend call to it.
 
-- no local function source exists in `supabase/functions/student-ai-tutor`
-- no frontend invocation exists in the current repository
-- keeping stale deployment configuration could mislead future reviewers about shipped functionality
+Leaving it there would make the repo look like it ships a function that no longer exists locally.
 
-If this function is reintroduced later, it should either use gateway JWT verification or perform explicit `requireUser(req)` checks inside the function.
+If this function comes back later, it should either use gateway JWT verification or include explicit `requireUser(req)` checks inside the function.
 
-## Why Gateway JWT May Be Disabled Intentionally
+## Recommendation
 
-Some Edge Functions disable gateway JWT verification to support custom CORS handling or request processing patterns.
+Keep the current four functions as they are for now, but keep this rule:
 
-That is acceptable only when the function still:
+> No Edge Function should use `verify_jwt = false` unless it performs its own authentication and authorization checks inside the function.
 
-- reads the caller's `Authorization` header
-- verifies the user with Supabase
-- resolves the user's trusted role from server-side data
-- checks ownership or permission for the requested academic resource
-- fails closed when authentication or authorization cannot be proven
+For future work:
 
-The four audited local functions follow this manual-auth pattern through shared helpers such as `requireUser(req)` and `requireLecturer(req)`.
+- prefer server-side role resolution over anything controlled by the client
+- add regression tests around lecturer-only and student-only boundaries where practical
+- review this file whenever a new Edge Function is added
+- treat missing auth checks as a release blocker
 
-## Recommendations
+## Current conclusion
 
-- Keep the four audited local functions unchanged for now.
-- Continue treating `student-ai-tutor` as inactive until source code is restored and reviewed.
-- Do not allow any function with `verify_jwt = false` unless it performs explicit manual authentication and authorization checks.
-- Prefer server-side role resolution over client-controlled profile state.
-- Add regression tests for lecturer-only and student-only Edge Function boundaries where practical.
-- Review this document whenever a new Edge Function is added or an existing function changes authentication behaviour.
+The current pattern is acceptable for the controlled pilot stage. The functions that disable gateway JWT verification still perform manual auth checks before handling sensitive academic workflows.
 
-## Current Conclusion
-
-The reviewed Edge Functions intentionally disable gateway JWT verification but compensate with in-function authentication and role checks.
-
-The current pattern is acceptable for the controlled pilot stage, provided future functions follow the same fail-closed authorization model and the team continues to test role boundaries before production rollout.
+This should not be treated as a permanent excuse to be loose with auth. If more functions are added, they need to follow the same fail-closed pattern.
