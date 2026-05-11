@@ -1,34 +1,24 @@
 # Academic Compliance and AI Governance
 
-## Purpose
+## Why this matters
 
-GradeAI is designed as an academic workflow and decision-support platform rather than a fully autonomous grading system.
+The hardest part of GradeAI is not just getting the software to work. The harder question is whether a university would feel comfortable using it around student work, grades, feedback, and academic integrity.
 
-The purpose of this document is to explain how the platform approaches responsible AI use, lecturer oversight, student protection, transparency, and institutional governance considerations.
+This file sets out the main governance issues I am designing around. It is not a claim that GradeAI is already approved for institution-wide use. At the current stage, it should be treated as a controlled pilot that still needs institutional review before wider rollout.
 
-The goal is to support academic judgement, not replace it.
+## Basic position
 
-## Human-in-the-Loop Grading
+GradeAI should not be used as an automatic marker that replaces a lecturer.
 
-GradeAI uses AI to support lecturers during assessment workflows.
+The safer position is:
 
-AI-generated outputs are intended as draft academic support rather than final decisions.
+> AI can help prepare draft grading evidence, but the lecturer remains responsible for the academic decision.
 
-The platform is designed so that lecturers can:
+That is the assumption behind the workflow.
 
-- review draft grades
-- edit scores
-- revise feedback
-- approve outcomes
-- release results when institutionally appropriate
+## Lecturer control
 
-This means academic judgement remains with the lecturer.
-
-## Lecturer Final Authority
-
-GradeAI is designed around a controlled release model.
-
-Important workflow stages are intentionally separated:
+The grading flow is deliberately staged:
 
 ```text
 submitted
@@ -38,129 +28,114 @@ submitted
   -> release
 ```
 
-Approval and release are separate actions.
+The important part is that approval and release are not the same thing.
 
-This separation helps reduce the risk of students seeing incomplete, draft, or unreviewed outcomes.
+A lecturer may approve something internally before it is ready for the student to see. This gives room for moderation, checking, or further review.
 
-Students should only see released grades and approved feedback.
+Students should only see released outcomes, not raw AI drafts or internal review notes.
 
-## Transparency and Explainability
+## What the AI is allowed to do
 
-The platform attempts to make grading easier to inspect and review.
+In the current design, AI is used to support the lecturer by producing draft material such as:
 
-Features supporting transparency include:
+- a suggested score
+- rubric-level comments
+- feedback wording
+- integrity or similarity signals
+- explanations that help students understand released feedback
 
-- rubric-based grading rather than free-form scoring
-- criterion-level feedback
-- lecturer review before release
-- moderation support for difficult or borderline cases
-- stored grading metadata and workflow history
-- student-facing explanation support after release
+These outputs should be treated as material for review, not as final academic authority.
 
-The intention is to make grading easier to understand and review rather than presenting AI outputs as unquestionable decisions.
+## Academic integrity
 
-## Academic Integrity Safeguards
+Integrity checks are sensitive because a false accusation can seriously affect a student.
 
-Integrity workflows are intended as review aids.
+GradeAI should therefore treat integrity results as signals for review, not proof of misconduct.
 
-Integrity signals may include:
+The system can help identify things like unusual similarity or writing patterns, but a person still needs to look at the work and decide what the evidence means.
 
-- internal similarity between submissions
-- AI-writing indicators
-- overlap patterns requiring lecturer attention
+The language in the product and documentation should avoid making automatic misconduct claims.
 
-These signals are not proof of misconduct.
+## Data and privacy
 
-The platform is designed to support lecturer review and academic judgement rather than automatic disciplinary action.
+GradeAI may handle student submissions, grades, feedback, emails, and support notes. That makes privacy a central issue, not an optional extra.
 
-## Data Protection and Privacy Considerations
+Before wider use, an institution would likely want clear answers on:
 
-Because GradeAI may process student submissions, grades, and educational records, privacy and data protection considerations are important.
+- what data is stored
+- where it is stored
+- who can access it
+- how long it is kept
+- how deletion would work
+- whether any student data is sent to external AI providers
+- what happens to uploaded files
+- how audit logs are protected
 
-The platform is designed with the expectation that institutions may require:
+For a controlled pilot, the priority is to keep access narrow, avoid real sensitive data where possible, and make the data flow easy to explain.
 
-- clear data retention rules
-- role-based access controls
-- secure authentication
-- auditability
-- institutional review of data flows
-- compliance with UK GDPR or equivalent institutional policies
+## Role boundaries
 
-Sensitive academic data should not be publicly exposed, and student-facing access should remain role-bound and release-controlled.
+The system separates users into roles such as student, lecturer, moderator, and admin.
 
-## Role-Based Access and Security
+The main rule is that each role should only see what it needs to do its job.
 
-The system uses role-based access patterns to separate permissions across:
+Examples:
 
-- students
-- lecturers
-- moderators
-- admins
+- students should not see unreleased grades
+- students should not see draft AI feedback
+- moderators should only see the cases assigned to them
+- admins should have oversight without becoming hidden markers
+- lecturer access should be tied to their own assignments and students
 
-Protected areas include:
+These boundaries need to be tested regularly because they are more important than most UI features.
 
-- unreleased grades
-- draft feedback
-- moderation workflows
-- integrity review outputs
-- student support records
+## Audit trail
 
-The platform also uses row-level access patterns and server-side role checks to reduce inappropriate access.
+Academic decisions need to be reviewable later.
 
-## Auditability
+That means GradeAI should keep enough history to answer questions such as:
 
-Academic decisions often need to be reviewable.
+- who reviewed the submission
+- what was approved
+- when it was released
+- whether it was moderated
+- what integrity evidence existed
+- whether a support intervention was recorded
 
-GradeAI therefore attempts to support auditability through:
+The aim is not to log everything forever. The aim is to keep the right evidence so a decision can be explained if challenged.
 
-- moderation records
-- workflow states
-- lecturer review actions
-- approval and release separation
-- stored grading metadata
-- intervention and support history
+## Data residency and external providers
 
-This supports institutional quality assurance and moderation practices.
+One concern raised by academics is where student data goes, especially if AI providers are involved.
 
-## Institutional Adoption Considerations
+For institutional use, GradeAI would need a clear deployment and data-processing position. That may include:
 
-Universities may have additional governance requirements before adopting AI-assisted assessment tools.
+- using approved regions
+- avoiding unnecessary transfer of student identifiers
+- limiting what text is sent to model providers
+- documenting provider terms
+- supporting anonymisation or pseudonymisation where practical
 
-Typical concerns may include:
+This is not fully solved by code alone. It also depends on the institution's policy and deployment choices.
 
-- GDPR and student privacy
-- data residency requirements
-- academic integrity policy alignment
-- model transparency
-- lecturer accountability
-- intellectual property concerns around student submissions
-- acceptable AI use policies
+## Current limits
 
-Institutions may therefore require local policy review before live deployment.
+GradeAI is still an early controlled pilot.
 
-## Current Limitations
+The main limitations are:
 
-GradeAI should currently be understood as an early controlled pilot rather than a mature institution-wide deployment.
+- it has not gone through a full university procurement or compliance process
+- AI grading can still be inconsistent on borderline work
+- data protection requirements will differ between institutions
+- some safeguards depend on correct deployment configuration
+- lecturers still need to review the output carefully
 
-Current limitations include:
+These limits should be stated clearly. Overclaiming here would make the project less credible, not more.
 
-- institutional compliance requirements vary between universities
-- AI grading consistency can vary on borderline work
-- some governance outcomes depend on deployment configuration and institutional policy
-- lecturer review remains necessary for safe academic use
+## Practical rule for the project
 
-## Summary
+The product should keep following this rule:
 
-GradeAI is intended to support academic workflows responsibly.
+> AI can assist, but a human must remain responsible for academic judgement, release, and misconduct decisions.
 
-The platform is designed around:
-
-- lecturer oversight
-- human review before release
-- transparency and explainability
-- moderation support
-- integrity review assistance
-- role-based access
-- auditability
-
-The platform should be understood as a decision-support system for higher education rather than a replacement for academic judgement.
+That is the safest way to position GradeAI at this stage.
