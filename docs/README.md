@@ -36,7 +36,15 @@ Use this to understand authentication, role boundaries, data access, row-level s
 
 ### 5. Academic Compliance and AI Governance
 
-**File:** [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
+### 5. Authorization Reference
+
+**File:** [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
+
+Use this when you need the fastest route from a critical workflow to the exact tables, RPCs, Edge Functions, and current RLS policies it depends on.
+
+This is the most audit-friendly map of the current authorization surface.
+
+### 6. Production Hardening Summary
 
 Use this to understand the main adoption concerns around student data, lecturer control, academic integrity, AI use, and institutional review.
 
@@ -47,6 +55,14 @@ Use this to understand the main adoption concerns around student data, lecturer 
 Use this to review the check carried out on Edge Functions that disable gateway JWT verification and rely on manual in-function auth checks.
 
 ## User and Workflow Documentation
+
+### User Guide
+
+**File:** [`USER_GUIDE.md`](USER_GUIDE.md)
+
+Use this for a practical first-time walkthrough of the platform across lecturer, student, moderator, and admin roles.
+
+It includes a worked assignment-creation example with a sample rubric so new users can understand how GradeAI is meant to be used in practice.
 
 ### Lecturer Guide
 
@@ -82,6 +98,14 @@ Documents role-boundary checks used to confirm that users only see what they are
 
 This is important evidence for security and trust review.
 
+### Live Regression Checklist
+
+**File:** [`LIVE_REGRESSION_CHECKLIST.md`](LIVE_REGRESSION_CHECKLIST.md)
+
+Use this for a short cross-role smoke test after workflow, grading, notification, or architecture changes.
+
+It is intentionally shorter than the full testing checklist and more practical for quick demo or pilot validation.
+
 ## Role, Data, and Migration Notes
 
 ### Role Model Alignment
@@ -98,19 +122,11 @@ Records the database migration baseline and helps reviewers understand the datab
 
 ## Assessor and Evidence-Facing Material
 
-### GTV Evidence Summary: Production Hardening
+### Assessor Evidence Summary
 
-**File:** [`GTV_EVIDENCE_SUMMARY_GRADEAI_HARDENING.md`](GTV_EVIDENCE_SUMMARY_GRADEAI_HARDENING.md)
+**File:** [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 
-A Global Talent evidence-oriented summary focused on production-hardening work completed on GradeAI.
-
-This document is useful for explaining technical ability, responsible AI integration, and engineering judgement in an evidence pack.
-
-### Presentation Script
-
-**File:** [`PRESENTATION_SCRIPT.md`](PRESENTATION_SCRIPT.md)
-
-A supporting script for explaining the project verbally to reviewers, assessors, or technical contacts.
+A concise evidence-facing summary for reviewers. It explains what GradeAI is, the problem it addresses, what was built, the technical architecture, product evidence, and personal contribution.
 
 ## Screenshots
 
@@ -126,9 +142,10 @@ For a technical reviewer, read the documents in this order:
 2. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 3. [`TRUST_MODEL.md`](TRUST_MODEL.md)
 4. [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
-5. [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
-6. [`EDGE_FUNCTION_AUTH_AUDIT.md`](EDGE_FUNCTION_AUTH_AUDIT.md)
+5. [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
+6. [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
 7. [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
+8. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 
 For a non-technical reviewer or assessor, start with:
 

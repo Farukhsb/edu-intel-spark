@@ -1,0 +1,31 @@
+import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui";
+import type { useLecturerAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows";
+import type { Grade } from "@/pages/dashboard/assignment-detail/types";
+
+interface BuildReviewDialogPropsArgs {
+  assignmentMaxScore: number;
+  grades: Record<string, Grade>;
+  isDemo: boolean;
+  lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
+}
+
+export const buildReviewDialogProps = ({
+  assignmentMaxScore,
+  grades,
+  isDemo,
+  lecturerActions,
+}: BuildReviewDialogPropsArgs): SubmissionReviewDialogProps => ({
+  assignmentMaxScore,
+  editFeedback: lecturerActions.editFeedback,
+  editScore: lecturerActions.editScore,
+  grade:
+    lecturerActions.reviewGradeOverride ??
+    (lecturerActions.reviewSubmission ? grades[lecturerActions.reviewSubmission.id] ?? null : null),
+  isDemo,
+  onEditFeedbackChange: lecturerActions.setEditFeedback,
+  onEditScoreChange: lecturerActions.setEditScore,
+  onOpenChange: lecturerActions.setReviewOpen,
+  onSave: lecturerActions.saveReview,
+  open: lecturerActions.reviewOpen,
+  reviewSubmission: lecturerActions.reviewSubmission,
+});

@@ -1,0 +1,71 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import CohortAnalytics from "@/pages/dashboard/CohortAnalytics";
+
+const mocks = vi.hoisted(() => ({
+  authState: {
+    isDemo: true,
+    user: null,
+  },
+  supabase: {
+    from: vi.fn(),
+  },
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => mocks.authState,
+}));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: mocks.supabase,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}));
+
+vi.mock("recharts", () => ({
+  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  BarChart: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  CartesianGrid: () => <div />,
+  XAxis: () => <div />,
+  YAxis: () => <div />,
+  Tooltip: () => <div />,
+  Bar: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Cell: () => <div />,
+}));
+
+describe("CohortAnalytics demo mode", () => {
+  beforeEach(() => {
+    mocks.authState.isDemo = true;
+    mocks.authState.user = null;
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders demo cohort insights with a reporting-readiness summary and skips Supabase reads", async () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <CohortAnalytics />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
+    expect(screen.getByText("High-risk student cluster detected")).toBeInTheDocument();
+    expect(
+      screen.getByText("Open the risk workflow and prioritise the highest-risk students."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "AI Recommendations" })).toBeInTheDocument();
+    expect(screen.getAllByText("Grade Distribution").length).toBeGreaterThan(0);
+    expect(mocks.supabase.from).not.toHaveBeenCalled();
+  });
+});

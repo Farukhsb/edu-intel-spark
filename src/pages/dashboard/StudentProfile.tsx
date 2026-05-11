@@ -1,103 +1,78 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  ArrowLeft,
-  AlertTriangle,
-  BookOpen,
-  Clock,
-  Lightbulb,
-  Mail,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  User,
-} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
+import { computeRisk } from "@/lib/studentRisk";
+import { fetchLecturerStudentProfileDataset } from "@/lib/data/student";
 import { safeFormatDate } from "@/lib/date";
-import { queueCommunicationMessage } from "@/lib/communications";
+import { dispatchCommunicationMessage } from "@/lib/communications";
 import { log } from "@/lib/logger";
 import { toast } from "sonner";
 import {
   buildManualInterventionPayload,
   fetchStudentInterventions,
   getInterventionErrorText,
+  getStudentInterventionReadiness,
+  isInterventionOverdue,
   insertManualIntervention,
   normalizeManualInterventionStatus,
   normalizeManualInterventionType,
   type InterventionEntry,
   type ManualInterventionStatus,
   type ManualInterventionType,
+  updateStudentInterventionStatus,
 } from "@/lib/interventions";
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
-const ASSIGNMENT_FIELDS = "id, title, module_code, due_date, max_score";
-const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
-const GRADE_FIELDS = "submission_id, ai_score, final_score";
-
-interface StudentAssignment {
-  id: string;
-  title: string;
-  module_code: string | null;
-  due_date: string | null;
-  max_score: number;
-}
-
-interface StudentSubmission {
-  id: string;
-  assignment_id: string;
-  student_id: string | null;
-  student_name: string | null;
-  student_email: string | null;
-  status: string;
-  submitted_at: string;
-}
-
-interface StudentInsightData {
-  name: string;
-  email: string | null;
-  studentId: string;
-  studentRecordId: string | null;
-  modules: string[];
-  averageGrade: number | null;
-  latestGrade: number | null;
-  riskScore: number | null;
-  riskLevel: "critical" | "high" | "moderate" | "watch";
-  reasons: string[];
-  recommendation: string;
-  missedAssignments: StudentAssignment[];
-  submissions: StudentSubmission[];
-  chart: Array<{ assessment: string; grade: number }>;
-}
-
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  buildStudentInsightData,
+  matchStudentSubmissions,
+  type StudentAssignment,
+  type StudentInsightData,
+  type StudentSubmission,
+} from "@/lib/studentProfile";
+import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
+import {
+  StudentGradesTrendCard,
+  StudentInterventionFormCard,
+  StudentInterventionHistoryCard,
+  StudentMissedAssignmentsCard,
+  StudentProfileBackButton,
+  StudentProfileHero,
+  StudentProfileSummaryCards,
+  StudentRiskReasonsCard,
+} from "@/pages/dashboard/student-profile/sections";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const isUuid = (value: string | null | undefined): value is string =>
   typeof value === "string" && UUID_PATTERN.test(value);
+
+const getSupportNotificationToastCopy = (
+  actionLabel: string,
+  dispatchResult: {
+    ok: boolean;
+    status: "created" | "duplicate" | "failed" | "unauthenticated";
+  },
+) => {
+  if (dispatchResult.status === "duplicate") {
+    return {
+      level: "warning" as const,
+      message: `${actionLabel} was already queued for this student. No duplicate notice was created.`,
+    };
+  }
+
+  if (!dispatchResult.ok) {
+    return {
+      level: "error" as const,
+      message: `${actionLabel} could not be queued right now.`,
+    };
+  }
+
+  return {
+    level: "success" as const,
+    message: `${actionLabel} saved`,
+  };
+};
 
 const StudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
@@ -135,7 +110,13 @@ const StudentProfile = () => {
           reasons: ["Average below 40%", "Steep grade decline", "Predicted next: 29%"],
           recommendation: "Urgent: schedule a 1-on-1 meeting, review fundamentals, and refer to support services.",
           missedAssignments: [
-            { id: "demo-missed", title: "Algorithms Lab Reflection", module_code: "CS205", due_date: new Date().toISOString(), max_score: 20 },
+            {
+              id: "demo-missed",
+              title: "Algorithms Lab Reflection",
+              module_code: "CS205",
+              due_date: new Date().toISOString(),
+              max_score: 20,
+            },
           ],
           submissions: [],
           chart: [
@@ -151,37 +132,15 @@ const StudentProfile = () => {
       }
 
       try {
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .from("assignments")
-          .select(ASSIGNMENT_FIELDS)
-          .eq("lecturer_id", user.id);
-
-        if (assignmentsError) throw assignmentsError;
-
-        const assignments = (assignmentsData || []) as StudentAssignment[];
+        const { assignments, submissions: allSubmissions, grades } = await fetchLecturerStudentProfileDataset(user.id);
         if (assignments.length === 0) {
           setStudent(null);
           setLoading(false);
           return;
         }
-
-        const assignmentIds = assignments.map((assignment) => assignment.id);
-        const { data: submissionsData, error: submissionsError } = await supabase
-          .from("submissions")
-          .select(SUBMISSION_FIELDS)
-          .in("assignment_id", assignmentIds);
-
-        if (submissionsError) throw submissionsError;
-
-        const allSubmissions = (submissionsData || []) as StudentSubmission[];
-        const matchingSubmissions = allSubmissions.filter((submission) => {
-          const name = submission.student_name || "";
-          return (
-            submission.student_id === decodedStudentId ||
-            submission.student_email === decodedStudentId ||
-            name.toLowerCase() === decodedStudentId.toLowerCase() ||
-            slugify(name) === slugify(decodedStudentId)
-          );
+        const matchingSubmissions = matchStudentSubmissions({
+          submissions: allSubmissions,
+          studentId: decodedStudentId,
         });
 
         if (matchingSubmissions.length === 0) {
@@ -190,31 +149,15 @@ const StudentProfile = () => {
           return;
         }
 
-        const submissionIds = matchingSubmissions.map((submission) => submission.id);
-        const { data: gradesData, error: gradesError } = await supabase
-          .from("grades")
-          .select(GRADE_FIELDS)
-          .in("submission_id", submissionIds);
-
-        if (gradesError) throw gradesError;
-
-        const gradeMap = new Map(
-          (gradesData || []).map((grade) => [
-            grade.submission_id,
-            Number(grade.final_score ?? grade.ai_score),
-          ])
-        );
-        const assignmentMap = new Map(assignments.map((assignment) => [assignment.id, assignment]));
-
         const sortedSubmissions = [...matchingSubmissions].sort(
-          (left, right) => new Date(left.submitted_at).getTime() - new Date(right.submitted_at).getTime()
+          (left, right) => new Date(left.submitted_at).getTime() - new Date(right.submitted_at).getTime(),
         );
         const matchedStudentEmail =
           sortedSubmissions.find((submission) => submission.student_email)?.student_email || null;
-        let resolvedStudentRecordId =
+        let linkedStudentRecordId =
           sortedSubmissions.find((submission) => submission.student_id)?.student_id || null;
 
-        if (!resolvedStudentRecordId && matchedStudentEmail) {
+        if (!linkedStudentRecordId && matchedStudentEmail) {
           const { data: profileData, error: profileError } = await supabase
             .from("profiles")
             .select("id")
@@ -226,82 +169,20 @@ const StudentProfile = () => {
               studentId: decodedStudentId,
             });
           } else {
-            resolvedStudentRecordId = profileData?.id ?? null;
+            linkedStudentRecordId = profileData?.id ?? null;
           }
         }
 
-        const trajectory: StudentTrajectory = {
-          name:
-            sortedSubmissions.find((submission) => submission.student_name)?.student_name ||
-            sortedSubmissions[0].student_email ||
-            "Student",
-          email: sortedSubmissions.find((submission) => submission.student_email)?.student_email || null,
-          studentId:
-            sortedSubmissions.find((submission) => submission.student_id)?.student_id ||
-            sortedSubmissions.find((submission) => submission.student_email)?.student_email ||
+        setStudent(
+          buildStudentInsightData({
+            assignments,
+            submissions: allSubmissions,
+            grades,
             decodedStudentId,
-          scores: sortedSubmissions
-            .map((submission) => {
-              const score = gradeMap.get(submission.id);
-              const assignment = assignmentMap.get(submission.assignment_id);
-              if (score == null || Number.isNaN(score) || !assignment) return null;
-              return {
-                score,
-                date: submission.submitted_at,
-                assignmentTitle: assignment.title,
-              };
-            })
-            .filter((entry): entry is StudentTrajectory["scores"][number] => entry !== null),
-        };
-
-        const risk = computeRisk(trajectory);
-        const scores = trajectory.scores.map((point) => point.score);
-        const averageGrade =
-          scores.length > 0
-            ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
-            : null;
-        const latestGrade = scores.length > 0 ? scores[scores.length - 1] : null;
-        const matchedAssignmentIds = new Set(matchingSubmissions.map((submission) => submission.assignment_id));
-        const missedAssignments = assignments.filter((assignment) => !matchedAssignmentIds.has(assignment.id));
-        const chart = trajectory.scores.map((point) => ({
-          assessment: point.assignmentTitle.length > 18 ? `${point.assignmentTitle.slice(0, 16)}...` : point.assignmentTitle,
-          grade: point.score,
-        }));
-
-        const reasons = [...(risk?.flags || [])];
-        if (missedAssignments.length > 0) {
-          reasons.push(`${missedAssignments.length} assignment${missedAssignments.length === 1 ? "" : "s"} missing`);
-        }
-        if (reasons.length === 0) {
-          reasons.push("Student is being monitored due to recent performance volatility.");
-        }
-
-        setStudent({
-          name: trajectory.name,
-          email: trajectory.email,
-          studentId: trajectory.studentId,
-          studentRecordId: resolvedStudentRecordId,
-          modules: Array.from(
-            new Set(
-              matchingSubmissions
-                .map((submission) => assignmentMap.get(submission.assignment_id)?.module_code)
-                .filter(Boolean) as string[]
-            )
-          ),
-          averageGrade,
-          latestGrade,
-          riskScore: risk?.riskScore ?? null,
-          riskLevel: risk?.riskLevel ?? (averageGrade != null && averageGrade < 50 ? "watch" : "moderate"),
-          reasons,
-          recommendation:
-            risk?.recommendation ||
-            (missedAssignments.length > 0
-              ? "Review the missing work with the student and agree a catch-up plan."
-              : "Continue monitoring performance and reinforce the next study priorities."),
-          missedAssignments,
-          submissions: matchingSubmissions,
-          chart,
-        });
+            studentRecordId: linkedStudentRecordId,
+            computeRisk,
+          }),
+        );
       } catch (error) {
         log.error("Failed to load student profile", error, {
           studentId: decodedStudentId,
@@ -349,7 +230,7 @@ const StudentProfile = () => {
     };
 
     void loadInterventions();
-  }, [isDemo, resolvedStudentRecordId, user?.id]);
+  }, [decodedStudentId, isDemo, resolvedStudentRecordId, user?.id]);
 
   const handleAddIntervention = async () => {
     if (!interventionNote.trim()) return;
@@ -404,7 +285,7 @@ const StudentProfile = () => {
       });
       toast.error(
         getInterventionErrorText(error) ||
-          `Could not save intervention (type: ${safeInterventionType}, status: ${safeInterventionStatus})`
+          `Could not save intervention (type: ${safeInterventionType}, status: ${safeInterventionStatus})`,
       );
       return;
     }
@@ -416,7 +297,7 @@ const StudentProfile = () => {
     setInterventionStatus("ongoing");
     toast.success("Intervention logged");
 
-    const notificationResult = await queueCommunicationMessage({
+    const notificationResult = await dispatchCommunicationMessage({
       category: "intervention-follow-up",
       recipientName: student.name,
       recipientEmail: student.email,
@@ -439,8 +320,13 @@ ${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}
       relatedStudentId: resolvedStudentRecordId,
     });
 
-    if (!notificationResult) {
-      toast.error("Intervention saved, but the student notification could not be created");
+    if (notificationResult.status === "failed" || notificationResult.status === "unauthenticated") {
+      toast.warning("Intervention saved, but the student notification could not be created");
+      return;
+    }
+
+    if (notificationResult.status === "duplicate") {
+      toast.warning("Intervention logged. An equivalent student support notice was already queued.");
     }
   };
 
@@ -454,7 +340,7 @@ ${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}
       toast.error("Student record is not linked, so the alert cannot be saved correctly yet");
       return;
     }
-    const result = await queueCommunicationMessage({
+    const result = await dispatchCommunicationMessage({
       category: "at-risk-alert",
       recipientName: student.name,
       recipientEmail: student.email,
@@ -473,11 +359,8 @@ ${student.recommendation}
 Please reply to arrange a short meeting so we can agree the most useful support before the next submission.`,
       relatedStudentId: resolvedStudentRecordId,
     });
-    if (!result) {
-      toast.error("Could not save at-risk alert");
-      return;
-    }
-    toast.success("At-risk alert saved");
+    const feedback = getSupportNotificationToastCopy("At-risk alert", result);
+    toast[feedback.level](feedback.message);
   };
 
   const queueFollowUpReminder = async () => {
@@ -491,12 +374,12 @@ Please reply to arrange a short meeting so we can agree the most useful support 
       return;
     }
     const latestIntervention = interventions[0];
-    const result = await queueCommunicationMessage({
+    const result = await dispatchCommunicationMessage({
       category: "intervention-follow-up",
       recipientName: student.name,
       recipientEmail: student.email,
       recipientId: resolvedStudentRecordId,
-      subject: `Follow-up on your academic support plan`,
+      subject: "Follow-up on your academic support plan",
       body: `Dear ${student.name},
 
 This is a follow-up on the support actions we discussed${latestIntervention ? ` on ${safeFormatDate(latestIntervention.createdAt, "MMM d, yyyy")}` : ""}.
@@ -507,327 +390,141 @@ ${student.recommendation}
 Please share a short update before ${latestIntervention?.followUpDate ? safeFormatDate(latestIntervention.followUpDate, "MMM d, yyyy") : "our next review"} so we can confirm what is working and what still needs attention.`,
       relatedStudentId: resolvedStudentRecordId,
     });
-    if (!result) {
-      toast.error("Could not save follow-up reminder");
+    const feedback = getSupportNotificationToastCopy("Follow-up reminder", result);
+    toast[feedback.level](feedback.message);
+  };
+
+  const handleUpdateInterventionStatus = async (
+    interventionId: string,
+    nextStatus: ManualInterventionStatus,
+  ) => {
+    if (isDemo) {
+      setInterventions((current) =>
+        current.map((entry) => (entry.id === interventionId ? { ...entry, status: nextStatus } : entry)),
+      );
+      toast.success(nextStatus === "resolved" ? "Demo intervention resolved." : "Demo intervention reopened.");
       return;
     }
-    toast.success("Follow-up reminder saved");
+
+    const { data, error } = await updateStudentInterventionStatus(supabase, interventionId, nextStatus);
+
+    if (error) {
+      toast.error(getInterventionErrorText(error) || "Could not update intervention status");
+      return;
+    }
+
+    setInterventions((current) =>
+      current.map((entry) => (entry.id === interventionId && data ? data : entry)),
+    );
+    toast.success(nextStatus === "resolved" ? "Intervention resolved" : "Intervention reopened");
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Clock className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardLoadingState />;
   }
 
   if (!student) {
     return (
       <div className="space-y-4 animate-fade-in">
-        <Button variant="ghost" onClick={() => navigate(-1)}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
-        </Button>
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Student not found for this lecturer view.</p>
-          </CardContent>
-        </Card>
+        <StudentProfileBackButton onBack={() => navigate(-1)} />
+        <DashboardEmptyState
+          title="Student not found"
+          description="Student not found for this lecturer view."
+        />
       </div>
     );
   }
 
+  const openInterventions = interventions.filter((entry) => entry.status === "ongoing").length;
+  const overdueInterventions = interventions.filter((entry) => isInterventionOverdue(entry)).length;
+  const interventionReadiness = getStudentInterventionReadiness({
+    riskLevel: student.riskLevel,
+    recommendation: student.recommendation,
+    missedAssignmentsCount: student.missedAssignments.length,
+    openInterventions,
+    overdueInterventions,
+    latestIntervention: interventions[0] || null,
+  });
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <Button variant="ghost" onClick={() => navigate(-1)}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back
-      </Button>
+      <StudentProfileBackButton onBack={() => navigate(-1)} />
 
-      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
-        <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-              <User className="h-7 w-7 text-primary" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold font-display">{student.name}</h2>
-                <Badge variant={riskBadgeVariant as "outline" | "secondary" | "destructive"}>
-                  {student.riskLevel === "watch" ? "Watchlist" : `${student.riskLevel} risk`}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {student.modules.length > 0 ? student.modules.join(", ") : "No modules recorded"}
-              </p>
-              <p className="max-w-2xl text-sm text-muted-foreground">{student.recommendation}</p>
-            </div>
-          </div>
+      <StudentProfileHero
+        student={student}
+        riskBadgeVariant={riskBadgeVariant as "outline" | "secondary" | "destructive"}
+        openInterventions={openInterventions}
+        onQueueAtRiskAlert={() => void queueAtRiskAlert()}
+        onQueueFollowUpReminder={() => void queueFollowUpReminder()}
+      />
 
-          <div className="flex flex-wrap gap-3">
-            <div className="rounded-xl border bg-background/70 p-3 text-center">
-              <p className="text-xs text-muted-foreground">Risk score</p>
-              <p className="text-2xl font-bold font-display">{student.riskScore ?? "-"}</p>
-            </div>
-            <div className="rounded-xl border bg-background/70 p-3 text-center">
-              <p className="text-xs text-muted-foreground">Average</p>
-              <p className="text-2xl font-bold font-display">{student.averageGrade ?? "-"}%</p>
-            </div>
-            <div className="rounded-xl border bg-background/70 p-3 text-center">
-              <p className="text-xs text-muted-foreground">Missed</p>
-              <p className="text-2xl font-bold font-display">{student.missedAssignments.length}</p>
-            </div>
-            <Button variant="outline" onClick={() => void queueAtRiskAlert()}>
-              Send at-risk alert
-            </Button>
-            <Button variant="outline" onClick={() => void queueFollowUpReminder()}>
-              Send follow-up reminder
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Latest grade</p>
-            <div className="mt-2 flex items-center gap-2">
-              <p className="text-2xl font-semibold">{student.latestGrade ?? "-"}</p>
-              {trendDirection === "up" ? (
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              ) : trendDirection === "down" ? (
-                <TrendingDown className="h-4 w-4 text-destructive" />
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Submissions tracked</p>
-            <p className="mt-2 text-2xl font-semibold">{student.submissions.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Open interventions</p>
-            <p className="mt-2 text-2xl font-semibold">
-              {interventions.filter((entry) => entry.status === "ongoing").length}
+      <div className="rounded-lg border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <div className="flex flex-col space-y-1.5 p-6">
+          <h3 className="text-base font-semibold tracking-tight">Reporting Readiness</h3>
+          <p className="text-sm text-muted-foreground">
+            A compact reading of what this student support view is most likely to require next.
+          </p>
+        </div>
+        <div className="grid gap-4 p-6 pt-0 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">{interventionReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current risk level, missed assignments, and open intervention state for this student.
             </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Contact</p>
-            {student.email ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2 w-full justify-start"
-                onClick={() => {
-                  window.location.href = `mailto:${student.email}`;
-                }}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Email student
-              </Button>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">No student email on record.</p>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{interventionReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the support issue most likely to need follow-up or a clear explanation in review.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{interventionReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to open a first intervention, chase progress, or close the loop.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent Grades Trend</CardTitle>
-            <CardDescription>Latest assessment performance over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {student.chart.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-8 text-center">
-                <p className="text-sm text-muted-foreground">No graded work yet for this student.</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={student.chart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="assessment" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="grade"
-                    stroke={trendDirection === "down" ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
-                    strokeWidth={2.5}
-                    dot={{ r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+      <StudentProfileSummaryCards
+        student={student}
+        trendDirection={trendDirection}
+        openInterventions={openInterventions}
+        onEmailStudent={() => {
+          window.location.href = `mailto:${student.email}`;
+        }}
+      />
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              <CardTitle className="text-base">Why This Student Is At Risk</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {student.reasons.map((reason) => (
-              <div key={reason} className="rounded-lg border p-3 text-sm">
-                {reason}
-              </div>
-            ))}
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <div className="flex items-start gap-2">
-                <Lightbulb className="mt-0.5 h-4 w-4 text-primary" />
-                <div>
-                  <p className="text-sm font-medium">Intervention suggestion</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{student.recommendation}</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+        <StudentGradesTrendCard student={student} trendDirection={trendDirection} />
+        <StudentRiskReasonsCard student={student} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">Missed Submissions</CardTitle>
-            </div>
-            <CardDescription>Assignments with no submission found for this student</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {student.missedAssignments.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No missed assignments detected in this lecturer view.
-              </div>
-            ) : (
-              student.missedAssignments.map((assignment) => (
-                <div key={assignment.id} className="rounded-lg border p-3">
-                  <p className="text-sm font-medium">{assignment.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {assignment.module_code || "No module"}{assignment.due_date ? ` • Due ${safeFormatDate(assignment.due_date, "MMM d, yyyy")}` : ""}
-                  </p>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">Intervention Tracking</CardTitle>
-            </div>
-            <CardDescription>Log actions, follow-up dates, and resolution status</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Intervention type</Label>
-                <Select value={interventionType} onValueChange={(value) => setInterventionType(normalizeManualInterventionType(value))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="meeting">Meeting</SelectItem>
-                    <SelectItem value="feedback">Feedback</SelectItem>
-                    <SelectItem value="referral">Referral</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={interventionStatus} onValueChange={(value) => setInterventionStatus(normalizeManualInterventionStatus(value))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ongoing">Ongoing</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Lecturer note</Label>
-              <Textarea
-                rows={4}
-                value={interventionNote}
-                onChange={(event) => setInterventionNote(event.target.value)}
-                placeholder="Record what happened, what support was offered, and what to review next."
-              />
-              {!isDemo && !resolvedStudentRecordId && (
-                <p className="text-xs text-destructive">
-                  This student is missing a database ID, so interventions cannot be saved yet.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Follow-up date</Label>
-              <Input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} />
-            </div>
-
-            <Button
-              className="w-full"
-              onClick={handleAddIntervention}
-              disabled={!interventionNote.trim() || (!isDemo && !resolvedStudentRecordId)}
-            >
-              Log intervention
-            </Button>
-          </CardContent>
-        </Card>
+        <StudentMissedAssignmentsCard assignments={student.missedAssignments} />
+        <StudentInterventionFormCard
+          isDemo={isDemo}
+          canSave={Boolean(resolvedStudentRecordId)}
+          interventionType={interventionType}
+          interventionStatus={interventionStatus}
+          interventionNote={interventionNote}
+          followUpDate={followUpDate}
+          onInterventionTypeChange={(value) => setInterventionType(normalizeManualInterventionType(value))}
+          onInterventionStatusChange={(value) => setInterventionStatus(normalizeManualInterventionStatus(value))}
+          onInterventionNoteChange={setInterventionNote}
+          onFollowUpDateChange={setFollowUpDate}
+          onSubmit={() => void handleAddIntervention()}
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Intervention History</CardTitle>
-          <CardDescription>Saved to your connected Supabase project for this student</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {interventions.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No interventions logged yet.
-            </div>
-          ) : (
-            interventions.map((entry) => (
-              <div key={entry.id} className="rounded-lg border p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="capitalize">{entry.type}</Badge>
-                  <Badge variant={entry.status === "resolved" ? "default" : "secondary"} className="capitalize">
-                    {entry.status}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    Logged {safeFormatDate(entry.createdAt, "MMM d, yyyy HH:mm")}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm">{entry.note}</p>
-                {entry.followUpDate && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Follow up on {safeFormatDate(entry.followUpDate, "MMM d, yyyy")}
-                  </p>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+      <StudentInterventionHistoryCard
+        interventions={interventions}
+        onUpdateStatus={(interventionId, nextStatus) => void handleUpdateInterventionStatus(interventionId, nextStatus)}
+      />
     </div>
   );
 };

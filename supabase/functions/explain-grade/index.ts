@@ -1,32 +1,33 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { z } from "https://esm.sh/zod@3.23.8";
-import { jsonError, requireUser } from "../_shared/auth.ts";
+import { createAdminClient, HttpError, jsonError, requireUser } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
+import { buildReleasedGradeContext } from "../_shared/explain-grade-context.ts";
+import { parseExplainGradeRequestPayload } from "../_shared/explain-grade-request.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logWarn } from "../_shared/log.ts";
 import { createChatCompletion, getModel } from "../_shared/openai.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import {
+  buildExplainGradeSystemPrompt,
+  buildWeaknessRankingResponse,
+  hasWeaknessIntent,
+} from "../_shared/explain-grade-prompt.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
-const ExplainGradeRequestSchema = z.object({
-  submissionId: z.string().uuid().optional(),
-  submissionIds: z.array(z.string().uuid()).max(50).optional(),
-  message: z.string().min(1).max(2000),
-});
+function createSseResponse(content: string, corsHeaders: HeadersInit) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`),
+      );
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
 
-type ExplainGradeMessage = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
-
-function isExplainGradeMessage(value: unknown): value is ExplainGradeMessage {
-  if (!value || typeof value !== "object") return false;
-
-  const message = value as Record<string, unknown>;
-
-  return (
-    (message.role === "user" || message.role === "assistant" || message.role === "system") &&
-    typeof message.content === "string"
-  );
+  return new Response(body, {
+    headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+  });
 }
 
 serve(async (req) => {
@@ -37,8 +38,9 @@ serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { user } = await requireUser(req);
-    const rateLimit = applyRateLimit(req, {
+    const { supabase: userSupabase, user } = await requireUser(req);
+    const admin = createAdminClient();
+    const rateLimit = await applySharedRateLimit(admin, req, {
       scope: "explain-grade",
       limit: 12,
       windowMs: 60_000,
@@ -49,17 +51,7 @@ serve(async (req) => {
       return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
     }
     const body = await req.json().catch(() => null);
-    const payload = body && typeof body === "object" ? body as Record<string, unknown> : null;
-    const rawMessages = Array.isArray(payload?.messages) ? payload.messages.filter(isExplainGradeMessage) : [];
-    const latestUserMessage = [...rawMessages].reverse().find((entry) => entry.role === "user");
-
-    const parsed = ExplainGradeRequestSchema.safeParse({
-      submissionId: typeof payload?.submissionId === "string" ? payload.submissionId : undefined,
-      submissionIds: Array.isArray(payload?.submissionIds)
-        ? payload.submissionIds.filter((value): value is string => typeof value === "string")
-        : undefined,
-      message: typeof payload?.message === "string" ? payload.message : latestUserMessage?.content,
-    });
+    const parsed = parseExplainGradeRequestPayload(body);
 
     if (!parsed.success) {
       return new Response(
@@ -74,28 +66,54 @@ serve(async (req) => {
       );
     }
 
-    const { submissionId, submissionIds, message } = parsed.data;
-    const messages = rawMessages.length > 0
-      ? rawMessages
-      : [{ role: "user", content: message } satisfies ExplainGradeMessage];
-    const gradeContext = payload?.gradeContext;
-    const chatModel = getModel("OPENAI_CHAT_MODEL", "gpt-5.4-mini");
+    const { submissionId, message, messages } = parsed.data;
+    const { data: submission, error: submissionError } = await userSupabase
+      .from("submissions")
+      .select("id, assignment_id, student_id, student_name, student_email, file_name, status")
+      .eq("id", submissionId)
+      .maybeSingle();
 
-    const systemPrompt = `You are GradeAI, a supportive academic grade assistant for university students. You use the Socratic method to help students reflect on their work and understand their grades.
+    if (submissionError) {
+      throw new Error("Failed to load submission");
+    }
 
-Current grade context:
-${JSON.stringify(gradeContext, null, 2)}
+    const { data: grade, error: gradeError } = await userSupabase
+      .from("grades")
+      .select("id, submission_id, ai_score, final_score, ai_feedback, ai_breakdown, grading_confidence")
+      .eq("submission_id", submissionId)
+      .maybeSingle();
 
-Guidelines:
-- Use the Socratic method: ask guiding questions instead of giving direct answers
-- Instead of "Your essay lacked structure", ask "What do you think was the strongest part of your argument?"
-- Instead of "You lost marks on testing", ask "How did you decide which test cases to include?"
-- Help students discover insights about their work through reflection
-- Reference specific components from their grade breakdown
-- Be encouraging and supportive
-- Use markdown formatting for clarity
-- Keep responses focused and under 300 words
-- If asked about topics outside grade explanation, politely redirect`;
+    if (gradeError) {
+      throw new Error("Failed to load released grade");
+    }
+
+    const assignmentId = typeof submission?.assignment_id === "string" ? submission.assignment_id : null;
+    const { data: assignment, error: assignmentError } = assignmentId
+      ? await userSupabase
+          .from("assignments")
+          .select("id, title, module_code, max_score")
+          .eq("id", assignmentId)
+          .maybeSingle()
+      : { data: null, error: null };
+
+    if (assignmentError) {
+      throw new Error("Failed to load assignment context");
+    }
+
+    const gradeContext = buildReleasedGradeContext(
+      { submission, grade, assignment },
+      user.id,
+      (status, errorMessage) => new HttpError(status, errorMessage),
+    );
+    const chatModel = getModel("OPENAI_CHAT_MODEL", "gpt-4o-mini");
+    const latestUserQuestion = [...messages].reverse().find((entry) => entry.role === "user")?.content ?? message;
+    if (hasWeaknessIntent(latestUserQuestion)) {
+      return createSseResponse(
+        buildWeaknessRankingResponse(gradeContext.weakestCriterion, gradeContext.criterionInsights),
+        corsHeaders,
+      );
+    }
+    const systemPrompt = buildExplainGradeSystemPrompt(gradeContext, latestUserQuestion);
 
     const response = await createChatCompletion({
       model: chatModel,

@@ -6,13 +6,18 @@ import {
   Menu, MessageSquare, Moon, Search, Settings, Shield, Sun, Target, TrendingUp, University,
   Upload, Users, FileOutput,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { BulkStudentUpload } from "@/components/BulkStudentUpload";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
+import { getDashboardShellContext } from "@/lib/dashboardShell";
+import {
+  getLecturerWorkflowNotificationDestination,
+  getLecturerWorkflowNotificationPreviewHint,
+} from "@/lib/lecturerWorkflowNotifications";
 import {
   clearCommunicationMessage,
   loadVisibleCommunicationMessages,
@@ -20,8 +25,35 @@ import {
   type CommunicationMessage,
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
+import { getStudentSupportNotificationDestination } from "@/lib/studentSupportWorkflow";
 
 const DEMO_LECTURER_NOTIFICATIONS: CommunicationMessage[] = [
+  {
+    id: "demo-notice-release-follow-up",
+    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: false,
+    category: "grade-released",
+    recipientName: "Dr. Demo Lecturer",
+    recipientEmail: "demo@gradeai.com",
+    recipientId: "demo-lecturer",
+    subject: "Released result follow-up",
+    body: "Released results are ready to review for the policy brief assignment.",
+    relatedAssignmentId: "demo-assignment-policy-brief",
+  },
+  {
+    id: "demo-notice-ai-ready",
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    cleared: false,
+    read: false,
+    category: "ai-grading-ready",
+    recipientName: "Dr. Demo Lecturer",
+    recipientEmail: "demo@gradeai.com",
+    recipientId: "demo-lecturer",
+    subject: "Synthetic AI grading ready",
+    body: "AI grading is ready for the policy brief assignment.",
+    relatedAssignmentId: "demo-assignment-policy-brief",
+  },
   {
     id: "demo-notice-1",
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
@@ -83,6 +115,19 @@ const DEMO_STUDENT_NOTIFICATIONS: CommunicationMessage[] = [
 const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
 const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 
+type SidebarLink = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+type SidebarSection = {
+  label: string;
+  description: string;
+  defaultOpen: boolean;
+  links: readonly SidebarLink[];
+};
+
 const lecturerSections = [
   {
     label: "Core",
@@ -123,15 +168,14 @@ const lecturerSections = [
     ],
   },
   {
-    label: "Admin",
-    description: "Setup and operational tools",
+    label: "Workspace",
+    description: "Personal settings and account controls",
     defaultOpen: false,
     links: [
-      { to: "/dashboard/bulk-upload-students", label: "Bulk Upload Students", icon: Users, isAction: true },
       { to: "/dashboard/settings", label: "Settings", icon: Settings },
     ],
   },
-] as const;
+] as const satisfies readonly SidebarSection[];
 
 const adminSections = [
   {
@@ -173,7 +217,7 @@ const adminSections = [
       { to: "/dashboard/settings", label: "Settings", icon: Settings },
     ],
   },
-] as const;
+] as const satisfies readonly SidebarSection[];
 
 const studentLinks = [
   { to: "/dashboard", label: "My Grades", icon: GraduationCap },
@@ -181,15 +225,54 @@ const studentLinks = [
   { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
   { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
-];
+] as const satisfies readonly SidebarLink[];
 
 const defaultLecturerSectionState = Object.fromEntries(
   lecturerSections.map((section) => [section.label, section.defaultOpen]),
-) as Record<(typeof lecturerSections)[number]["label"], boolean>;
+) as Record<string, boolean>;
 
 const defaultAdminSectionState = Object.fromEntries(
   adminSections.map((section) => [section.label, section.defaultOpen]),
-) as Record<(typeof adminSections)[number]["label"], boolean>;
+) as Record<string, boolean>;
+
+const getNotificationCategoryLabel = (category: CommunicationMessage["category"]) => {
+  switch (category) {
+    case "grade-released":
+      return "Released result";
+    case "feedback-summary":
+      return "Feedback";
+    case "assignment-published":
+      return "Assignment";
+    case "submission-received":
+      return "Submission";
+    case "ai-grading-ready":
+      return "AI grading";
+    case "integrity-check-ready":
+      return "Integrity";
+    case "at-risk-alert":
+      return "At-risk";
+    case "intervention-follow-up":
+      return "Support";
+    default:
+      return "Notice";
+  }
+};
+
+const getStudentNotificationPreviewHint = (notification: CommunicationMessage) => {
+  switch (notification.category) {
+    case "grade-released":
+      return "Opens your released result and grade explanation.";
+    case "feedback-summary":
+      return "Opens your released result summary.";
+    case "assignment-published":
+      return "Opens the assignment submission window.";
+    case "at-risk-alert":
+    case "intervention-follow-up":
+      return "Opens your improvement plan.";
+    default:
+      return null;
+  }
+};
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { profile, user, signOut, isDemo } = useAuth();
@@ -208,15 +291,17 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   });
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
-  const [openSections, setOpenSections] = useState(() => {
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window === "undefined") return defaultSectionState;
 
     try {
       const stored = window.localStorage.getItem(sidebarStateKey);
       if (!stored) return defaultSectionState;
 
-      const parsed = JSON.parse(stored) as Partial<typeof defaultSectionState>;
-      return { ...defaultSectionState, ...parsed };
+      const parsed = JSON.parse(stored) as Partial<Record<string, boolean>>;
+      return Object.fromEntries(
+        Object.entries({ ...defaultSectionState, ...parsed }).map(([key, value]) => [key, Boolean(value)]),
+      );
     } catch {
       return defaultSectionState;
     }
@@ -306,6 +391,36 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
     if (isStudentRole(profile?.role)) {
       if (notification.category === "at-risk-alert" || notification.category === "intervention-follow-up") {
+        const supportDestination = getStudentSupportNotificationDestination({
+          notification,
+          notifications,
+        });
+
+        if (supportDestination.kind === "released-result") {
+          const params = new URLSearchParams();
+          if (supportDestination.targetNotification?.relatedAssignmentId) {
+            params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
+          }
+          params.set("source", "support-notification");
+          navigate(`/dashboard/explain-grade${params.toString() ? `?${params.toString()}` : ""}`, {
+            state: {
+              notification: supportDestination.targetNotification ?? notification,
+              redirectedFromSupportNotification: notification,
+            },
+          });
+          return;
+        }
+
+        if (supportDestination.kind === "assignments") {
+          navigate("/dashboard/assignments?source=support-notification", {
+            state: {
+              notification: supportDestination.targetNotification ?? notification,
+              redirectedFromSupportNotification: notification,
+            },
+          });
+          return;
+        }
+
         navigate(`/dashboard/improvements?notice=${encodeURIComponent(notification.id)}`, {
           state: { notification },
         });
@@ -314,9 +429,18 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
       if (
         notification.category === "feedback-summary" ||
-        notification.category === "grade-released" ||
-        notification.category === "assignment-published"
+        notification.category === "grade-released"
       ) {
+        const params = new URLSearchParams();
+        if (notification.relatedAssignmentId) {
+          params.set("assignment", notification.relatedAssignmentId);
+        }
+        params.set("source", "notification");
+        navigate(`/dashboard/explain-grade${params.toString() ? `?${params.toString()}` : ""}`);
+        return;
+      }
+
+      if (notification.category === "assignment-published") {
         navigate("/dashboard/assignments");
         return;
       }
@@ -328,6 +452,26 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     }
 
     if (isLecturerEquivalent && notification.relatedAssignmentId) {
+      const destination = getLecturerWorkflowNotificationDestination({
+        notification,
+        notifications,
+      });
+
+      if (destination) {
+        navigate(
+          `/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}?source=notification&focus=${destination.focus}`,
+          destination.redirected
+            ? {
+                state: {
+                  notification: destination.targetNotification,
+                  redirectedFromNotification: notification,
+                },
+              }
+            : undefined,
+        );
+        return;
+      }
+
       navigate(`/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}`);
       return;
     }
@@ -340,7 +484,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate("/dashboard");
   };
 
-  const lecturerLinks = roleSections.flatMap((section) => section.links);
+  const lecturerLinks: SidebarLink[] = roleSections.flatMap((section) => [...section.links]);
   const links = isLecturerEquivalent ? lecturerLinks : studentLinks;
 
   const handleSignOut = async () => {
@@ -371,6 +515,13 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const activeSection = isLecturerEquivalent
     ? roleSections.find((section) => section.links.some((link) => isLinkActive(link.to)))
     : null;
+  const shellContext = getDashboardShellContext({
+    isAdmin,
+    isLecturerEquivalent,
+    activeSectionLabel: activeSection?.label ?? null,
+    activeSectionDescription: activeSection?.description ?? null,
+    activeLinkLabel: activeLink?.label ?? null,
+  });
 
   useEffect(() => {
     if (!activeSection || searchQuery) return;
@@ -390,22 +541,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     setOpenSections((current) => ({ ...current, [label]: !current[label] }));
   };
 
-  const renderNavLink = (link: (typeof lecturerSections)[number]["links"][number] | (typeof adminSections)[number]["links"][number] | typeof studentLinks[number]) => {
+  const renderNavLink = (link: SidebarLink) => {
     const isActive = isLinkActive(link.to);
-    const isActionLink = "isAction" in link && !!link.isAction;
 
     return (
       <Link
         key={link.to}
-        to={isActionLink ? "#" : link.to}
+        to={link.to}
         onClick={(event) => {
-          if (isActionLink) {
-            event.preventDefault();
-            setSidebarOpen(false);
-            setSearchQuery("");
-            return;
-          }
-
           setSidebarOpen(false);
           setSearchQuery("");
         }}
@@ -506,18 +649,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                   </button>
                   {isExpanded && (
                     <div className="space-y-1 pb-1">
-                      {section.links.map((link) =>
-                        "isAction" in link && link.isAction ? (
-                          <div key={link.to} className="rounded-xl border border-dashed border-sidebar-border/80 bg-sidebar-accent/25 p-2">
-                            <BulkStudentUpload
-                              triggerClassName="w-full justify-start rounded-lg border-0 bg-transparent px-2 py-2 text-sm font-medium text-sidebar-foreground/78 shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                              compact
-                            />
-                          </div>
-                        ) : (
-                          renderNavLink(link)
-                        ),
-                      )}
+                      {section.links.map((link) => renderNavLink(link))}
                     </div>
                   )}
                 </div>
@@ -557,11 +689,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           </Button>
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              {activeSection?.label || (isLecturerEquivalent ? "Workspace" : "Student")}
+              {shellContext.workspaceLabel}
             </p>
             <h1 className="truncate font-display text-xl font-semibold tracking-tight">
               {activeLink?.label || "Dashboard"}
             </h1>
+            <p className="mt-0.5 hidden max-w-2xl truncate text-xs text-muted-foreground md:block">
+              {shellContext.workspaceHint}
+            </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             {isDemo && (
@@ -572,7 +707,13 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" size="icon" className="relative rounded-xl" onClick={() => setShowNotifications(!showNotifications)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative rounded-xl"
+              aria-label="Open notifications"
+              onClick={() => setShowNotifications(!showNotifications)}
+            >
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
             </Button>
@@ -610,8 +751,29 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                             {safeFormatDate(notification.createdAt, "MMM d, HH:mm")}
                           </span>
                         </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="text-[10px]">
+                            {getNotificationCategoryLabel(notification.category)}
+                          </Badge>
+                        </div>
                         <p className="mt-1 text-muted-foreground">{notification.recipientName}</p>
                         <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>
+                        {isStudentRole(profile?.role) && getStudentNotificationPreviewHint(notification) && (
+                          <p className="mt-2 text-[11px] font-medium text-foreground/80">
+                            {getStudentNotificationPreviewHint(notification)}
+                          </p>
+                        )}
+                        {!isStudentRole(profile?.role) && getLecturerWorkflowNotificationPreviewHint({
+                          notification,
+                          notifications,
+                        }) && (
+                          <p className="mt-2 text-[11px] font-medium text-foreground/80">
+                            {getLecturerWorkflowNotificationPreviewHint({
+                              notification,
+                              notifications,
+                            })}
+                          </p>
+                        )}
                         </button>
                         <div className="flex justify-end px-3 pb-3">
                           <button

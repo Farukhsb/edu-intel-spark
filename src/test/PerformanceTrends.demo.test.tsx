@@ -29,6 +29,20 @@ vi.mock("@/hooks/use-toast", () => ({
   }),
 }));
 
+vi.mock("recharts", () => ({
+  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  LineChart: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  BarChart: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  CartesianGrid: () => <div />,
+  XAxis: () => <div />,
+  YAxis: () => <div />,
+  Tooltip: () => <div />,
+  Legend: () => <div />,
+  Line: () => <div />,
+  Bar: () => <div />,
+  Cell: () => <div />,
+}));
+
 describe("PerformanceTrends demo mode", () => {
   beforeEach(() => {
     mocks.authState.isDemo = true;
@@ -51,7 +65,10 @@ describe("PerformanceTrends demo mode", () => {
     );
 
     expect(await screen.findByText("Average Grades Over Time")).toBeInTheDocument();
-    expect(screen.getByText("Filtered intervention view")).toBeInTheDocument();
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
+    expect(screen.getByText("Open early support signals and act on high-risk students")).toBeInTheDocument();
+    expect(await screen.findByText("Filtered intervention view")).toBeInTheDocument();
     expect(screen.getByText(/Showing 1 student matching the current risk and score criteria\./)).toBeInTheDocument();
     expect(screen.getAllByText("Mariam Okeke").length).toBeGreaterThan(0);
     expect(screen.queryByText("No graded submissions yet. Performance trends will appear once assignments are graded.")).not.toBeInTheDocument();

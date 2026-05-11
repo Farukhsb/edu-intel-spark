@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import LecturerOverview from "@/pages/dashboard/LecturerOverview";
@@ -141,6 +141,7 @@ describe("LecturerOverview", () => {
     expect(await screen.findByText("Welcome back, Dr")).toBeInTheDocument();
     expect(screen.getByText("Sam Student")).toBeInTheDocument();
     expect(screen.getByText("Algorithms")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open released results" })).toBeInTheDocument();
   });
 
   it("shows a loading state while dashboard data is loading", () => {
@@ -185,6 +186,12 @@ describe("LecturerOverview", () => {
     await waitFor(() => {
       expect(screen.getByText("Active Students")).toBeInTheDocument();
     });
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Live delivery position")).toBeInTheDocument();
+    expect(screen.getByText("1 active assignment still need routine monitoring")).toBeInTheDocument();
+    expect(
+      screen.getByText("Track live submissions and keep release-ready work moving through the workflow"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Awaiting Review")).toBeInTheDocument();
     expect(screen.getByText("Average Grade")).toBeInTheDocument();
     expect(screen.getByText("At-Risk Students")).toBeInTheDocument();
@@ -192,5 +199,48 @@ describe("LecturerOverview", () => {
     expect(screen.getByText("Grade Distribution")).toBeInTheDocument();
     expect(screen.getByText("Attention Needed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Review submissions/i })).toBeInTheDocument();
+  });
+
+  it("opens a focused assignment workflow from recent submissions and the attention card", async () => {
+    setupSupabase({
+      assignments: [{ id: "assignment-1", title: "Algorithms", max_score: 100 }],
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_id: "student-1",
+          student_name: "Sam Student",
+          student_email: "sam@example.com",
+          file_name: "essay.pdf",
+          status: "under_review",
+          submitted_at: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+      grades: [{ submission_id: "submission-1", ai_score: 72, final_score: null }],
+    });
+
+    renderLecturerOverview();
+
+    expect(await screen.findByRole("button", { name: "Open manual review" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open manual review" }));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open manual review queue" }));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Review submissions/i }));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
+    );
+
+    fireEvent.click(screen.getByText("Awaiting Review"));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
+    );
   });
 });

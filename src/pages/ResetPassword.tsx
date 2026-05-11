@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getResetPasswordReadiness } from "@/lib/resetPasswordReadiness";
+import { useAuth } from "@/contexts/AuthContext";
 
 const getHashParams = () => {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
@@ -31,12 +33,18 @@ const getRecoveryParams = () => {
 const ResetPassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { completePasswordChange } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [linkChecked, setLinkChecked] = useState(false);
   const [isRecovered, setIsRecovered] = useState(false);
+  const readiness = getResetPasswordReadiness({
+    linkChecked,
+    recoveryReady,
+    isRecovered,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -83,26 +91,31 @@ const ResetPassword = () => {
         return;
       }
 
-      let error = null;
-
       if (code) {
-        ({ error } = await supabase.auth.exchangeCodeForSession(code));
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          markReady(false);
+          return;
+        }
       } else if (tokenHash) {
-        ({ error } = await supabase.auth.verifyOtp({
+        const { error } = await supabase.auth.verifyOtp({
           type: "recovery",
           token_hash: tokenHash,
-        }));
+        });
+        if (error) {
+          markReady(false);
+          return;
+        }
       } else if (accessToken && refreshToken) {
-        ({ error } = await supabase.auth.setSession({
+        const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
-        }));
+        });
+        if (error) {
+          markReady(false);
+          return;
+        }
       } else {
-        markReady(false);
-        return;
-      }
-
-      if (error) {
         markReady(false);
         return;
       }
@@ -150,26 +163,28 @@ const ResetPassword = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({ password });
-
-    setLoading(false);
-
-    if (error) {
+    try {
+      await completePasswordChange(password);
+    } catch (error) {
+      setLoading(false);
+      const errorMessage = error instanceof Error ? error.message : "Password reset failed";
       const isWeakOrCompromised =
-        error.message.toLowerCase().includes("weak") ||
-        error.message.toLowerCase().includes("compromised") ||
-        error.message.toLowerCase().includes("hibp") ||
-        error.status === 422;
+        errorMessage.toLowerCase().includes("weak") ||
+        errorMessage.toLowerCase().includes("compromised") ||
+        errorMessage.toLowerCase().includes("hibp") ||
+        (typeof error === "object" && error !== null && "status" in error && error.status === 422);
 
       toast({
         title: isWeakOrCompromised ? "Password not secure enough" : "Password reset failed",
         description: isWeakOrCompromised
           ? "This password has appeared in a data breach and cannot be used. Please choose a stronger, unique password."
-          : error.message,
+          : errorMessage,
         variant: "destructive",
       });
       return;
     }
+
+    setLoading(false);
 
     setIsRecovered(true);
     toast({
@@ -190,6 +205,17 @@ const ResetPassword = () => {
             Back to login
           </Link>
         </Button>
+
+        <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+          <CardContent className="grid gap-4 p-6">
+            <div className="rounded-lg border bg-background/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recovery Readiness</p>
+              <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{readiness.likelyChallenge}</p>
+              <p className="mt-3 text-sm font-medium">{readiness.bestNextAction}</p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

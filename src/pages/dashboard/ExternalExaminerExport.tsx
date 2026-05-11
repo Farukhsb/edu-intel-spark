@@ -6,80 +6,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, FileText, Loader2, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import {
+  DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS,
+  DEMO_EXTERNAL_EXAMINER_EXPORT_DATA,
+} from "@/pages/dashboard/external-examiner-export/demoData";
 import type {
   ExternalExaminerAssignmentRow,
-  ExternalExaminerExportRow,
   ExternalExaminerGradeRow,
-  ExternalExaminerProfileRow,
-  ExternalExaminerSubmissionRow,
+  ExternalExaminerExportRow,
 } from "@/types/academic";
 
-const ASSIGNMENT_FIELDS = "id, title, module_code";
-const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
-const GRADE_FIELDS = "submission_id, ai_score, lecturer_score, final_score, ai_feedback, lecturer_feedback, final_feedback, reviewed_at, reviewed_by";
-const PROFILE_FIELDS = "id, full_name, email";
-
 const EXPORTABLE_STATUSES = new Set(["moderated", "approved", "released"]);
-
-const DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS = [
-  {
-    id: "demo-assignment-policy-brief",
-    title: "Strategic Policy Brief: Housing Affordability Interventions",
-    moduleCode: "PPL502",
-  },
-  {
-    id: "demo-assignment-ethics-review",
-    title: "Research Ethics Review Memo",
-    moduleCode: "SOC411",
-  },
-];
-
-const DEMO_EXTERNAL_EXAMINER_EXPORT_DATA: ExternalExaminerExportRow[] = [
-  {
-    studentName: "Amina Hassan",
-    studentEmail: "amina.hassan@demo.gradeai.test",
-    assignmentTitle: "Strategic Policy Brief: Housing Affordability Interventions",
-    moduleCode: "PPL502",
-    aiScore: 68,
-    lecturerScore: 70,
-    finalScore: 69,
-    aiFeedback:
-      "The brief identifies the main affordability pressures clearly and uses current evidence effectively. Policy options are compared with reasonable balance, but the implementation risks need stronger quantification.",
-    lecturerFeedback:
-      "A well-structured brief with credible analysis. The strongest section is the evaluation of rent stabilisation trade-offs; the recommendation section should be more explicit about cost and political feasibility.",
-    finalFeedback:
-      "A strong policy brief that demonstrates sound judgement and use of evidence. To move into a clearer distinction range, tighten the implementation plan and support the final recommendation with sharper fiscal reasoning.",
-    status: "released",
-    submittedAt: "2026-04-11",
-    reviewedAt: "2026-04-18",
-    reviewedBy: "Dr Priya Malhotra",
-    classification: "1st",
-  },
-  {
-    studentName: "Daniel Reed",
-    studentEmail: "daniel.reed@demo.gradeai.test",
-    assignmentTitle: "Research Ethics Review Memo",
-    moduleCode: "SOC411",
-    aiScore: 61,
-    lecturerScore: 63,
-    finalScore: 62,
-    aiFeedback:
-      "The memo covers informed consent, confidentiality, and participant risk appropriately. The discussion of data retention is accurate, but the mitigation plan for vulnerable participants is underdeveloped.",
-    lecturerFeedback:
-      "Clear and competent overall. The ethical principles are understood, but the memo would benefit from a more critical treatment of power dynamics and withdrawal procedures.",
-    finalFeedback:
-      "A solid upper-second response with secure coverage of core ethics issues. Further depth in participant safeguarding and procedural detail would strengthen the analysis.",
-    status: "approved",
-    submittedAt: "2026-04-09",
-    reviewedAt: "2026-04-16",
-    reviewedBy: "Dr Priya Malhotra",
-    classification: "2:1",
-  },
-];
 
 const getClassification = (score: number | null): string => {
   if (score == null) return "—";
@@ -88,6 +29,22 @@ const getClassification = (score: number | null): string => {
   if (score >= 50) return "2:2";
   if (score >= 40) return "3rd";
   return "Fail";
+};
+
+const getExportSummary = (rows: ExternalExaminerExportRow[]) => {
+  const scores = rows.map((row) => row.finalScore).filter((score): score is number => score != null);
+  const averageScore = scores.length > 0 ? Math.round(scores.reduce((left, right) => left + right, 0) / scores.length) : 0;
+  const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
+  const moderatedCount = rows.filter((row) => row.lecturerScore != null).length;
+  const releasedCount = rows.filter((row) => row.status === "released").length;
+
+  return {
+    averageScore,
+    passRate,
+    moderatedCount,
+    releasedCount,
+    moderationCoverage: rows.length > 0 ? Math.round((moderatedCount / rows.length) * 100) : 0,
+  };
 };
 
 const ExternalExaminerExport = () => {
@@ -115,17 +72,8 @@ const ExternalExaminerExport = () => {
 
     const fetchData = async () => {
       try {
-        const [{ data: assignmentsRaw }, { data: subsRaw }, { data: gradesRaw }, { data: profilesRaw }] = await Promise.all([
-          supabase.from("assignments").select(ASSIGNMENT_FIELDS),
-          supabase.from("submissions").select(SUBMISSION_FIELDS),
-          supabase.from("grades").select(GRADE_FIELDS),
-          supabase.from("profiles").select(PROFILE_FIELDS),
-        ]);
-
-        const assignmentRows = (assignmentsRaw ?? []) as ExternalExaminerAssignmentRow[];
-        const submissionRows = (subsRaw ?? []) as ExternalExaminerSubmissionRow[];
-        const gradeRows = (gradesRaw ?? []) as ExternalExaminerGradeRow[];
-        const profileRows = (profilesRaw ?? []) as ExternalExaminerProfileRow[];
+        const { assignments: assignmentRows, submissions: submissionRows, grades: gradeRows, profiles: profileRows } =
+          await fetchExternalExaminerDataset();
 
         setAssignments(
           assignmentRows.map((row) => ({
@@ -186,6 +134,7 @@ const ExternalExaminerExport = () => {
   const filteredData = selectedAssignment === "all"
     ? exportData
     : exportData.filter((row) => row.assignmentTitle === assignments.find((assignment) => assignment.id === selectedAssignment)?.title);
+  const exportSummary = getExportSummary(filteredData);
 
   const handleExport = (format: "csv" | "detailed") => {
     setExporting(true);
@@ -280,6 +229,52 @@ const ExternalExaminerExport = () => {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Average final score</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.averageScore}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Pass rate</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.passRate}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Moderation coverage</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.moderationCoverage}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Released to students</p>
+            <p className="mt-2 text-2xl font-semibold">{exportSummary.releasedCount}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+          <div>
+            <p className="text-sm font-medium">Governed export scope</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Only `moderated`, `approved`, and `released` submissions are included in the examiner export.
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-medium">External review intent</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Use this view to inspect final outcomes, moderation evidence, and score consistency before downloading the full report.
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-medium">Current selection</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {selectedAssignment === "all"
+                ? "All assignments"
+                : assignments.find((assignment) => assignment.id === selectedAssignment)?.title || "Filtered assignment"} | {filteredData.length} records ready
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">

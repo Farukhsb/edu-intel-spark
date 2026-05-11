@@ -11,6 +11,7 @@ type RenderModerationDashboardOptions = {
   cases: ModerationCaseView[];
   lecturers?: unknown[];
   supabase?: Record<string, unknown>;
+  navigateSpy?: ReturnType<typeof vi.fn>;
 };
 
 export const fetchModerationCaseViewsMock = vi.fn();
@@ -20,6 +21,7 @@ export const renderModerationDashboard = async ({
   cases,
   lecturers = [],
   supabase = {},
+  navigateSpy,
 }: RenderModerationDashboardOptions) => {
   vi.resetModules();
 
@@ -35,6 +37,16 @@ export const renderModerationDashboard = async ({
   vi.doMock("@/integrations/supabase/client", () => ({
     supabase,
   }));
+
+  if (navigateSpy) {
+    vi.doMock("react-router-dom", async () => {
+      const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+      return {
+        ...actual,
+        useNavigate: () => navigateSpy,
+      };
+    });
+  }
 
   vi.doMock("@/lib/moderationWorkflow", async () => {
     const actual = await vi.importActual<typeof import("@/lib/moderationWorkflow")>("@/lib/moderationWorkflow");
@@ -60,4 +72,5 @@ export const cleanupModerationDashboardMocks = () => {
   vi.unmock("@/contexts/AuthContext");
   vi.unmock("@/integrations/supabase/client");
   vi.unmock("@/lib/moderationWorkflow");
+  vi.unmock("react-router-dom");
 };

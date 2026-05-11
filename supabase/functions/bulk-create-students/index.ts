@@ -1,10 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
-import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createAdminClient, jsonError, requireAdmin, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { requirePostMethod } from "../_shared/http.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
-import { applyRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 
 type StudentInput = {
   name: string;
@@ -13,6 +13,107 @@ type StudentInput = {
   cohort_id?: string;
   department_id?: string;
 };
+
+type ProfileVerification = {
+  email: string;
+  full_name: string | null;
+  cohort_id: string | null;
+  department_id: string | null;
+  must_change_password: boolean;
+};
+
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+
+function getPasswordSetupRedirectUrl() {
+  const configuredAppUrl =
+    Deno.env.get("APP_URL")?.trim() ||
+    Deno.env.get("SITE_URL")?.trim() ||
+    Deno.env.get("PUBLIC_APP_URL")?.trim() ||
+    Deno.env.get("APP_BASE_URL")?.trim() ||
+    "";
+
+  if (!configuredAppUrl) {
+    return undefined;
+  }
+
+  return `${trimTrailingSlash(configuredAppUrl)}/reset-password`;
+}
+
+const PROFILE_FLAG_RETRY_COUNT = 5;
+const PROFILE_FLAG_RETRY_DELAY_MS = 400;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function markPasswordChangeRequired(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  options: { userId?: string; email: string },
+) {
+  for (let attempt = 0; attempt < PROFILE_FLAG_RETRY_COUNT; attempt++) {
+    let query = supabaseAdmin
+      .from("profiles")
+      .update({ must_change_password: true });
+
+    if (options.userId) {
+      query = query.eq("id", options.userId);
+    } else {
+      query = query.eq("email", options.email).eq("role", "student");
+    }
+
+    const { data, error } = await query.select("id").maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data?.id) {
+      return;
+    }
+
+    if (attempt < PROFILE_FLAG_RETRY_COUNT - 1) {
+      await wait(PROFILE_FLAG_RETRY_DELAY_MS);
+    }
+  }
+
+  throw new Error("The student account was invited, but the password-change requirement could not be applied.");
+}
+
+async function fetchVerifiedProfile(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  options: { userId?: string; email: string },
+) {
+  let lastProfile: ProfileVerification | null = null;
+
+  for (let attempt = 0; attempt < PROFILE_FLAG_RETRY_COUNT; attempt++) {
+    let query = supabaseAdmin
+      .from("profiles")
+      .select("email, full_name, cohort_id, department_id, must_change_password");
+
+    if (options.userId) {
+      query = query.eq("id", options.userId);
+    } else {
+      query = query.eq("email", options.email).eq("role", "student");
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      lastProfile = data as ProfileVerification;
+      if (data.must_change_password) {
+        return lastProfile;
+      }
+    }
+
+    if (attempt < PROFILE_FLAG_RETRY_COUNT - 1) {
+      await wait(PROFILE_FLAG_RETRY_DELAY_MS);
+    }
+  }
+
+  return lastProfile;
+}
 
 const StudentInputSchema = z.object({
   email: z.string().trim().email(),
@@ -29,10 +130,6 @@ const BulkCreateStudentsRequestSchema = z.object({
   students: z.array(StudentInputSchema).min(1).max(500),
 });
 
-function generateTemporaryPassword() {
-  return `GradeAI_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-}
-
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
@@ -41,8 +138,9 @@ serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { user } = await requireLecturer(req);
-    const rateLimit = applyRateLimit(req, {
+    const { user } = await requireAdmin(req);
+    const supabaseAdmin = createAdminClient();
+    const rateLimit = await applySharedRateLimit(supabaseAdmin, req, {
       scope: "bulk-create-students",
       limit: 20,
       windowMs: 60_000,
@@ -79,7 +177,7 @@ serve(async (req) => {
       throw new HttpError(400, "Upload is limited to 200 students per request");
     }
 
-    const supabaseAdmin = createAdminClient();
+    const passwordSetupRedirectTo = getPasswordSetupRedirectUrl();
     const results = [];
 
     for (const student of students as StudentInput[]) {
@@ -98,17 +196,14 @@ serve(async (req) => {
         continue;
       }
 
-      const password = generateTemporaryPassword();
-      const { error } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
+      const { data: inviteData, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        data: {
           full_name: name,
           role: "student",
           cohort_id: cohortId,
           department_id: departmentId,
         },
+        redirectTo: passwordSetupRedirectTo,
       });
 
       if (error) {
@@ -116,7 +211,38 @@ serve(async (req) => {
         continue;
       }
 
-      results.push({ name, email, password, success: true });
+      try {
+        await markPasswordChangeRequired(supabaseAdmin, {
+          userId: inviteData.user?.id,
+          email,
+        });
+
+        const verifiedProfile = await fetchVerifiedProfile(supabaseAdmin, {
+          userId: inviteData.user?.id,
+          email,
+        });
+
+        results.push({
+          name,
+          email,
+          success: true,
+          invite_sent: true,
+          verified_profile: verifiedProfile,
+        });
+      } catch (flagError) {
+        logError("Failed to mark invited student for password change", flagError, {
+          function: "bulk-create-students",
+          email,
+          userId: inviteData.user?.id ?? null,
+        });
+        results.push({
+          name,
+          email,
+          success: false,
+          error: flagError instanceof Error ? flagError.message : "Password-change requirement could not be applied",
+        });
+        continue;
+      }
     }
 
     const successCount = results.filter((result) => result.success).length;

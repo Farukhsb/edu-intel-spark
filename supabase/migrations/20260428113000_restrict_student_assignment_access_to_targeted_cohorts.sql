@@ -16,7 +16,7 @@ using (
     join public.profiles p
       on p.id = auth.uid()
     where ac.assignment_id = public.assignments.id
-      and ac.cohort_id = p.cohort_id
+      and ac.cohort_id::text = p.cohort_id
   )
 );
 
@@ -36,8 +36,8 @@ with check (
       on ac.assignment_id = a.id
     join public.profiles p
       on p.id = auth.uid()
-    where a.id = submissions.assignment_id
+    where a.id::text = submissions.assignment_id::text
       and a.status = 'published'
-      and ac.cohort_id = p.cohort_id
+      and ac.cohort_id::text = p.cohort_id
   )
 );

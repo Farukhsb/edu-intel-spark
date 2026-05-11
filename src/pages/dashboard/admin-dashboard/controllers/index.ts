@@ -1,0 +1,1 @@
+export { useAdminDashboardController } from "./useAdminDashboardController";

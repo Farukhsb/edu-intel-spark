@@ -8,6 +8,21 @@ const ALLOWED_ORIGINS = new Set([
 
 const PAGES_DEV_ROOT = "gradeai.pages.dev";
 
+function getEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  return undefined;
+}
+
+const EXTRA_ALLOWED_ORIGINS = new Set(
+  (getEnv("ALLOWED_ORIGINS") ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+
 const BASE_CORS_HEADERS = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -39,11 +54,22 @@ function isAllowedOrigin(origin: string): boolean {
     return true;
   }
 
+  if (EXTRA_ALLOWED_ORIGINS.has(origin)) {
+    return true;
+  }
+
   let url: URL;
   try {
     url = new URL(origin);
   } catch {
     return false;
+  }
+
+  if (
+    url.protocol === "http:" &&
+    (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+  ) {
+    return true;
   }
 
   if (url.protocol !== "https:") {

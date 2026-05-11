@@ -33,6 +33,39 @@ export type DraftCommunicationMessage = Omit<
   "id" | "createdAt" | "cleared" | "read"
 >;
 
+export interface CommunicationDispatchResult {
+  ok: boolean;
+  status: "created" | "duplicate" | "failed" | "unauthenticated";
+  message: CommunicationMessage | null;
+}
+
+const normalizeMessageToken = (value: string | null | undefined) =>
+  value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+
+export const buildCommunicationMessageFingerprint = (
+  message: Pick<
+    DraftCommunicationMessage,
+    | "category"
+    | "recipientName"
+    | "recipientEmail"
+    | "recipientId"
+    | "subject"
+    | "body"
+    | "relatedStudentId"
+    | "relatedAssignmentId"
+  >,
+) =>
+  [
+    message.category,
+    normalizeMessageToken(message.recipientName),
+    normalizeMessageToken(message.recipientEmail),
+    normalizeMessageToken(message.recipientId),
+    normalizeMessageToken(message.subject),
+    normalizeMessageToken(message.body),
+    normalizeMessageToken(message.relatedStudentId),
+    normalizeMessageToken(message.relatedAssignmentId),
+  ].join("|");
+
 interface CommunicationMessageRow {
   id: string;
   created_at: string;
@@ -58,6 +91,52 @@ type SupabaseLikeError = {
   details?: string | null;
   hint?: string | null;
 };
+
+const CommunicationCategorySchema = z.enum([
+  "feedback-summary",
+  "at-risk-alert",
+  "grade-released",
+  "intervention-follow-up",
+  "submission-received",
+  "ai-grading-ready",
+  "integrity-check-ready",
+  "assignment-published",
+]);
+
+const CommunicationMessageRowSchema = z.object({
+  id: z.string(),
+  created_at: z.string(),
+  cleared: z.boolean().nullable(),
+  read: z.boolean().nullable(),
+  category: CommunicationCategorySchema,
+  recipient_name: z.string(),
+  recipient_email: z.string().nullable(),
+  recipient_id: z.string().nullable(),
+  subject: z.string(),
+  body: z.string(),
+  related_student_id: z.string().nullable(),
+  related_assignment_id: z.string().nullable(),
+});
+
+const CommunicationMessageLegacyRowSchema = CommunicationMessageRowSchema.omit({
+  cleared: true,
+  read: true,
+});
+
+const CommunicationMessageClearedOnlyRowSchema = CommunicationMessageRowSchema.omit({
+  read: true,
+});
+
+const CommunicationMessageReadOnlyRowSchema = CommunicationMessageRowSchema.omit({
+  cleared: true,
+});
+
+const WorkflowEmailResponseSchema = z.object({
+  success: z.boolean().optional(),
+  skipped: z.boolean().optional(),
+  reason: z.string().optional(),
+  sentCount: z.number().optional(),
+});
 
 const COMMUNICATION_MESSAGE_SELECT =
   "id, created_at, cleared, read, category, recipient_name, recipient_email, recipient_id, subject, body, related_student_id, related_assignment_id";
@@ -161,9 +240,113 @@ const normalizeReadOnlyMessage = (
   relatedAssignmentId: message.related_assignment_id || undefined,
 });
 
-export const queueCommunicationMessage = async (
-  message: DraftCommunicationMessage
+const parseCommunicationMessageRows = <TRow>(
+  rows: unknown,
+  schema: z.ZodType<TRow>,
 ) => {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.flatMap((row) => {
+    const parsed = schema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+};
+
+const findExistingCommunicationMessage = async (
+  message: DraftCommunicationMessage,
+) => {
+  const recipientId = message.recipientId ?? null;
+  const recipientEmail = message.recipientEmail ?? null;
+  const relatedAssignmentId = message.relatedAssignmentId ?? null;
+  const relatedStudentId = message.relatedStudentId ?? null;
+
+  const fetchWithSelect = async (selectClause: string) => {
+    let query = supabase
+      .from("communication_messages")
+      .select(selectClause)
+      .eq("category", message.category)
+      .eq("subject", message.subject)
+      .eq("body", message.body);
+
+    if (recipientId) {
+      query = query.eq("recipient_id", recipientId);
+    } else {
+      query = query.is("recipient_id", null);
+    }
+
+    if (recipientEmail) {
+      query = query.eq("recipient_email", recipientEmail);
+    } else {
+      query = query.is("recipient_email", null);
+    }
+
+    if (relatedAssignmentId) {
+      query = query.eq("related_assignment_id", relatedAssignmentId);
+    } else {
+      query = query.is("related_assignment_id", null);
+    }
+
+    if (relatedStudentId) {
+      query = query.eq("related_student_id", relatedStudentId);
+    } else {
+      query = query.is("related_student_id", null);
+    }
+
+    return query.limit(10);
+  };
+
+  const { data, error } = await fetchWithSelect(COMMUNICATION_MESSAGE_SELECT);
+
+  if (isMissingNotificationStateColumnError(error)) {
+    const { missingRead, missingCleared } = getNotificationStateColumnAvailability(error);
+
+    if (missingRead && !missingCleared) {
+      const fallbackResult = await fetchWithSelect(COMMUNICATION_MESSAGE_CLEARED_ONLY_SELECT);
+      return {
+        data: parseCommunicationMessageRows(
+          fallbackResult.data,
+          CommunicationMessageClearedOnlyRowSchema,
+        ),
+        error: fallbackResult.error,
+        mode: "cleared-only" as const,
+      };
+    }
+
+    if (missingCleared && !missingRead) {
+      const fallbackResult = await fetchWithSelect(COMMUNICATION_MESSAGE_READ_ONLY_SELECT);
+      return {
+        data: parseCommunicationMessageRows(
+          fallbackResult.data,
+          CommunicationMessageReadOnlyRowSchema,
+        ),
+        error: fallbackResult.error,
+        mode: "read-only" as const,
+      };
+    }
+
+    const fallbackResult = await fetchWithSelect(LEGACY_COMMUNICATION_MESSAGE_SELECT);
+    return {
+      data: parseCommunicationMessageRows(
+        fallbackResult.data,
+        CommunicationMessageLegacyRowSchema,
+      ),
+      error: fallbackResult.error,
+      mode: "legacy" as const,
+    };
+  }
+
+  return {
+    data: parseCommunicationMessageRows(data, CommunicationMessageRowSchema),
+    error,
+    mode: "full" as const,
+  };
+};
+
+export const dispatchCommunicationMessage = async (
+  message: DraftCommunicationMessage,
+): Promise<CommunicationDispatchResult> => {
   const e2eUserId = getE2EAuthenticatedUserId();
   const userId =
     e2eUserId ??
@@ -173,7 +356,41 @@ export const queueCommunicationMessage = async (
     null;
 
   if (!userId) {
-    return null;
+    return {
+      ok: false,
+      status: "unauthenticated",
+      message: null,
+    };
+  }
+
+  const fingerprint = buildCommunicationMessageFingerprint(message);
+  const existingResult = await findExistingCommunicationMessage(message);
+
+  if (!existingResult.error && existingResult.data.length > 0) {
+    const normalizedExistingMessages =
+      existingResult.mode === "full"
+        ? (existingResult.data as CommunicationMessageRow[]).map((item) => normalizeMessage(item))
+        : existingResult.mode === "cleared-only"
+          ? (existingResult.data as CommunicationMessageClearedOnlyRow[]).map((item) =>
+              normalizeClearedOnlyMessage(item),
+            )
+          : existingResult.mode === "read-only"
+            ? (existingResult.data as CommunicationMessageReadOnlyRow[]).map((item) =>
+                normalizeReadOnlyMessage(item),
+              )
+            : (existingResult.data as CommunicationMessageLegacyRow[]).map((item) => normalizeLegacyMessage(item));
+
+    const matched = normalizedExistingMessages.find(
+      (existingMessage) => buildCommunicationMessageFingerprint(existingMessage) === fingerprint,
+    );
+
+    if (matched) {
+      return {
+        ok: true,
+        status: "duplicate",
+        message: matched,
+      };
+    }
   }
 
   const { data, error } = await supabase
@@ -215,14 +432,19 @@ export const queueCommunicationMessage = async (
       .select(LEGACY_COMMUNICATION_MESSAGE_SELECT)
       .single();
 
-    if (!legacyResult.error && legacyResult.data) {
+    const parsedLegacyMessage = CommunicationMessageLegacyRowSchema.safeParse(legacyResult.data);
+    if (!legacyResult.error && parsedLegacyMessage.success) {
+      const normalizedMessage = normalizeLegacyMessage(parsedLegacyMessage.data);
+
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("gradeai:communications-updated"));
       }
 
-      return normalizeLegacyMessage(
-        legacyResult.data as CommunicationMessageLegacyRow,
-      );
+      return {
+        ok: true,
+        status: "created",
+        message: normalizedMessage,
+      };
     }
 
     log.error("Failed to save communication message after legacy retry", legacyResult.error, {
@@ -233,7 +455,11 @@ export const queueCommunicationMessage = async (
       relatedStudentId: message.relatedStudentId ?? null,
       ...toSafeSupabaseErrorContext(legacyResult.error),
     });
-    return null;
+    return {
+      ok: false,
+      status: "failed",
+      message: null,
+    };
   }
 
   if (error || !data) {
@@ -245,14 +471,48 @@ export const queueCommunicationMessage = async (
       relatedStudentId: message.relatedStudentId ?? null,
       ...toSafeSupabaseErrorContext(error),
     });
-    return null;
+    return {
+      ok: false,
+      status: "failed",
+      message: null,
+    };
   }
+
+  const parsedInsertedMessage = CommunicationMessageRowSchema.safeParse(data);
+
+  if (!parsedInsertedMessage.success) {
+    log.error("Communication message insert returned an unexpected row shape", parsedInsertedMessage.error, {
+      category: message.category,
+      recipientId: message.recipientId ?? null,
+      hasRecipientEmail: Boolean(message.recipientEmail),
+      relatedAssignmentId: message.relatedAssignmentId ?? null,
+      relatedStudentId: message.relatedStudentId ?? null,
+    });
+    return {
+      ok: false,
+      status: "failed",
+      message: null,
+    };
+  }
+
+  const normalizedMessage = normalizeMessage(parsedInsertedMessage.data);
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
 
-  return normalizeMessage(data as CommunicationMessageRow);
+  return {
+    ok: true,
+    status: "created",
+    message: normalizedMessage,
+  };
+};
+
+export const queueCommunicationMessage = async (
+  message: DraftCommunicationMessage
+) => {
+  const result = await dispatchCommunicationMessage(message);
+  return result.message;
 };
 
 export const markCommunicationMessageRead = async (id: string) => {
@@ -283,9 +543,8 @@ export const clearCommunicationMessage = async (id: string) => {
           window.dispatchEvent(new Event("gradeai:communications-updated"));
         }
 
-        return normalizeClearedOnlyMessage(
-          fallbackResult.data as CommunicationMessageClearedOnlyRow,
-        );
+        const parsedRow = CommunicationMessageClearedOnlyRowSchema.safeParse(fallbackResult.data);
+        return parsedRow.success ? normalizeClearedOnlyMessage(parsedRow.data) : null;
       }
 
       log.error("Failed to clear communication message after compatibility retry", fallbackResult.error, {
@@ -308,7 +567,8 @@ export const clearCommunicationMessage = async (id: string) => {
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
 
-  return normalizeMessage(data as CommunicationMessageRow);
+  const parsedRow = CommunicationMessageRowSchema.safeParse(data);
+  return parsedRow.success ? normalizeMessage(parsedRow.data) : null;
 };
 
 const updateCommunicationMessageReadState = async (id: string, read: boolean) => {
@@ -335,9 +595,8 @@ const updateCommunicationMessageReadState = async (id: string, read: boolean) =>
           window.dispatchEvent(new Event("gradeai:communications-updated"));
         }
 
-        return normalizeReadOnlyMessage(
-          fallbackResult.data as CommunicationMessageReadOnlyRow,
-        );
+        const parsedRow = CommunicationMessageReadOnlyRowSchema.safeParse(fallbackResult.data);
+        return parsedRow.success ? normalizeReadOnlyMessage(parsedRow.data) : null;
       }
 
       log.error("Failed to update communication message read state after compatibility retry", fallbackResult.error, {
@@ -362,7 +621,8 @@ const updateCommunicationMessageReadState = async (id: string, read: boolean) =>
     window.dispatchEvent(new Event("gradeai:communications-updated"));
   }
 
-  return normalizeMessage(data as CommunicationMessageRow);
+  const parsedRow = CommunicationMessageRowSchema.safeParse(data);
+  return parsedRow.success ? normalizeMessage(parsedRow.data) : null;
 };
 
 export const buildSubmissionReceivedNotification = (input: {
@@ -420,7 +680,7 @@ export const buildGradeReleasedNotification = (input: {
   recipientEmail: input.studentEmail,
   recipientId: input.studentId,
   subject: "Feedback released",
-  body: `Your feedback for ${input.assignmentTitle} is now available`,
+  body: `Your released result for ${input.assignmentTitle} is now available`,
   relatedAssignmentId: input.assignmentId,
   relatedStudentId: input.studentId,
 });
@@ -463,7 +723,37 @@ export const WorkflowEmailRequestSchema = z.discriminatedUnion("category", [
 
 export type WorkflowEmailRequest = z.infer<typeof WorkflowEmailRequestSchema>;
 
-export const sendWorkflowNotificationEmail = async (request: WorkflowEmailRequest) => {
+export interface WorkflowEmailDispatchResult {
+  ok: boolean;
+  status: "sent" | "duplicate" | "failed" | "invalid";
+  reason?: string | null;
+}
+
+type FunctionErrorLike = {
+  message?: string;
+  context?: {
+    clone?: () => {
+      text: () => Promise<string>;
+    };
+  };
+};
+
+const readFunctionErrorResponse = async (error: FunctionErrorLike | null | undefined) => {
+  const response = error?.context;
+  if (!response?.clone) return null;
+
+  try {
+    const text = await response.clone().text();
+    const normalized = text.replace(/\s+/g, " ").trim();
+    return normalized.slice(0, 500) || null;
+  } catch {
+    return null;
+  }
+};
+
+export const dispatchWorkflowNotificationEmail = async (
+  request: WorkflowEmailRequest,
+): Promise<WorkflowEmailDispatchResult> => {
   const parsed = WorkflowEmailRequestSchema.safeParse(request);
 
   if (!parsed.success) {
@@ -476,23 +766,70 @@ export const sendWorkflowNotificationEmail = async (request: WorkflowEmailReques
       hasSubmissionId:
         typeof request === "object" && request && "submissionId" in request && typeof request.submissionId === "string",
     });
-    return false;
+    return { ok: false, status: "invalid", reason: "invalid_request" };
   }
 
-  const { error } = await supabase.functions.invoke("send-workflow-notification-email", {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token ?? null;
+  const safeRequestContext = {
+    category: request.category as WorkflowEmailCategory,
+    assignmentId: request.assignmentId,
+    submissionId: "submissionId" in request ? request.submissionId : null,
+  };
+
+  if (!accessToken) {
+    log.warn("Workflow notification email could not be sent because the browser session is missing", {
+      ...safeRequestContext,
+    });
+    return { ok: false, status: "failed", reason: "missing_session" };
+  }
+
+  log.info("Workflow notification email invoke started", safeRequestContext);
+
+  const { data, error } = await supabase.functions.invoke("send-workflow-notification-email", {
     body: parsed.data,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 
   if (error) {
+    const functionResponse = await readFunctionErrorResponse(error as FunctionErrorLike);
     log.warn("Workflow notification email did not send", {
-      category: request.category as WorkflowEmailCategory,
-      assignmentId: request.assignmentId,
-      submissionId: "submissionId" in request ? request.submissionId : null,
+      ...safeRequestContext,
+      errorMessage: error.message ?? null,
+      functionResponse,
     });
-    return false;
+    return { ok: false, status: "failed", reason: "invoke_failed" };
   }
 
-  return true;
+  const parsedResponse = WorkflowEmailResponseSchema.safeParse(data);
+  const duplicate = parsedResponse.success && parsedResponse.data.reason === "duplicate_notification";
+
+  if (duplicate) {
+    log.info("Workflow notification email invoke succeeded", {
+      ...safeRequestContext,
+      outcome: "duplicate",
+      reason: "duplicate_notification",
+    });
+    return { ok: true, status: "duplicate", reason: "duplicate_notification" };
+  }
+
+  const reason = parsedResponse.success ? parsedResponse.data.reason ?? null : null;
+  log.info("Workflow notification email invoke succeeded", {
+    ...safeRequestContext,
+    outcome: "sent",
+    reason,
+  });
+
+  return { ok: true, status: "sent", reason };
+};
+
+export const sendWorkflowNotificationEmail = async (request: WorkflowEmailRequest) => {
+  const result = await dispatchWorkflowNotificationEmail(request);
+  return result.ok;
 };
 
 export const getVisibleCommunicationMessages = (
@@ -553,6 +890,14 @@ export const loadVisibleCommunicationMessages = async (options: {
   email?: string | null;
   fullName?: string | null;
 }) => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("communication_messages")
     .select(COMMUNICATION_MESSAGE_SELECT)
@@ -577,7 +922,10 @@ export const loadVisibleCommunicationMessages = async (options: {
       }
 
       return getVisibleCommunicationMessages(
-        ((clearedOnlyResult.data || []) as CommunicationMessageClearedOnlyRow[]).map(
+        parseCommunicationMessageRows(
+          clearedOnlyResult.data,
+          CommunicationMessageClearedOnlyRowSchema,
+        ).map(
           normalizeClearedOnlyMessage,
         ),
         options,
@@ -599,7 +947,10 @@ export const loadVisibleCommunicationMessages = async (options: {
       }
 
       return getVisibleCommunicationMessages(
-        ((readOnlyResult.data || []) as CommunicationMessageReadOnlyRow[]).map(
+        parseCommunicationMessageRows(
+          readOnlyResult.data,
+          CommunicationMessageReadOnlyRowSchema,
+        ).map(
           normalizeReadOnlyMessage,
         ),
         options,
@@ -620,7 +971,10 @@ export const loadVisibleCommunicationMessages = async (options: {
     }
 
     return getVisibleCommunicationMessages(
-      ((legacyResult.data || []) as CommunicationMessageLegacyRow[]).map(
+      parseCommunicationMessageRows(
+        legacyResult.data,
+        CommunicationMessageLegacyRowSchema,
+      ).map(
         normalizeLegacyMessage,
       ),
       options,
@@ -635,7 +989,7 @@ export const loadVisibleCommunicationMessages = async (options: {
   }
 
   return getVisibleCommunicationMessages(
-    ((data || []) as CommunicationMessageRow[]).map(normalizeMessage),
+    parseCommunicationMessageRows(data, CommunicationMessageRowSchema).map(normalizeMessage),
     options
   ).slice(0, 6);
 };

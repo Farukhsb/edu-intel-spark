@@ -36,6 +36,18 @@ describe("Supabase shared CORS", () => {
     expect(headers).toBeNull();
   });
 
+  it("allows localhost on arbitrary ports for local edge-function development", () => {
+    const headers = getCorsHeaders(makeRequest("http://localhost:4173", "OPTIONS"));
+
+    expect(headers?.["Access-Control-Allow-Origin"]).toBe("http://localhost:4173");
+  });
+
+  it("allows 127.0.0.1 on arbitrary ports for local edge-function development", () => {
+    const headers = getCorsHeaders(makeRequest("http://127.0.0.1:4173", "OPTIONS"));
+
+    expect(headers?.["Access-Control-Allow-Origin"]).toBe("http://127.0.0.1:4173");
+  });
+
   it("returns a forbidden response for rejected origins", async () => {
     const response = createCorsForbiddenResponse();
 

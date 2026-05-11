@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   },
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     auth: {
       getSession: vi.fn(),
     },
@@ -197,56 +198,32 @@ const setupExplainGradeSupabase = () => {
   mocks.supabase.auth.getSession.mockResolvedValue({
     data: { session: { access_token: "test-token" } },
   });
+  mocks.supabase.rpc.mockResolvedValue({
+    data: [
+      {
+        submission_id: "submission-1",
+        assignment_id: "assignment-1",
+        assignment_title: "Critical Essay",
+        module_code: "ENG101",
+        max_score: 100,
+        file_name: "essay.pdf",
+        file_url: "",
+        submission_status: "released",
+        submitted_at: "2026-04-20T10:00:00.000Z",
+        final_score: 74,
+        ai_score: null,
+        final_feedback: null,
+        ai_feedback: null,
+        ai_breakdown: [
+          { criterion: "Argument", score: 18, max_score: 25 },
+          { criterion: "Evidence", score: 19, max_score: 25 },
+        ],
+      },
+    ],
+    error: null,
+  });
 
-  mocks.supabase.from.mockImplementation((table: string) => ({
-    select: vi.fn(() => {
-      if (table === "submissions") {
-        return Promise.resolve({
-          data: [
-            {
-              id: "submission-1",
-              assignment_id: "assignment-1",
-              student_name: "Sam Student",
-              file_name: "essay.pdf",
-              status: "released",
-            },
-          ],
-        });
-      }
-
-      if (table === "grades") {
-        return {
-          in: vi.fn(() =>
-            Promise.resolve({
-              data: [
-                {
-                  id: "grade-1",
-                  submission_id: "submission-1",
-                  final_score: 74,
-                  ai_breakdown: [
-                    { criterion: "Argument", score: 18, max_score: 25 },
-                    { criterion: "Evidence", score: 19, max_score: 25 },
-                  ],
-                },
-              ],
-            })
-          ),
-        };
-      }
-
-      if (table === "assignments") {
-        return {
-          in: vi.fn(() =>
-            Promise.resolve({
-              data: [{ id: "assignment-1", module_code: "ENG101", title: "Critical Essay" }],
-            })
-          ),
-        };
-      }
-
-      return Promise.resolve({ data: [] });
-    }),
-  }));
+  mocks.supabase.from.mockReset();
 };
 
 describe("Network/API failure handling", () => {

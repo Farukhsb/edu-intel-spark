@@ -45,98 +45,99 @@ vi.mock("lucide-react", () => {
   };
 });
 
-type SubmissionRow = {
-  id: string;
-  assignment_id: string;
-  student_id: string;
-  status: string;
-  submitted_at: string;
-  file_url: string | null;
-};
-
-type GradeRow = {
+type ProjectionRow = {
   submission_id: string;
+  assignment_id: string;
+  assignment_title: string | null;
+  module_code: string | null;
+  max_score: number | null;
+  file_name: string;
+  file_url: string | null;
+  submission_status: string;
+  submitted_at: string;
   final_score: number | null;
   ai_score: number | null;
   final_feedback: string | null;
   ai_feedback: string | null;
-  ai_breakdown: null;
+  ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
 };
 
-type AssignmentMetadataRow = {
-  submission_id: string;
-  assignment_id: string;
-  title: string | null;
-  module_code: string | null;
-  max_score: number | null;
-};
-
-const defaultSubmissions: SubmissionRow[] = [
-  {
-    id: "submission-1",
-    assignment_id: "assignment-1",
-    student_id: "student-1",
-    status: "released",
-    submitted_at: "2026-04-20T10:00:00.000Z",
-    file_url: null,
-  },
-];
-
-const defaultGrades: GradeRow[] = [
+const defaultProjection: ProjectionRow[] = [
   {
     submission_id: "submission-1",
+    assignment_id: "assignment-1",
+    assignment_title: "Algorithms Essay",
+    module_code: "CS301",
+    max_score: 100,
+    file_name: "essay.pdf",
+    file_url: null,
+    submission_status: "released",
+    submitted_at: "2026-04-20T10:00:00.000Z",
     final_score: 76,
     ai_score: null,
     final_feedback: "Released feedback",
     ai_feedback: null,
-    ai_breakdown: null,
-  },
-];
-
-const defaultAssignmentMetadata: AssignmentMetadataRow[] = [
-  {
-    submission_id: "submission-1",
-    assignment_id: "assignment-1",
-    title: "Algorithms Essay",
-    module_code: "CS301",
-    max_score: 100,
+    ai_breakdown: [
+      { criterion: "Argument", score: 24, max_score: 30 },
+      { criterion: "Evidence", score: 28, max_score: 35 },
+      { criterion: "Structure", score: 24, max_score: 35 },
+    ],
   },
 ];
 
 const setupSupabase = ({
-  submissions = defaultSubmissions,
-  grades = defaultGrades,
-  assignmentMetadata = defaultAssignmentMetadata,
-  assignmentMetadataError = null,
+  projection = defaultProjection,
+  projectionError = null,
+  submissions = [],
+  grades = [],
+  assignments = [],
 }: {
-  submissions?: SubmissionRow[];
-  grades?: GradeRow[];
-  assignmentMetadata?: AssignmentMetadataRow[];
-  assignmentMetadataError?: { message: string } | null;
+  projection?: ProjectionRow[];
+  projectionError?: { message: string } | null;
+  submissions?: Array<Record<string, unknown>>;
+  grades?: Array<Record<string, unknown>>;
+  assignments?: Array<Record<string, unknown>>;
 } = {}) => {
+  mocks.supabase.rpc.mockResolvedValue({
+    data: projection,
+    error: projectionError,
+  });
+  mocks.supabase.from.mockReset();
   mocks.supabase.from.mockImplementation((table: string) => {
     if (table === "submissions") {
       return {
-        select: vi.fn(() => ({
-          eq: vi.fn().mockResolvedValue({ data: submissions, error: null }),
-        })),
+        select: () => ({
+          eq: vi.fn().mockResolvedValue({
+            data: submissions,
+            error: null,
+          }),
+        }),
       };
     }
 
     if (table === "grades") {
       return {
-        select: vi.fn(() => ({
-          in: vi.fn().mockResolvedValue({ data: grades, error: null }),
-        })),
+        select: () => ({
+          in: vi.fn().mockResolvedValue({
+            data: grades,
+            error: null,
+          }),
+        }),
+      };
+    }
+
+    if (table === "assignments") {
+      return {
+        select: () => ({
+          in: vi.fn().mockResolvedValue({
+            data: assignments,
+            error: null,
+          }),
+        }),
       };
     }
 
     throw new Error(`Unexpected table: ${table}`);
-  });
-
-  mocks.supabase.rpc.mockResolvedValue({
-    data: assignmentMetadata,
-    error: assignmentMetadataError,
   });
 };
 
@@ -157,17 +158,29 @@ describe("StudentGrades", () => {
     render(<StudentGrades />);
 
     await waitFor(() => {
-      expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
+    expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Released result position")).toBeInTheDocument();
+    expect(screen.getByText("Algorithms Essay has feedback ready to review")).toBeInTheDocument();
+    expect(screen.getByText("Open the released result and review the criterion feedback")).toBeInTheDocument();
     expect(screen.getByText("76/100")).toBeInTheDocument();
-    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_grade_assignment_metadata");
+    expect(screen.getByText("Released")).toBeInTheDocument();
+    expect(screen.getByText("Lecturer Feedback")).toBeInTheDocument();
+    expect(screen.getByText("Strongest Areas")).toBeInTheDocument();
+    expect(screen.getByText("Focus Next Time")).toBeInTheDocument();
+    expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
   });
 
   it("falls back safely when assignment metadata is unavailable", async () => {
     setupSupabase({
-      assignmentMetadata: [],
-      assignmentMetadataError: { message: "RLS blocked assignment row" },
+      projection: [
+        {
+          ...defaultProjection[0],
+          assignment_title: null,
+        },
+      ],
     });
 
     render(<StudentGrades />);
@@ -177,12 +190,54 @@ describe("StudentGrades", () => {
     });
 
     expect(screen.getByText("76/100")).toBeInTheDocument();
-    expect(mocks.logger.warn).toHaveBeenCalledWith(
-      "Student grade assignment metadata lookup failed",
-      {
-        userId: "student-1",
-      },
-    );
+    expect(mocks.logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("falls back to direct student queries when the projection RPC is unavailable", async () => {
+    setupSupabase({
+      projection: [],
+      projectionError: { message: "function does not exist" },
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          file_name: "essay.pdf",
+          file_url: "",
+          status: "released",
+          submitted_at: "2026-04-20T10:00:00.000Z",
+          student_id: "student-1",
+        },
+      ],
+      grades: [
+        {
+          submission_id: "submission-1",
+          final_score: 76,
+          ai_score: null,
+          final_feedback: "Released feedback",
+          ai_feedback: null,
+          ai_breakdown: null,
+        },
+      ],
+      assignments: [
+        {
+          id: "assignment-1",
+          title: "Algorithms Essay",
+          module_code: "CS301",
+          max_score: 100,
+        },
+      ],
+    });
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("76/100")).toBeInTheDocument();
+    expect(mocks.supabase.from).toHaveBeenCalledWith("submissions");
+    expect(mocks.supabase.from).toHaveBeenCalledWith("grades");
+    expect(mocks.supabase.from).toHaveBeenCalledWith("assignments");
   });
 
   it("uses shared synthetic assignment-set data in demo mode", async () => {
@@ -202,7 +257,39 @@ describe("StudentGrades", () => {
     expect(screen.getByText("84/100")).toBeInTheDocument();
     expect(screen.getByText("Network Security Incident Reflection")).toBeInTheDocument();
     expect(screen.getByText("submitted")).toBeInTheDocument();
-    expect(mocks.supabase.from).not.toHaveBeenCalled();
     expect(mocks.supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("renders a safe pending-state card when feedback is not yet released", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          submission_id: "submission-pending",
+          assignment_id: "assignment-2",
+          assignment_title: "Pending Review Essay",
+          submission_status: "moderation_in_progress",
+          final_score: null,
+          ai_score: null,
+          final_feedback: null,
+          ai_feedback: null,
+          ai_breakdown: null,
+        },
+      ],
+    });
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Pending Review Essay")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Pending review position")).toBeInTheDocument();
+    expect(screen.getByText("moderation in progress is still blocking release")).toBeInTheDocument();
+    expect(screen.getByText("Wait for marking and moderation to complete before checking again")).toBeInTheDocument();
+    expect(screen.getByText("moderation in progress")).toBeInTheDocument();
+    expect(screen.queryByText("Lecturer Feedback")).not.toBeInTheDocument();
+    expect(screen.queryByText("Strongest Areas")).not.toBeInTheDocument();
   });
 });

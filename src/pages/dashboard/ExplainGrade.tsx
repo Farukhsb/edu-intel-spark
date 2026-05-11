@@ -1,194 +1,63 @@
-import { useState, useRef, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { Brain, ChevronDown, ChevronUp, Loader2, Send, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
+
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Brain, ChevronDown, ChevronUp, Send, Sparkles, Loader2 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { env } from "@/lib/env";
-import { log } from "@/lib/logger";
-import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
-import type { AcademicGradeBreakdownItem } from "@/types/academic";
-import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
 import {
-  DEMO_STUDENT_ASSIGNMENTS,
-  DEMO_STUDENT_ASSIGNMENT_GRADES,
-  DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
-} from "@/pages/dashboard/demoAssignments";
-
-interface ExplainGradeBreakdown {
-  assessment: string;
-  totalGrade: number;
-  band: string;
-  components: { name: string; weight: number; score: number; maxScore: number }[];
-  improvementAreas: { area: string; currentBand: string; nextBand: string; pointsNeeded: number; tips: string[] }[];
-}
-
-interface SubmissionRow {
-  id: string;
-  assignment_id: string | null;
-  student_name: string | null;
-  file_name: string | null;
-  status?: string | null;
-}
-
-interface GradeRow {
-  id: string;
-  submission_id: string;
-  ai_score: number | null;
-  final_score: number | null;
-  ai_breakdown: SharedGradeBreakdown[] | null;
-}
-
-interface AssignmentRow {
-  id: string;
-  module_code: string | null;
-  title: string;
-}
-
-type ExplainGradeBreakdownItem = AcademicGradeBreakdownItem & SharedGradeBreakdown;
-
-export const getBreakdownMaxScore = (item: ExplainGradeBreakdownItem) => item.max_score ?? item.maxScore ?? 0;
+  DashboardDemoBanner,
+  DashboardEmptyState,
+  DashboardLoadingState,
+  DashboardPageIntro,
+} from "@/components/dashboard/PageStates";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { env } from "@/lib/env";
+import { getExplainGradeReadiness } from "@/lib/explainGradeReadiness";
+import { log } from "@/lib/logger";
+import { parseExplainGradeSearchState } from "@/lib/schemas/navigation";
+import {
+  buildDemoGradeResponse,
+  buildGradeSelectorLabels,
+  getBreakdownMaxScore,
+} from "@/pages/dashboard/explain-grade/helpers";
+import { useExplainGradeData } from "@/pages/dashboard/explain-grade/useExplainGradeData";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
 
-const getBand = (pct: number) => {
-  if (pct >= 70) return "1st";
-  if (pct >= 60) return "2:1";
-  if (pct >= 50) return "2:2";
-  if (pct >= 40) return "3rd";
-  return "Fail";
+const INITIAL_ASSISTANT_MESSAGE: ChatMsg = {
+  role: "assistant",
+  content:
+    "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
 };
 
-const getNextBand = (band: string) => {
-  if (band === "3rd") return "2:2";
-  if (band === "2:2") return "2:1";
-  if (band === "2:1") return "1st";
-  return "1st";
-};
-
-const getNextBandThreshold = (band: string) => {
-  if (band === "3rd") return 50;
-  if (band === "2:2") return 60;
-  if (band === "2:1") return 70;
-  return 80;
-};
-
-interface SubmissionOption {
-  gradeId: string;
-  submissionId: string;
-  label: string;
-  totalGrade: number;
-  breakdown: ExplainGradeBreakdown;
-}
-
-const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
-  .flat()
-  .flatMap((submission) => {
-    if (submission.status !== "released") return [];
-    const assignment = DEMO_STUDENT_ASSIGNMENTS.find((entry) => entry.id === submission.assignment_id);
-    const grade = DEMO_STUDENT_ASSIGNMENT_GRADES[submission.id];
-    const breakdown = safeParseGradeBreakdown(grade?.ai_breakdown ?? []);
-    if (!grade || !breakdown.success) return [];
-
-    const totalGrade = Number(grade.final_score ?? grade.ai_score ?? 0);
-    const totalMaxRaw = breakdown.data.reduce(
-      (sum, item: ExplainGradeBreakdownItem) => sum + getBreakdownMaxScore(item),
-      0,
-    );
-    const totalMax = totalMaxRaw > 0 ? totalMaxRaw : 1;
-
-    const components = breakdown.data.map((item: ExplainGradeBreakdownItem) => ({
-      name: item.criterion || item.name || "Unknown",
-      weight: Math.round((getBreakdownMaxScore(item) / totalMax) * 100),
-      score: Math.round(((item.score ?? 0) / Math.max(getBreakdownMaxScore(item), 1)) * 100),
-      maxScore: 100,
-    }));
-
-    const improvementAreas = components
-      .filter((component) => component.score < 70)
-      .sort((left, right) => left.score - right.score)
-      .slice(0, 3)
-      .map((component) => {
-        const band = getBand(component.score);
-        const next = getNextBand(band);
-        const threshold = getNextBandThreshold(band);
-        return {
-          area: component.name,
-          currentBand: band,
-          nextBand: next,
-          pointsNeeded: Math.max(threshold - component.score, 0),
-          tips: [
-            `Focus on strengthening your ${component.name.toLowerCase()} skills`,
-            `Review the rubric criteria for ${component.name}`,
-            "Use the released lecturer feedback to revise the next submission",
-          ],
-        };
-      });
-
-    const label = assignment
-      ? `${assignment.module_code || ""} ${assignment.title}`.trim()
-      : submission.file_name;
-
-    return [
-      {
-        gradeId: grade.id,
-        submissionId: submission.id,
-        label,
-        totalGrade,
-        breakdown: {
-          assessment: label,
-          totalGrade,
-          band: getBand(totalGrade),
-          components,
-          improvementAreas,
-        },
-      },
-    ];
-  });
-
-const buildDemoGradeResponse = (question: string, breakdown: ExplainGradeBreakdown) => {
-  const weakestArea = breakdown.improvementAreas[0];
-  const strongestArea = [...breakdown.components].sort((left, right) => right.score - left.score)[0];
-  const normalizedQuestion = question.toLowerCase();
-
-  if (normalizedQuestion.includes("why") && normalizedQuestion.includes("grade")) {
-    return `You received **${breakdown.totalGrade}% (${breakdown.band})** because your strongest performance was in **${strongestArea?.name || "your best-scoring criterion"}**, while the main drag on your mark was **${weakestArea?.area || "the weakest rubric area"}**. The demo breakdown shows a solid overall submission with a clearer route to improvement in one weaker criterion rather than broad underperformance.`;
-  }
-
-  if (normalizedQuestion.includes("improve") || normalizedQuestion.includes("raise")) {
-    return `The fastest route upward is **${weakestArea?.area || "the weakest rubric area"}**. In this demo submission, you need roughly **${weakestArea?.pointsNeeded ?? 0} more points** there to move closer to **${weakestArea?.nextBand || "the next band"}**. Focus on:\n\n- ${weakestArea?.tips[0] || "Tightening criterion-specific evidence"}\n- ${weakestArea?.tips[1] || "Matching the rubric language more directly"}\n- ${weakestArea?.tips[2] || "Using the lecturer feedback to revise your approach"}`
-  }
-
-  return `For this demo submission, the key message is:\n\n- Overall result: **${breakdown.totalGrade}% (${breakdown.band})**\n- Strongest area: **${strongestArea?.name || "Top criterion"}** at **${strongestArea?.score ?? 0}%**\n- Main improvement area: **${weakestArea?.area || "Weakest criterion"}**\n\nAsk why the mark landed in this band, or ask how to improve the weakest area, and I’ll answer using the synthetic demo breakdown.`;
+const getScoreTone = (score: number) => {
+  if (score >= 70) return "success";
+  if (score >= 50) return "primary";
+  return "destructive";
 };
 
 const ExplainGrade = () => {
-  const { isDemo } = useAuth();
-  const [submissions, setSubmissions] = useState<SubmissionOption[]>(isDemo ? DEMO_SUBMISSIONS : []);
-  const [selectedId, setSelectedId] = useState<string>(isDemo ? (DEMO_SUBMISSIONS[0]?.gradeId ?? "") : "");
-  const [loading, setLoading] = useState(!isDemo);
+  const { isDemo, user } = useAuth();
+  const { submissions, selectedId, setSelectedId, loading } = useExplainGradeData({
+    isDemo,
+    userId: user?.id,
+  });
+  const [searchParams, setSearchParams] = useSearchParams();
   const [expandedArea, setExpandedArea] = useState<number | null>(0);
-  const [messages, setMessages] = useState<ChatMsg[]>([
-    {
-      role: "assistant",
-      content: "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMsg[]>([INITIAL_ASSISTANT_MESSAGE]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isDemo) return;
-    fetchGrades();
-  }, [isDemo]);
+  const { assignmentId: focusAssignmentId, submissionId: focusSubmissionId, source: focusSource } =
+    parseExplainGradeSearchState(searchParams);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -196,115 +65,46 @@ const ExplainGrade = () => {
     }
   }, [messages]);
 
-  const fetchGrades = async () => {
-    try {
-      // RLS ensures students only see their own submissions/grades
-      const { data: subs } = await supabase.from("submissions").select("*");
-      const submissionRows = (subs ?? []) as SubmissionRow[];
-      const releasedSubs = submissionRows.filter((submission) => submission.status === "released");
-      const subIds = releasedSubs.map(s => s.id);
-      const { data: grades } = subIds.length > 0
-        ? await supabase.from("grades").select("*").in("submission_id", subIds)
-        : { data: [] as GradeRow[] };
-      const assignmentIds = [...new Set(submissionRows.map((submission) => submission.assignment_id))];
-      const { data: assignments } = assignmentIds.length > 0
-        ? await supabase.from("assignments").select("*").in("id", assignmentIds)
-        : { data: [] as AssignmentRow[] };
+  useEffect(() => {
+    if (!submissions.length) return;
 
-      if (!grades?.length || !releasedSubs.length) {
-        setLoading(false);
-        return;
-      }
+    const focusedSubmission =
+      (focusSubmissionId
+        ? submissions.find((submission) => submission.submissionId === focusSubmissionId)
+        : undefined) ??
+      (focusAssignmentId
+        ? submissions.find((submission) => submission.assignmentId === focusAssignmentId)
+        : undefined);
 
-      const safeSubs = releasedSubs;
-      const safeAssignments = (assignments ?? []) as AssignmentRow[];
-      const subMap = Object.fromEntries(safeSubs.map(s => [s.id, s]));
-      const assignMap = Object.fromEntries(safeAssignments.map(a => [a.id, a]));
-
-      const options: SubmissionOption[] = grades
-        .flatMap(g => {
-          if (g.ai_score == null && g.final_score == null) return [];
-          const breakdownResult = safeParseGradeBreakdown(g.ai_breakdown);
-          if (!breakdownResult.success) {
-            log.error("Invalid grade breakdown payload received for ExplainGrade", breakdownResult.error, {
-              gradeId: g.id,
-              submissionId: g.submission_id,
-            });
-            return [];
-          }
-
-          const sub = subMap[g.submission_id];
-          const assignment = sub ? assignMap[sub.assignment_id] : null;
-          const totalGrade = Number(g.final_score ?? g.ai_score ?? 0);
-          const breakdown: ExplainGradeBreakdownItem[] = breakdownResult.data;
-          const totalMaxRaw = breakdown.reduce((s: number, b: ExplainGradeBreakdownItem) => s + getBreakdownMaxScore(b), 0);
-          if (totalMaxRaw === 0 && import.meta.env.DEV) {
-            log.warn("AI breakdown has no max scores; using fallback totalMax = 1", {
-              gradeId: g.id,
-            });
-          }
-          const totalMax = totalMaxRaw > 0 ? totalMaxRaw : 1;
-
-          const components = breakdown.map((b: ExplainGradeBreakdownItem) => ({
-            name: b.criterion || b.name || "Unknown",
-            weight: Math.round((getBreakdownMaxScore(b) / totalMax) * 100),
-            score: Math.round(((b.score ?? 0) / Math.max(getBreakdownMaxScore(b), 1)) * 100),
-            maxScore: 100,
-          }));
-
-          const improvementAreas = components
-            .filter(c => c.score < 70)
-            .sort((a, b) => a.score - b.score)
-            .slice(0, 3)
-            .map(c => {
-              const band = getBand(c.score);
-              const next = getNextBand(band);
-              const threshold = getNextBandThreshold(band);
-              return {
-                area: c.name,
-                currentBand: band,
-                nextBand: next,
-                pointsNeeded: Math.max(threshold - c.score, 0),
-                tips: [
-                  `Focus on strengthening your ${c.name.toLowerCase()} skills`,
-                  `Review the rubric criteria for ${c.name}`,
-                  `Seek specific feedback on this area from your lecturer`,
-                ],
-              };
-            });
-
-          const label = assignment
-            ? `${assignment.module_code || ""} ${assignment.title}`.trim()
-            : sub?.student_name || sub?.file_name || g.submission_id;
-
-          return [{
-            gradeId: g.id,
-            submissionId: g.submission_id,
-            label,
-            totalGrade,
-            breakdown: {
-              assessment: label,
-              totalGrade,
-              band: getBand(totalGrade),
-              components,
-              improvementAreas,
-            },
-          }];
-        });
-
-      setSubmissions(options);
-      if (options.length > 0) setSelectedId(options[0].gradeId);
-    } catch (err) {
-      log.error("Failed to fetch grades", err);
+    if (focusedSubmission && focusedSubmission.gradeId !== selectedId) {
+      setSelectedId(focusedSubmission.gradeId);
+      setMessages([INITIAL_ASSISTANT_MESSAGE]);
     }
-    setLoading(false);
-  };
+  }, [focusAssignmentId, focusSubmissionId, selectedId, setSelectedId, submissions]);
 
-  const selected = submissions.find(s => s.gradeId === selectedId);
+  const selected = submissions.find((submission) => submission.gradeId === selectedId);
   const gradeBreakdown = selected?.breakdown;
+  const strongestComponents = [...(gradeBreakdown?.components ?? [])]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 2);
+  const primaryStrength = strongestComponents[0];
+  const priorityImprovementAreas = gradeBreakdown?.improvementAreas.slice(0, 2) ?? [];
+  const readiness = getExplainGradeReadiness({
+    assignmentLabel: selected?.label ?? null,
+    band: gradeBreakdown?.band ?? "current",
+    strongestArea: primaryStrength?.name ?? null,
+    topImprovementArea: gradeBreakdown?.improvementAreas[0]
+      ? {
+          area: gradeBreakdown.improvementAreas[0].area,
+          nextBand: gradeBreakdown.improvementAreas[0].nextBand,
+          pointsNeeded: gradeBreakdown.improvementAreas[0].pointsNeeded,
+        }
+      : null,
+  });
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading || !gradeBreakdown) return;
+
     const userMsg: ChatMsg = { role: "user", content: inputValue };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
@@ -319,7 +119,6 @@ const ExplainGrade = () => {
     }
 
     setIsLoading(true);
-
     let assistantSoFar = "";
 
     try {
@@ -327,40 +126,43 @@ const ExplainGrade = () => {
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error("Not signed in");
 
-      const resp = await fetch(CHAT_URL, {
+      const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
-          gradeContext: gradeBreakdown,
+          submissionId: selected.submissionId,
+          messages: updatedMessages.map((message) => ({ role: message.role, content: message.content })),
         }),
       });
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: "AI service error" }));
-        toast.error(err.error || "Something went wrong");
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: "AI service error" }));
+        toast.error(errorBody.error || "Something went wrong");
         setIsLoading(false);
         return;
       }
 
-      if (!resp.body) throw new Error("No response body");
+      if (!response.body) throw new Error("No response body");
 
-      const reader = resp.body.getReader();
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let textBuffer = "";
       let streamDone = false;
 
       const upsert = (chunk: string) => {
         assistantSoFar += chunk;
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === "assistant" && prev.length === updatedMessages.length + 1) {
-            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+        setMessages((previous) => {
+          const last = previous[previous.length - 1];
+          if (last?.role === "assistant" && previous.length === updatedMessages.length + 1) {
+            return previous.map((message, index) =>
+              index === previous.length - 1 ? { ...message, content: assistantSoFar } : message,
+            );
           }
-          return [...prev, { role: "assistant", content: assistantSoFar }];
+          return [...previous, { role: "assistant", content: assistantSoFar }];
         });
       };
 
@@ -377,13 +179,16 @@ const ExplainGrade = () => {
           if (line.startsWith(":") || line.trim() === "") continue;
           if (!line.startsWith("data: ")) continue;
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") { streamDone = true; break; }
+          if (jsonStr === "[DONE]") {
+            streamDone = true;
+            break;
+          }
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) upsert(content);
           } catch {
-            textBuffer = line + "\n" + textBuffer;
+            textBuffer = `${line}\n${textBuffer}`;
             break;
           }
         }
@@ -401,11 +206,13 @@ const ExplainGrade = () => {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) upsert(content);
-          } catch { /* ignore */ }
+          } catch {
+            // Ignore trailing partial chunks after stream completion.
+          }
         }
       }
-    } catch (e) {
-      log.error("Failed to get AI response", e);
+    } catch (error) {
+      log.error("Failed to get AI response", error);
       toast.error("Failed to get AI response");
     } finally {
       setIsLoading(false);
@@ -413,35 +220,150 @@ const ExplainGrade = () => {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+    return <DashboardLoadingState />;
   }
 
   if (!gradeBreakdown) {
     return (
-      <div className="space-y-6 animate-fade-in">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">No graded submissions found. Grades will appear here once assignments are graded by AI.</p>
-          </CardContent>
-        </Card>
-      </div>
+      <DashboardEmptyState
+        title="No graded submissions found"
+        description="Grades will appear here once assignments are graded by AI."
+      />
     );
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {isDemo && <DashboardDemoBanner label="Viewing demo Explain Grade data" />}
+
+      <DashboardPageIntro
+        eyebrow="Grade explanation"
+        title="Explain Grade"
+        description="Review the released breakdown, see which criteria pulled the mark up or down, and ask targeted follow-up questions about how to improve next time."
+      />
+
       {submissions.length > 1 && (
-        <Select value={selectedId} onValueChange={(v) => { setSelectedId(v); setMessages([messages[0]]); }}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Select a submission" /></SelectTrigger>
-          <SelectContent>
-            {submissions.map(s => (
-              <SelectItem key={s.gradeId} value={s.gradeId}>
-                {s.label} — {s.totalGrade}%
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Released submissions</p>
+            <Select
+              value={selectedId}
+              onValueChange={(value) => {
+                setSelectedId(value);
+                setMessages([INITIAL_ASSISTANT_MESSAGE]);
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a submission" />
+              </SelectTrigger>
+              <SelectContent>
+                {submissions.map((submission) => (
+                  <SelectItem key={submission.gradeId} value={submission.gradeId} textValue={submission.label}>
+                    <span className="flex flex-col">
+                      <span>{submission.label}</span>
+                      {submission.secondaryLabel ? (
+                        <span className="text-xs text-muted-foreground">{submission.secondaryLabel}</span>
+                      ) : null}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
       )}
+
+      {(focusSource === "notification" || focusSource === "email") && (focusAssignmentId || focusSubmissionId) && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium">Opened from released-grade notification</p>
+              <p className="text-xs text-muted-foreground">
+                This view is focused on the released result linked from your {focusSource === "email" ? "email" : "notification"}.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchParams({}, { replace: true });
+              }}
+            >
+              Show all released grades
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on the released breakdown, band, and strongest improvement route for this result.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the released-result question most likely to matter before your next submission.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide what to carry into the next piece of work before asking deeper follow-up questions.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">Released Result Summary</CardTitle>
+          </div>
+          <CardDescription>{selected?.secondaryLabel || "Released grade context for this submission."}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-4xl font-bold font-display">{gradeBreakdown.totalGrade}%</span>
+            <Badge>{gradeBreakdown.band}</Badge>
+            <Badge variant="outline">Released grade</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strongest Areas</p>
+              <div className="mt-2 space-y-1">
+                {strongestComponents.map((component) => (
+                  <p key={component.name} className="text-sm">
+                    {component.name} <span className="text-muted-foreground">({component.score}%)</span>
+                  </p>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best Improvement Route</p>
+              {gradeBreakdown.improvementAreas[0] ? (
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm font-medium">{gradeBreakdown.improvementAreas[0].area}</p>
+                  <p className="text-xs text-muted-foreground">
+                    +{gradeBreakdown.improvementAreas[0].pointsNeeded} points to move toward {gradeBreakdown.improvementAreas[0].nextBand}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No major weak area stands out from this released breakdown.
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -452,23 +374,25 @@ const ExplainGrade = () => {
           <CardDescription>{gradeBreakdown.assessment}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex items-center gap-3">
-            <span className="text-4xl font-bold font-display">{gradeBreakdown.totalGrade}%</span>
-            <Badge>{gradeBreakdown.band}</Badge>
-          </div>
           <div className="space-y-3">
-            {gradeBreakdown.components.map((c, i) => (
-              <div key={i} className="space-y-1">
+            {gradeBreakdown.components.map((component, index) => (
+              <div key={index} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
-                  <span>{c.name} ({c.weight}%)</span>
-                  <span className="font-medium">{c.score}%</span>
+                  <span>
+                    {component.name} ({component.weight}%)
+                  </span>
+                  <span className="font-medium">{component.score}%</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
                     className={`h-full rounded-full ${
-                      c.score >= 70 ? "bg-success" : c.score >= 50 ? "bg-primary" : "bg-destructive"
+                      getScoreTone(component.score) === "success"
+                        ? "bg-success"
+                        : getScoreTone(component.score) === "primary"
+                          ? "bg-primary"
+                          : "bg-destructive"
                     }`}
-                    style={{ width: `${c.score}%` }}
+                    style={{ width: `${component.score}%` }}
                   />
                 </div>
               </div>
@@ -484,11 +408,11 @@ const ExplainGrade = () => {
             <CardDescription>Specific guidance to raise your grade band</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {gradeBreakdown.improvementAreas.map((area, i) => (
-              <div key={i} className="rounded-lg border p-3">
+            {gradeBreakdown.improvementAreas.map((area, index) => (
+              <div key={index} className="rounded-lg border p-3">
                 <button
                   className="flex w-full items-center justify-between text-left"
-                  onClick={() => setExpandedArea(expandedArea === i ? null : i)}
+                  onClick={() => setExpandedArea(expandedArea === index ? null : index)}
                 >
                   <div>
                     <span className="text-sm font-medium">{area.area}</span>
@@ -496,27 +420,72 @@ const ExplainGrade = () => {
                       +{area.pointsNeeded} points to reach {area.nextBand}
                     </p>
                   </div>
-                  {expandedArea === i ? (
+                  {expandedArea === index ? (
                     <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   ) : (
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   )}
                 </button>
-                {expandedArea === i && (
+                {expandedArea === index ? (
                   <div className="mt-3 space-y-2 border-t pt-3">
-                    {area.tips.map((tip, j) => (
-                      <div key={j} className="flex items-start gap-2 text-sm">
+                    {area.tips.map((tip, tipIndex) => (
+                      <div key={tipIndex} className="flex items-start gap-2 text-sm">
                         <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                         {tip}
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
             ))}
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Next Submission Action Plan</CardTitle>
+          <CardDescription>Turn this released result into a short, specific plan for the next piece of work.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Keep This Strength</p>
+            <p className="mt-2 text-sm font-medium">
+              {primaryStrength
+                ? `${primaryStrength.name} is already one of your strongest criteria. Keep its current standard while you improve weaker areas.`
+                : "Carry your strongest habits forward into the next submission."}
+            </p>
+          </div>
+
+          {priorityImprovementAreas.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {priorityImprovementAreas.map((area) => (
+                <div key={area.area} className="rounded-xl border p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Priority Focus</p>
+                  <p className="mt-2 text-sm font-semibold">{area.area}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Aim for roughly +{area.pointsNeeded} points to move toward {area.nextBand}.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {area.tips.slice(0, 2).map((tip) => (
+                      <div key={tip} className="flex items-start gap-2 text-sm">
+                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        {tip}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border p-4">
+              <p className="text-sm text-muted-foreground">
+                This released breakdown does not show a major weak criterion, so focus on consistency across the whole rubric.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -528,42 +497,37 @@ const ExplainGrade = () => {
         <CardContent>
           <div className="flex h-80 flex-col">
             <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto pr-2">
-              {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
+              {messages.map((message, index) => (
+                <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
                     className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
+                      message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                     }`}
                   >
-                    {msg.role === "assistant" ? (
+                    {message.role === "assistant" ? (
                       <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
                       </div>
                     ) : (
-                      msg.content
+                      message.content
                     )}
                   </div>
                 </div>
               ))}
-              {isLoading && messages[messages.length - 1]?.role === "user" && (
+              {isLoading && messages[messages.length - 1]?.role === "user" ? (
                 <div className="flex justify-start">
                   <div className="rounded-2xl bg-muted px-4 py-2.5">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
             <div className="mt-3 flex gap-2">
               <Input
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(event) => setInputValue(event.target.value)}
                 placeholder="Ask about your grade..."
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                onKeyDown={(event) => event.key === "Enter" && handleSend()}
                 disabled={isLoading}
               />
               <Button size="icon" onClick={handleSend} disabled={isLoading}>
@@ -576,5 +540,7 @@ const ExplainGrade = () => {
     </div>
   );
 };
+
+export { buildGradeSelectorLabels, getBreakdownMaxScore };
 
 export default ExplainGrade;

@@ -1,20 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invokeMock, warnMock } = vi.hoisted(() => ({
-  invokeMock: vi.fn(),
-  warnMock: vi.fn(),
-}));
+const { supabaseMock, getSessionMock, invokeMock, infoMock, warnMock } = vi.hoisted(() => {
+  const getSessionMock = vi.fn();
+  const invokeMock = vi.fn();
+
+  return {
+    getSessionMock,
+    invokeMock,
+    infoMock: vi.fn(),
+    warnMock: vi.fn(),
+    supabaseMock: {
+      auth: {
+        getSession: getSessionMock,
+      },
+      functions: {
+        invoke: invokeMock,
+      },
+    },
+  };
+});
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    functions: {
-      invoke: invokeMock,
-    },
-  },
+  supabase: supabaseMock,
 }));
 
 vi.mock("@/lib/logger", () => ({
   log: {
+    info: infoMock,
     warn: warnMock,
   },
 }));
@@ -26,6 +38,7 @@ import {
   formatSubmissionNotificationEmail,
 } from "../../supabase/functions/_shared/email";
 import {
+  dispatchWorkflowNotificationEmail,
   WorkflowEmailRequestSchema,
   sendWorkflowNotificationEmail,
 } from "@/lib/communications";
@@ -35,7 +48,16 @@ const forbiddenContentPattern = /score|feedback text|private feedback|plagiarism
 describe("workflow email notifications", () => {
   beforeEach(() => {
     invokeMock.mockReset();
+    getSessionMock.mockReset();
+    infoMock.mockReset();
     warnMock.mockReset();
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "test-access-token",
+        },
+      },
+    });
   });
 
   it("keeps assignment-published email content safe", () => {
@@ -57,11 +79,12 @@ describe("workflow email notifications", () => {
     const email = formatGradeReleasedEmail({
       studentName: "Sam Student",
       assignmentTitle: "Algorithms Essay",
-      assignmentUrl: "https://gradeai.test/dashboard/assignments/assignment-1",
+      assignmentUrl: "https://gradeai.test/dashboard/explain-grade?assignment=assignment-1&submission=submission-1&source=email",
     });
 
     expect(email.subject).toBe("Feedback released");
     expect(email.text).toContain("Algorithms Essay");
+    expect(email.text).toContain("/dashboard/explain-grade?");
     expect(email.text).not.toMatch(forbiddenContentPattern);
     expect(email.html).not.toMatch(forbiddenContentPattern);
   });
@@ -100,6 +123,137 @@ describe("workflow email notifications", () => {
     expect(warnMock).toHaveBeenCalled();
   });
 
+  it("does not invoke the edge function when no browser session is available", async () => {
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: null,
+      },
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "assignment-published",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: "failed",
+      reason: "missing_session",
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(warnMock).toHaveBeenCalled();
+  });
+
+  it("reports duplicate workflow emails without treating them as failures", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        skipped: true,
+        reason: "duplicate_notification",
+      },
+      error: null,
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("send-workflow-notification-email", {
+      body: {
+        category: "grade-released",
+        assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+        submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+      },
+      headers: {
+        Authorization: "Bearer test-access-token",
+      },
+    });
+    expect(result).toEqual({
+      ok: true,
+      status: "duplicate",
+      reason: "duplicate_notification",
+    });
+    expect(infoMock).toHaveBeenCalledWith("Workflow notification email invoke started", {
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+  });
+
+  it("treats malformed successful workflow email responses as non-duplicate sends", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        meta: 42,
+      },
+      error: null,
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "sent",
+      reason: null,
+    });
+  });
+
+  it("keeps safe skip reasons when the edge function intentionally skips delivery", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        skipped: true,
+        reason: "recipient_missing",
+      },
+      error: null,
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      status: "sent",
+      reason: "recipient_missing",
+    });
+    expect(infoMock).toHaveBeenCalledWith("Workflow notification email invoke succeeded", {
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+      outcome: "sent",
+      reason: "recipient_missing",
+    });
+  });
+
+  it("reports invocation failures as failed workflow email dispatches", async () => {
+    invokeMock.mockResolvedValue({
+      data: null,
+      error: { message: "network issue" },
+    });
+
+    const result = await dispatchWorkflowNotificationEmail({
+      category: "grade-released",
+      assignmentId: "6f951f5c-2665-48c8-b404-3ef9b6288882",
+      submissionId: "6f951f5c-2665-48c8-b404-3ef9b6288883",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: "failed",
+      reason: "invoke_failed",
+    });
+    expect(warnMock).toHaveBeenCalled();
+  });
+
   it("escapes dynamic HTML values while keeping plain text readable", () => {
     const assignmentTitle = `<Algorithms & "Trees">`;
     const studentName = `Sam <Student>`;
@@ -124,12 +278,12 @@ describe("workflow email notifications", () => {
     const email = formatGradeReleasedEmail({
       studentName: `Ari "Student"`,
       assignmentTitle: `Graphs <Final>`,
-      assignmentUrl: "https://gradeai.test/dashboard/assignments/assignment-2?source=bell&view=student",
+      assignmentUrl: "https://gradeai.test/dashboard/explain-grade?assignment=assignment-2&submission=submission-2&source=email",
     });
 
     expect(email.html).toContain("Graphs &lt;Final&gt;");
     expect(email.html).toContain("Ari &quot;Student&quot;");
-    expect(email.html).toContain("source=bell&amp;view=student");
+    expect(email.html).toContain("source=email");
     expect(email.text).toContain("Graphs <Final>");
   });
 });

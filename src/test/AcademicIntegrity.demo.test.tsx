@@ -36,6 +36,12 @@ describe("AcademicIntegrity demo mode", () => {
     );
 
     expect(await screen.findByText("Academic Integrity Review Queue")).toBeInTheDocument();
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Escalated review position")).toBeInTheDocument();
+    expect(screen.getByText("Research Ethics Review Memo")).toBeInTheDocument();
+    expect(
+      screen.getByText("Complete active investigations and record lecturer decisions"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Amina Hassan")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
 
@@ -45,5 +51,5 @@ describe("AcademicIntegrity demo mode", () => {
     fireEvent.click(screen.getByRole("button", { name: /Active Investigations/i }));
     expect(await screen.findByText("Daniel Reed")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
-  });
+  }, 30000);
 });

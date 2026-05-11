@@ -1,20 +1,17 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSupabaseMock } from "@/test/helpers/mockSupabaseClient";
 
+const mocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+}));
+
 const renderAccreditationDashboard = async ({
   supabaseMock,
-  derived,
   programmes = [],
 }: {
   supabaseMock: ReturnType<typeof createSupabaseMock>;
-  derived: {
-    qaaMetrics: Array<Record<string, unknown>>;
-    nssMetrics: Array<Record<string, unknown>>;
-    tefIndicators: Array<Record<string, unknown>>;
-    feedbackTurnaround: { avg: number; target: number; compliant: number; total: number };
-  };
   programmes?: Array<Record<string, unknown>>;
 }) => {
   vi.resetModules();
@@ -29,10 +26,13 @@ const renderAccreditationDashboard = async ({
     supabase: supabaseMock,
   }));
 
-  vi.doMock("@/lib/accreditationMetrics", () => ({
-    deriveAccreditationMetrics: () => derived,
-    deriveProgrammeReports: () => programmes,
-  }));
+  vi.doMock("react-router-dom", async () => {
+    const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+    return {
+      ...actual,
+      useNavigate: () => mocks.navigate,
+    };
+  });
 
   const { default: AccreditationDashboard } = await import("@/pages/dashboard/AccreditationDashboard");
 
@@ -47,12 +47,13 @@ describe("AccreditationDashboard integration", () => {
   afterEach(() => {
     cleanup();
     vi.resetModules();
+    vi.clearAllMocks();
     vi.unmock("@/contexts/AuthContext");
     vi.unmock("@/integrations/supabase/client");
-    vi.unmock("@/lib/accreditationMetrics");
+    vi.unmock("react-router-dom");
   });
 
-  it("shows the empty state when no accreditation data exists", async () => {
+  it("renders a zeroed accreditation view when no live data exists", async () => {
     const supabaseMock = createSupabaseMock({
       grades: { selectResult: { data: [], error: null } },
       submissions: { selectResult: { data: [], error: null } },
@@ -62,22 +63,12 @@ describe("AccreditationDashboard integration", () => {
 
     await renderAccreditationDashboard({
       supabaseMock,
-      derived: {
-        qaaMetrics: [],
-        nssMetrics: [],
-        tefIndicators: [],
-        feedbackTurnaround: { avg: 0, target: 15, compliant: 0, total: 0 },
-      },
     });
 
-    expect(
-      await screen.findByText(
-        "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading.",
-        {},
-        { timeout: 10000 },
-      )
-    ).toBeInTheDocument();
-  });
+    expect(await screen.findByText("Overall Compliance", {}, { timeout: 15000 })).toBeInTheDocument();
+    expect(screen.getByText("Recommended Actions")).toBeInTheDocument();
+    expect(screen.getByText("Open pending submissions")).toBeInTheDocument();
+  }, 20000);
 
   it("shows an explicit load error state when accreditation queries fail", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -90,17 +81,15 @@ describe("AccreditationDashboard integration", () => {
 
     await renderAccreditationDashboard({
       supabaseMock,
-      derived: {
-        qaaMetrics: [],
-        nssMetrics: [],
-        tefIndicators: [],
-        feedbackTurnaround: { avg: 0, target: 15, compliant: 0, total: 0 },
-      },
     });
 
-    await screen.findByText("Accreditation metrics could not be loaded right now. Try again later.");
+    await screen.findByText(
+      "Accreditation metrics could not be loaded right now. Try again later.",
+      {},
+      { timeout: 20000 },
+    );
     expect(errorSpy).toHaveBeenCalled();
-  });
+  }, 25000);
 
   it("renders live derived metrics when accreditation data exists", async () => {
     const supabaseMock = createSupabaseMock({
@@ -176,36 +165,6 @@ describe("AccreditationDashboard integration", () => {
 
     await renderAccreditationDashboard({
       supabaseMock,
-      derived: {
-        qaaMetrics: [
-          {
-            id: "feedback-turnaround",
-            metric: "Feedback Turnaround",
-            value: 50,
-            target: 90,
-            status: "below",
-            detail: "1 of 2 graded submissions met the 15-day target.",
-            category: "assessment",
-          },
-        ],
-        nssMetrics: [
-          {
-            question: "Assessment and feedback",
-            score: 71,
-            benchmark: 78,
-            trend: "-3",
-          },
-        ],
-        tefIndicators: [
-          {
-            name: "Student experience",
-            score: 68,
-            rating: "bronze",
-            detail: "Feedback timeliness is lagging behind benchmark.",
-          },
-        ],
-        feedbackTurnaround: { avg: 14, target: 15, compliant: 1, total: 2 },
-      },
       programmes: [
         {
           code: "CS401",
@@ -224,9 +183,17 @@ describe("AccreditationDashboard integration", () => {
 
     expect(await screen.findByText("Overall Compliance", {}, { timeout: 10000 })).toBeInTheDocument();
 
-    expect(screen.getByText("Top Findings")).toBeInTheDocument();
+    expect(screen.getAllByText("Top Findings").length).toBeGreaterThan(0);
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("First challenge likely")).toBeInTheDocument();
     expect(screen.getByText("QAA Quality Standards")).toBeInTheDocument();
-    expect(screen.getAllByText("Feedback Turnaround").length).toBeGreaterThan(0);
+    expect(screen.getByText("Feedback Turnaround Analysis")).toBeInTheDocument();
     expect(screen.getByText("Recommended Actions")).toBeInTheDocument();
+    expect(screen.getByText("Open release queue")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Reduce feedback backlog/i }));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      "/dashboard/assignments/a2?source=queue&focus=release-ready",
+    );
   });
 });

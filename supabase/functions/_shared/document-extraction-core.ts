@@ -7,10 +7,40 @@ import {
 } from "./text-analysis.ts";
 
 export const DOCUMENT_EXTRACTION_ERROR_MESSAGE =
-  "We could not read this document. Please upload a readable PDF, DOCX, or TXT file.";
+  "We could not read this document. Please upload a readable PDF, DOCX, TXT, or supported code file.";
 export const MIN_EXTRACTED_TEXT_CHARS = 200;
 
-export type SupportedDocumentType = "docx" | "pdf" | "txt" | "unsupported";
+export type SupportedDocumentType = "code" | "docx" | "pdf" | "txt" | "unsupported";
+
+const CODE_FILE_EXTENSIONS = [
+  ".py",
+  ".js",
+  ".ts",
+  ".tsx",
+  ".jsx",
+  ".java",
+  ".c",
+  ".cpp",
+  ".cc",
+  ".cs",
+  ".go",
+  ".php",
+  ".rb",
+  ".rs",
+  ".swift",
+  ".kt",
+  ".kts",
+  ".scala",
+  ".sql",
+  ".html",
+  ".css",
+  ".json",
+  ".xml",
+  ".yaml",
+  ".yml",
+  ".sh",
+  ".md",
+] as const;
 
 export type DocxExtractor = (bytes: Uint8Array) => Promise<{
   value: string;
@@ -82,6 +112,18 @@ export function detectDocumentType(fileName: string | null | undefined, mimeType
 
   if (normalizedMime.startsWith("text/plain") || normalizedName.endsWith(".txt")) {
     return "txt";
+  }
+
+  if (
+    normalizedMime.startsWith("text/") ||
+    normalizedMime.includes("javascript") ||
+    normalizedMime.includes("json") ||
+    normalizedMime.includes("xml") ||
+    normalizedMime.includes("yaml") ||
+    normalizedMime.includes("x-python") ||
+    CODE_FILE_EXTENSIONS.some((extension) => normalizedName.endsWith(extension))
+  ) {
+    return "code";
   }
 
   return "unsupported";

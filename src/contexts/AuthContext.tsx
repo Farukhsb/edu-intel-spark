@@ -8,7 +8,7 @@ import { env } from "@/lib/env";
 import { parseAppRole, type AppRole, type PublicSignupRole } from "@/lib/roles";
 import type { User } from "@supabase/supabase-js";
 
-interface Profile {
+export interface Profile {
   id: string;
   full_name: string | null;
   email: string | null;
@@ -16,6 +16,7 @@ interface Profile {
   avatar_url: string | null;
   cohort_id: string | null;
   department_id: string | null;
+  must_change_password: boolean;
 }
 
 const PROFILE_FETCH_RETRY_COUNT = 5;
@@ -28,6 +29,8 @@ interface AuthContextType {
   loading: boolean;
   profileError: string | null;
   isDemo: boolean;
+  mustChangePassword: boolean;
+  pendingVerificationEmail: string | null;
   signUp: (
     email: string,
     password: string,
@@ -38,6 +41,8 @@ interface AuthContextType {
   ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  completePasswordChange: (password: string) => Promise<void>;
+  refreshProfile: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   resendVerification: () => Promise<void>;
   enterDemo: (demoRole: AppRole) => void;
@@ -60,6 +65,7 @@ const DEMO_LECTURER_PROFILE: Profile = {
   avatar_url: null,
   cohort_id: null,
   department_id: null,
+  must_change_password: false,
 };
 
 const DEMO_STUDENT_PROFILE: Profile = {
@@ -70,6 +76,7 @@ const DEMO_STUDENT_PROFILE: Profile = {
   avatar_url: null,
   cohort_id: "200",
   department_id: "Computer Science",
+  must_change_password: false,
 };
 
 const createDemoUser = (profile: Profile | null): User =>
@@ -86,6 +93,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -98,6 +106,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       avatar_url: string | null;
       cohort_id: string | null;
       department_id: string | null;
+      must_change_password: boolean | null;
     } | null = null;
 
     for (let attempt = 0; attempt < PROFILE_FETCH_RETRY_COUNT; attempt++) {
@@ -131,6 +140,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         avatar_url: data.avatar_url,
         cohort_id: data.cohort_id ?? null,
         department_id: data.department_id ?? null,
+        must_change_password: data.must_change_password ?? false,
       });
       setProfileError(null);
       posthog.identify(userId);
@@ -153,6 +163,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        setPendingVerificationEmail(null);
         setUser(session.user);
         fetchProfile(session.user.id, session.user.email).finally(() => setLoading(false));
       } else {
@@ -168,6 +179,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (session?.user) {
+        setPendingVerificationEmail(null);
         setUser(session.user);
         fetchProfile(session.user.id, session.user.email).finally(() => setLoading(false));
       } else {
@@ -181,6 +193,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => subscription.unsubscribe();
   }, [isDemo, location.pathname, navigate]);
+
+  const refreshProfile = async () => {
+    if (!user || isDemo) return;
+    await fetchProfile(user.id, user.email);
+  };
 
   const signUp = async (
     email: string,
@@ -210,6 +227,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const hasActiveSession = Boolean(data.session);
 
     if (hasActiveSession) {
+      setPendingVerificationEmail(null);
       setProfile({
         id: data.user.id,
         full_name: fullName,
@@ -218,7 +236,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         avatar_url: null,
         cohort_id: role === "student" ? (cohortId || null) : null,
         department_id: departmentId || null,
+        must_change_password: false,
       });
+    } else {
+      setPendingVerificationEmail(email);
     }
 
     return {
@@ -229,6 +250,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    setPendingVerificationEmail(null);
   };
 
   const handleSignOut = async () => {
@@ -237,6 +259,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
       setProfile(null);
       setProfileError(null);
+      setPendingVerificationEmail(null);
       setLoading(false);
       return;
     }
@@ -244,11 +267,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (isDemo) {
       setIsDemo(false);
       setProfile(null);
+      setPendingVerificationEmail(null);
       return;
     }
     await supabase.auth.signOut();
     setProfile(null);
     setProfileError(null);
+    setPendingVerificationEmail(null);
+  };
+
+  const completePasswordChange = async (password: string) => {
+    if (!user) {
+      throw new Error("You must be signed in to update your password.");
+    }
+
+    const { error: authError } = await supabase.auth.updateUser({ password });
+    if (authError) throw authError;
+
+    const { error: profileUpdateError } = await supabase
+      .from("profiles")
+      .update({ must_change_password: false })
+      .eq("id", user.id);
+
+    if (profileUpdateError) {
+      throw new Error("Your password was updated, but the account security check could not be completed. Please sign in again and try once more.");
+    }
+
+    setProfile((current) => (current ? { ...current, must_change_password: false } : current));
   };
 
   const resetPassword = async (email: string) => {
@@ -262,6 +307,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const resendVerification = async () => {
+    if (!pendingVerificationEmail) {
+      throw new Error("No pending verification email is available. Create your account again or contact support.");
+    }
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingVerificationEmail,
+    });
+    if (error) throw error;
   };
 
   const enterDemo = (demoRole: AppRole) => {
@@ -284,9 +338,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         profileError,
         isDemo,
+        mustChangePassword: profile?.must_change_password ?? false,
+        pendingVerificationEmail,
         signUp,
         signIn,
         signOut: handleSignOut,
+        completePasswordChange,
+        refreshProfile,
         resetPassword,
         resendVerification,
         enterDemo,

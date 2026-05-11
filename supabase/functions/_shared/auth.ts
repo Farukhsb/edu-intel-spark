@@ -1,5 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+function getEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  return undefined;
+}
+
 export class HttpError extends Error {
   status: number;
 
@@ -9,9 +17,9 @@ export class HttpError extends Error {
   }
 }
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const supabaseUrl = getEnv("SUPABASE_URL");
+const anonKey = getEnv("SUPABASE_ANON_KEY");
+const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 if (!supabaseUrl || !anonKey || !serviceRoleKey) {
   throw new Error("Supabase environment variables are not configured");
@@ -55,7 +63,7 @@ export async function requireUser(req: Request) {
   return { supabase, user: data.user };
 }
 
-async function resolveUserRoles(
+export async function resolveUserRoles(
   supabase: ReturnType<typeof createUserClient>,
   userId: string,
 ): Promise<AppRole[]> {
@@ -64,19 +72,19 @@ async function resolveUserRoles(
     supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
   ]);
 
-  if (rolesRes.error || profileRes.error) {
+  if (rolesRes.error && profileRes.error) {
     throw new HttpError(500, "Failed to verify user role");
   }
 
   const roles = new Set<AppRole>();
 
-  for (const row of rolesRes.data ?? []) {
+  for (const row of rolesRes.error ? [] : rolesRes.data ?? []) {
     if (row.role === "lecturer" || row.role === "student" || row.role === "admin") {
       roles.add(row.role);
     }
   }
 
-  const profileRole = profileRes.data?.role;
+  const profileRole = profileRes.error ? null : profileRes.data?.role;
   if (profileRole === "lecturer" || profileRole === "student" || profileRole === "admin") {
     roles.add(profileRole);
   }
@@ -84,15 +92,26 @@ async function resolveUserRoles(
   return [...roles];
 }
 
-export async function requireLecturer(req: Request) {
+export async function requireAppRoles(
+  req: Request,
+  allowedRoles: AppRole[],
+) {
   const { supabase, user } = await requireUser(req);
   const roles = await resolveUserRoles(supabase, user.id);
 
-  if (!roles.includes("lecturer") && !roles.includes("admin")) {
-    throw new HttpError(403, "Lecturer or admin access required");
+  if (!allowedRoles.some((role) => roles.includes(role))) {
+    throw new HttpError(403, `${allowedRoles.join(" or ")} access required`);
   }
 
-  return { supabase, user };
+  return { supabase, user, roles };
+}
+
+export async function requireLecturer(req: Request) {
+  return requireAppRoles(req, ["lecturer", "admin"]);
+}
+
+export async function requireAdmin(req: Request) {
+  return requireAppRoles(req, ["admin"]);
 }
 
 export function jsonError(error: unknown, corsHeaders: Record<string, string>) {

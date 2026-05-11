@@ -26,14 +26,17 @@ export default defineConfig({
         "src/vite-env.d.ts",
       ],
       thresholds: {
-        statements: 5,
-        branches: 5,
-        functions: 5,
-        lines: 5,
+        statements: 40,
+        branches: 25,
+        functions: 35,
+        lines: 40,
       },
     },
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "npm:zod": "zod",
+    },
   },
 });

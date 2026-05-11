@@ -2,6 +2,12 @@ import {
   canReleaseStatus,
   getApprovalBlockReason,
   getAssessmentSummary,
+  getLecturerSelectionGuidance,
+  getLecturerWorkflowLaneSummary,
+  getSelectedWorkflowActionState,
+  getSubmissionDisplayState,
+  isApprovableWorkflowStatus,
+  isRegradableWorkflowStatus,
   isStudentGradeVisible,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
@@ -33,6 +39,137 @@ describe("assessment workflow rules", () => {
     expect(canReleaseStatus("approved")).toBe(true);
     expect(canReleaseStatus("released")).toBe(false);
     expect(canReleaseStatus("moderated")).toBe(false);
+  });
+
+  it("keeps regrade and approval eligibility in shared workflow helpers", () => {
+    expect(isRegradableWorkflowStatus("submitted")).toBe(true);
+    expect(isRegradableWorkflowStatus("approved")).toBe(true);
+    expect(isRegradableWorkflowStatus("released")).toBe(false);
+
+    expect(isApprovableWorkflowStatus("ai_graded")).toBe(false);
+    expect(isApprovableWorkflowStatus("first_review")).toBe(true);
+    expect(isApprovableWorkflowStatus("moderated")).toBe(true);
+    expect(isApprovableWorkflowStatus("approved")).toBe(false);
+  });
+
+  it("summarizes selected workflow actions consistently for the assignment page", () => {
+    expect(
+      getSelectedWorkflowActionState([
+        "submitted",
+        "ai_graded",
+        "under_review",
+        "approved",
+        "released",
+      ]),
+    ).toEqual({
+      submittedCount: 1,
+      regradableCount: 4,
+      approvableCount: 1,
+      releaseReadyCount: 1,
+      hasRegradable: true,
+      hasApprovable: true,
+      hasReleaseReady: true,
+    });
+  });
+
+  it("summarizes workflow lanes consistently for lecturer operations", () => {
+    expect(
+      getLecturerWorkflowLaneSummary([
+        "submitted",
+        "ai_grading",
+        "ai_graded",
+        "moderation_pending",
+        "approved",
+        "released",
+      ]),
+    ).toEqual({
+      intakeCount: 1,
+      aiInProgressCount: 1,
+      firstReviewCount: 1,
+      manualReviewCount: 0,
+      moderationCount: 1,
+      releaseReadyCount: 1,
+      releasedCount: 1,
+    });
+  });
+
+  it("guides selected submissions toward the clearest next lecturer action", () => {
+    expect(getLecturerSelectionGuidance(["approved"])).toEqual({
+      headline: "Release-ready submissions selected",
+      detail:
+        "1 approved submission is ready for student release. Release them only after the final feedback and score look correct.",
+    });
+
+    expect(getLecturerSelectionGuidance(["ai_graded"])).toEqual({
+      headline: "First-review work is selected",
+      detail:
+        "These submissions already have AI output. Open the review surface, confirm or adjust the score and feedback, and let the workflow decide whether moderation is needed.",
+    });
+  });
+
+  it("builds a lecturer review display state for unreleased graded work", () => {
+    expect(
+      getSubmissionDisplayState({
+        status: "ai_graded",
+        grade: {
+          ai_score: 58,
+          ai_feedback: "AI feedback",
+        },
+        isLecturer: true,
+      }),
+    ).toEqual({
+      scoreToDisplay: 58,
+      studentVisibleFeedback: null,
+      showFeedbackSummary: true,
+      showFirstReview: true,
+      showApprove: false,
+      showRelease: false,
+      showReleaseNote: false,
+    });
+  });
+
+  it("shows approval without first-review editing once work has moved into moderation-complete state", () => {
+    expect(
+      getSubmissionDisplayState({
+        status: "moderated",
+        grade: {
+          ai_score: 58,
+          ai_feedback: "AI feedback",
+        },
+        isLecturer: true,
+      }),
+    ).toEqual({
+      scoreToDisplay: 58,
+      studentVisibleFeedback: null,
+      showFeedbackSummary: true,
+      showFirstReview: false,
+      showApprove: true,
+      showRelease: false,
+      showReleaseNote: false,
+    });
+  });
+
+  it("builds a student-visible released display state from resolved final values", () => {
+    expect(
+      getSubmissionDisplayState({
+        status: "released",
+        grade: {
+          ai_score: 58,
+          lecturer_score: 61,
+          final_score: 63,
+          final_feedback: "Released feedback",
+        },
+        isLecturer: false,
+      }),
+    ).toEqual({
+      scoreToDisplay: 63,
+      studentVisibleFeedback: "Released feedback",
+      showFeedbackSummary: false,
+      showFirstReview: false,
+      showApprove: false,
+      showRelease: false,
+      showReleaseNote: false,
+    });
   });
 
   it("blocks approval while moderation is active or still required", () => {

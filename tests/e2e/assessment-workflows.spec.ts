@@ -89,6 +89,7 @@ test.describe("critical assessment workflows", () => {
     await page.getByPlaceholder(/add or edit feedback/i).fill("Clearer use of evidence after lecturer review.");
     await page.getByTestId("submission-review-save").click();
 
+    await expect(page.getByText("First marker review saved.")).toBeVisible();
     await expect(page.getByTestId("submission-review-dialog")).not.toBeVisible();
     await expect(page.getByTestId("submission-status-submission-release")).toContainText("First Review");
     await expect(submissionCard).toContainText("73/100");
@@ -174,16 +175,13 @@ test.describe("critical assessment workflows", () => {
     await page.getByPlaceholder(/add or edit feedback/i).fill("Adjusted upward after first marker review.");
     await page.getByTestId("submission-review-save").click();
 
+    await expect(page.getByText("First marker review saved and sent to moderation.")).toBeVisible();
     await expect(page.getByTestId("submission-review-dialog")).not.toBeVisible();
     await expect(page.getByTestId("submission-status-submission-moderation")).toContainText("Moderation Pending");
     await expect(moderationSubmissionCard).toContainText("72/100");
     expect(state.tables.submissions[0].status).toBe("moderation_pending");
     expect(state.tables.moderation_cases).toHaveLength(1);
-
-    await page.getByTestId("submission-approve-submission-moderation").click();
-    await expect(
-      page.getByText("This submission is in the moderation workflow and cannot be approved yet.")
-    ).toBeVisible();
+    await expect(page.getByTestId("submission-approve-submission-moderation")).toHaveCount(0);
     expect(state.tables.submissions[0].status).toBe("moderation_pending");
 
     await page.goto("/dashboard/moderation");
@@ -197,7 +195,11 @@ test.describe("critical assessment workflows", () => {
     await expect(page.getByText("Moderator assigned.")).toBeVisible();
     expect(state.tables.submissions[0].status).toBe("moderation_in_progress");
 
-    await expect(page.getByTestId("moderation-review-dialog")).toBeVisible();
+    await setE2EAuth(page, { role: "lecturer", ...moderator });
+
+    await page.reload();
+    await expect(page.getByText("Moderation Queue")).toBeVisible();
+    await page.getByTestId(`moderation-review-open-${state.tables.moderation_cases[0].id}`).click();
     await page.getByPlaceholder(/record the moderation rationale/i).fill("Moderator agrees after confirming the lecturer adjustment.");
     await page.getByPlaceholder(/out of 100/i).fill("72");
     await page.getByPlaceholder(/feedback text to keep with the final agreed mark/i).fill("Final agreed feedback after moderation.");
@@ -205,6 +207,10 @@ test.describe("critical assessment workflows", () => {
     await expect(page.getByText("Agree saved.")).toBeVisible();
     expect(state.tables.submissions[0].status).toBe("moderated");
 
+    await setE2EAuth(page, { role: "lecturer", ...lecturer });
+
+    await page.reload();
+    await expect(page.getByText("Moderation Queue")).toBeVisible();
     await page.getByTestId(`moderation-review-open-${state.tables.moderation_cases[0].id}`).click();
     await page.getByTestId("moderation-action-approve").click();
     await expect(page.getByText("Approve saved.")).toBeVisible();
@@ -309,4 +315,338 @@ test.describe("critical assessment workflows", () => {
     await expect(approvedCard).not.toContainText("55/100");
     await expect(approvedCard).not.toContainText("Approved feedback should stay hidden.");
   });
+
+  test("student only sees the result after lecturer release changes status from approved to released", async ({ page }) => {
+    const state = createMockSupabaseState({
+      assignments: [
+        {
+          id: "assignment-transition",
+          title: "Operating Systems Report",
+          description: "Release visibility transition coverage.",
+          module_code: "CS430",
+          max_score: 100,
+          due_date: "2026-04-14T09:00:00.000Z",
+          status: "published",
+          lecturer_id: lecturer.id,
+          rubric: [{ criterion: "Evaluation", weight: 50 }],
+        },
+      ],
+      submissions: [
+        {
+          id: "submission-transition",
+          assignment_id: "assignment-transition",
+          student_name: student.fullName,
+          student_email: student.email,
+          student_id: student.id,
+          file_name: "os-report.pdf",
+          file_type: "application/pdf",
+          file_url: "student-1/assignment-transition/os-report.pdf",
+          status: "ai_graded",
+          submitted_at: "2026-04-13T10:30:00.000Z",
+          uploaded_by: student.id,
+        },
+      ],
+      grades: [
+        {
+          id: "grade-transition",
+          submission_id: "submission-transition",
+          ai_score: 76,
+          ai_feedback: "Secure knowledge with a solid evaluative line.",
+          ai_breakdown: [{ criterion: "Evaluation", score: 38, max_score: 50, confidence_score: 0.92 }],
+          grading_confidence: 0.92,
+          grading_metadata: {},
+          lecturer_score: null,
+          lecturer_feedback: null,
+          final_score: null,
+          final_feedback: null,
+        },
+      ],
+      academic_integrity_reviews: [],
+      moderation_cases: [],
+      moderation_reviews: [],
+      grade_audit_log: [],
+      profiles: [
+        { id: lecturer.id, full_name: lecturer.fullName, email: lecturer.email, role: "lecturer", avatar_url: null, cohort_id: null, department_id: null },
+        { id: student.id, full_name: student.fullName, email: student.email, role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
+      ],
+    });
+
+    await installSupabaseMocks(page, state);
+    await setE2EAuth(page, { role: "lecturer", ...lecturer });
+
+    await page.goto("/dashboard/assignments/assignment-transition");
+    await page.waitForURL("**/dashboard/assignments/assignment-transition");
+    await expect(page.getByText("Operating Systems Report")).toBeVisible({ timeout: 10000 });
+
+    await page.getByTestId("submission-review-submission-transition").click();
+    await expect(page.getByTestId("submission-review-dialog")).toBeVisible();
+    await page.getByPlaceholder(/out of 100/i).fill("78");
+    await page.getByPlaceholder(/add or edit feedback/i).fill("Clearer systems evaluation after lecturer review.");
+    await page.getByTestId("submission-review-save").click();
+    await expect(page.getByText("First marker review saved.")).toBeVisible();
+
+    await page.getByTestId("submission-approve-submission-transition").click();
+    await expect(page.getByTestId("submission-status-submission-transition")).toContainText("Approved");
+    expect(state.tables.submissions[0].status).toBe("approved");
+
+    await setE2EAuth(page, { role: "student", ...student, cohortId: "cohort-1", departmentId: "cs" });
+    await page.goto("/dashboard");
+    await page.waitForURL("**/dashboard");
+    await expect(page.getByText("Your grade view")).toBeVisible({ timeout: 10000 });
+
+    const approvedCard = page.locator("div").filter({ hasText: "Operating Systems Report" }).first();
+    await expect(approvedCard).toContainText("approved");
+    await expect(approvedCard).not.toContainText("78/100");
+    await expect(approvedCard).not.toContainText("Clearer systems evaluation after lecturer review.");
+
+    await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await page.goto("/dashboard/assignments/assignment-transition");
+    await page.waitForURL("**/dashboard/assignments/assignment-transition");
+    await page.getByTestId("submission-release-submission-transition").click();
+    await expect(page.getByTestId("submission-status-submission-transition")).toContainText("Released");
+    expect(state.tables.submissions[0].status).toBe("released");
+
+    await setE2EAuth(page, { role: "student", ...student, cohortId: "cohort-1", departmentId: "cs" });
+    await page.goto("/dashboard");
+    await page.waitForURL("**/dashboard");
+
+    const releasedCard = page.locator("div").filter({ hasText: "Operating Systems Report" }).first();
+    await expect(releasedCard).toContainText("78/100");
+    await expect(releasedCard).toContainText("Clearer systems evaluation after lecturer review.");
+  });
+
+  test("older lecturer notification focus falls forward to released follow-up once the workflow is already released", async ({ page }) => {
+    const state = createMockSupabaseState({
+      assignments: [
+        {
+          id: "assignment-notice-forward",
+          title: "Distributed Systems Portfolio",
+          description: "Notification focus reconciliation coverage.",
+          module_code: "CS440",
+          max_score: 100,
+          due_date: "2026-04-18T09:00:00.000Z",
+          status: "published",
+          lecturer_id: lecturer.id,
+          rubric: [],
+        },
+      ],
+      submissions: [
+        {
+          id: "submission-released-focus",
+          assignment_id: "assignment-notice-forward",
+          student_name: "Amina Hassan",
+          student_email: "amina@example.test",
+          student_id: "student-focus-1",
+          file_name: "released-focus.pdf",
+          file_type: "application/pdf",
+          file_url: "student-focus-1/assignment-notice-forward/released-focus.pdf",
+          status: "released",
+          submitted_at: "2026-04-17T10:00:00.000Z",
+          uploaded_by: "student-focus-1",
+        },
+        {
+          id: "submission-stale-review",
+          assignment_id: "assignment-notice-forward",
+          student_name: "Daniel Reed",
+          student_email: "daniel@example.test",
+          student_id: "student-focus-2",
+          file_name: "stale-review.pdf",
+          file_type: "application/pdf",
+          file_url: "student-focus-2/assignment-notice-forward/stale-review.pdf",
+          status: "submitted",
+          submitted_at: "2026-04-17T11:00:00.000Z",
+          uploaded_by: "student-focus-2",
+        },
+      ],
+      grades: [
+        {
+          id: "grade-released-focus",
+          submission_id: "submission-released-focus",
+          ai_score: 72,
+          ai_feedback: "Released report feedback.",
+          ai_breakdown: [],
+          final_score: 75,
+          final_feedback: "Released portfolio feedback.",
+        },
+      ],
+      academic_integrity_reviews: [],
+      moderation_cases: [],
+      moderation_reviews: [],
+      grade_audit_log: [],
+      profiles: [
+        { id: lecturer.id, full_name: lecturer.fullName, email: lecturer.email, role: "lecturer", avatar_url: null, cohort_id: null, department_id: null },
+      ],
+    });
+
+    await installSupabaseMocks(page, state);
+    await setE2EAuth(page, { role: "lecturer", ...lecturer });
+
+    await page.goto("/dashboard/assignments/assignment-notice-forward?source=notification&focus=submission-review");
+    await page.waitForURL("**/dashboard/assignments/assignment-notice-forward?source=notification&focus=submission-review");
+    await expect(page.getByTestId("assignment-notification-focus")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Opened from an earlier notice after release")).toBeVisible();
+    await expect(page.getByText("released results")).toBeVisible();
+
+    await expect(page.getByTestId("submission-card-submission-released-focus")).toBeVisible();
+    await expect(page.getByTestId("submission-card-submission-released-focus")).toContainText("Released");
+    await expect(page.getByTestId("submission-card-submission-stale-review")).toHaveCount(0);
+  });
+
+  test("older lecturer AI-results notice falls forward into moderation once moderation is the active stage", async ({ page }) => {
+    const state = createMockSupabaseState({
+      assignments: [
+        {
+          id: "assignment-notice-moderation",
+          title: "Computer Networks Review",
+          description: "Moderation notification reconciliation coverage.",
+          module_code: "CS450",
+          max_score: 100,
+          due_date: "2026-04-19T09:00:00.000Z",
+          status: "published",
+          lecturer_id: lecturer.id,
+          rubric: [],
+        },
+      ],
+      submissions: [
+        {
+          id: "submission-moderation-focus-1",
+          assignment_id: "assignment-notice-moderation",
+          student_name: "Amina Hassan",
+          student_email: "amina@example.test",
+          student_id: "student-mod-focus-1",
+          file_name: "moderation-focus-1.pdf",
+          file_type: "application/pdf",
+          file_url: "student-mod-focus-1/assignment-notice-moderation/moderation-focus-1.pdf",
+          status: "moderation_pending",
+          submitted_at: "2026-04-18T10:00:00.000Z",
+          uploaded_by: "student-mod-focus-1",
+        },
+        {
+          id: "submission-moderation-focus-2",
+          assignment_id: "assignment-notice-moderation",
+          student_name: "Daniel Reed",
+          student_email: "daniel@example.test",
+          student_id: "student-mod-focus-2",
+          file_name: "moderation-focus-2.pdf",
+          file_type: "application/pdf",
+          file_url: "student-mod-focus-2/assignment-notice-moderation/moderation-focus-2.pdf",
+          status: "escalated",
+          submitted_at: "2026-04-18T11:00:00.000Z",
+          uploaded_by: "student-mod-focus-2",
+        },
+        {
+          id: "submission-stale-ai",
+          assignment_id: "assignment-notice-moderation",
+          student_name: "Nina Patel",
+          student_email: "nina@example.test",
+          student_id: "student-mod-focus-3",
+          file_name: "stale-ai.pdf",
+          file_type: "application/pdf",
+          file_url: "student-mod-focus-3/assignment-notice-moderation/stale-ai.pdf",
+          status: "ai_graded",
+          submitted_at: "2026-04-18T12:00:00.000Z",
+          uploaded_by: "student-mod-focus-3",
+        },
+      ],
+      grades: [
+        {
+          id: "grade-moderation-focus-1",
+          submission_id: "submission-moderation-focus-1",
+          ai_score: 58,
+          ai_feedback: "Queued for moderation.",
+          ai_breakdown: [],
+          final_score: null,
+          final_feedback: null,
+        },
+        {
+          id: "grade-moderation-focus-2",
+          submission_id: "submission-moderation-focus-2",
+          ai_score: 61,
+          ai_feedback: "Escalated after moderation disagreement.",
+          ai_breakdown: [],
+          final_score: null,
+          final_feedback: null,
+        },
+        {
+          id: "grade-stale-ai",
+          submission_id: "submission-stale-ai",
+          ai_score: 73,
+          ai_feedback: "Older AI-ready item.",
+          ai_breakdown: [],
+          final_score: null,
+          final_feedback: null,
+        },
+      ],
+      moderation_cases: [
+        {
+          id: "case-moderation-focus-1",
+          submission_id: "submission-moderation-focus-1",
+          assignment_id: "assignment-notice-moderation",
+          grade_id: "grade-moderation-focus-1",
+          lecturer_id: lecturer.id,
+          first_marker_id: lecturer.id,
+          moderator_id: null,
+          status: "moderation_pending",
+          trigger_flags: ["score_variance"],
+          trigger_summary: "Needs moderation review.",
+          confidence_score: 0.6,
+          integrity_risk_score: 0,
+          ai_score_snapshot: 58,
+          first_marker_score: 70,
+          moderator_score: null,
+          final_agreed_score: null,
+          final_agreed_feedback: null,
+          moderated_at: null,
+          approved_at: null,
+          created_at: "2026-04-18T10:30:00.000Z",
+          updated_at: "2026-04-18T10:30:00.000Z",
+        },
+        {
+          id: "case-moderation-focus-2",
+          submission_id: "submission-moderation-focus-2",
+          assignment_id: "assignment-notice-moderation",
+          grade_id: "grade-moderation-focus-2",
+          lecturer_id: lecturer.id,
+          first_marker_id: lecturer.id,
+          moderator_id: lecturer.id,
+          status: "escalated",
+          trigger_flags: ["integrity_risk"],
+          trigger_summary: "Escalated dispute.",
+          confidence_score: 0.65,
+          integrity_risk_score: 48,
+          ai_score_snapshot: 61,
+          first_marker_score: 63,
+          moderator_score: 60,
+          final_agreed_score: null,
+          final_agreed_feedback: null,
+          moderated_at: null,
+          approved_at: null,
+          created_at: "2026-04-18T11:30:00.000Z",
+          updated_at: "2026-04-18T11:30:00.000Z",
+        },
+      ],
+      academic_integrity_reviews: [],
+      moderation_reviews: [],
+      grade_audit_log: [],
+      profiles: [
+        { id: lecturer.id, full_name: lecturer.fullName, email: lecturer.email, role: "lecturer", avatar_url: null, cohort_id: null, department_id: null },
+      ],
+    });
+
+    await installSupabaseMocks(page, state);
+    await setE2EAuth(page, { role: "lecturer", ...lecturer });
+
+    await page.goto("/dashboard/assignments/assignment-notice-moderation?source=notification&focus=ai-results");
+    await page.waitForURL("**/dashboard/assignments/assignment-notice-moderation?source=notification&focus=ai-results");
+    await expect(page.getByTestId("assignment-notification-focus")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Opened from an earlier notice after moderation started")).toBeVisible();
+    await expect(page.getByText("blocked in moderation or escalation")).toBeVisible();
+
+    await expect(page.getByTestId("submission-card-submission-moderation-focus-1")).toBeVisible();
+    await expect(page.getByTestId("submission-card-submission-moderation-focus-1")).toContainText("Moderation Pending");
+    await expect(page.getByTestId("submission-card-submission-moderation-focus-2")).toBeVisible();
+    await expect(page.getByTestId("submission-card-submission-moderation-focus-2")).toContainText("Escalated");
+    await expect(page.getByTestId("submission-card-submission-stale-ai")).toHaveCount(0);
+  });
+
 });

@@ -174,12 +174,12 @@ export function formatGradeReleasedEmail(params: {
 
   return {
     subject: "Feedback released",
-    text: `${greeting}\n\nYour feedback for ${params.assignmentTitle} is now available in GradeAI.\nView feedback: ${params.assignmentUrl}`,
+    text: `${greeting}\n\nYour released result for ${params.assignmentTitle} is now available in GradeAI.\nOpen released result: ${params.assignmentUrl}`,
     html: `
       <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
         <p>${safeGreeting}</p>
-        <p>Your feedback for <strong>${safeAssignmentTitle}</strong> is now available in GradeAI.</p>
-        <p><a href="${safeAssignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">View feedback</a></p>
+        <p>Your released result for <strong>${safeAssignmentTitle}</strong> is now available in GradeAI.</p>
+        <p><a href="${safeAssignmentUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;">Open released result</a></p>
       </div>
     `,
   };

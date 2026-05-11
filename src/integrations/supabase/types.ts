@@ -70,6 +70,57 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit_log: {
+        Row: {
+          action_type: string
+          actor_id: string | null
+          actor_role: string | null
+          created_at: string
+          details: Json
+          id: string
+          target_user_email: string | null
+          target_user_id: string | null
+          target_user_name: string | null
+        }
+        Insert: {
+          action_type: string
+          actor_id?: string | null
+          actor_role?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_email?: string | null
+          target_user_id?: string | null
+          target_user_name?: string | null
+        }
+        Update: {
+          action_type?: string
+          actor_id?: string | null
+          actor_role?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_email?: string | null
+          target_user_id?: string | null
+          target_user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_audit_log_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analytics_recommendations: {
         Row: {
           assignment_id: string | null
@@ -647,6 +698,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          must_change_password: boolean
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
         }
@@ -658,6 +710,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          must_change_password?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
         }
@@ -669,6 +722,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          must_change_password?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
         }
@@ -928,6 +982,78 @@ export type Database = {
             module_code: string | null
             submission_id: string
             title: string | null
+          }[]
+        }
+        get_admin_dashboard_metrics: {
+          Args: never
+          Returns: {
+            active_lecturers: number
+            active_students: number
+            high_integrity_risk_cases: number
+            pending_moderation_cases: number
+            total_assignments: number
+            total_submissions: number
+            total_users: number
+          }[]
+        }
+        get_admin_assignment_oversight: {
+          Args: never
+          Returns: {
+            created_at: string
+            due_date: string | null
+            graded_count: number
+            id: string
+            lecturer_name: string
+            module_code: string | null
+            released_count: number
+            status: Database["public"]["Enums"]["assignment_status"]
+            submission_count: number
+            title: string
+          }[]
+        }
+        get_admin_moderation_overview: {
+          Args: never
+          Returns: {
+            assignment_title: string
+            confidence_score: number | null
+            created_at: string
+            disagreement: boolean
+            first_marker_name: string
+            id: string
+            integrity_risk_score: number | null
+            moderator_name: string
+            status: string
+            trigger_summary: string | null
+            updated_at: string
+          }[]
+        }
+        get_admin_recent_activity: {
+          Args: never
+          Returns: {
+            created_at: string
+            detail: string
+            id: string
+            title: string
+            tone: string
+          }[]
+        }
+        get_student_submission_grade_projection: {
+          Args: never
+          Returns: {
+            ai_breakdown: Json | null
+            ai_feedback: string | null
+            ai_score: number | null
+            assignment_id: string
+            assignment_title: string | null
+            file_name: string
+            file_url: string
+            final_feedback: string | null
+            final_score: number | null
+            max_score: number | null
+            module_code: string | null
+            submission_id: string
+            submission_status: Database["public"]["Enums"]["submission_status"]
+            submitted_at: string
           }[]
         }
         has_role: {
