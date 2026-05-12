@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { env } from "@/lib/env";
 import { getExplainGradeReadiness } from "@/lib/explainGradeReadiness";
 import { log } from "@/lib/logger";
+import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 import { parseExplainGradeSearchState } from "@/lib/schemas/navigation";
 import {
   buildDemoGradeResponse,
@@ -56,6 +57,7 @@ const ExplainGrade = () => {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastLoggedGradeDetailsRef = useRef<string | null>(null);
   const { assignmentId: focusAssignmentId, submissionId: focusSubmissionId, source: focusSource } =
     parseExplainGradeSearchState(searchParams);
 
@@ -101,6 +103,32 @@ const ExplainGrade = () => {
         }
       : null,
   });
+
+  useEffect(() => {
+    if (isDemo || !user || !selected) {
+      return;
+    }
+
+    const logKey = `${selected.gradeId}:${selected.submissionId}`;
+    if (lastLoggedGradeDetailsRef.current === logKey) {
+      return;
+    }
+    lastLoggedGradeDetailsRef.current = logKey;
+
+    void logAcademicAccessEvent({
+      actorId: user.id,
+      actorRole: "student",
+      eventType: "grade_details_viewed",
+      resourceType: "grade",
+      resourceId: selected.gradeId,
+      assignmentId: selected.assignmentId,
+      submissionId: selected.submissionId,
+      metadata: {
+        source: "explain_grade",
+        focusSource: focusSource || "direct",
+      },
+    });
+  }, [focusSource, isDemo, selected, user]);
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading || !gradeBreakdown) return;

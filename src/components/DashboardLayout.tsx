@@ -3,13 +3,21 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Award, BarChart3, Bell, Brain, ChevronDown, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut,
-  Menu, MessageSquare, Moon, Search, Settings, Shield, Sun, Target, TrendingUp, University,
+  Menu, MessageSquare, Moon, Search, Settings, Shield, Sun, Target, TrendingUp, University, AlertTriangle,
   Upload, Users, FileOutput,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
@@ -114,6 +122,23 @@ const DEMO_STUDENT_NOTIFICATIONS: CommunicationMessage[] = [
 
 const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
 const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
+const STUDENT_SIDEBAR_STATE_KEY = "gradeai:student-sidebar-sections";
+const LECTURER_ONBOARDING_STATE_KEY = "gradeai:lecturer-onboarding-v1-dismissed";
+
+const lecturerOnboardingActions = [
+  {
+    title: "Review your workspace overview",
+    description: "Start on Overview to see current teaching pressure, recent submissions, and the next workflow that needs attention.",
+  },
+  {
+    title: "Create or open an assignment",
+    description: "Use Assignments to create new assessment work or reopen an existing assignment for grading and release activity.",
+  },
+  {
+    title: "Check grading, integrity, and moderation before release",
+    description: "Before students see results, confirm the grading flow is complete and review any integrity or moderation work that still needs action.",
+  },
+] as const;
 
 type SidebarLink = {
   to: string;
@@ -130,7 +155,7 @@ type SidebarSection = {
 
 const lecturerSections = [
   {
-    label: "Core",
+    label: "Teaching",
     description: "Daily teaching workflow",
     defaultOpen: true,
     links: [
@@ -148,23 +173,13 @@ const lecturerSections = [
     ],
   },
   {
-    label: "Insights",
+    label: "Teaching Insights",
     description: "Cohort and learner signals",
     defaultOpen: false,
     links: [
       { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
       { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
       { to: "/dashboard/learning-outcomes", label: "Learning Outcomes", icon: Target },
-    ],
-  },
-  {
-    label: "Institution",
-    description: "Quality and reporting views",
-    defaultOpen: false,
-    links: [
-      { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
-      { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
-      { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
     ],
   },
   {
@@ -200,13 +215,24 @@ const adminSections = [
     ],
   },
   {
-    label: "Academic Access",
-    description: "Read-only workflow visibility",
+    label: "Academic Oversight",
+    description: "Read-only academic workflow visibility",
     defaultOpen: false,
     links: [
       { to: "/dashboard?view=assignments", label: "Assignments", icon: Upload },
       { to: "/dashboard?view=submissions", label: "Submissions", icon: FileOutput },
-      { to: "/dashboard/moderation", label: "Moderation", icon: ClipboardCheck },
+      { to: "/dashboard?view=moderation", label: "Moderation", icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: "Compliance & Governance",
+    description: "Audit and institutional governance views",
+    defaultOpen: false,
+    links: [
+      { to: "/dashboard?view=data-access-log", label: "Data Access Log", icon: FileOutput },
+      { to: "/dashboard?view=integrity-overview", label: "Academic Integrity Overview", icon: Shield },
+      { to: "/dashboard?view=moderation-audit", label: "Moderation Audit", icon: ClipboardCheck },
+      { to: "/dashboard?view=policy-exceptions", label: "Policy Exceptions", icon: AlertTriangle },
     ],
   },
   {
@@ -219,13 +245,34 @@ const adminSections = [
   },
 ] as const satisfies readonly SidebarSection[];
 
-const studentLinks = [
-  { to: "/dashboard", label: "My Grades", icon: GraduationCap },
-  { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
-  { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
-  { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
-  { to: "/dashboard/settings", label: "Settings", icon: Settings },
-] as const satisfies readonly SidebarLink[];
+const studentSections = [
+  {
+    label: "Learning",
+    description: "Assignments and current results",
+    defaultOpen: true,
+    links: [
+      { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
+      { to: "/dashboard", label: "My Grades", icon: GraduationCap },
+    ],
+  },
+  {
+    label: "Support & Improvement",
+    description: "Feedback understanding and next-step support",
+    defaultOpen: true,
+    links: [
+      { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
+      { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
+    ],
+  },
+  {
+    label: "Workspace",
+    description: "Personal settings and account controls",
+    defaultOpen: false,
+    links: [
+      { to: "/dashboard/settings", label: "Settings", icon: Settings },
+    ],
+  },
+] as const satisfies readonly SidebarSection[];
 
 const defaultLecturerSectionState = Object.fromEntries(
   lecturerSections.map((section) => [section.label, section.defaultOpen]),
@@ -233,6 +280,10 @@ const defaultLecturerSectionState = Object.fromEntries(
 
 const defaultAdminSectionState = Object.fromEntries(
   adminSections.map((section) => [section.label, section.defaultOpen]),
+) as Record<string, boolean>;
+
+const defaultStudentSectionState = Object.fromEntries(
+  studentSections.map((section) => [section.label, section.defaultOpen]),
 ) as Record<string, boolean>;
 
 const getNotificationCategoryLabel = (category: CommunicationMessage["category"]) => {
@@ -280,9 +331,17 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const navigate = useNavigate();
   const isAdmin = isAdminRole(profile?.role);
   const isLecturerEquivalent = isLecturerEquivalentRole(profile?.role);
-  const roleSections = isAdmin ? adminSections : lecturerSections;
-  const defaultSectionState = isAdmin ? defaultAdminSectionState : defaultLecturerSectionState;
-  const sidebarStateKey = isAdmin ? ADMIN_SIDEBAR_STATE_KEY : LECTURER_SIDEBAR_STATE_KEY;
+  const roleSections = isAdmin ? adminSections : isLecturerEquivalent ? lecturerSections : studentSections;
+  const defaultSectionState = isAdmin
+    ? defaultAdminSectionState
+    : isLecturerEquivalent
+      ? defaultLecturerSectionState
+      : defaultStudentSectionState;
+  const sidebarStateKey = isAdmin
+    ? ADMIN_SIDEBAR_STATE_KEY
+    : isLecturerEquivalent
+      ? LECTURER_SIDEBAR_STATE_KEY
+      : STUDENT_SIDEBAR_STATE_KEY;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(() => {
@@ -290,6 +349,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     return false;
   });
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window === "undefined") return defaultSectionState;
@@ -484,15 +544,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate("/dashboard");
   };
 
-  const lecturerLinks: SidebarLink[] = roleSections.flatMap((section) => [...section.links]);
-  const links = isLecturerEquivalent ? lecturerLinks : studentLinks;
+  const links: SidebarLink[] = roleSections.flatMap((section) => [...section.links]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate(isDemo ? "/" : "/auth");
   };
 
-  const filteredLecturerSections = roleSections
+  const filteredSections = roleSections
     .map((section) => ({
       ...section,
       links: searchQuery
@@ -501,10 +560,6 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     }))
     .filter((section) => section.links.length > 0);
 
-  const filteredLinks = searchQuery
-    ? links.filter((l) => l.label.toLowerCase().includes(searchQuery.toLowerCase()))
-    : links;
-
   const isLinkActive = (to: string) => {
     const [path, query = ""] = to.split("?");
     if (location.pathname !== path) return false;
@@ -512,9 +567,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   };
 
   const activeLink = links.find((link) => isLinkActive(link.to));
-  const activeSection = isLecturerEquivalent
-    ? roleSections.find((section) => section.links.some((link) => isLinkActive(link.to)))
-    : null;
+  const activeSection = roleSections.find((section) => section.links.some((link) => isLinkActive(link.to))) ?? null;
   const shellContext = getDashboardShellContext({
     isAdmin,
     isLecturerEquivalent,
@@ -532,13 +585,30 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   }, [activeSection, searchQuery]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !isLecturerEquivalent) return;
+    if (typeof window === "undefined") return;
 
     window.localStorage.setItem(sidebarStateKey, JSON.stringify(openSections));
-  }, [isLecturerEquivalent, openSections, sidebarStateKey]);
+  }, [openSections, sidebarStateKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isDemo || !isLecturerEquivalent || isAdmin) {
+      setShowOnboarding(false);
+      return;
+    }
+
+    const dismissed = window.localStorage.getItem(LECTURER_ONBOARDING_STATE_KEY) === "true";
+    setShowOnboarding(!dismissed);
+  }, [isAdmin, isDemo, isLecturerEquivalent]);
 
   const toggleSection = (label: string) => {
     setOpenSections((current) => ({ ...current, [label]: !current[label] }));
+  };
+
+  const dismissOnboarding = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(LECTURER_ONBOARDING_STATE_KEY, "true");
+    }
+    setShowOnboarding(false);
   };
 
   const renderNavLink = (link: SidebarLink) => {
@@ -577,6 +647,60 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.08),transparent_28%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.28))]">
+      <Dialog open={showOnboarding} onOpenChange={(open) => (!open ? dismissOnboarding() : setShowOnboarding(true))}>
+        <DialogContent className="max-w-3xl gap-5 p-0">
+          <div className="border-b border-border/70 px-6 py-5">
+            <DialogHeader className="space-y-2 text-left">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+                  <Brain className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle>Welcome to GradeAI</DialogTitle>
+                   <DialogDescription>
+                     GradeAI helps you manage teaching and assessment work in one place. Start with these three first actions.
+                   </DialogDescription>
+                 </div>
+               </div>
+             </DialogHeader>
+           </div>
+
+           <div className="px-6">
+             <div className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
+               <p className="text-sm font-medium text-foreground">Start here</p>
+               <ol className="mt-2 space-y-1 text-sm text-muted-foreground">
+                 <li>1. Review your <span className="font-medium text-foreground">workspace overview</span>.</li>
+                 <li>2. Create or open an <span className="font-medium text-foreground">assignment</span>.</li>
+                 <li>3. Check <span className="font-medium text-foreground">grading, integrity, and moderation</span> before release.</li>
+               </ol>
+             </div>
+           </div>
+
+           <div className="grid gap-3 px-6 pb-1 md:grid-cols-3">
+             {lecturerOnboardingActions.map((card) => (
+               <div key={card.title} className="rounded-2xl border border-border/70 bg-background px-4 py-3 shadow-sm">
+                 <p className="text-sm font-semibold text-foreground">{card.title}</p>
+                 <p className="mt-1 text-sm leading-6 text-muted-foreground">{card.description}</p>
+               </div>
+            ))}
+          </div>
+
+          <DialogFooter className="border-t border-border/70 px-6 py-4 sm:justify-between sm:space-x-0">
+            <p className="text-xs text-muted-foreground">
+              You can close this now and start working immediately.
+            </p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button type="button" variant="ghost" onClick={dismissOnboarding}>
+                Skip for now
+              </Button>
+              <Button type="button" onClick={dismissOnboarding}>
+                Start using GradeAI
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
@@ -608,9 +732,9 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         </div>
 
         <nav className="flex-1 overflow-y-auto px-4 py-3">
-          {isLecturerEquivalent ? (
+          {isAdmin || isLecturerEquivalent || isStudentRole(profile?.role) ? (
             <div className="space-y-5">
-              {filteredLecturerSections.map((section) => {
+              {filteredSections.map((section) => {
                 const isExpanded = searchQuery ? true : openSections[section.label];
 
                 return (
@@ -656,11 +780,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                 );
               })}
             </div>
-          ) : (
-            <div className="space-y-1">
-              {filteredLinks.map((link) => renderNavLink(link))}
-            </div>
-          )}
+          ) : null}
         </nav>
 
         <div className="border-t border-sidebar-border/80 p-4">

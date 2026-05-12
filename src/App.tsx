@@ -8,6 +8,7 @@ import { NetworkStatus } from "@/components/NetworkStatus";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getForcedPasswordChangeRoute, getPasswordChangeRedirectPath } from "@/lib/passwordChangeRouting";
+import type { AppRole } from "@/lib/roles";
 import { isAdminRole, isLecturerEquivalentRole } from "@/lib/roles";
 
 import Index from "./pages/Index";
@@ -126,7 +127,7 @@ const DashboardRouter = () => {
   return <StudentGrades />;
 };
 
-const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
+const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
   const location = useLocation();
 
   return (
@@ -144,9 +145,9 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
   );
 };
 
-const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
+export const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
   const { role } = useAuth();
-  const resolvedRole = isLecturerEquivalentRole(role) ? "lecturer" : role;
+  const resolvedRole = allowedRole === "lecturer" && isLecturerEquivalentRole(role) ? "lecturer" : role;
   if (allowedRole && resolvedRole && resolvedRole !== allowedRole) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -195,9 +196,9 @@ const App = () => (
               <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
               <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
               <Route path="/dashboard/moderation" element={<DashboardRoute allowedRole="lecturer"><ModerationDashboard /></DashboardRoute>} />
-              <Route path="/dashboard/institutional" element={<DashboardRoute allowedRole="lecturer"><InstitutionalInsights /></DashboardRoute>} />
-              <Route path="/dashboard/accreditation" element={<DashboardRoute allowedRole="lecturer"><AccreditationDashboard /></DashboardRoute>} />
-              <Route path="/dashboard/external-examiner" element={<DashboardRoute allowedRole="lecturer"><ExternalExaminerExport /></DashboardRoute>} />
+              <Route path="/dashboard/institutional" element={<DashboardRoute allowedRole="admin"><InstitutionalInsights /></DashboardRoute>} />
+              <Route path="/dashboard/accreditation" element={<DashboardRoute allowedRole="admin"><AccreditationDashboard /></DashboardRoute>} />
+              <Route path="/dashboard/external-examiner" element={<DashboardRoute allowedRole="admin"><ExternalExaminerExport /></DashboardRoute>} />
               <Route path="/dashboard/learning-outcomes" element={<DashboardRoute allowedRole="lecturer"><LearningOutcomes /></DashboardRoute>} />
               <Route path="/dashboard/explain-grade" element={<DashboardRoute allowedRole="student"><ExplainGrade /></DashboardRoute>} />
               <Route path="/dashboard/improvements" element={<DashboardRoute allowedRole="student"><ImprovementPlan /></DashboardRoute>} />

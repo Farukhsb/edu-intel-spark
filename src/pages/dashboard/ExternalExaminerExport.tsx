@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
+import { DashboardEmptyState } from "@/components/dashboard/PageStates";
 import {
   DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS,
   DEMO_EXTERNAL_EXAMINER_EXPORT_DATA,
@@ -54,6 +55,8 @@ const ExternalExaminerExport = () => {
   const [assignments, setAssignments] = useState<Array<{ id: string; title: string; moduleCode: string }>>([]);
   const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
   const [exportData, setExportData] = useState<ExternalExaminerExportRow[]>([]);
+  const [hasSourceData, setHasSourceData] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [includeOptions, setIncludeOptions] = useState({
     scores: true,
     feedback: true,
@@ -66,6 +69,8 @@ const ExternalExaminerExport = () => {
     if (isDemo) {
       setAssignments(DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS);
       setExportData(DEMO_EXTERNAL_EXAMINER_EXPORT_DATA);
+      setHasSourceData(true);
+      setLoadError(false);
       setLoading(false);
       return;
     }
@@ -74,6 +79,10 @@ const ExternalExaminerExport = () => {
       try {
         const { assignments: assignmentRows, submissions: submissionRows, grades: gradeRows, profiles: profileRows } =
           await fetchExternalExaminerDataset();
+        setHasSourceData(
+          assignmentRows.length > 0 || submissionRows.length > 0 || gradeRows.length > 0 || profileRows.length > 0,
+        );
+        setLoadError(false);
 
         setAssignments(
           assignmentRows.map((row) => ({
@@ -124,6 +133,10 @@ const ExternalExaminerExport = () => {
         setExportData(data);
       } catch (err) {
         log.error("Failed to generate external examiner export", err);
+        setAssignments([]);
+        setExportData([]);
+        setHasSourceData(false);
+        setLoadError(true);
       }
       setLoading(false);
     };
@@ -217,6 +230,24 @@ const ExternalExaminerExport = () => {
 
   if (loading) {
     return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (loadError) {
+    return (
+      <DashboardEmptyState
+        title="External examiner export unavailable"
+        description="External examiner data could not be loaded right now. Try again later."
+      />
+    );
+  }
+
+  if (!isDemo && !hasSourceData) {
+    return (
+      <DashboardEmptyState
+        title="No external examiner data yet"
+        description="This report populates after assignments, submissions, and grading records exist in the live dataset."
+      />
+    );
   }
 
   return (

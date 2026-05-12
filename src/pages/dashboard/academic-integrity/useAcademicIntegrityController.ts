@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, FileSearch, Scale, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 import { fetchAcademicIntegrityDataset } from "@/lib/data/integrity";
 import { log } from "@/lib/logger";
 import { type IntegrityDecision } from "@/lib/integrityReviews";
@@ -56,6 +57,7 @@ export const useAcademicIntegrityController = () => {
   const [decisionDrafts, setDecisionDrafts] = useState<Record<string, IntegrityDecision>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [queueFilter, setQueueFilter] = useState<IntegrityQueueFilter>("pending");
+  const lastLoggedExpandedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isDemo) {
@@ -150,6 +152,37 @@ export const useAcademicIntegrityController = () => {
       : queueFilter === "investigate"
         ? "No active investigations right now."
         : "No resolved integrity cases yet.";
+
+  useEffect(() => {
+    if (isDemo || !user || !expandedId) {
+      return;
+    }
+
+    if (lastLoggedExpandedIdRef.current === expandedId) {
+      return;
+    }
+
+    const item = flagged.find((entry) => entry.submissionId === expandedId);
+    if (!item) {
+      return;
+    }
+
+    lastLoggedExpandedIdRef.current = expandedId;
+    void logAcademicAccessEvent({
+      actorId: user.id,
+      actorRole: "lecturer",
+      eventType: "integrity_evidence_viewed",
+      resourceType: "academic_integrity_review",
+      resourceId: item.submissionId,
+      assignmentId: item.assignmentId,
+      submissionId: item.submissionId,
+      metadata: {
+        source: "academic_integrity_queue",
+        decision: item.decision,
+        riskLevel: item.riskLevel,
+      },
+    });
+  }, [expandedId, flagged, isDemo, user]);
 
   const saveDecision = async (item: FlaggedIntegrityCase) => {
     if (isDemo) {

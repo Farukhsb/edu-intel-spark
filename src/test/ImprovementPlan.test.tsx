@@ -178,9 +178,7 @@ describe("ImprovementPlan explanation validation", () => {
 
     expect(screen.getByText("Review lecturer feedback before next lab")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /hide completed tasks/i }).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole("button", { name: /view open tasks/i }));
-
+    fireEvent.click(screen.getByRole("button", { name: /view modules/i }));
     expect(screen.getByText("Complete Big-O analysis worksheet")).toBeInTheDocument();
   });
 

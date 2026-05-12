@@ -4,10 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowRight, Award, Building2, Download, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
-import { fetchInstitutionalInsightsDataset } from "@/lib/data/academic";
+import { fetchProgrammeReportDataset } from "@/lib/data/academic";
 import { log } from "@/lib/logger";
 import {
   EMPTY_ACCREDITATION,
@@ -49,13 +48,14 @@ const getMetricStatus = (value: number, target: number): AccreditationMetric["st
 };
 
 const InstitutionalInsights = () => {
-  const { isDemo, user } = useAuth();
+  const { isDemo } = useAuth();
   const navigate = useNavigate();
   const [departmentStats, setDepartmentStats] = useState<DepartmentStat[]>([]);
   const [lowPerforming, setLowPerforming] = useState<LowPerformingAssessment[]>([]);
   const [accreditation, setAccreditation] = useState<AccreditationMetric[]>(EMPTY_ACCREDITATION);
   const [loading, setLoading] = useState(!isDemo);
   const [hasRealData, setHasRealData] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (isDemo) {
@@ -63,32 +63,30 @@ const InstitutionalInsights = () => {
       return;
     }
 
-    if (!user) return;
-
     const fetchData = async () => {
       try {
-        const { assignments, submissions, grades } = await fetchInstitutionalInsightsDataset(user.id);
+        const { assignments, submissions, grades } = await fetchProgrammeReportDataset();
+        const hasUsableData = assignments.length > 0 || submissions.length > 0 || grades.length > 0;
 
-        if (assignments.length === 0) {
-          setHasRealData(false);
+        setHasRealData(hasUsableData);
+        setLoadError(false);
+
+        if (!hasUsableData) {
           setDepartmentStats([]);
           setLowPerforming([]);
           setAccreditation(EMPTY_ACCREDITATION);
-          setLoading(false);
           return;
         }
 
         const assignmentById = new Map(assignments.map((assignment) => [assignment.id, assignment]));
 
         const scores = grades
-          .map((grade) => Number(grade.final_score ?? grade.ai_score))
+          .map((grade) => Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score))
           .filter((score) => Number.isFinite(score));
-
-        setHasRealData(assignments.length > 0 || submissions.length > 0 || grades.length > 0);
 
         const gradeBySubmission: Record<string, number> = {};
         grades.forEach((grade) => {
-          const score = Number(grade.final_score ?? grade.ai_score);
+          const score = Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score);
           if (Number.isFinite(score)) {
             gradeBySubmission[grade.submission_id] = score;
           }
@@ -131,7 +129,7 @@ const InstitutionalInsights = () => {
         const moduleGroups: Record<string, number[]> = {};
         submissions.forEach((submission) => {
           const assignment = assignmentById.get(submission.assignment_id);
-          const key = assignment?.module_code?.trim() || "Unassigned module";
+          const key = assignment?.module_code?.trim() || assignment?.title?.trim() || "Unassigned module";
           const score = gradeBySubmission[submission.id];
 
           if (!moduleGroups[key]) {
@@ -168,16 +166,39 @@ const InstitutionalInsights = () => {
         ]);
       } catch (error) {
         log.error("Failed to fetch institutional data", error);
+        setHasRealData(false);
+        setLoadError(true);
+        setDepartmentStats([]);
+        setLowPerforming([]);
+        setAccreditation(EMPTY_ACCREDITATION);
       } finally {
         setLoading(false);
       }
     };
 
     void fetchData();
-  }, [isDemo, user?.id]);
+  }, [isDemo]);
 
   if (loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (loadError) {
+    return (
+      <DashboardEmptyState
+        title="Institutional reporting is unavailable"
+        description="Institutional insights could not be loaded right now. Try again later."
+      />
+    );
+  }
+
+  if (!isDemo && !hasRealData) {
+    return (
+      <DashboardEmptyState
+        title="No institutional data yet"
+        description="This page auto-populates after assignments, submissions, and grading activity exist in the live dataset."
+      />
+    );
   }
 
   const weakestDepartment = [...departmentStats].sort((left, right) => left.passRate - right.passRate)[0];
@@ -239,15 +260,8 @@ const InstitutionalInsights = () => {
         <DashboardDemoBanner label="Viewing demo institutional data" />
       )}
 
-      {!isDemo && !hasRealData && (
-        <DashboardEmptyState
-          title="No institutional data yet"
-          description="This page auto-populates after you create assignments, upload submissions, and complete grading."
-        />
-      )}
-
       <div className="flex items-center justify-end">
-        <Button variant="outline" size="sm" onClick={exportInsightsSnapshot} disabled={!hasRealData && !isDemo}>
+        <Button variant="outline" size="sm" onClick={exportInsightsSnapshot}>
           <Download className="mr-2 h-3.5 w-3.5" />
           Export snapshot
         </Button>

@@ -43,7 +43,6 @@ export const ImprovementPlanHero = ({
   activeView,
   onViewModules,
   onViewCompletedTasks,
-  onViewOpenTasks,
 }: {
   module: PlanModule | null;
   readiness: ImprovementPlanReadiness;
@@ -53,7 +52,6 @@ export const ImprovementPlanHero = ({
   activeView: "modules" | "completed" | "open";
   onViewModules: () => void;
   onViewCompletedTasks: () => void;
-  onViewOpenTasks: () => void;
 }) => {
   const openTasks = Math.max(0, total - completed);
   const hasActiveModule = module != null;
@@ -167,9 +165,6 @@ export const ImprovementPlanHero = ({
             onClick={onViewCompletedTasks}
           >
             View completed tasks
-          </Button>
-          <Button type="button" variant={activeView === "open" ? "default" : "outline"} onClick={onViewOpenTasks}>
-            View open tasks
           </Button>
         </div>
       </CardContent>

@@ -151,23 +151,23 @@ const setupSupabase = ({
     select: vi.fn(() => {
       if (table === "assignments") {
         if (assignmentsError) {
-          return Promise.reject(assignmentsError);
+          return Promise.resolve({ data: null, error: assignmentsError });
         }
         if (assignmentsPromise) {
           return assignmentsPromise;
         }
-        return Promise.resolve({ data: assignments });
+        return Promise.resolve({ data: assignments, error: null });
       }
       if (table === "submissions") {
-        return Promise.resolve({ data: submissions });
+        return Promise.resolve({ data: submissions, error: null });
       }
       if (table === "grades") {
-        return Promise.resolve({ data: grades });
+        return Promise.resolve({ data: grades, error: null });
       }
       if (table === "profiles") {
-        return Promise.resolve({ data: profiles });
+        return Promise.resolve({ data: profiles, error: null });
       }
-      return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [], error: null });
     }),
   }));
 };
@@ -254,9 +254,8 @@ describe("ExternalExaminerExport", () => {
 
     render(<ExternalExaminerExport />);
 
-    expect(await screen.findByText("No graded submissions to export yet.")).toBeInTheDocument();
-    expect(screen.getByText("0 records ready for export")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Export CSV/i })).toBeDisabled();
+    expect(await screen.findByText("No external examiner data yet")).toBeInTheDocument();
+    expect(screen.queryByText("Export Preview")).not.toBeInTheDocument();
   });
 
   it("renders the export table and summary with mocked data", async () => {
@@ -285,8 +284,9 @@ describe("ExternalExaminerExport", () => {
 
     render(<ExternalExaminerExport />);
 
-    expect(await screen.findByRole("button", { name: /Export CSV/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Detailed Report/i })).toBeDisabled();
+    expect(await screen.findByText("No external examiner data yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Export CSV/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Detailed Report/i })).not.toBeInTheDocument();
   });
 
   it("calls the download helper path with safe mocked data", async () => {
@@ -313,7 +313,7 @@ describe("ExternalExaminerExport", () => {
 
     render(<ExternalExaminerExport />);
 
-    expect(await screen.findByText("No graded submissions to export yet.")).toBeInTheDocument();
+    expect(await screen.findByText("External examiner export unavailable")).toBeInTheDocument();
     expect(screen.queryByText("Sam Student")).not.toBeInTheDocument();
 
     consoleError.mockRestore();

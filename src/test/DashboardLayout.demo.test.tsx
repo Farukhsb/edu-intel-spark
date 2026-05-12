@@ -46,6 +46,7 @@ vi.mock("react-router-dom", async () => {
 describe("DashboardLayout demo mode", () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -66,7 +67,8 @@ describe("DashboardLayout demo mode", () => {
 
     expect(await screen.findAllByText("Demo")).not.toHaveLength(0);
     expect(screen.getByText("Demo child")).toBeInTheDocument();
-    expect(screen.getAllByText("Core").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Teaching").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Teaching Insights").length).toBeGreaterThan(0);
     expect(screen.getByText("Overview sits in daily teaching workflow.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Bulk Upload Students" })).not.toBeInTheDocument();
     expect(mocks.communications.loadVisibleCommunicationMessages).not.toHaveBeenCalled();
@@ -167,8 +169,14 @@ describe("DashboardLayout demo mode", () => {
     );
 
     expect(screen.getAllByText("Student workspace").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Learning").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Support & Improvement").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Assignments").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("My Grades").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Explain My Grade").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Improvement Plan").length).toBeGreaterThan(0);
     expect(
-      screen.getByText("Use this area to review results, assignments, and your next support actions."),
+      screen.getByText("Explain My Grade sits in feedback understanding and next-step support."),
     ).toBeInTheDocument();
     clickNotificationsButton();
 
@@ -177,6 +185,69 @@ describe("DashboardLayout demo mode", () => {
     expect(screen.getByText("Support")).toBeInTheDocument();
     expect(screen.getByText("Opens your improvement plan.")).toBeInTheDocument();
     expect(mocks.communications.loadVisibleCommunicationMessages).not.toHaveBeenCalled();
+  });
+
+  it("shows the updated admin sidebar structure without the old academic access label", async () => {
+    mocks.authState.profile = {
+      id: "demo-admin",
+      full_name: "Demo Admin",
+      email: "admin@gradeai.com",
+      role: "admin",
+    };
+    mocks.authState.user = {
+      id: "demo-admin",
+      email: "admin@gradeai.com",
+    };
+
+    const { DashboardLayout } = await import("@/components/DashboardLayout");
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardLayout>
+          <div>Admin child</div>
+        </DashboardLayout>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Admin child")).toBeInTheDocument();
+    expect(screen.getAllByText("Reports").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Institutional Insights").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Academic Oversight").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Compliance & Governance").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Academic Access")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Academic Oversight/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Compliance & Governance/i }));
+    expect(screen.getAllByText("Data Access Log").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Policy Exceptions").length).toBeGreaterThan(0);
+  });
+
+  it("does not show institutional insights in the lecturer sidebar", async () => {
+    mocks.authState.profile = {
+      id: "demo-lecturer",
+      full_name: "Dr. Demo Lecturer",
+      email: "demo@gradeai.com",
+      role: "lecturer",
+    };
+    mocks.authState.user = {
+      id: "demo-lecturer",
+      email: "demo@gradeai.com",
+    };
+
+    const { DashboardLayout } = await import("@/components/DashboardLayout");
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardLayout>
+          <div>Lecturer child</div>
+        </DashboardLayout>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Lecturer child")).toBeInTheDocument();
+    expect(screen.queryByText("Institutional Insights")).not.toBeInTheDocument();
+    expect(screen.queryByText("Accreditation")).not.toBeInTheDocument();
+    expect(screen.queryByText("External Examiner")).not.toBeInTheDocument();
+    expect(screen.queryByText("Institution")).not.toBeInTheDocument();
   });
 
   it("routes an older support notice into the newer released-result workflow in demo student mode", async () => {
@@ -214,5 +285,148 @@ describe("DashboardLayout demo mode", () => {
         }),
       }),
     );
+  });
+
+  it("shows the first-run onboarding modal for real lecturer sessions and stores dismissal", async () => {
+    mocks.authState.isDemo = false;
+    mocks.authState.profile = {
+      id: "lecturer-1",
+      full_name: "Dr. Ada Lecturer",
+      email: "ada@example.com",
+      role: "lecturer",
+    };
+    mocks.authState.user = {
+      id: "lecturer-1",
+      email: "ada@example.com",
+    };
+    mocks.communications.loadVisibleCommunicationMessages.mockResolvedValue([]);
+
+    const { DashboardLayout } = await import("@/components/DashboardLayout");
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardLayout>
+          <div>Lecturer child</div>
+        </DashboardLayout>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Welcome to GradeAI")).toBeInTheDocument();
+    expect(screen.getByText("Start here")).toBeInTheDocument();
+    expect(screen.getByText("Review your workspace overview")).toBeInTheDocument();
+    expect(screen.getByText("Create or open an assignment")).toBeInTheDocument();
+    expect(screen.getByText("Check grading, integrity, and moderation before release")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start using GradeAI" }));
+
+    expect(screen.queryByText("Welcome to GradeAI")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("gradeai:lecturer-onboarding-v1-dismissed")).toBe("true");
+
+    mocks.authState.isDemo = true;
+  });
+
+  it("does not show the onboarding modal again after dismissal and remount", async () => {
+    mocks.authState.isDemo = false;
+    mocks.authState.profile = {
+      id: "lecturer-1",
+      full_name: "Dr. Ada Lecturer",
+      email: "ada@example.com",
+      role: "lecturer",
+    };
+    mocks.authState.user = {
+      id: "lecturer-1",
+      email: "ada@example.com",
+    };
+    mocks.communications.loadVisibleCommunicationMessages.mockResolvedValue([]);
+
+    const { DashboardLayout } = await import("@/components/DashboardLayout");
+
+    const firstRender = render(
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardLayout>
+          <div>Lecturer child</div>
+        </DashboardLayout>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Lecturer child")).toBeInTheDocument();
+    expect(await screen.findByText("Welcome to GradeAI")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    expect(window.localStorage.getItem("gradeai:lecturer-onboarding-v1-dismissed")).toBe("true");
+
+    firstRender.unmount();
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardLayout>
+          <div>Lecturer child</div>
+        </DashboardLayout>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Lecturer child")).toBeInTheDocument();
+    expect(screen.queryByText("Welcome to GradeAI")).not.toBeInTheDocument();
+
+    mocks.authState.isDemo = true;
+  });
+
+  it("does not show the onboarding modal for student sessions", async () => {
+    mocks.authState.isDemo = false;
+    mocks.authState.profile = {
+      id: "student-1",
+      full_name: "Student Example",
+      email: "student@example.com",
+      role: "student",
+    };
+    mocks.authState.user = {
+      id: "student-1",
+      email: "student@example.com",
+    };
+    mocks.communications.loadVisibleCommunicationMessages.mockResolvedValue([]);
+
+    const { DashboardLayout } = await import("@/components/DashboardLayout");
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardLayout>
+          <div>Student child</div>
+        </DashboardLayout>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("Welcome to GradeAI")).not.toBeInTheDocument();
+    expect(await screen.findByText("Student child")).toBeInTheDocument();
+
+    mocks.authState.isDemo = true;
+  });
+
+  it("does not show the onboarding modal for admin sessions", async () => {
+    mocks.authState.isDemo = false;
+    mocks.authState.profile = {
+      id: "admin-1",
+      full_name: "Admin Example",
+      email: "admin@example.com",
+      role: "admin",
+    };
+    mocks.authState.user = {
+      id: "admin-1",
+      email: "admin@example.com",
+    };
+    mocks.communications.loadVisibleCommunicationMessages.mockResolvedValue([]);
+
+    const { DashboardLayout } = await import("@/components/DashboardLayout");
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DashboardLayout>
+          <div>Admin child</div>
+        </DashboardLayout>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("Welcome to GradeAI")).not.toBeInTheDocument();
+    expect(await screen.findByText("Admin child")).toBeInTheDocument();
+
+    mocks.authState.isDemo = true;
   });
 });

@@ -87,14 +87,14 @@ describe("navigation schemas", () => {
 
   it("normalizes admin dashboard search params to known view and user filter values", () => {
     const valid = parseAdminDashboardSearchState(
-      new URLSearchParams("view=users&filter=lecturer"),
+      new URLSearchParams("view=moderation-audit&filter=lecturer"),
     );
     const invalid = parseAdminDashboardSearchState(
       new URLSearchParams("view=unknown&filter=staff"),
     );
 
     expect(valid).toEqual({
-      view: "users",
+      view: "moderation-audit",
       userFilter: "lecturer",
     });
     expect(invalid).toEqual({

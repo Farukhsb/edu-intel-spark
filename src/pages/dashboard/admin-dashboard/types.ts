@@ -70,6 +70,75 @@ export type AdminAuditRow = {
   source: "admin" | "workflow";
 };
 
+export type AdminGovernanceStatus = "available" | "empty" | "unavailable";
+
+export type AdminDataAccessLogRow = {
+  id: string;
+  timestamp: string;
+  actor: string;
+  actorRole: string;
+  action: string;
+  resourceType: string;
+  resourceLabel: string;
+  outcome: string;
+  details: string;
+  source: "admin" | "workflow" | "academic-access";
+};
+
+export type AdminIntegrityEventRow = {
+  id: string;
+  reviewedAt: string;
+  assignmentTitle: string;
+  studentLabel: string;
+  decision: string;
+  riskScore: number | null;
+  similarityScore: number | null;
+  flags: string[];
+  latestNote: string;
+};
+
+export type AdminIntegrityAssignmentSummaryRow = {
+  assignmentId: string;
+  assignmentTitle: string;
+  totalReviews: number;
+  flaggedReviews: number;
+  highRiskCases: number;
+};
+
+export type AdminIntegrityOverview = {
+  totalReviews: number;
+  flaggedReviews: number;
+  highRiskCases: number;
+  averageSimilarityScore: number | null;
+  assignmentsWithMostConcerns: AdminIntegrityAssignmentSummaryRow[];
+  recentEvents: AdminIntegrityEventRow[];
+  status: AdminGovernanceStatus;
+};
+
+export type AdminModerationAuditRow = {
+  id: string;
+  assignmentTitle: string;
+  studentLabel: string;
+  assignedModerator: string;
+  status: string;
+  decision: string;
+  historySummary: string;
+  noteSummary: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminPolicyExceptionRow = {
+  id: string;
+  type: string;
+  severity: "high" | "medium";
+  assignmentTitle: string;
+  studentLabel: string;
+  status: string;
+  detectedAt: string;
+  details: string;
+};
+
 export type ActivityItem = {
   id: string;
   createdAt: string;
@@ -86,7 +155,18 @@ export type AdminOverviewCard = {
   icon: LucideIcon;
 };
 
-export type AdminView = "overview" | "users" | "system" | "assignments" | "submissions" | "audit";
+export type AdminView =
+  | "overview"
+  | "users"
+  | "system"
+  | "assignments"
+  | "submissions"
+  | "moderation"
+  | "audit"
+  | "data-access-log"
+  | "integrity-overview"
+  | "moderation-audit"
+  | "policy-exceptions";
 
 export type PendingRoleChange = {
   userId: string;
@@ -123,6 +203,13 @@ export type AdminDashboardState = {
   moderationRows: AdminModerationRow[];
   auditRows: AdminAuditRow[];
   activityFeed: ActivityItem[];
+  dataAccessLogRows: AdminDataAccessLogRow[];
+  dataAccessLogStatus: AdminGovernanceStatus;
+  integrityOverview: AdminIntegrityOverview;
+  moderationAuditRows: AdminModerationAuditRow[];
+  moderationAuditStatus: AdminGovernanceStatus;
+  policyExceptionRows: AdminPolicyExceptionRow[];
+  policyExceptionStatus: AdminGovernanceStatus;
   activeView: AdminView;
   activeUserFilter: "lecturer" | "student" | null;
   visibleUsers: AdminUserRow[];

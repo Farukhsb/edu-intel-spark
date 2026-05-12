@@ -10,12 +10,12 @@ import type { StudentGradeProjectionRow } from "@/lib/studentGradeProjection";
 const ACCREDITATION_ASSIGNMENT_FIELDS = "id, title, module_code, due_date, description, rubric";
 const ACCREDITATION_SUBMISSION_FIELDS = "id, assignment_id, submitted_at, status";
 const ACCREDITATION_GRADE_FIELDS =
-  "submission_id, ai_score, final_score, ai_feedback, lecturer_score, reviewed_by, created_at";
+  "submission_id, ai_score, final_score, ai_feedback, lecturer_score, reviewed_by, created_at, reviewed_at";
 const ACCREDITATION_PROFILE_FIELDS = "id, role";
 
 const PROGRAMME_ASSIGNMENT_FIELDS = "id, title, module_code";
 const PROGRAMME_SUBMISSION_FIELDS = "id, assignment_id";
-const PROGRAMME_GRADE_FIELDS = "submission_id, ai_score, final_score";
+const PROGRAMME_GRADE_FIELDS = "submission_id, ai_score, final_score, lecturer_score";
 
 const EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS = "id, title, module_code";
 const EXTERNAL_EXAMINER_SUBMISSION_FIELDS =
@@ -79,16 +79,21 @@ export const fetchProgrammeReportDataset = async () => {
 
 export const fetchExternalExaminerDataset = async () => {
   const [
-    { data: assignmentsRaw },
-    { data: submissionsRaw },
-    { data: gradesRaw },
-    { data: profilesRaw },
+    { data: assignmentsRaw, error: assignmentsError },
+    { data: submissionsRaw, error: submissionsError },
+    { data: gradesRaw, error: gradesError },
+    { data: profilesRaw, error: profilesError },
   ] = await Promise.all([
     supabase.from("assignments").select(EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS),
     supabase.from("submissions").select(EXTERNAL_EXAMINER_SUBMISSION_FIELDS),
     supabase.from("grades").select(EXTERNAL_EXAMINER_GRADE_FIELDS),
     supabase.from("profiles").select(EXTERNAL_EXAMINER_PROFILE_FIELDS),
   ]);
+
+  if (assignmentsError) throw assignmentsError;
+  if (submissionsError) throw submissionsError;
+  if (gradesError) throw gradesError;
+  if (profilesError) throw profilesError;
 
   return {
     assignments: (assignmentsRaw ?? []) as ExternalExaminerAssignmentRow[],

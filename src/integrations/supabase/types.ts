@@ -70,6 +70,48 @@ export type Database = {
         }
         Relationships: []
       }
+      academic_access_events: {
+        Row: {
+          actor_id: string
+          actor_role: string
+          assignment_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          moderation_case_id: string | null
+          resource_id: string | null
+          resource_type: string
+          submission_id: string | null
+        }
+        Insert: {
+          actor_id: string
+          actor_role: string
+          assignment_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          moderation_case_id?: string | null
+          resource_id?: string | null
+          resource_type: string
+          submission_id?: string | null
+        }
+        Update: {
+          actor_id?: string
+          actor_role?: string
+          assignment_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          moderation_case_id?: string | null
+          resource_id?: string | null
+          resource_type?: string
+          submission_id?: string | null
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action_type: string

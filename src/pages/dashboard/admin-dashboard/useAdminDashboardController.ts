@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAdminDashboardDataset } from "@/lib/data/admin";
 import { safeFormatDate } from "@/lib/date";
+import { getIntegrityReviewSummary } from "@/lib/integrityReviews";
 import { log } from "@/lib/logger";
 import {
   buildOperationalMonitoringSnapshot,
@@ -17,9 +18,16 @@ import {
   type ActivityItem,
   type AdminAssignmentRow,
   type AdminAuditRow,
+  type AdminDataAccessLogRow,
   type AdminDashboardState,
+  type AdminGovernanceStatus,
+  type AdminIntegrityAssignmentSummaryRow,
+  type AdminIntegrityEventRow,
+  type AdminIntegrityOverview,
   type AdminMetrics,
   type AdminModerationRow,
+  type AdminModerationAuditRow,
+  type AdminPolicyExceptionRow,
   type AdminSubmissionRow,
   type AdminUserRow,
   type AdminView,
@@ -154,6 +162,376 @@ const buildActivityFeed = ({
     .slice(0, 10);
 };
 
+const OVERDUE_MODERATION_DAYS = 7;
+
+const toGovernanceStatus = (available: boolean, rowCount: number): AdminGovernanceStatus =>
+  !available ? "unavailable" : rowCount > 0 ? "available" : "empty";
+
+const buildDataAccessLogRows = ({
+  adminAuditRows,
+  workflowAuditRows,
+  academicAccessEvents,
+  lecturerNameById,
+}: {
+  adminAuditRows: Array<{
+    id: string;
+    created_at: string;
+    action_type: string;
+    actor_role: string | null;
+    target_user_name: string | null;
+    target_user_email: string | null;
+    details: unknown;
+  }>;
+  workflowAuditRows: Array<{
+    id: string;
+    created_at: string;
+    event_type: string;
+    submission_id: string | null;
+    moderation_case_id: string | null;
+    reason: string | null;
+  }>;
+  academicAccessEvents: Array<{
+    id: string;
+    created_at: string;
+    actor_id: string;
+    actor_role: string;
+    event_type: string;
+    resource_type: string;
+    resource_id: string | null;
+    assignment_id: string | null;
+    submission_id: string | null;
+    moderation_case_id: string | null;
+    metadata: unknown;
+  }>;
+  lecturerNameById: Map<string, string>;
+}): AdminDataAccessLogRow[] => {
+  const adminRows = adminAuditRows.map((row) => {
+    const details =
+      row.details && typeof row.details === "object" ? (row.details as Record<string, unknown>) : {};
+    const actorName =
+      typeof details.actor_name === "string" && details.actor_name.trim().length > 0
+        ? details.actor_name
+        : row.actor_role === "admin"
+          ? "Admin"
+          : "System";
+    const previousRole =
+      typeof details.previous_role === "string" && details.previous_role.trim().length > 0
+        ? details.previous_role
+        : null;
+    const updatedRole =
+      typeof details.updated_role === "string" && details.updated_role.trim().length > 0
+        ? details.updated_role
+        : null;
+
+    return {
+      id: `admin-access-${row.id}`,
+      timestamp: row.created_at,
+      actor: actorName,
+      actorRole: row.actor_role || "admin",
+      action: humanizeToken(row.action_type),
+      resourceType: row.target_user_name || row.target_user_email ? "User account" : "Admin event",
+      resourceLabel: row.target_user_name || row.target_user_email || "Admin governance record",
+      outcome: "Recorded",
+      details:
+        previousRole || updatedRole
+          ? `${previousRole || "unknown"} -> ${updatedRole || "unknown"}${row.target_user_email ? ` | ${row.target_user_email}` : ""}`
+          : "Using available admin audit events. Access-specific outcome fields are not yet recorded.",
+      source: "admin" as const,
+    };
+  });
+
+  const workflowRows = workflowAuditRows.map((row) => ({
+    id: `workflow-access-${row.id}`,
+    timestamp: row.created_at,
+    actor: "Workflow",
+    actorRole: "system",
+    action: humanizeToken(String(row.event_type)),
+    resourceType: row.moderation_case_id ? "Moderation case" : "Submission",
+    resourceLabel: row.moderation_case_id || row.submission_id || "Workflow record",
+    outcome: "Recorded",
+    details: row.reason || "Using available workflow audit events.",
+    source: "workflow" as const,
+  }));
+
+  const academicRows = academicAccessEvents.map((row) => {
+    const metadata =
+      row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {};
+    const metadataSummary = Object.entries(metadata)
+      .map(([key, value]) => `${humanizeToken(key)}: ${String(value)}`)
+      .slice(0, 3)
+      .join(" | ");
+
+    return {
+      id: `academic-access-${row.id}`,
+      timestamp: row.created_at,
+      actor: lecturerNameById.get(row.actor_id) || "Authenticated user",
+      actorRole: row.actor_role,
+      action: humanizeToken(row.event_type),
+      resourceType: humanizeToken(row.resource_type),
+      resourceLabel:
+        row.moderation_case_id ||
+        row.submission_id ||
+        row.assignment_id ||
+        row.resource_id ||
+        "Academic evidence record",
+      outcome: "Recorded",
+      details: metadataSummary || "Academic evidence access recorded.",
+      source: "academic-access" as const,
+    };
+  });
+
+  return [...academicRows, ...adminRows, ...workflowRows].sort(
+    (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+  );
+};
+
+const buildIntegrityOverview = ({
+  integrityReviews,
+  submissionById,
+  assignmentTitleById,
+}: {
+  integrityReviews: Array<{
+    id: string;
+    submission_id: string;
+    decision: string;
+    lecturer_note: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  submissionById: Map<string, AdminSubmissionRow>;
+  assignmentTitleById: Map<string, string>;
+}): AdminIntegrityOverview => {
+  const assignmentSummaryMap = new Map<string, AdminIntegrityAssignmentSummaryRow>();
+  const similarityScores: number[] = [];
+
+  const recentEvents: AdminIntegrityEventRow[] = integrityReviews.map((review) => {
+    const submission = submissionById.get(review.submission_id);
+    const summary = getIntegrityReviewSummary(review);
+    const assignmentId = submission?.assignmentId || "unknown-assignment";
+    const assignmentTitle = submission?.assignmentTitle || assignmentTitleById.get(assignmentId) || "Unknown assignment";
+    const existing = assignmentSummaryMap.get(assignmentId) ?? {
+      assignmentId,
+      assignmentTitle,
+      totalReviews: 0,
+      flaggedReviews: 0,
+      highRiskCases: 0,
+    };
+    existing.totalReviews += 1;
+    if (summary.flagged) {
+      existing.flaggedReviews += 1;
+    }
+    if (summary.riskScore >= 80 || review.decision === "misconduct-concern") {
+      existing.highRiskCases += 1;
+    }
+    assignmentSummaryMap.set(assignmentId, existing);
+
+    const similarityScore = summary.payload.integritySnapshot?.similarityScore ?? null;
+    if (similarityScore != null) {
+      similarityScores.push(similarityScore);
+    }
+
+    return {
+      id: review.id,
+      reviewedAt: review.updated_at,
+      assignmentTitle,
+      studentLabel: submission?.studentLabel || "Student record unavailable",
+      decision: humanizeToken(review.decision),
+      riskScore: summary.riskScore || null,
+      similarityScore,
+      flags: summary.payload.integritySnapshot?.flags || [],
+      latestNote: summary.payload.latestNote || "Not yet recorded",
+    };
+  });
+
+  const flaggedReviews = recentEvents.filter((event) => (event.riskScore ?? 0) >= 55 || event.decision === "Investigate" || event.decision === "Misconduct Concern").length;
+  const highRiskCases = recentEvents.filter((event) => (event.riskScore ?? 0) >= 80 || event.decision === "Misconduct Concern").length;
+
+  return {
+    totalReviews: recentEvents.length,
+    flaggedReviews,
+    highRiskCases,
+    averageSimilarityScore: similarityScores.length > 0 ? Math.round(similarityScores.reduce((sum, value) => sum + value, 0) / similarityScores.length) : null,
+    assignmentsWithMostConcerns: [...assignmentSummaryMap.values()]
+      .sort((left, right) => right.flaggedReviews - left.flaggedReviews || right.highRiskCases - left.highRiskCases)
+      .slice(0, 5),
+    recentEvents: recentEvents
+      .sort((left, right) => new Date(right.reviewedAt).getTime() - new Date(left.reviewedAt).getTime())
+      .slice(0, 8),
+    status: toGovernanceStatus(true, recentEvents.length),
+  };
+};
+
+const buildModerationAuditRows = ({
+  moderationCases,
+  assignmentTitleById,
+  lecturerNameById,
+  submissionById,
+  gradeAuditRows,
+}: {
+  moderationCases: Array<{
+    id: string;
+    assignment_id: string;
+    submission_id: string | null;
+    moderator_id: string | null;
+    status: string;
+    final_agreed_score: number | null;
+    final_agreed_feedback: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  assignmentTitleById: Map<string, string>;
+  lecturerNameById: Map<string, string>;
+  submissionById: Map<string, AdminSubmissionRow>;
+  gradeAuditRows: Array<{
+    moderation_case_id: string | null;
+    event_type: string;
+    reason: string | null;
+  }>;
+}): AdminModerationAuditRow[] =>
+  moderationCases.map((row) => {
+    const submission = row.submission_id ? submissionById.get(row.submission_id) : null;
+    const caseAuditRows = gradeAuditRows.filter((auditRow) => auditRow.moderation_case_id === row.id);
+    const latestAudit = caseAuditRows[0];
+    return {
+      id: row.id,
+      assignmentTitle: assignmentTitleById.get(row.assignment_id) || "Unknown assignment",
+      studentLabel: submission?.studentLabel || "Student record unavailable",
+      assignedModerator: row.moderator_id ? lecturerNameById.get(row.moderator_id) || "Unknown moderator" : "Not yet assigned",
+      status: humanizeToken(row.status),
+      decision:
+        row.final_agreed_score != null
+          ? `Final score ${row.final_agreed_score}`
+          : latestAudit
+            ? humanizeToken(String(latestAudit.event_type))
+            : "Not yet recorded",
+      historySummary: caseAuditRows.length > 0 ? `${caseAuditRows.length} audit event${caseAuditRows.length === 1 ? "" : "s"}` : "No audit history visible",
+      noteSummary: row.final_agreed_feedback || latestAudit?.reason || "Not yet recorded",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  });
+
+const buildPolicyExceptionRows = ({
+  moderationCases,
+  integrityReviews,
+  submissionById,
+  assignmentTitleById,
+}: {
+  moderationCases: Array<{
+    id: string;
+    assignment_id: string;
+    submission_id: string | null;
+    status: string;
+    moderator_id: string | null;
+    final_agreed_feedback: string | null;
+    updated_at: string;
+  }>;
+  integrityReviews: Array<{
+    id: string;
+    submission_id: string;
+    decision: string;
+    lecturer_note: string | null;
+    updated_at: string;
+  }>;
+  submissionById: Map<string, AdminSubmissionRow>;
+  assignmentTitleById: Map<string, string>;
+}): AdminPolicyExceptionRow[] => {
+  const now = Date.now();
+  const moderationCaseBySubmissionId = new Map(
+    moderationCases
+      .filter((row) => row.submission_id)
+      .map((row) => [row.submission_id as string, row]),
+  );
+  const rows: AdminPolicyExceptionRow[] = [];
+
+  moderationCases.forEach((row) => {
+    const submission = row.submission_id ? submissionById.get(row.submission_id) : null;
+    const assignmentTitle = assignmentTitleById.get(row.assignment_id) || "Unknown assignment";
+    const studentLabel = submission?.studentLabel || "Student record unavailable";
+    const ageInDays = Math.floor((now - new Date(row.updated_at).getTime()) / (1000 * 60 * 60 * 24));
+
+    if (
+      (row.status === "moderation_pending" || row.status === "moderation_in_progress" || row.status === "escalated") &&
+      ageInDays >= OVERDUE_MODERATION_DAYS
+    ) {
+      rows.push({
+        id: `overdue-${row.id}`,
+        type: "Overdue moderation case",
+        severity: row.status === "escalated" ? "high" : "medium",
+        assignmentTitle,
+        studentLabel,
+        status: humanizeToken(row.status),
+        detectedAt: row.updated_at,
+        details: `Case has been in ${humanizeToken(row.status)} for ${ageInDays} days.`,
+      });
+    }
+
+    if ((row.status === "moderated" || row.status === "approved") && !row.final_agreed_feedback) {
+      rows.push({
+        id: `missing-evidence-${row.id}`,
+        type: "Missing moderation evidence",
+        severity: "medium",
+        assignmentTitle,
+        studentLabel,
+        status: humanizeToken(row.status),
+        detectedAt: row.updated_at,
+        details: "Moderation outcome exists but no final agreed feedback is recorded.",
+      });
+    }
+
+    if (submission?.status === "released" && row.status !== "approved") {
+      rows.push({
+        id: `released-unresolved-${row.id}`,
+        type: "Released grade with unresolved moderation",
+        severity: "high",
+        assignmentTitle,
+        studentLabel,
+        status: humanizeToken(row.status),
+        detectedAt: row.updated_at,
+        details: "Submission is already released while the linked moderation case is not approved.",
+      });
+    }
+
+    if ((row.status === "moderation_pending" || row.status === "moderation_in_progress") && !row.moderator_id) {
+      rows.push({
+        id: `unassigned-${row.id}`,
+        type: "Moderation case without assigned moderator",
+        severity: "medium",
+        assignmentTitle,
+        studentLabel,
+        status: humanizeToken(row.status),
+        detectedAt: row.updated_at,
+        details: "Case is awaiting moderation work but no moderator is assigned.",
+      });
+    }
+  });
+
+  integrityReviews.forEach((review) => {
+    const summary = getIntegrityReviewSummary(review);
+    if (summary.riskScore < 80 && review.decision !== "misconduct-concern") {
+      return;
+    }
+
+    if (moderationCaseBySubmissionId.has(review.submission_id)) {
+      return;
+    }
+
+    const submission = submissionById.get(review.submission_id);
+    rows.push({
+      id: `integrity-${review.id}`,
+      type: "High integrity risk without moderation case",
+      severity: "high",
+      assignmentTitle: submission?.assignmentTitle || "Unknown assignment",
+      studentLabel: submission?.studentLabel || "Student record unavailable",
+      status: humanizeToken(review.decision),
+      detectedAt: review.updated_at,
+      details: "Integrity review is high risk or a misconduct concern, but no linked moderation case is visible.",
+    });
+  });
+
+  return rows.sort((left, right) => new Date(right.detectedAt).getTime() - new Date(left.detectedAt).getTime());
+};
+
 export const useAdminDashboardController = () => {
   const { profile } = useAuth();
   const [searchParams] = useSearchParams();
@@ -169,6 +547,21 @@ export const useAdminDashboardController = () => {
   const [moderationRows, setModerationRows] = useState<AdminModerationRow[]>([]);
   const [auditRows, setAuditRows] = useState<AdminAuditRow[]>([]);
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
+  const [dataAccessLogRows, setDataAccessLogRows] = useState<AdminDataAccessLogRow[]>([]);
+  const [dataAccessLogStatus, setDataAccessLogStatus] = useState<AdminGovernanceStatus>("empty");
+  const [integrityOverview, setIntegrityOverview] = useState<AdminIntegrityOverview>({
+    totalReviews: 0,
+    flaggedReviews: 0,
+    highRiskCases: 0,
+    averageSimilarityScore: null,
+    assignmentsWithMostConcerns: [],
+    recentEvents: [],
+    status: "empty",
+  });
+  const [moderationAuditRows, setModerationAuditRows] = useState<AdminModerationAuditRow[]>([]);
+  const [moderationAuditStatus, setModerationAuditStatus] = useState<AdminGovernanceStatus>("empty");
+  const [policyExceptionRows, setPolicyExceptionRows] = useState<AdminPolicyExceptionRow[]>([]);
+  const [policyExceptionStatus, setPolicyExceptionStatus] = useState<AdminGovernanceStatus>("empty");
   const [pendingRoleChange, setPendingRoleChange] = useState<PendingRoleChange>(null);
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
   const [syncingUserId, setSyncingUserId] = useState<string | null>(null);
@@ -202,6 +595,8 @@ export const useAdminDashboardController = () => {
         moderationCases,
         adminAuditRes,
         gradeAuditRes,
+        academicAccessEventsRes,
+        integrityReviewsRes,
         latestGradeRes,
         notificationsRes,
       } = await fetchAdminDashboardDataset();
@@ -228,9 +623,10 @@ export const useAdminDashboardController = () => {
       }));
 
       const submissionSummaryByAssignmentId = buildAssignmentSubmissionSummaryMap(rawSubmissions);
-      const rpcAssignmentRows = assignmentOversightRes.error
-        ? null
-        : (assignmentOversightRes.data || []).map((row) => ({
+      const rpcAssignmentRows =
+        assignmentOversightRes.error || !(assignmentOversightRes.data || []).length
+          ? null
+          : (assignmentOversightRes.data || []).map((row) => ({
             id: row.id,
             title: row.title,
             moduleCode: row.module_code ?? null,
@@ -282,10 +678,12 @@ export const useAdminDashboardController = () => {
         submittedAt: row.submittedAt,
         fileName: row.fileName,
       }));
+      const submissionById = new Map(submissionRows.map((row) => [row.id, row]));
 
-      const rpcModerationRows = moderationOverviewRes.error
-        ? null
-        : (moderationOverviewRes.data || []).map((row) => ({
+      const rpcModerationRows =
+        moderationOverviewRes.error || !(moderationOverviewRes.data || []).length
+          ? null
+          : (moderationOverviewRes.data || []).map((row) => ({
             id: row.id,
             assignmentTitle: row.assignment_title,
             firstMarkerName: row.first_marker_name,
@@ -324,12 +722,24 @@ export const useAdminDashboardController = () => {
       const moderationCaseRows = rpcModerationRows ?? clientModerationRows;
 
       let adminAuditRows: AdminAuditRow[] = [];
+      let adminDataAccessEvents: Array<{
+        id: string;
+        created_at: string;
+        action_type: string;
+        actor_role: string | null;
+        target_user_name: string | null;
+        target_user_email: string | null;
+        details: unknown;
+      }> = [];
+      let adminAuditAvailable = false;
       try {
         if (adminAuditRes.error) {
           throw adminAuditRes.error;
         }
+        adminAuditAvailable = true;
+        adminDataAccessEvents = adminAuditRes.data || [];
 
-        adminAuditRows = (adminAuditRes.data || []).map((row) => {
+        adminAuditRows = adminDataAccessEvents.map((row) => {
           const details = (row.details ?? {}) as {
             actor_name?: string;
             previous_role?: string;
@@ -340,9 +750,12 @@ export const useAdminDashboardController = () => {
             id: `admin-${row.id}`,
             createdAt: row.created_at,
             actorName: details.actor_name || "Admin",
-            action: "Changed user role",
+            action: humanizeToken(String(row.action_type)),
             target: row.target_user_name || "Unknown user",
-            detail: `${details.previous_role || "unknown"} -> ${details.updated_role || "unknown"}${row.target_user_email ? ` | ${row.target_user_email}` : ""}`,
+            detail:
+              details.previous_role || details.updated_role
+                ? `${details.previous_role || "unknown"} -> ${details.updated_role || "unknown"}${row.target_user_email ? ` | ${row.target_user_email}` : ""}`
+                : row.target_user_email || "Admin audit event recorded",
             source: "admin" as const,
           };
         });
@@ -353,17 +766,42 @@ export const useAdminDashboardController = () => {
       }
 
       let workflowAuditRows: AdminAuditRow[] = [];
+      let workflowDataAccessEvents: Array<{
+        id: string;
+        created_at: string;
+        event_type: string;
+        submission_id: string | null;
+        moderation_case_id: string | null;
+        reason: string | null;
+      }> = [];
       let latestGradeRun: string | null = null;
       let aiGradingFailures: number | null = null;
       let emailNotificationsVisible = false;
       let emailNotificationsCount = 0;
+      let gradeAuditAvailable = false;
+      let academicAccessEventsAvailable = false;
+      let academicAccessEvents: Array<{
+        id: string;
+        created_at: string;
+        actor_id: string;
+        actor_role: string;
+        event_type: string;
+        resource_type: string;
+        resource_id: string | null;
+        assignment_id: string | null;
+        submission_id: string | null;
+        moderation_case_id: string | null;
+        metadata: unknown;
+      }> = [];
 
       try {
         if (gradeAuditRes.error) {
           throw gradeAuditRes.error;
         }
+        gradeAuditAvailable = true;
+        workflowDataAccessEvents = gradeAuditRes.data || [];
 
-        workflowAuditRows = (gradeAuditRes.data || []).map((row) => ({
+        workflowAuditRows = workflowDataAccessEvents.map((row) => ({
           id: `workflow-${row.id}`,
           createdAt: row.created_at,
           actorName: "Workflow",
@@ -374,7 +812,7 @@ export const useAdminDashboardController = () => {
         }));
 
         const todayKey = new Date().toISOString().slice(0, 10);
-        aiGradingFailures = (gradeAuditRes.data || []).filter((row) => {
+        aiGradingFailures = workflowDataAccessEvents.filter((row) => {
           const eventType = String(row.event_type).toLowerCase();
           return row.created_at.startsWith(todayKey) && (eventType.includes("fail") || eventType.includes("error"));
         }).length;
@@ -409,9 +847,86 @@ export const useAdminDashboardController = () => {
         });
       }
 
+      try {
+        if (academicAccessEventsRes.error) {
+          throw academicAccessEventsRes.error;
+        }
+
+        academicAccessEventsAvailable = true;
+        academicAccessEvents = academicAccessEventsRes.data || [];
+      } catch {
+        log.warn("Academic access events are unavailable to admin dashboard", {
+          view: "data-access-log",
+        });
+      }
+
+      let integrityReviewsAvailable = false;
+      let integrityReviewRows: Array<{
+        id: string;
+        submission_id: string;
+        decision: string;
+        lecturer_note: string | null;
+        created_at: string;
+        updated_at: string;
+      }> = [];
+
+      try {
+        if (integrityReviewsRes.error) {
+          throw integrityReviewsRes.error;
+        }
+
+        integrityReviewsAvailable = true;
+        integrityReviewRows = (integrityReviewsRes.data || []).map((row) => ({
+          id: row.id,
+          submission_id: row.submission_id,
+          decision: row.decision,
+          lecturer_note: row.lecturer_note,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        }));
+      } catch {
+        log.warn("Academic integrity reviews are unavailable to admin dashboard", {
+          view: "integrity-overview",
+        });
+      }
+
       const mergedAuditRows = [...adminAuditRows, ...workflowAuditRows]
         .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
         .slice(0, 25);
+      const dataAccessRows = buildDataAccessLogRows({
+        adminAuditRows: adminDataAccessEvents,
+        workflowAuditRows: workflowDataAccessEvents,
+        academicAccessEvents,
+        lecturerNameById,
+      });
+      const moderationAuditRows = buildModerationAuditRows({
+        moderationCases,
+        assignmentTitleById,
+        lecturerNameById,
+        submissionById,
+        gradeAuditRows: workflowDataAccessEvents,
+      });
+      const nextIntegrityOverview = integrityReviewsAvailable
+        ? buildIntegrityOverview({
+            integrityReviews: integrityReviewRows,
+            submissionById,
+            assignmentTitleById,
+          })
+        : {
+            totalReviews: 0,
+            flaggedReviews: 0,
+            highRiskCases: 0,
+            averageSimilarityScore: null,
+            assignmentsWithMostConcerns: [],
+            recentEvents: [],
+            status: "unavailable" as const,
+          };
+      const policyExceptionRows = buildPolicyExceptionRows({
+        moderationCases,
+        integrityReviews: integrityReviewRows,
+        submissionById,
+        assignmentTitleById,
+      });
       const rpcActivityFeed = recentActivityRes.error
         ? null
         : (recentActivityRes.data || []).map((row) => ({
@@ -455,6 +970,21 @@ export const useAdminDashboardController = () => {
       setSubmissions(submissionRows);
       setModerationRows(moderationCaseRows);
       setAuditRows(mergedAuditRows);
+      setDataAccessLogRows(dataAccessRows);
+      setDataAccessLogStatus(
+        toGovernanceStatus(adminAuditAvailable || gradeAuditAvailable || academicAccessEventsAvailable, dataAccessRows.length),
+      );
+      setIntegrityOverview(nextIntegrityOverview);
+      setModerationAuditRows(moderationAuditRows);
+      setModerationAuditStatus(toGovernanceStatus(true, moderationAuditRows.length));
+      setPolicyExceptionRows(policyExceptionRows);
+      setPolicyExceptionStatus(
+        integrityReviewsAvailable
+          ? toGovernanceStatus(true, policyExceptionRows.length)
+          : policyExceptionRows.length > 0
+            ? "available"
+            : "unavailable",
+      );
       setMetrics({
         totalUsers: rpcMetrics?.total_users ?? profileRows.length,
         activeLecturers: rpcMetrics?.active_lecturers ?? profileRows.filter((row) => row.role === "lecturer").length,
@@ -592,6 +1122,13 @@ export const useAdminDashboardController = () => {
       moderationRows,
       auditRows,
       activityFeed,
+      dataAccessLogRows,
+      dataAccessLogStatus,
+      integrityOverview,
+      moderationAuditRows,
+      moderationAuditStatus,
+      policyExceptionRows,
+      policyExceptionStatus,
       activeView,
       activeUserFilter,
       visibleUsers,

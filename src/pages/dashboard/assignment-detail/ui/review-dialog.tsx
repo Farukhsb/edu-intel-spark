@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
+import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 
 import type { AssignmentDetailSubmission, Grade } from "@/pages/dashboard/assignment-detail/types";
 
@@ -41,7 +43,51 @@ export const SubmissionReviewDialog = ({
   onSave,
   open,
   reviewSubmission,
-}: SubmissionReviewDialogProps) => (
+}: SubmissionReviewDialogProps) => {
+  const { user, profile, isDemo: sessionIsDemo } = useAuth();
+  const lastLoggedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !reviewSubmission || sessionIsDemo) {
+      return;
+    }
+
+    const logKey = `${reviewSubmission.id}:${grade?.id ?? "no-grade"}`;
+    if (lastLoggedKeyRef.current === logKey) {
+      return;
+    }
+    lastLoggedKeyRef.current = logKey;
+
+    void logAcademicAccessEvent({
+      actorId: user?.id,
+      actorRole: profile?.role ?? null,
+      eventType: "submission_viewed",
+      resourceType: "submission",
+      resourceId: reviewSubmission.id,
+      assignmentId: reviewSubmission.assignment_id,
+      submissionId: reviewSubmission.id,
+      metadata: {
+        source: "assignment_review_dialog",
+        status: reviewSubmission.status,
+      },
+    });
+
+    void logAcademicAccessEvent({
+      actorId: user?.id,
+      actorRole: profile?.role ?? null,
+      eventType: "grade_details_viewed",
+      resourceType: "grade",
+      resourceId: grade?.id ?? reviewSubmission.id,
+      assignmentId: reviewSubmission.assignment_id,
+      submissionId: reviewSubmission.id,
+      metadata: {
+        source: "assignment_review_dialog",
+        hasAiDraft: Boolean(grade?.ai_score != null),
+      },
+    });
+  }, [grade?.ai_score, grade?.id, open, profile?.role, reviewSubmission, sessionIsDemo, user?.id]);
+
+  return (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent data-testid="submission-review-dialog" className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
@@ -154,4 +200,5 @@ export const SubmissionReviewDialog = ({
       )}
     </DialogContent>
   </Dialog>
-);
+  );
+};

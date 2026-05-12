@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
+import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 import { safeFormatDate } from "@/lib/date";
 import { getIntegrityReviewSummary } from "@/lib/integrityReviews";
 import type { AssignmentDetailSubmission } from "@/pages/dashboard/assignment-detail/types";
@@ -98,7 +102,85 @@ export const ModerationReviewDialog = ({
   selectedCase,
   userId,
 }: ModerationReviewDialogProps) => {
+  const { user, profile, isDemo } = useAuth();
   const { openSubmissionFile } = useSubmissionFileActions();
+  const lastLoggedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !selectedCase || isDemo) {
+      return;
+    }
+
+    const logKey = `${selectedCase.moderationCase.id}:${selectedCase.submission?.id ?? "no-submission"}`;
+    if (lastLoggedKeyRef.current === logKey) {
+      return;
+    }
+    lastLoggedKeyRef.current = logKey;
+
+    void logAcademicAccessEvent({
+      actorId: user?.id,
+      actorRole: profile?.role ?? null,
+      eventType: "moderation_evidence_viewed",
+      resourceType: "moderation_case",
+      resourceId: selectedCase.moderationCase.id,
+      assignmentId: selectedCase.assignment?.id ?? selectedCase.moderationCase.assignment_id,
+      submissionId: selectedCase.submission?.id ?? selectedCase.moderationCase.submission_id,
+      moderationCaseId: selectedCase.moderationCase.id,
+      metadata: {
+        source: "moderation_review_dialog",
+        status: selectedCase.moderationCase.status,
+      },
+    });
+
+    if (selectedCase.submission?.id) {
+      void logAcademicAccessEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        eventType: "submission_viewed",
+        resourceType: "submission",
+        resourceId: selectedCase.submission.id,
+        assignmentId: selectedCase.assignment?.id ?? selectedCase.moderationCase.assignment_id,
+        submissionId: selectedCase.submission.id,
+        moderationCaseId: selectedCase.moderationCase.id,
+        metadata: {
+          source: "moderation_review_dialog",
+          status: selectedCase.submission.status,
+        },
+      });
+    }
+
+    void logAcademicAccessEvent({
+      actorId: user?.id,
+      actorRole: profile?.role ?? null,
+      eventType: "grade_details_viewed",
+      resourceType: "grade",
+      resourceId: selectedCase.grade?.id ?? selectedCase.moderationCase.grade_id,
+      assignmentId: selectedCase.assignment?.id ?? selectedCase.moderationCase.assignment_id,
+      submissionId: selectedCase.submission?.id ?? selectedCase.moderationCase.submission_id,
+      moderationCaseId: selectedCase.moderationCase.id,
+      metadata: {
+        source: "moderation_review_dialog",
+        status: selectedCase.moderationCase.status,
+      },
+    });
+
+    if (selectedCase.integrityReview) {
+      void logAcademicAccessEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        eventType: "integrity_evidence_viewed",
+        resourceType: "academic_integrity_review",
+        resourceId: selectedCase.integrityReview.id,
+        assignmentId: selectedCase.assignment?.id ?? selectedCase.moderationCase.assignment_id,
+        submissionId: selectedCase.submission?.id ?? selectedCase.moderationCase.submission_id,
+        moderationCaseId: selectedCase.moderationCase.id,
+        metadata: {
+          source: "moderation_review_dialog",
+          decision: selectedCase.integrityReview.decision,
+        },
+      });
+    }
+  }, [isDemo, open, profile?.role, selectedCase, user?.id]);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -215,7 +297,11 @@ export const ModerationReviewDialog = ({
                                 disabled={!selectedCase.submission || !hasSubmissionFile}
                                 onClick={() =>
                                   selectedCase.submission &&
-                                  openSubmissionFile(toAssignmentDetailSubmission(selectedCase.submission))
+                                  openSubmissionFile(toAssignmentDetailSubmission(selectedCase.submission), {
+                                    source: "moderation_review_dialog",
+                                    resourceType: "submission_file",
+                                    moderationCaseId: selectedCase.moderationCase.id,
+                                  })
                                 }
                               >
                                 Open submission file

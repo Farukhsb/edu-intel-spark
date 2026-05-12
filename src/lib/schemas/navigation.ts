@@ -16,7 +16,19 @@ const AssignmentQueueFocusSchema = z.enum([
 ]);
 const AssignmentStatusFilterSchema = z.enum(["draft", "published", "closed"]);
 const AssignmentListViewSchema = z.enum(["needs-review"]);
-const AdminViewSchema = z.enum(["overview", "users", "system", "assignments", "submissions", "audit"]);
+const AdminViewSchema = z.enum([
+  "overview",
+  "users",
+  "system",
+  "assignments",
+  "submissions",
+  "moderation",
+  "audit",
+  "data-access-log",
+  "integrity-overview",
+  "moderation-audit",
+  "policy-exceptions",
+]);
 const AdminUserFilterSchema = z.enum(["student", "lecturer", "admin"]);
 const PerformanceRiskFilterSchema = z.enum(["all", "high-plus", "critical", "high", "moderate"]);
 const PerformanceScoreBandFilterSchema = z.enum(["all", "lt40", "40-49", "50-59", "60plus"]);

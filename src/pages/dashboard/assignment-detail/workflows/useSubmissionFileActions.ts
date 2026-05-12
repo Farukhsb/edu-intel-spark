@@ -1,20 +1,45 @@
 import { toast } from "sonner";
 
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 import { log } from "@/lib/logger";
 import type { AssignmentDetailSubmission } from "@/pages/dashboard/assignment-detail/types";
 
+type SubmissionFileAccessOptions = {
+  source?: string;
+  resourceType?: string;
+  moderationCaseId?: string | null;
+};
+
 interface UseSubmissionFileActionsResult {
-  openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
+  openSubmissionFile: (submission: AssignmentDetailSubmission, options?: SubmissionFileAccessOptions) => Promise<void>;
 }
 
 export const useSubmissionFileActions = (): UseSubmissionFileActionsResult => {
-  const openSubmissionFile = async (submission: AssignmentDetailSubmission) => {
+  const { user, profile } = useAuth();
+
+  const openSubmissionFile = async (submission: AssignmentDetailSubmission, options?: SubmissionFileAccessOptions) => {
     try {
       const rawUrl = submission.file_url || "";
       const isDirectUrl = /^https?:\/\//i.test(rawUrl);
       if (isDirectUrl) {
         window.open(rawUrl, "_blank", "noopener,noreferrer");
+        void logAcademicAccessEvent({
+          actorId: user?.id,
+          actorRole: profile?.role ?? null,
+          eventType: "submission_file_opened",
+          resourceType: options?.resourceType || "submission_file",
+          resourceId: submission.id,
+          assignmentId: submission.assignment_id,
+          submissionId: submission.id,
+          moderationCaseId: options?.moderationCaseId ?? null,
+          metadata: {
+            source: options?.source || "submission_file_action",
+            fileName: submission.file_name,
+            fileType: submission.file_type,
+          },
+        });
         return;
       }
 
@@ -27,6 +52,21 @@ export const useSubmissionFileActions = (): UseSubmissionFileActionsResult => {
       }
 
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      void logAcademicAccessEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        eventType: "submission_file_opened",
+        resourceType: options?.resourceType || "submission_file",
+        resourceId: submission.id,
+        assignmentId: submission.assignment_id,
+        submissionId: submission.id,
+        moderationCaseId: options?.moderationCaseId ?? null,
+        metadata: {
+          source: options?.source || "submission_file_action",
+          fileName: submission.file_name,
+          fileType: submission.file_type,
+        },
+      });
     } catch (error) {
       log.error("Failed to open submission file", error, {
         submissionId: submission.id,

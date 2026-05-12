@@ -3,6 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SubmissionReviewDialog } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
 
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({
+    user: { id: "lecturer-1" },
+    profile: { role: "lecturer" },
+    isDemo: false,
+  }),
+}));
+
 describe("SubmissionReviewDialog", () => {
   it("shows manual review messaging when no AI draft exists", () => {
     render(

@@ -206,7 +206,6 @@ const ImprovementPlan = () => {
         activeView={activeWorkspaceView}
         onViewModules={showModules}
         onViewCompletedTasks={showCompletedTasks}
-        onViewOpenTasks={showOpenTasks}
       />
 
       <Card className="border-dashed bg-muted/20">
