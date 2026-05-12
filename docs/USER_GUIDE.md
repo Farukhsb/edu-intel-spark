@@ -385,6 +385,8 @@ Admin views help with:
 
 This gives institutions visibility without turning the admin dashboard into a teaching workspace.
 
+Institution-level reporting also lives in the admin area. Pages such as `Institutional Insights`, `Accreditation`, and `External Examiner` are meant for oversight, quality review, and reporting, so they sit under `Admin -> Reports` rather than the lecturer sidebar.
+
 ## 20. Best Practices for Lecturers
 
 To get the best from GradeAI:

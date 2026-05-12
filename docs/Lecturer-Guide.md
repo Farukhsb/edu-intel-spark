@@ -47,24 +47,37 @@ As a lecturer, you can use the platform to:
 
 The lecturer dashboard is organised around the main assessment workflow.
 
+The sidebar is grouped like this:
+
+- `Teaching`
+  This is the day-to-day teaching workspace.
+- `Assessment`
+  This is where review and quality-control tasks live.
+- `Teaching Insights`
+  This is where you look at cohort patterns, performance movement, and outcome-level signals.
+- `Workspace`
+  This is where personal settings live.
+
+The main lecturer pages are:
+
 - `Overview`
   Use this to get a quick summary of submission activity, grading progress, and students who may need attention.
 - `Assignments`
   Use this to create assignments, open a specific assignment, and manage submission workflows.
-- `Learning Outcomes`
-  Use this to review assessment alignment and outcome visibility.
+- `Academic Integrity`
+  Use this to review persisted integrity cases after running checks from an assignment.
+- `Moderation`
+  Use this to review cases that need a second look before release.
 - `Cohort Analytics`
   Use this to see trends and distributions across groups of students.
 - `Performance Trends`
   Use this to track movement in grades over time and review early support signals.
-- `Academic Integrity`
-  Use this to review persisted integrity cases after running checks from an assignment.
-- `Institutional Insights`
-  Use this for broader reporting and compliance-style views.
-- `Accreditation`
-  Use this for evidence-oriented assessment reporting.
+- `Learning Outcomes`
+  Use this to review assessment alignment and outcome visibility.
 - `Settings`
   Use this for account and system-level preferences.
+
+Institution-level reporting pages such as `Institutional Insights`, `Accreditation`, and `External Examiner` now sit under the admin reporting area, not the lecturer sidebar.
 
 ## Recommended Lecturer Workflow
 
