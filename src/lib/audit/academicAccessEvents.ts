@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { log } from "@/lib/logger";
-import type { TablesInsert } from "@/integrations/supabase/types";
+import type { Json, TablesInsert } from "@/integrations/supabase/types";
 
 export type AcademicAccessEventType =
   | "submission_viewed"
@@ -21,14 +21,42 @@ type AcademicAccessEventInput = {
   metadata?: Record<string, unknown>;
 };
 
-const sanitizeMetadata = (metadata?: Record<string, unknown>) => {
+const toJsonValue = (value: unknown): Json | undefined => {
+  if (value == null) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => toJsonValue(item))
+      .filter((item): item is Json => item !== undefined);
+  }
+  if (typeof value === "object") {
+    const nested: Record<string, Json | undefined> = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const normalized = toJsonValue(nestedValue);
+      if (normalized !== undefined) {
+        nested[key] = normalized;
+      }
+    }
+    return nested;
+  }
+
+  return String(value);
+};
+
+const sanitizeMetadata = (metadata?: Record<string, unknown>): Json => {
   if (!metadata) {
     return {};
   }
 
-  return Object.fromEntries(
-    Object.entries(metadata).filter(([, value]) => value !== undefined),
-  );
+  const sanitized: Record<string, Json | undefined> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    const normalized = toJsonValue(value);
+    if (normalized !== undefined) {
+      sanitized[key] = normalized;
+    }
+  }
+
+  return sanitized;
 };
 
 export const logAcademicAccessEvent = async ({

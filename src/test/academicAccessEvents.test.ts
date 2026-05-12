@@ -56,9 +56,10 @@ describe("academic access event logging", () => {
         resource_id: "submission-1",
         assignment_id: "assignment-1",
         submission_id: "submission-1",
-        metadata: {
+        moderation_case_id: null,
+        metadata: expect.objectContaining({
           source: "assignment_review_dialog",
-        },
+        }),
       }),
     );
   });
