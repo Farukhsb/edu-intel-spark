@@ -33,3 +33,9 @@ export type LecturerOverviewDistributionBand = {
   count: number;
   fill: string;
 };
+
+export interface LecturerOverviewPipelineStage {
+  label: string;
+  count: number;
+  detail: string;
+}

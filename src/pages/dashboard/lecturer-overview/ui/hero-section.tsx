@@ -1,28 +1,22 @@
-import { ArrowRight, Sparkles } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-import type { LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
+import type { LecturerOverviewStats } from "../types";
 
 export const LecturerOverviewHeroSection = ({
   profile,
   heroSummary,
   stats,
-  primaryWorkflowTarget,
 }: {
   profile: { full_name?: string | null } | null | undefined;
   heroSummary: string;
   stats: LecturerOverviewStats;
-  primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
 }) => {
-  const navigate = useNavigate();
-
   return (
     <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
-      <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
+      <CardContent className="p-6">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
             <Sparkles className="h-6 w-6" />
@@ -41,20 +35,6 @@ export const LecturerOverviewHeroSection = ({
               </Badge>
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 lg:justify-end">
-          <Button
-            size="sm"
-            className="shadow-sm"
-            onClick={() => navigate(primaryWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review")}
-          >
-            Review submissions
-            <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/performance?risk=high-plus")}>
-            View risk insights
-          </Button>
         </div>
       </CardContent>
     </Card>

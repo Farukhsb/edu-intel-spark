@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation";
+import { isGradedWorkflowStatus, isReviewQueueStatus } from "@/lib/assessmentWorkflow";
 import { safeToLocaleDate } from "@/lib/date";
 import { exportLecturerOverviewPdf } from "@/lib/exportLecturerOverviewPdf";
 import { getLecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
@@ -10,6 +11,7 @@ import { log } from "@/lib/logger";
 
 import type {
   LecturerOverviewDistributionBand,
+  LecturerOverviewPipelineStage,
   LecturerOverviewRecentSubmission,
   LecturerOverviewStats,
   LecturerOverviewWorkflowTarget,
@@ -97,6 +99,53 @@ const EMPTY_DIST: LecturerOverviewDistributionBand[] = [
   { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
 ];
 
+const EMPTY_PIPELINE: LecturerOverviewPipelineStage[] = [
+  { label: "Submitted", count: 0, detail: "Newly received work waiting to move into marking." },
+  { label: "AI Graded", count: 0, detail: "AI output is ready for lecturer review." },
+  { label: "Under Review", count: 0, detail: "Lecturer, moderation, or approval work is still in progress." },
+  { label: "Released", count: 0, detail: "Student-visible results that have completed the workflow." },
+];
+
+const DEMO_PIPELINE: LecturerOverviewPipelineStage[] = [
+  { label: "Submitted", count: 0, detail: "Newly received work waiting to move into marking." },
+  { label: "AI Graded", count: 1, detail: "AI output is ready for lecturer review." },
+  { label: "Under Review", count: 1, detail: "Lecturer, moderation, or approval work is still in progress." },
+  { label: "Released", count: 1, detail: "Student-visible results that have completed the workflow." },
+];
+
+const buildPipelineStages = (statuses: string[]): LecturerOverviewPipelineStage[] => [
+  {
+    label: "Submitted",
+    count: statuses.filter((status) => ["submitted", "ai_grading"].includes(status)).length,
+    detail: "Newly received work waiting to move into marking.",
+  },
+  {
+    label: "AI Graded",
+    count: statuses.filter((status) => status === "ai_graded").length,
+    detail: "AI output is ready for lecturer review.",
+  },
+  {
+    label: "Under Review",
+    count: statuses.filter((status) =>
+      [
+        "first_review",
+        "moderation_pending",
+        "moderation_in_progress",
+        "moderated",
+        "escalated",
+        "under_review",
+        "approved",
+      ].includes(status),
+    ).length,
+    detail: "Lecturer, moderation, or approval work is still in progress.",
+  },
+  {
+    label: "Released",
+    count: statuses.filter((status) => status === "released").length,
+    detail: "Student-visible results that have completed the workflow.",
+  },
+];
+
 export const distributionInterpretation = (dist: { label: string; count: number }[]) => {
   const top = [...dist].sort((a, b) => b.count - a.count)[0];
   if (!top || top.count === 0) return "Grade distribution will appear once submissions have been graded.";
@@ -118,6 +167,7 @@ export const useLecturerOverviewController = () => {
   const [stats, setStats] = useState<LecturerOverviewStats>(isDemo ? DEMO_STATS : EMPTY_STATS);
   const [recent, setRecent] = useState<LecturerOverviewRecentSubmission[]>(isDemo ? DEMO_RECENT : []);
   const [gradeDistribution, setGradeDistribution] = useState<LecturerOverviewDistributionBand[]>(isDemo ? DEMO_DIST : EMPTY_DIST);
+  const [pipeline, setPipeline] = useState<LecturerOverviewPipelineStage[]>(isDemo ? DEMO_PIPELINE : EMPTY_PIPELINE);
   const [loading, setLoading] = useState(!isDemo);
 
   const fetchDashboard = async () => {
@@ -138,6 +188,7 @@ export const useLecturerOverviewController = () => {
         setStats({ ...EMPTY_STATS, assignmentCount: 0 });
         setRecent([]);
         setGradeDistribution(EMPTY_DIST);
+        setPipeline(EMPTY_PIPELINE);
         setLoading(false);
         return;
       }
@@ -179,31 +230,8 @@ export const useLecturerOverviewController = () => {
         };
       });
 
-      const gradedSubs = allSubs.filter((submission) =>
-        [
-          "ai_graded",
-          "first_review",
-          "moderation_pending",
-          "moderation_in_progress",
-          "moderated",
-          "escalated",
-          "under_review",
-          "approved",
-          "released",
-        ].includes(submission.status),
-      );
-      const pendingSubs = allSubs.filter((submission) =>
-        [
-          "submitted",
-          "ai_grading",
-          "ai_graded",
-          "first_review",
-          "moderation_pending",
-          "moderation_in_progress",
-          "escalated",
-          "under_review",
-        ].includes(submission.status),
-      );
+      const gradedSubs = allSubs.filter((submission) => isGradedWorkflowStatus(submission.status));
+      const pendingSubs = allSubs.filter((submission) => isReviewQueueStatus(submission.status));
       const scores = allGrades
         .map((grade) => grade.final_score ?? grade.ai_score)
         .filter((score): score is number => score != null);
@@ -264,6 +292,7 @@ export const useLecturerOverviewController = () => {
         else dist[3].count++;
       });
       setGradeDistribution(dist);
+      setPipeline(buildPipelineStages(allSubs.map((submission) => submission.status)));
 
       const recentSubs: LecturerOverviewRecentSubmission[] = allSubs.slice(0, 6).map((submission) => {
         const assignment = assignmentMap[submission.assignment_id];
@@ -400,6 +429,7 @@ export const useLecturerOverviewController = () => {
       stats,
       recent,
       gradeDistribution,
+      pipeline,
       totalScored,
       readiness,
       heroSummary,

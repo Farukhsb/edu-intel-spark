@@ -39,7 +39,9 @@ vi.mock("lucide-react", () => {
     ArrowRight: Icon,
     BarChart3: Icon,
     CheckCircle: Icon,
+    CheckCircle2: Icon,
     Clock: Icon,
+    Clock3: Icon,
     Download: Icon,
     FileText: Icon,
     Loader2: () => <svg data-testid="loading-spinner" />,
@@ -186,8 +188,8 @@ describe("LecturerOverview", () => {
     await waitFor(() => {
       expect(screen.getByText("Active Students")).toBeInTheDocument();
     });
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
-    expect(screen.getByText("Live delivery position")).toBeInTheDocument();
+    expect(screen.getAllByText("What needs attention now").length).toBeGreaterThan(0);
+    expect(screen.getByText("No immediate blocker")).toBeInTheDocument();
     expect(screen.getByText("1 active assignment still need routine monitoring")).toBeInTheDocument();
     expect(
       screen.getByText("Track live submissions and keep release-ready work moving through the workflow"),
@@ -196,12 +198,16 @@ describe("LecturerOverview", () => {
     expect(screen.getByText("Average Grade")).toBeInTheDocument();
     expect(screen.getByText("At-Risk Students")).toBeInTheDocument();
     expect(screen.getByText("Recent Submissions")).toBeInTheDocument();
+    expect(screen.getByText("Assignment Workflow Pipeline")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-stage-submitted")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-stage-ai-graded")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-stage-under-review")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-stage-released")).toBeInTheDocument();
     expect(screen.getByText("Grade Distribution")).toBeInTheDocument();
-    expect(screen.getByText("Attention Needed")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Review submissions/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Open assignments/i })).toBeInTheDocument();
   });
 
-  it("opens a focused assignment workflow from recent submissions and the attention card", async () => {
+  it("opens a focused assignment workflow from recent submissions and the action card", async () => {
     setupSupabase({
       assignments: [{ id: "assignment-1", title: "Algorithms", max_score: 100 }],
       submissions: [
@@ -233,14 +239,78 @@ describe("LecturerOverview", () => {
       "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Review submissions/i }));
-    expect(mocks.navigate).toHaveBeenCalledWith(
-      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
-    );
-
     fireEvent.click(screen.getByText("Awaiting Review"));
     expect(mocks.navigate).toHaveBeenCalledWith(
       "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
     );
+  });
+
+  it("shows pipeline counts using existing submission workflow states", async () => {
+    setupSupabase({
+      assignments: [
+        { id: "assignment-1", title: "Algorithms", max_score: 100 },
+        { id: "assignment-2", title: "Databases", max_score: 100 },
+      ],
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_id: "student-1",
+          student_name: "Sam Student",
+          student_email: "sam@example.com",
+          file_name: "essay.pdf",
+          status: "submitted",
+          submitted_at: "2026-04-04T00:00:00.000Z",
+        },
+        {
+          id: "submission-2",
+          assignment_id: "assignment-1",
+          student_id: "student-2",
+          student_name: "Riley Student",
+          student_email: "riley@example.com",
+          file_name: "draft.pdf",
+          status: "ai_graded",
+          submitted_at: "2026-04-03T00:00:00.000Z",
+        },
+        {
+          id: "submission-3",
+          assignment_id: "assignment-2",
+          student_id: "student-3",
+          student_name: "Ayo Student",
+          student_email: "ayo@example.com",
+          file_name: "analysis.pdf",
+          status: "moderation_pending",
+          submitted_at: "2026-04-02T00:00:00.000Z",
+        },
+        {
+          id: "submission-4",
+          assignment_id: "assignment-2",
+          student_id: "student-4",
+          student_name: "Chris Student",
+          student_email: "chris@example.com",
+          file_name: "final.pdf",
+          status: "released",
+          submitted_at: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+      grades: [
+        { submission_id: "submission-2", ai_score: 67, final_score: null },
+        { submission_id: "submission-3", ai_score: 54, final_score: 58 },
+        { submission_id: "submission-4", ai_score: 74, final_score: 76 },
+      ],
+    });
+
+    renderLecturerOverview();
+
+    expect(await screen.findByText("Assignment Workflow Pipeline")).toBeInTheDocument();
+
+    expect(screen.getByTestId("pipeline-stage-submitted")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-count-submitted")).toHaveTextContent("1");
+    expect(screen.getByTestId("pipeline-stage-ai-graded")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-count-ai-graded")).toHaveTextContent("1");
+    expect(screen.getByTestId("pipeline-stage-under-review")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-count-under-review")).toHaveTextContent("1");
+    expect(screen.getByTestId("pipeline-stage-released")).toBeInTheDocument();
+    expect(screen.getByTestId("pipeline-count-released")).toHaveTextContent("1");
   });
 });
