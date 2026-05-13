@@ -242,8 +242,17 @@ export const AssignmentsScreen = ({
 
       {assignments.length === 0 ? (
         <DashboardEmptyState
-          title="No assignments yet"
-          description={role === "lecturer" ? "Create your first assignment to get started." : "No assignments have been published yet."}
+          title={role === "lecturer" ? "Create your first assignment" : "No assignments have been published yet"}
+          description={
+            role === "lecturer"
+              ? "Start with a draft brief and rubric, then publish it when you are ready for students to submit."
+              : "Your assignments will appear here once your lecturer has published them."
+          }
+          action={
+            role === "lecturer" && !isDemo ? (
+              <Button onClick={openCreateDialog}>Create your first assignment</Button>
+            ) : undefined
+          }
         />
       ) : sortedAssignments.length === 0 ? (
         <Card>

@@ -108,7 +108,7 @@ export const CohortAnalyticsScreen = ({
             {gradeDistChart.every((item) => item.count === 0) ? (
               <DashboardEmptyState
                 title="No graded submissions yet"
-                description="Grade distribution will appear after assignments are graded."
+                description="This view will populate once submissions have been graded and released, so there is live cohort performance data to compare."
               />
             ) : (
               <ResponsiveContainer width="100%" height={260}>

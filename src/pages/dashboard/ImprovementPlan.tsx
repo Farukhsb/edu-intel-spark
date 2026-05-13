@@ -15,6 +15,7 @@ import type { CommunicationMessage } from "@/lib/communications";
 import { getImprovementPlanReadiness } from "@/lib/improvementPlan";
 import {
   ImprovementPlanHero,
+  InlineProgressBar,
   ImprovementPlanModuleCard,
   ImprovementPlanResourcesSection,
 } from "@/pages/dashboard/improvement-plan/sections";
@@ -208,23 +209,53 @@ const ImprovementPlan = () => {
         onViewCompletedTasks={showCompletedTasks}
       />
 
+      {overallTasks.completed > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium">Progress you have already made</p>
+              <p className="text-sm text-muted-foreground">
+                You have completed {overallTasks.completed} of {overallTasks.total} task{overallTasks.total === 1 ? "" : "s"} so far. Keep that progress visible while you work through what is still open.
+              </p>
+            </div>
+            <div className="min-w-[180px] space-y-2">
+              <p className="text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {overallTasks.completed} of {overallTasks.total} tasks complete
+              </p>
+              <InlineProgressBar value={overallTasks.progress} className="h-2 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-dashed bg-muted/20">
-        <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Current view:</span>
-          <Badge variant="secondary">
-            {activeWorkspaceView === "modules"
-              ? "Modules"
-              : activeWorkspaceView === "completed"
-                ? "Completed tasks"
-                : "Open tasks"}
-          </Badge>
-          <span>
-            {activeWorkspaceView === "modules"
-              ? "Browse each active module plan."
-              : activeWorkspaceView === "completed"
-                ? "Showing modules that contain completed tasks."
-                : "Showing modules with open tasks that still need attention."}
-          </span>
+        <CardContent className="flex flex-col gap-3 p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">Current view:</span>
+            <Badge variant="secondary">
+              {activeWorkspaceView === "modules"
+                ? "Modules"
+                : activeWorkspaceView === "completed"
+                  ? "Completed tasks"
+                  : "Open tasks"}
+            </Badge>
+            <span>
+              {activeWorkspaceView === "modules"
+                ? "Browse each active module plan."
+                : activeWorkspaceView === "completed"
+                  ? "Showing modules that contain completed tasks."
+                  : "Showing modules with open tasks that still need attention."}
+            </span>
+          </div>
+          <div className="min-w-[220px] space-y-2" data-testid="workspace-progress-indicator">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-foreground">Overall progress</span>
+              <span>
+                {overallTasks.completed} of {overallTasks.total} tasks complete
+              </span>
+            </div>
+            <InlineProgressBar value={overallTasks.progress} className="h-2 w-full" />
+          </div>
         </CardContent>
       </Card>
 

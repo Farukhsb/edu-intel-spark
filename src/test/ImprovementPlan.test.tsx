@@ -125,6 +125,8 @@ describe("ImprovementPlan explanation validation", () => {
     expect(
       screen.getByText("Complete Complete Big-O analysis worksheet before the next submission window"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Progress you have already made")).toBeInTheDocument();
+    expect(screen.getAllByText("2 of 5 tasks complete").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Improvement plan" })).toBeInTheDocument();
     expect(
       screen.getByText(/Focused on the weakest repeated criteria so you know which skills to strengthen for future assignments/i),
@@ -140,6 +142,7 @@ describe("ImprovementPlan explanation validation", () => {
     renderWithRouter(<ImprovementPlan />);
 
     expect(screen.getByText("Priority 1 - CS205: Dynamic Programming Structure")).toBeInTheDocument();
+    expect(screen.getByTestId("workspace-progress-indicator")).toBeInTheDocument();
     expect(screen.getAllByText("Needs attention").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/(Good|Strong|High) recovery opportunity \| (short|12 min|15 min|20 min) review/).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("heading", { name: "Improvement plan" }).length).toBeGreaterThan(0);

@@ -160,6 +160,11 @@ describe("LecturerOverview", () => {
     renderLecturerOverview();
 
     expect(await screen.findByText("No submissions yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Publish an assignment or check the due dates on your active briefs. Student submissions will start appearing here as soon as work is uploaded.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("No grades yet")).toBeInTheDocument();
     expect(screen.getByText("0 active assignments")).toBeInTheDocument();
     expect(screen.getByText("0 active students")).toBeInTheDocument();

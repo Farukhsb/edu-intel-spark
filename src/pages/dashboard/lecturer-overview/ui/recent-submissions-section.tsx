@@ -27,7 +27,7 @@ export const LecturerOverviewRecentSubmissionsSection = ({
           <div className="rounded-lg border border-dashed p-8 text-center">
             <p className="text-sm font-medium">No submissions yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Submissions will appear here once students begin uploading work to your assignments.
+              Publish an assignment or check the due dates on your active briefs. Student submissions will start appearing here as soon as work is uploaded.
             </p>
           </div>
         ) : (
