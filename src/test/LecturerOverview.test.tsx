@@ -188,7 +188,9 @@ describe("LecturerOverview", () => {
     await waitFor(() => {
       expect(screen.getByText("Active Students")).toBeInTheDocument();
     });
-    expect(screen.getAllByText("What needs attention now").length).toBeGreaterThan(0);
+    expect(screen.getByText("What needs attention now")).toBeInTheDocument();
+    expect(screen.getByText("Operational focus")).toBeInTheDocument();
+    expect(screen.getByText("Live teaching scope")).toBeInTheDocument();
     expect(screen.getByText("No immediate blocker")).toBeInTheDocument();
     expect(screen.getByText("1 active assignment still need routine monitoring")).toBeInTheDocument();
     expect(

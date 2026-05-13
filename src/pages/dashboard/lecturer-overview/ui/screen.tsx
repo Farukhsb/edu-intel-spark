@@ -10,6 +10,7 @@ import { LecturerOverviewWorkflowPipelineSection } from "./workflow-pipeline-sec
 import type {
   LecturerOverviewDistributionBand,
   LecturerOverviewPipelineStage,
+  LecturerOverviewQueueFocus,
   LecturerOverviewRecentSubmission,
   LecturerOverviewStats,
   LecturerOverviewWorkflowTarget,
@@ -25,6 +26,7 @@ export const LecturerOverviewScreen = ({
   readiness,
   heroSummary,
   primaryWorkflowTarget,
+  queueFocus,
   onExportCsv,
   onExportPdf,
 }: {
@@ -37,6 +39,7 @@ export const LecturerOverviewScreen = ({
   readiness: LecturerOverviewReadiness;
   heroSummary: string;
   primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
+  queueFocus: LecturerOverviewQueueFocus;
   onExportCsv: () => void;
   onExportPdf: () => Promise<void>;
 }) => {
@@ -51,6 +54,7 @@ export const LecturerOverviewScreen = ({
         stats={stats}
         readiness={readiness}
         primaryWorkflowTarget={primaryWorkflowTarget}
+        queueFocus={queueFocus}
       />
       <LecturerOverviewPrimaryStatsSection stats={stats} primaryWorkflowTarget={primaryWorkflowTarget} />
 

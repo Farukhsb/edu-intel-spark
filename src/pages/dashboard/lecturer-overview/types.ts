@@ -28,6 +28,11 @@ export interface LecturerOverviewWorkflowTarget {
   label: string;
 }
 
+export interface LecturerOverviewQueueFocus {
+  label: string;
+  detail: string;
+}
+
 export type LecturerOverviewDistributionBand = {
   label: string;
   count: number;

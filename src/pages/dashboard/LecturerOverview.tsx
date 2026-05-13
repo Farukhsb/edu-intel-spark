@@ -15,6 +15,7 @@ const LecturerOverview = () => {
       readiness,
       heroSummary,
       primaryWorkflowTarget,
+      queueFocus,
     },
     actions: { exportCsv, exportPdf },
   } = useLecturerOverviewController();
@@ -38,6 +39,7 @@ const LecturerOverview = () => {
       readiness={readiness}
       heroSummary={heroSummary}
       primaryWorkflowTarget={primaryWorkflowTarget}
+      queueFocus={queueFocus}
       onExportCsv={exportCsv}
       onExportPdf={exportPdf}
     />

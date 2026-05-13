@@ -12,6 +12,7 @@ import { log } from "@/lib/logger";
 import type {
   LecturerOverviewDistributionBand,
   LecturerOverviewPipelineStage,
+  LecturerOverviewQueueFocus,
   LecturerOverviewRecentSubmission,
   LecturerOverviewStats,
   LecturerOverviewWorkflowTarget,
@@ -388,6 +389,54 @@ export const useLecturerOverviewController = () => {
     };
   }, [recent]);
 
+  const queueFocus = useMemo<LecturerOverviewQueueFocus>(() => {
+    if (stats.pendingCount > 0) {
+      const pendingByAssignment = recent
+        .filter((submission) =>
+          [
+            "submitted",
+            "ai_grading",
+            "ai_graded",
+            "first_review",
+            "moderation_pending",
+            "moderation_in_progress",
+            "escalated",
+            "under_review",
+          ].includes(submission.status),
+        )
+        .reduce<Record<string, { title: string; count: number }>>((accumulator, submission) => {
+          const current = accumulator[submission.assignment_id] ?? {
+            title: submission.assignment_title,
+            count: 0,
+          };
+          current.count += 1;
+          accumulator[submission.assignment_id] = current;
+          return accumulator;
+        }, {});
+
+      const leadAssignment = Object.values(pendingByAssignment).sort((a, b) => b.count - a.count)[0];
+
+      return {
+        label: leadAssignment ? leadAssignment.title : "Review queue",
+        detail: leadAssignment
+          ? `${leadAssignment.count} pending submission${leadAssignment.count === 1 ? "" : "s"} are currently stacking up here.`
+          : `${stats.pendingCount} submission${stats.pendingCount === 1 ? "" : "s"} are waiting in the review queue.`,
+      };
+    }
+
+    if (stats.atRisk > 0) {
+      return {
+        label: "Support pressure",
+        detail: `${stats.atRisk} student${stats.atRisk === 1 ? "" : "s"} currently sit below target and may need intervention.`,
+      };
+    }
+
+    return {
+      label: "Live teaching scope",
+      detail: `${stats.assignmentCount} active assignment${stats.assignmentCount === 1 ? "" : "s"} and ${stats.activeStudents} active student${stats.activeStudents === 1 ? "" : "s"} are in view.`,
+    };
+  }, [recent, stats.activeStudents, stats.assignmentCount, stats.atRisk, stats.pendingCount]);
+
   const exportCsv = () => {
     const rows = [["Student", "Assignment", "Score", "Max Score", "Status", "Submitted"]];
     recent.forEach((submission) =>
@@ -434,6 +483,7 @@ export const useLecturerOverviewController = () => {
       readiness,
       heroSummary,
       primaryWorkflowTarget,
+      queueFocus,
     },
     actions: {
       exportCsv,

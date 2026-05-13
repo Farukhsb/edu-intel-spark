@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { LecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
 
-import type { LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
+import type { LecturerOverviewQueueFocus, LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
 
 const getAttentionNowLabel = (stats: LecturerOverviewStats, readiness: LecturerOverviewReadiness) => {
   if (stats.pendingCount > 0) {
@@ -40,10 +40,12 @@ export const LecturerOverviewActionCardSection = ({
   stats,
   readiness,
   primaryWorkflowTarget,
+  queueFocus,
 }: {
   stats: LecturerOverviewStats;
   readiness: LecturerOverviewReadiness;
   primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
+  queueFocus: LecturerOverviewQueueFocus;
 }) => {
   const navigate = useNavigate();
   const actionHref =
@@ -106,8 +108,9 @@ export const LecturerOverviewActionCardSection = ({
                 <Sparkles className="h-4 w-4" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What needs attention now</p>
-                <p className="text-sm font-semibold">{getAttentionNowLabel(stats, readiness)}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Operational focus</p>
+                <p className="text-sm font-semibold">{queueFocus.label}</p>
+                <p className="text-xs text-muted-foreground">{queueFocus.detail}</p>
               </div>
             </div>
           </div>
