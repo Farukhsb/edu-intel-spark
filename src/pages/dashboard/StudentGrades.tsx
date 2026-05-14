@@ -238,24 +238,24 @@ const StudentGrades = () => {
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardContent className="grid gap-4 p-6 md:grid-cols-3">
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
             <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Based on your current released and pending grade state.
+              Based on what is released already and what is still moving through marking and review.
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What to review next</p>
             <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              This is the result state most likely to affect what you should review next.
+              This is the result state most likely to matter before your next submission.
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
             <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use this to decide whether to review a released result or wait for the next workflow step.
+              Use this to decide whether to review a released result now or check back later.
             </p>
           </div>
         </CardContent>

@@ -361,14 +361,14 @@ const InstitutionalInsights = () => {
           <button
             type="button"
             className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-            onClick={() => navigate("/dashboard/performance?risk=high-plus")}
+            onClick={() => navigate("/dashboard?view=submissions")}
           >
-            <p className="text-sm font-medium">Intervene with low-performing students</p>
+            <p className="text-sm font-medium">Review low-performing student signals</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use the risk workflow to act on the students most likely to be pulling down module and pass-rate performance.
+              Open the admin oversight view to review the submissions and result patterns most likely to be dragging down module and pass-rate performance.
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              Open risk workflow <ArrowRight className="h-3.5 w-3.5" />
+              Open submission oversight <ArrowRight className="h-3.5 w-3.5" />
             </span>
           </button>
           <button

@@ -58,7 +58,7 @@ describe("CohortAnalytics demo mode", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Reporting Readiness")).toBeInTheDocument();
+    expect(await screen.findByText("Teaching Focus")).toBeInTheDocument();
     expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
     expect(screen.getByText("High-risk student cluster detected")).toBeInTheDocument();
     expect(

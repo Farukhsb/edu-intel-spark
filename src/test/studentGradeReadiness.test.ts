@@ -11,7 +11,7 @@ describe("student grade readiness", () => {
       latestPendingStatus: "moderation_in_progress",
     });
 
-    expect(readiness.postureLabel).toBe("Released result position");
+    expect(readiness.postureLabel).toBe("You have a released result ready");
     expect(readiness.likelyChallenge).toBe("Algorithms Essay has feedback ready to review");
     expect(readiness.bestNextAction).toBe("Open the released result and review the criterion feedback");
   });
@@ -24,7 +24,7 @@ describe("student grade readiness", () => {
       latestPendingStatus: "moderation_in_progress",
     });
 
-    expect(readiness.postureLabel).toBe("Pending review position");
+    expect(readiness.postureLabel).toBe("Your result is still being prepared");
     expect(readiness.likelyChallenge).toBe("moderation in progress is still blocking release");
     expect(readiness.bestNextAction).toBe("Wait for marking and moderation to complete before checking again");
   });

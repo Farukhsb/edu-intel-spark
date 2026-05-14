@@ -326,24 +326,24 @@ const ExplainGrade = () => {
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardContent className="grid gap-4 p-6 md:grid-cols-3">
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
             <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Based on the released breakdown, band, and strongest improvement route for this result.
+              Based on the released breakdown, your current band, and the clearest route to improve next time.
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What matters most here</p>
             <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              This is the released-result question most likely to matter before your next submission.
+              This is the part of the released result most worth understanding before your next submission.
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
             <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use this to decide what to carry into the next piece of work before asking deeper follow-up questions.
+              Use this to decide what to carry into the next piece of work before going deeper into the detail.
             </p>
           </div>
         </CardContent>

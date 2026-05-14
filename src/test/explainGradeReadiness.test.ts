@@ -15,7 +15,7 @@ describe("explain grade readiness", () => {
       },
     });
 
-    expect(readiness.postureLabel).toBe("Released explanation position");
+    expect(readiness.postureLabel).toBe("Your released feedback is ready");
     expect(readiness.likelyChallenge).toBe("Algorithms Essay is closest to improving through Evidence");
     expect(readiness.bestNextAction).toBe("Use the Evidence guidance to work toward Distinction");
   });

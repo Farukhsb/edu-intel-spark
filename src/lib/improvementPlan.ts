@@ -841,7 +841,7 @@ export const getImprovementPlanReadiness = ({
 
   if (firstPriorityResource && firstOpenTaskEntry) {
     return {
-      postureLabel: "Active support position",
+      postureLabel: "You have active improvement work",
       likelyChallenge: `${firstPriorityResource.heading} is still the highest-priority improvement area`,
       bestNextAction: `Complete ${firstOpenTaskEntry.task.task} before the next submission window`,
     };
@@ -849,7 +849,7 @@ export const getImprovementPlanReadiness = ({
 
   if (plan.length > 0 && overallTasks.total > 0 && overallTasks.completed === overallTasks.total) {
     return {
-      postureLabel: "Maintained progress position",
+      postureLabel: "You have completed the current tasks",
       likelyChallenge: firstPriorityResource
         ? `${firstPriorityResource.heading} still needs to stay visible in your next piece of work`
         : "Your recent support tasks are complete, but the next submission still needs deliberate follow-through",
@@ -858,7 +858,7 @@ export const getImprovementPlanReadiness = ({
   }
 
   return {
-    postureLabel: "No active support position",
+    postureLabel: "No active improvement tasks yet",
     likelyChallenge: "No personalised improvement tasks are active yet",
     bestNextAction: "Receive released feedback first so the platform can build a focused support plan",
   };

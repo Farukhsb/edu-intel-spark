@@ -113,7 +113,7 @@ export const ImprovementPlanHero = ({
 
           <div className="space-y-3">
             <div className="rounded-2xl border bg-background/80 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current focus</p>
               <p className="mt-2 text-sm font-semibold text-foreground">{readiness.postureLabel}</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Based on your current support tasks, recurring weak criteria, and recommended next moves.
@@ -130,7 +130,7 @@ export const ImprovementPlanHero = ({
             </div>
 
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
               <p className="mt-2 text-sm font-semibold text-foreground">
                 {hasActiveModule
                   ? readiness.bestNextAction

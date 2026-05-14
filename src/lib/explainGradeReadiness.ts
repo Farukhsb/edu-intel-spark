@@ -16,7 +16,7 @@ export const getExplainGradeReadiness = ({
   topImprovementArea: { area: string; nextBand: string; pointsNeeded: number } | null;
 }): ExplainGradeReadiness => {
   return {
-    postureLabel: "Released explanation position",
+    postureLabel: "Your released feedback is ready",
     likelyChallenge: topImprovementArea
       ? `${assignmentLabel || "This result"} is closest to improving through ${topImprovementArea.area}`
       : `${assignmentLabel || "This result"} is already sitting in the ${band} band`,

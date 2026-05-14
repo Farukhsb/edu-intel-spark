@@ -185,8 +185,8 @@ describe("StudentGrades", () => {
     });
 
     expect(screen.getByText("Your results, Ada")).toBeInTheDocument();
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
-    expect(screen.getByText("Released result position")).toBeInTheDocument();
+    expect(screen.getByText("Current position")).toBeInTheDocument();
+    expect(screen.getByText("You have a released result ready")).toBeInTheDocument();
     expect(screen.getByText("Algorithms Essay has feedback ready to review")).toBeInTheDocument();
     expect(screen.getByText("Open the released result and review the criterion feedback")).toBeInTheDocument();
     expect(screen.getByText("76/100")).toBeInTheDocument();
@@ -340,8 +340,8 @@ describe("StudentGrades", () => {
       expect(screen.getByText("Pending Review Essay")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
-    expect(screen.getByText("Pending review position")).toBeInTheDocument();
+    expect(screen.getByText("Current position")).toBeInTheDocument();
+    expect(screen.getByText("Your result is still being prepared")).toBeInTheDocument();
     expect(screen.getByText("moderation in progress is still blocking release")).toBeInTheDocument();
     expect(screen.getByText("Wait for marking and moderation to complete before checking again")).toBeInTheDocument();
     expect(screen.getByText("moderation in progress")).toBeInTheDocument();

@@ -40,28 +40,28 @@ export const CohortAnalyticsScreen = ({
   <div className="space-y-6 animate-fade-in">
     <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
       <CardHeader>
-        <CardTitle className="text-base">Reporting Readiness</CardTitle>
+        <CardTitle className="text-base">Teaching Focus</CardTitle>
         <CardDescription>
-          A compact reading of which cohort-level signal is most likely to need intervention or explanation next.
+          A compact reading of which cohort-level signal is most likely to need teaching attention next.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border bg-background/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
           <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Based on the current recommendation severity mix and weakest assignment performance in this cohort view.
           </p>
         </div>
         <div className="rounded-lg border bg-background/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What needs attention</p>
           <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             This is the cohort signal most likely to require either direct action or a clear quality-review explanation.
           </p>
         </div>
         <div className="rounded-lg border bg-background/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
           <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextAction}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Use this to decide whether to move into student-risk follow-up, integrity review, or assignment remediation first.
