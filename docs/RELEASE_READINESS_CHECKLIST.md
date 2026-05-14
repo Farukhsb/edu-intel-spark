@@ -109,7 +109,7 @@ If the release/demo includes messaging or interventions:
 
 **No-Go** if:
 - a student can see unreleased grades
-- a lecturer can access another lecturer’s protected data
+- a lecturer can access another lecturer's protected data
 - moderation no longer blocks approval correctly
 - integrity or recommendation persistence is broken
 - critical migrations are unapplied or unverified

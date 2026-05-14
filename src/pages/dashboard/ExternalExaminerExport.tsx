@@ -22,9 +22,10 @@ import type {
 } from "@/types/academic";
 
 const EXPORTABLE_STATUSES = new Set(["moderated", "approved", "released"]);
+const MISSING_FIELD_LABEL = "Not recorded";
 
 const getClassification = (score: number | null): string => {
-  if (score == null) return "—";
+  if (score == null) return "Not classified";
   if (score >= 70) return "1st";
   if (score >= 60) return "2:1";
   if (score >= 50) return "2:2";
@@ -88,12 +89,12 @@ const ExternalExaminerExport = () => {
           assignmentRows.map((row) => ({
             id: row.id,
             title: row.title,
-            moduleCode: row.module_code || "—",
+            moduleCode: row.module_code || MISSING_FIELD_LABEL,
           })),
         );
 
         const userMap = Object.fromEntries(
-          profileRows.map((row) => [row.id, row.full_name || row.email || "Unknown"]),
+          profileRows.map((row) => [row.id, row.full_name || row.email || "Unknown student"]),
         ) as Record<string, string>;
 
         const gradeMap = Object.fromEntries(
@@ -113,19 +114,19 @@ const ExternalExaminerExport = () => {
 
             return {
               studentName: row.student_name || userMap[row.student_id || ""] || "Unknown",
-              studentEmail: row.student_email || "—",
-              assignmentTitle: assignment?.title || "—",
-              moduleCode: assignment?.module_code || "—",
+              studentEmail: row.student_email || MISSING_FIELD_LABEL,
+              assignmentTitle: assignment?.title || "Untitled assignment",
+              moduleCode: assignment?.module_code || MISSING_FIELD_LABEL,
               aiScore: grade?.ai_score ?? null,
               lecturerScore: grade?.lecturer_score ?? null,
               finalScore,
               aiFeedback: grade?.ai_feedback || "",
               lecturerFeedback: grade?.lecturer_feedback || "",
               finalFeedback: grade?.final_feedback || "",
-              status: row.status || "—",
-              submittedAt: safeFormatDate(row.submitted_at, "yyyy-MM-dd", "—"),
-              reviewedAt: safeFormatDate(grade?.reviewed_at, "yyyy-MM-dd", "—"),
-              reviewedBy: grade?.reviewed_by ? userMap[grade.reviewed_by] || grade.reviewed_by : "—",
+              status: row.status || "Status not recorded",
+              submittedAt: safeFormatDate(row.submitted_at, "yyyy-MM-dd", MISSING_FIELD_LABEL),
+              reviewedAt: safeFormatDate(grade?.reviewed_at, "yyyy-MM-dd", MISSING_FIELD_LABEL),
+              reviewedBy: grade?.reviewed_by ? userMap[grade.reviewed_by] || grade.reviewed_by : MISSING_FIELD_LABEL,
               classification: getClassification(finalScore),
             };
           });
@@ -141,7 +142,7 @@ const ExternalExaminerExport = () => {
       setLoading(false);
     };
 
-    fetchData();
+    void fetchData();
   }, [isDemo]);
 
   const filteredData = selectedAssignment === "all"
@@ -287,7 +288,7 @@ const ExternalExaminerExport = () => {
           <div>
             <p className="text-sm font-medium">Governed export scope</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Only `moderated`, `approved`, and `released` submissions are included in the examiner export.
+              Only moderated, approved, and released submissions are included in the examiner export.
             </p>
           </div>
           <div>
@@ -301,7 +302,7 @@ const ExternalExaminerExport = () => {
             <p className="mt-1 text-xs text-muted-foreground">
               {selectedAssignment === "all"
                 ? "All assignments"
-                : assignments.find((assignment) => assignment.id === selectedAssignment)?.title || "Filtered assignment"} | {filteredData.length} records ready
+                : assignments.find((assignment) => assignment.id === selectedAssignment)?.title || "Filtered assignment"} | {filteredData.length} records ready for export
             </p>
           </div>
         </CardContent>
@@ -390,9 +391,9 @@ const ExternalExaminerExport = () => {
                       <td className="py-2">{row.studentName}</td>
                       <td className="max-w-[150px] truncate py-2">{row.assignmentTitle}</td>
                       <td className="py-2">{row.moduleCode}</td>
-                      <td className="py-2 text-right">{row.aiScore ?? "—"}</td>
-                      <td className="py-2 text-right">{row.lecturerScore ?? "—"}</td>
-                      <td className="py-2 text-right font-medium">{row.finalScore ?? "—"}</td>
+                      <td className="py-2 text-right">{row.aiScore ?? "N/A"}</td>
+                      <td className="py-2 text-right">{row.lecturerScore ?? "N/A"}</td>
+                      <td className="py-2 text-right font-medium">{row.finalScore ?? "N/A"}</td>
                       <td className="py-2"><Badge variant="outline" className="text-xs">{row.classification}</Badge></td>
                       <td className="py-2"><Badge variant={row.status === "released" ? "default" : "secondary"} className="text-xs">{row.status}</Badge></td>
                     </tr>
@@ -405,7 +406,9 @@ const ExternalExaminerExport = () => {
                 </p>
               )}
               {filteredData.length === 0 && (
-                <p className="py-8 text-center text-sm text-muted-foreground">No graded submissions to export yet.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No governed export-ready records match this selection yet.
+                </p>
               )}
             </div>
           </CardContent>
