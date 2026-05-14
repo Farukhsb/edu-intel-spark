@@ -366,6 +366,9 @@ export const useAssignmentsController = ({
     setSearchParams(new URLSearchParams());
   };
 
+  const hasActiveFilters =
+    searchQuery.trim().length > 0 || statusFilter !== "all" || isPendingReviewView;
+
   return {
     loading,
     role,
@@ -377,6 +380,7 @@ export const useAssignmentsController = ({
     overviewStats,
     catalogReadiness,
     isPendingReviewView,
+    hasActiveFilters,
     searchQuery,
     statusFilter,
     formState,
@@ -404,4 +408,3 @@ export const useAssignmentsController = ({
     departments: ASSIGNMENT_TARGET_DEPARTMENTS,
   };
 };
-

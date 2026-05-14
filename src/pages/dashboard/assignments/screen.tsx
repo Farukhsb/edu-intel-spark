@@ -47,6 +47,7 @@ export const AssignmentsScreen = ({
   overviewStats,
   catalogReadiness,
   isPendingReviewView,
+  hasActiveFilters,
   searchQuery,
   statusFilter,
   formState,
@@ -264,9 +265,11 @@ export const AssignmentsScreen = ({
                 ? "There are no assignments with pending lecturer work in this filtered view."
                 : "Clear the search or status filter to see more assignments."}
             </p>
-            <Button variant="outline" className="mt-4" onClick={resetFilters}>
-              Reset Filters
-            </Button>
+            {hasActiveFilters ? (
+              <Button variant="outline" className="mt-4" onClick={resetFilters}>
+                Reset Filters
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : (
