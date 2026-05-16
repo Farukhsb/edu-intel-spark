@@ -275,7 +275,7 @@ describe("improvement plan domain helpers", () => {
       overallTasks: getOverallTaskSummary(plan),
     });
 
-    expect(readiness.postureLabel).toBe("Active support position");
+    expect(readiness.postureLabel).toBe("You have active improvement work");
     expect(readiness.likelyChallenge).toBe("CS101: Testing is still the highest-priority improvement area");
     expect(readiness.bestNextAction).toBe("Complete Review lecturer feedback for Testing before the next submission window");
   });
@@ -288,7 +288,7 @@ describe("improvement plan domain helpers", () => {
     });
 
     expect(readiness).toEqual({
-      postureLabel: "No active support position",
+      postureLabel: "No active improvement tasks yet",
       likelyChallenge: "No personalised improvement tasks are active yet",
       bestNextAction: "Receive released feedback first so the platform can build a focused support plan",
     });

@@ -264,8 +264,8 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
-    expect(screen.getByText("Released explanation position")).toBeInTheDocument();
+    expect(screen.getByText("Current position")).toBeInTheDocument();
+    expect(screen.getByText("Your released feedback is ready")).toBeInTheDocument();
     expect(screen.getByText("Released Result Summary")).toBeInTheDocument();
     expect(screen.getByText("Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("74%")).toBeInTheDocument();

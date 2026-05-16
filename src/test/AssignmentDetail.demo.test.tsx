@@ -65,7 +65,7 @@ describe("AssignmentDetail demo data isolation", () => {
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
     expect(screen.getByText("Demo Mode — synthetic sample data")).toBeInTheDocument();
     expect(screen.getByText("AI in Higher Education Essay Workflow")).toBeInTheDocument();
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Workflow Focus")).toBeInTheDocument();
     expect(screen.getByText("Active review position")).toBeInTheDocument();
     expect(
       screen.getAllByText("Open moderation-linked submissions and clear blocked review cases").length,
@@ -100,7 +100,7 @@ describe("AssignmentDetail demo data isolation", () => {
     );
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getAllByText("Current position").length).toBeGreaterThan(0);
     expect(screen.getByText("Released result position")).toBeInTheDocument();
     expect(screen.getByText("Open the released result and review the feedback summary")).toBeInTheDocument();
     expect(screen.getByText("Released result available")).toBeInTheDocument();

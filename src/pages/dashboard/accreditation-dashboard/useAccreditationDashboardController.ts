@@ -241,7 +241,7 @@ export const useAccreditationDashboardController = () => {
     exportQAAReport: () => exportQAAReport(qaaMetrics, summary),
     pendingWorkflowTarget,
     openPendingSubmissions: () => navigate(pendingWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review"),
-    openAtRiskCohort: () => navigate("/dashboard/performance?risk=high-plus"),
-    openLearningOutcomes: () => navigate("/dashboard/learning-outcomes"),
+    openAtRiskCohort: () => navigate("/dashboard?view=submissions"),
+    openLearningOutcomes: () => navigate("/dashboard?view=assignments"),
   };
 };

@@ -42,7 +42,7 @@ describe("Settings", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Account Setup")).toBeInTheDocument();
     expect(screen.getByText("Teaching workflow position")).toBeInTheDocument();
     expect(
       screen.getByText("Role and department settings now control lecturer-only workflow access"),

@@ -23,26 +23,32 @@ const Settings = () => {
       </div>
 
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
-        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+        <CardHeader>
+          <CardTitle className="text-base">Account Setup</CardTitle>
+          <CardDescription>
+            Check that your profile details are complete and that your role is set correctly for this workspace.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 p-6 pt-0 md:grid-cols-3">
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
             <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Based on your role and the account details currently available on your profile.
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What to check</p>
             <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               This is the setup issue most likely to affect what parts of the platform you can use cleanly.
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
             <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use this to decide whether to keep working normally or escalate an account setup issue.
+              Use this to decide whether everything is ready to use or whether an account setup issue needs attention.
             </p>
           </div>
         </CardContent>

@@ -148,11 +148,11 @@ export const AssignmentReadinessCard = ({
 }) => (
   <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
     <CardHeader>
-      <CardTitle className="text-base">Reporting Readiness</CardTitle>
+      <CardTitle className="text-base">{isLecturer ? "Workflow Focus" : "Current position"}</CardTitle>
     </CardHeader>
     <CardContent className="grid gap-4 md:grid-cols-3">
       <div className="rounded-lg border bg-background/70 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
         <p className="mt-2 text-sm font-semibold">{workflowReadiness.postureLabel}</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {isLecturer
@@ -161,7 +161,9 @@ export const AssignmentReadinessCard = ({
         </p>
       </div>
       <div className="rounded-lg border bg-background/70 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {isLecturer ? "What needs attention" : "What to review next"}
+        </p>
         <p className="mt-2 text-sm font-semibold">{workflowReadiness.likelyChallenge}</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {isLecturer
@@ -170,7 +172,7 @@ export const AssignmentReadinessCard = ({
         </p>
       </div>
       <div className="rounded-lg border bg-background/70 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
         <p className="mt-2 text-sm font-semibold">{workflowReadiness.bestNextAction}</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {isLecturer

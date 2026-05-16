@@ -65,7 +65,7 @@ describe("PerformanceTrends demo mode", () => {
     );
 
     expect(await screen.findByText("Average Grades Over Time")).toBeInTheDocument();
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Teaching Focus")).toBeInTheDocument();
     expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
     expect(screen.getByText("Open early support signals and act on high-risk students")).toBeInTheDocument();
     expect(await screen.findByText("Filtered intervention view")).toBeInTheDocument();

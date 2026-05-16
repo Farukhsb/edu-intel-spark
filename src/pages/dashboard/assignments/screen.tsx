@@ -47,6 +47,7 @@ export const AssignmentsScreen = ({
   overviewStats,
   catalogReadiness,
   isPendingReviewView,
+  hasActiveFilters,
   searchQuery,
   statusFilter,
   formState,
@@ -151,7 +152,9 @@ export const AssignmentsScreen = ({
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardContent className="grid gap-4 p-6 md:grid-cols-3">
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reporting Readiness</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {role === "lecturer" ? "Current teaching focus" : "Current position"}
+            </p>
             <p className="mt-2 text-sm font-semibold">{catalogReadiness.postureLabel}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {role === "lecturer"
@@ -160,7 +163,9 @@ export const AssignmentsScreen = ({
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {role === "lecturer" ? "What needs attention" : "What to review next"}
+            </p>
             <p className="mt-2 text-sm font-semibold">{catalogReadiness.likelyChallenge}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {role === "lecturer"
@@ -169,7 +174,7 @@ export const AssignmentsScreen = ({
             </p>
           </div>
           <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
             <p className="mt-2 text-sm font-semibold">{catalogReadiness.bestNextAction}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {role === "lecturer"
@@ -264,9 +269,11 @@ export const AssignmentsScreen = ({
                 ? "There are no assignments with pending lecturer work in this filtered view."
                 : "Clear the search or status filter to see more assignments."}
             </p>
-            <Button variant="outline" className="mt-4" onClick={resetFilters}>
-              Reset Filters
-            </Button>
+            {hasActiveFilters ? (
+              <Button variant="outline" className="mt-4" onClick={resetFilters}>
+                Reset Filters
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : (

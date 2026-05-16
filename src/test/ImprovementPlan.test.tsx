@@ -117,8 +117,8 @@ describe("ImprovementPlan explanation validation", () => {
   it("renders suggested focus areas without a misleading refresh action", () => {
     renderWithRouter(<ImprovementPlan />);
 
-    expect(screen.getByText("Current position")).toBeInTheDocument();
-    expect(screen.getByText("Active support position")).toBeInTheDocument();
+    expect(screen.getByText("Current focus")).toBeInTheDocument();
+    expect(screen.getByText("You have active improvement work")).toBeInTheDocument();
     expect(
       screen.getByText("CS205: Dynamic Programming Structure is still the highest-priority improvement area"),
     ).toBeInTheDocument();

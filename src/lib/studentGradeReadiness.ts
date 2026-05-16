@@ -17,7 +17,7 @@ export const getStudentGradeReadiness = ({
 }): StudentGradeReadiness => {
   if (releasedCount > 0) {
     return {
-      postureLabel: "Released result position",
+      postureLabel: "You have a released result ready",
       likelyChallenge: latestReleasedAssignmentTitle
         ? `${latestReleasedAssignmentTitle} has feedback ready to review`
         : "A released result is ready to review",
@@ -27,7 +27,7 @@ export const getStudentGradeReadiness = ({
 
   if (pendingCount > 0) {
     return {
-      postureLabel: "Pending review position",
+      postureLabel: "Your result is still being prepared",
       likelyChallenge: latestPendingStatus
         ? `${latestPendingStatus.replace(/_/g, " ")} is still blocking release`
         : "Your submission is still in review",
@@ -36,7 +36,7 @@ export const getStudentGradeReadiness = ({
   }
 
   return {
-    postureLabel: "No results position",
+    postureLabel: "No released results yet",
     likelyChallenge: "No submitted work has produced a released result yet",
     bestNextAction: "Head to assignments and submit work to start the grading workflow",
   };

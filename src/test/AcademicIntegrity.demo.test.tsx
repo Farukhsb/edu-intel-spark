@@ -36,7 +36,7 @@ describe("AcademicIntegrity demo mode", () => {
     );
 
     expect(await screen.findByText("Academic Integrity Review Queue")).toBeInTheDocument();
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Integrity Focus")).toBeInTheDocument();
     expect(screen.getByText("Escalated review position")).toBeInTheDocument();
     expect(screen.getByText("Research Ethics Review Memo")).toBeInTheDocument();
     expect(

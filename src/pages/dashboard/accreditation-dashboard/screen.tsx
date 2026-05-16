@@ -164,21 +164,21 @@ export const AccreditationDashboardScreen = ({
           </span>
         </button>
         <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openAtRiskCohort}>
-          <p className="text-sm font-medium">Tackle student outcome risk</p>
+          <p className="text-sm font-medium">Review student outcome risk</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Open the filtered at-risk cohort and intervene where pass rates and outcome metrics are weakest.
+            Open the admin submission oversight view and inspect where pass rates and outcome signals are weakest.
           </p>
           <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-            Open at-risk cohort <ArrowRight className="h-3.5 w-3.5" />
+            Open submission oversight <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </button>
         <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openLearningOutcomes}>
-          <p className="text-sm font-medium">Review weak rubric outcomes</p>
+          <p className="text-sm font-medium">Review assignment evidence</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Use learning outcomes to identify which criteria need clearer teaching, feedback, or rubric alignment.
+            Open assignment oversight to inspect rubric coverage and the assessment evidence likely to need explanation in a quality review.
           </p>
           <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-            Open learning outcomes <ArrowRight className="h-3.5 w-3.5" />
+            Open assignment oversight <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </button>
       </CardContent>
