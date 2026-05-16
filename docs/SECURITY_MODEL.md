@@ -74,6 +74,8 @@ RLS policies are expected to control which rows a user can read or change. For e
 
 This means the database is not treated as an open store where the frontend decides what to show. The database has to help enforce the rules.
 
+For a current workflow-to-policy reference, use [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md). It maps the main user actions to the tables, RPCs, Edge Functions, and latest RLS policy source files they rely on.
+
 ## Student Grade Visibility
 
 A key rule in GradeAI is that students should not see provisional AI output.

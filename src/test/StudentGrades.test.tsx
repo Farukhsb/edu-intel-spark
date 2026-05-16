@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   authState: {
     isDemo: false,
     user: { id: "student-1" },
+    profile: { full_name: "Ada Student" },
   },
   logger: {
     warn: vi.fn(),
@@ -59,7 +60,13 @@ type ProjectionRow = {
   ai_score: number | null;
   final_feedback: string | null;
   ai_feedback: string | null;
-  ai_breakdown: null;
+  ai_breakdown: Array<{
+    criterion: string;
+    score: number;
+    max_score: number;
+    feedback?: string;
+    comment?: string;
+  }> | null;
 };
 
 const defaultProjection: ProjectionRow[] = [
@@ -77,7 +84,26 @@ const defaultProjection: ProjectionRow[] = [
     ai_score: null,
     final_feedback: "Released feedback",
     ai_feedback: null,
-    ai_breakdown: null,
+    ai_breakdown: [
+      {
+        criterion: "Argument",
+        score: 24,
+        max_score: 30,
+        feedback: "Clear argument with a mostly convincing line of reasoning.",
+      },
+      {
+        criterion: "Evidence",
+        score: 28,
+        max_score: 35,
+        comment: "Evidence is relevant, though some examples need tighter analysis.",
+      },
+      {
+        criterion: "Structure",
+        score: 24,
+        max_score: 35,
+        feedback: "The structure is understandable, but transitions could be stronger.",
+      },
+    ],
   },
 ];
 
@@ -142,6 +168,7 @@ describe("StudentGrades", () => {
     vi.clearAllMocks();
     mocks.authState.isDemo = false;
     mocks.authState.user = { id: "student-1" };
+    mocks.authState.profile = { full_name: "Ada Student" };
   });
 
   afterEach(() => {
@@ -154,10 +181,25 @@ describe("StudentGrades", () => {
     render(<StudentGrades />);
 
     await waitFor(() => {
-      expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
+    expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("Your results, Ada")).toBeInTheDocument();
+    expect(screen.getByText("Current position")).toBeInTheDocument();
+    expect(screen.getByText("You have a released result ready")).toBeInTheDocument();
+    expect(screen.getByText("Algorithms Essay has feedback ready to review")).toBeInTheDocument();
+    expect(screen.getByText("Open the released result and review the criterion feedback")).toBeInTheDocument();
     expect(screen.getByText("76/100")).toBeInTheDocument();
+    expect(screen.getByText("Released")).toBeInTheDocument();
+    expect(screen.getByText("You scored 76 out of 100.")).toBeInTheDocument();
+    expect(screen.getByText("That is 36 marks above the pass mark of 40.")).toBeInTheDocument();
+    expect(screen.getByText("Good work on this one.")).toBeInTheDocument();
+    expect(screen.getByText("Rubric Breakdown")).toBeInTheDocument();
+    expect(screen.getByText("Clear argument with a mostly convincing line of reasoning.")).toBeInTheDocument();
+    expect(screen.getByText("Evidence is relevant, though some examples need tighter analysis.")).toBeInTheDocument();
+    expect(screen.getByText("Strongest Areas")).toBeInTheDocument();
+    expect(screen.getByText("Areas To Work On")).toBeInTheDocument();
+    expect(screen.getByText("Lecturer Feedback")).toBeInTheDocument();
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
   });
 
@@ -228,9 +270,35 @@ describe("StudentGrades", () => {
     expect(mocks.supabase.from).toHaveBeenCalledWith("assignments");
   });
 
+  it("shows a forward-looking message when a released grade is below the pass mark", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          assignment_title: "Statistics Report",
+          final_score: 34,
+          ai_breakdown: [
+            { criterion: "Interpretation", score: 12, max_score: 40, feedback: "Interpretation needs to be clearer." },
+          ],
+        },
+      ],
+    });
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Statistics Report")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("You scored 34 out of 100.")).toBeInTheDocument();
+    expect(screen.getByText("That is 6 marks below the pass mark of 40.")).toBeInTheDocument();
+    expect(screen.getByText("Here is what to focus on next.")).toBeInTheDocument();
+  });
+
   it("uses shared synthetic assignment-set data in demo mode", async () => {
     mocks.authState.isDemo = true;
     mocks.authState.user = null;
+    mocks.authState.profile = { full_name: "Demo Student" };
 
     render(<StudentGrades />);
 
@@ -246,5 +314,44 @@ describe("StudentGrades", () => {
     expect(screen.getByText("Network Security Incident Reflection")).toBeInTheDocument();
     expect(screen.getByText("submitted")).toBeInTheDocument();
     expect(mocks.supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("renders a safe pending-state card when feedback is not yet released", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          submission_id: "submission-pending",
+          assignment_id: "assignment-2",
+          assignment_title: "Pending Review Essay",
+          submission_status: "moderation_in_progress",
+          final_score: null,
+          ai_score: null,
+          final_feedback: null,
+          ai_feedback: null,
+          ai_breakdown: null,
+        },
+      ],
+    });
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Pending Review Essay")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Current position")).toBeInTheDocument();
+    expect(screen.getByText("Your result is still being prepared")).toBeInTheDocument();
+    expect(screen.getByText("moderation in progress is still blocking release")).toBeInTheDocument();
+    expect(screen.getByText("Wait for marking and moderation to complete before checking again")).toBeInTheDocument();
+    expect(screen.getByText("moderation in progress")).toBeInTheDocument();
+    expect(screen.getByText("Your results are on the way")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Your grades and feedback will appear here once your lecturer has finished reviewing and releasing them.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Lecturer Feedback")).not.toBeInTheDocument();
+    expect(screen.queryByText("Strongest Areas")).not.toBeInTheDocument();
   });
 });

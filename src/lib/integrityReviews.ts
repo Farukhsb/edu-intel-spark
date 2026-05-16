@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type IntegrityDecision = "pending" | "clear" | "investigate" | "misconduct-concern";
 
 export interface IntegrityHistoryEntry {
@@ -46,6 +48,62 @@ export interface StoredReviewPayload {
   integritySnapshot: IntegritySnapshot | null;
 }
 
+export interface IntegrityReviewSummary {
+  payload: StoredReviewPayload;
+  riskScore: number;
+  flagged: boolean;
+}
+
+const IntegrityDecisionSchema = z.enum(["pending", "clear", "investigate", "misconduct-concern"]);
+
+const IntegrityHistoryEntrySchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  decision: IntegrityDecisionSchema,
+  note: z.string(),
+});
+
+const IntegrityEvidenceItemSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+  score: z.number(),
+});
+
+const IntegritySnapshotSchema: z.ZodType<IntegritySnapshot> = z.object({
+  totalScore: z.number(),
+  aiWritingScore: z.number(),
+  similarityScore: z.number(),
+  analysisLimited: z.boolean().optional(),
+  limitations: z.array(z.string()).optional(),
+  overlapBreakdown: z
+    .object({
+      totalOverlap: z.number(),
+      citedOverlap: z.number(),
+      uncitedOverlap: z.number(),
+      internalPeerOverlap: z.number(),
+      externalSourceOverlap: z.number(),
+    })
+    .optional(),
+  baselineDeviationScore: z.number().optional(),
+  riskLevel: z.enum(["high", "medium", "low"]),
+  evidence: z.object({
+    aiWriting: z.array(IntegrityEvidenceItemSchema),
+    similarity: z.array(IntegrityEvidenceItemSchema),
+    uncitedMatches: z.array(IntegrityEvidenceItemSchema).optional(),
+    citedMatches: z.array(IntegrityEvidenceItemSchema).optional(),
+    peerMatches: z.array(IntegrityEvidenceItemSchema).optional(),
+    externalMatches: z.array(IntegrityEvidenceItemSchema).optional(),
+    baselineDeviation: z.array(IntegrityEvidenceItemSchema).optional(),
+  }),
+  flags: z.array(z.string()),
+});
+
+const StoredReviewPayloadSchema = z.object({
+  latestNote: z.string().optional(),
+  history: z.array(IntegrityHistoryEntrySchema).catch([]),
+  integritySnapshot: z.unknown().optional(),
+});
+
 export const parseStoredReviewPayload = (
   review: Pick<{ lecturer_note: string | null; updated_at: string; decision: string }, "lecturer_note" | "updated_at" | "decision">
 ): StoredReviewPayload => {
@@ -54,22 +112,14 @@ export const parseStoredReviewPayload = (
   }
 
   try {
-    const parsed = JSON.parse(review.lecturer_note) as Partial<StoredReviewPayload>;
-    if (Array.isArray(parsed.history)) {
+    const parsed = StoredReviewPayloadSchema.safeParse(JSON.parse(review.lecturer_note));
+    if (parsed.success) {
+      const integritySnapshot = IntegritySnapshotSchema.nullable().safeParse(parsed.data.integritySnapshot);
+
       return {
-        latestNote: typeof parsed.latestNote === "string" ? parsed.latestNote : parsed.history[0]?.note ?? "",
-        history: parsed.history.filter(
-          (entry): entry is IntegrityHistoryEntry =>
-            !!entry &&
-            typeof entry.id === "string" &&
-            typeof entry.createdAt === "string" &&
-            typeof entry.decision === "string" &&
-            typeof entry.note === "string"
-        ),
-        integritySnapshot:
-          parsed.integritySnapshot && typeof parsed.integritySnapshot === "object"
-            ? (parsed.integritySnapshot as IntegritySnapshot)
-            : null,
+        latestNote: parsed.data.latestNote ?? parsed.data.history[0]?.note ?? "",
+        history: parsed.data.history,
+        integritySnapshot: integritySnapshot.success ? integritySnapshot.data : null,
       };
     }
   } catch {
@@ -79,7 +129,9 @@ export const parseStoredReviewPayload = (
         {
           id: `legacy-${review.updated_at}`,
           createdAt: review.updated_at,
-          decision: review.decision as IntegrityDecision,
+          decision: IntegrityDecisionSchema.safeParse(review.decision).success
+            ? IntegrityDecisionSchema.parse(review.decision)
+            : "pending",
           note: review.lecturer_note,
         },
       ],
@@ -88,6 +140,22 @@ export const parseStoredReviewPayload = (
   }
 
   return { latestNote: "", history: [], integritySnapshot: null };
+};
+
+export const getIntegrityReviewSummary = (
+  review: Pick<{ lecturer_note: string | null; updated_at: string; decision: string }, "lecturer_note" | "updated_at" | "decision">,
+  threshold = 55,
+): IntegrityReviewSummary => {
+  const payload = parseStoredReviewPayload(review);
+  const riskScore = payload.integritySnapshot?.totalScore || 0;
+  const flagged =
+    riskScore >= threshold || review.decision === "investigate" || review.decision === "misconduct-concern";
+
+  return {
+    payload,
+    riskScore,
+    flagged,
+  };
 };
 
 export const serializeReviewPayload = (

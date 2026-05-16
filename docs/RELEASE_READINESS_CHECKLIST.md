@@ -78,13 +78,18 @@ Do not skip this when:
 Before presenting:
 - lecturer dashboard loads without runtime errors
 - grouped sidebar renders correctly
-- major dashboard pages open:
+- lecturer workflow pages open:
   - Overview
   - Assignments
   - Academic Integrity
   - Moderation
   - Cohort Analytics
+  - Performance Trends
+  - Learning Outcomes
+- admin report pages open:
+  - Institutional Insights
   - Accreditation
+  - External Examiner
 - no obviously broken empty states, clipped layouts, or placeholder text remain
 
 ## 8. Communication Readiness
@@ -104,7 +109,7 @@ If the release/demo includes messaging or interventions:
 
 **No-Go** if:
 - a student can see unreleased grades
-- a lecturer can access another lecturer’s protected data
+- a lecturer can access another lecturer's protected data
 - moderation no longer blocks approval correctly
 - integrity or recommendation persistence is broken
 - critical migrations are unapplied or unverified

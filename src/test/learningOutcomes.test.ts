@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildLearningOutcomesSnapshot } from "@/lib/learningOutcomes";
+import {
+  buildLearningOutcomesSnapshot,
+  getLearningOutcomesReportingReadiness,
+} from "@/lib/learningOutcomes";
 
 describe("learningOutcomes", () => {
   it("builds criterion outcomes and chronologically ordered trajectories", () => {
@@ -127,5 +130,32 @@ describe("learningOutcomes", () => {
       },
     ]);
     expect(snapshot.trajectories).toEqual([]);
+  });
+
+  it("derives a concise reporting-readiness summary from outcomes and trajectories", () => {
+    expect(
+      getLearningOutcomesReportingReadiness({
+        outcomes: [
+          {
+            criterion: "Analysis",
+            avgScore: 12,
+            maxScore: 20,
+            pct: 60,
+            status: "approaching",
+          },
+        ],
+        trajectories: [
+          {
+            name: "Sam Student",
+            scores: [62, 45],
+            trend: "declining",
+          },
+        ],
+      }),
+    ).toEqual({
+      postureLabel: "Watch list position",
+      likelyChallenge: "Analysis",
+      bestNextAction: "Review declining student trajectories",
+    });
   });
 });

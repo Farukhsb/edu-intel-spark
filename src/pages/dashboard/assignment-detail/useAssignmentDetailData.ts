@@ -29,7 +29,7 @@ import type {
 
 const toAssignmentDetailBreakdown = (value: unknown): AssignmentDetailBreakdown[] => {
   const parsed = safeParseGradeBreakdown(value);
-  return parsed.success ? (parsed.data as AssignmentDetailBreakdown[]) : [];
+  return parsed.success ? parsed.data.map((item) => ({ ...item })) : [];
 };
 
 interface UseAssignmentDetailDataArgs {
@@ -146,31 +146,33 @@ export const useAssignmentDetailData = ({
           : DEMO_ASSIGNMENT_SUBMISSIONS[id] ?? [];
       const gradeSource =
         role === "student" ? DEMO_STUDENT_ASSIGNMENT_GRADES : DEMO_ASSIGNMENT_GRADES;
-      const demoGrades = Object.fromEntries(
-        demoSubmissions
-          .map((submission) => {
-            const grade = gradeSource[submission.id];
-            if (!grade) return null;
+      const demoGradeEntries = demoSubmissions
+        .map((submission): [string, Grade] | null => {
+          const grade = gradeSource[submission.id];
+          if (!grade) return null;
 
-            return [
-              submission.id,
-              {
-                id: grade.id,
-                submission_id: grade.submission_id,
-                ai_score: grade.ai_score,
-                ai_feedback: grade.ai_feedback,
-                ai_breakdown: toAssignmentDetailBreakdown(grade.ai_breakdown),
-                assignment_type: grade.assignment_type,
-                grading_confidence: grade.grading_confidence,
-                grading_metadata: grade.grading_metadata,
-                lecturer_score: grade.lecturer_score,
-                lecturer_feedback: grade.lecturer_feedback,
-                final_score: grade.final_score,
-                final_feedback: grade.final_feedback,
-              } satisfies Grade,
-            ] as const;
-          })
-          .filter((entry): entry is readonly [string, Grade] => entry !== null),
+          return [
+            submission.id,
+            {
+              id: grade.id,
+              submission_id: grade.submission_id,
+              ai_score: grade.ai_score,
+              ai_feedback: grade.ai_feedback,
+              ai_breakdown: toAssignmentDetailBreakdown(grade.ai_breakdown),
+              assignment_type: grade.assignment_type,
+              grading_confidence: grade.grading_confidence,
+              grading_metadata: grade.grading_metadata,
+              lecturer_score: grade.lecturer_score,
+              lecturer_feedback: grade.lecturer_feedback,
+              final_score: grade.final_score,
+              final_feedback: grade.final_feedback,
+            },
+          ];
+        })
+        .filter((entry): entry is [string, Grade] => entry !== null);
+
+      const demoGrades = Object.fromEntries(
+        demoGradeEntries,
       );
 
       setSubmissions(demoSubmissions);

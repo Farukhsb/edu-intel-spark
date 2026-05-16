@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -22,11 +22,13 @@ import {
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 import {
+  getLearningOutcomesReportingReadiness,
   loadLearningOutcomesData,
   type AssignmentOption,
   type OutcomeRow,
   type StudentTrajectory,
 } from "@/lib/learningOutcomes";
+import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation";
 
 const LearningOutcomes = () => {
   const { isDemo, user } = useAuth();
@@ -62,12 +64,23 @@ const LearningOutcomes = () => {
 
   const statusColor = (s: string) => s === "above" ? "bg-success" : s === "approaching" ? "bg-warning" : "bg-destructive";
   const statusBadge = (s: string) => s === "above" ? "default" : s === "approaching" ? "secondary" : "destructive";
+  type BadgeVariant = NonNullable<BadgeProps["variant"]>;
   const statusLabel = (s: string) => s === "above" ? "Above" : s === "approaching" ? "Approaching" : "Below";
   const belowTargetOutcomes = outcomes.filter((outcome) => outcome.status !== "above");
   const decliningStudents = trajectories.filter((student) => student.trend === "declining");
   const selectedAssignmentLabel = selectedAssignment === "all"
     ? "all assignments"
     : assignments.find((assignment) => assignment.id === selectedAssignment)?.title || "selected assignment";
+  const reportingReadiness = getLearningOutcomesReportingReadiness({
+    outcomes,
+    trajectories,
+  });
+  const assignmentWorkflowTarget = selectedAssignment !== "all"
+    ? getAssignmentWorkflowTarget({
+      assignmentId: selectedAssignment,
+      status: "ai_graded",
+    })
+    : null;
 
   const exportOutcomeSnapshot = () => {
     const lines = [
@@ -125,9 +138,9 @@ const LearningOutcomes = () => {
             <SelectTrigger className="w-[280px]"><SelectValue placeholder="Select assignment" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Assignments</SelectItem>
-              {assignments.map(a => (
+              {assignments.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.moduleCode ? `${a.moduleCode} — ` : ""}{a.title}
+                  {a.moduleCode ? `${a.moduleCode} - ` : ""}{a.title}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -138,6 +151,38 @@ const LearningOutcomes = () => {
           </Button>
         </div>
       )}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+        <CardTitle className="text-base">Teaching Focus</CardTitle>
+        <CardDescription>
+          A compact reading of what this outcomes view is most likely to need from you next.
+        </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current weak-criterion and trajectory signals in {selectedAssignmentLabel}.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What needs attention</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the criterion most likely to raise questions about teaching, feedback, or rubric alignment.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to act on student trajectories or criterion-level feedback first.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -201,27 +246,29 @@ const LearningOutcomes = () => {
           <button
             type="button"
             className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-            onClick={() => navigate("/dashboard/assignments?view=needs-review")}
+            onClick={() => navigate(assignmentWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review")}
           >
             <p className="text-sm font-medium">Tighten pending feedback</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Go straight to the submissions queue and push rubric-specific feedback into live marking.
+              {assignmentWorkflowTarget
+                ? "Open this assignment's grading workflow and turn weak rubric signals into live marking action."
+                : "Go straight to the submissions queue and push rubric-specific feedback into live marking."}
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              Open pending queue <ArrowRight className="h-3.5 w-3.5" />
+              {assignmentWorkflowTarget ? assignmentWorkflowTarget.label : "Open pending queue"} <ArrowRight className="h-3.5 w-3.5" />
             </span>
           </button>
           <button
             type="button"
             className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-            onClick={() => navigate("/dashboard/improvements")}
+            onClick={() => navigate("/dashboard/performance?risk=high-plus")}
           >
-            <p className="text-sm font-medium">Check student improvement plans</p>
+            <p className="text-sm font-medium">Review student support risk</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Confirm weak criteria are turning into visible study tasks on the student side.
+              Open the performance workflow and review which students need support against the weak criteria shown here.
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              Open student plan view <ArrowRight className="h-3.5 w-3.5" />
+              Open performance workflow <ArrowRight className="h-3.5 w-3.5" />
             </span>
           </button>
         </CardContent>
@@ -261,7 +308,7 @@ const LearningOutcomes = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={statusBadge(lo.status) as any} className="text-xs">{statusLabel(lo.status)}</Badge>
+                      <Badge variant={statusBadge(lo.status) as BadgeVariant} className="text-xs">{statusLabel(lo.status)}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -323,3 +370,4 @@ const LearningOutcomes = () => {
 };
 
 export default LearningOutcomes;
+

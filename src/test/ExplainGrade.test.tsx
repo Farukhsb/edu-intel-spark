@@ -230,9 +230,12 @@ const setupSupabase = ({
   mocks.supabase.from.mockReset();
 };
 
-const renderExplainGrade = () =>
+const renderExplainGrade = (initialEntry = "/dashboard/explain-grade") =>
   render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter
+      initialEntries={[initialEntry]}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <ExplainGrade />
     </MemoryRouter>
   );
@@ -261,8 +264,17 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
+    expect(screen.getByText("Current position")).toBeInTheDocument();
+    expect(screen.getByText("Your released feedback is ready")).toBeInTheDocument();
+    expect(screen.getByText("Released Result Summary")).toBeInTheDocument();
     expect(screen.getByText("Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("74%")).toBeInTheDocument();
+    expect(screen.getByText("Strongest Areas")).toBeInTheDocument();
+    expect(screen.getByText("Best Improvement Route")).toBeInTheDocument();
+    expect(screen.getByText("Critical Essay \u2014 74% is closest to improving through Structure")).toBeInTheDocument();
+    expect(screen.getByText("Use the Structure guidance to work toward 1st")).toBeInTheDocument();
+    expect(screen.getByText("Next Submission Action Plan")).toBeInTheDocument();
+    expect(screen.getByText("Keep This Strength")).toBeInTheDocument();
   });
 
   it("uses synthetic demo data and answers without Supabase session access in demo mode", async () => {
@@ -368,9 +380,9 @@ describe("ExplainGrade", () => {
         score: 67,
       }),
     ).toEqual({
-      label: "Data Structures Assignment — 67%",
+      label: "Data Structures Assignment \u2014 67%",
       assessment: "Data Structures Assignment",
-      secondaryLabel: "Nkechi Onwumere CV.docx · Released 29 Apr 2026",
+      secondaryLabel: "Nkechi Onwumere CV.docx \u00b7 Released 29 Apr 2026",
     });
 
     expect(
@@ -380,7 +392,7 @@ describe("ExplainGrade", () => {
         score: 58,
       }),
     ).toMatchObject({
-      label: "fallback-report.pdf — 58%",
+      label: "fallback-report.pdf \u2014 58%",
       assessment: "fallback-report.pdf",
       secondaryLabel: null,
     });
@@ -392,7 +404,7 @@ describe("ExplainGrade", () => {
         score: 41,
       }),
     ).toMatchObject({
-      label: "Released grade — 41%",
+      label: "Released grade \u2014 41%",
       assessment: "Released grade",
     });
   });
@@ -459,12 +471,73 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Data Structures Assignment")).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment — 67%");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Data Structures Assignment \u2014 67%");
     expect(screen.getByRole("combobox")).toHaveTextContent("Nkechi Onwumere CV.docx");
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
     expect(screen.queryByText(/abdullahi faruk/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Other Student/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Hidden Student/i)).not.toBeInTheDocument();
+  });
+
+  it("focuses the released result linked from a notification assignment query", async () => {
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_name: "Sam Student",
+          file_name: "essay.pdf",
+          status: "released",
+        },
+        {
+          id: "submission-2",
+          assignment_id: "assignment-2",
+          student_name: "Sam Student",
+          file_name: "report.pdf",
+          status: "released",
+        },
+      ],
+      grades: [
+        {
+          id: "grade-1",
+          submission_id: "submission-1",
+          final_score: 74,
+          ai_breakdown: [{ criterion: "Argument", score: 18, max_score: 25 }],
+        },
+        {
+          id: "grade-2",
+          submission_id: "submission-2",
+          final_score: 81,
+          ai_breakdown: [{ criterion: "Analysis", score: 21, max_score: 25 }],
+        },
+      ],
+      assignments: [
+        { id: "assignment-1", module_code: "ENG101", title: "Critical Essay" },
+        { id: "assignment-2", module_code: "ENG102", title: "Research Report" },
+      ],
+      assignmentMetadata: [
+        {
+          assignment_id: "assignment-1",
+          max_score: 100,
+          module_code: "ENG101",
+          submission_id: "submission-1",
+          title: "Critical Essay",
+        },
+        {
+          assignment_id: "assignment-2",
+          max_score: 100,
+          module_code: "ENG102",
+          submission_id: "submission-2",
+          title: "Research Report",
+        },
+      ],
+    });
+
+    renderExplainGrade("/dashboard/explain-grade?assignment=assignment-2&source=notification");
+
+    expect(await screen.findByText("Opened from released-grade notification")).toBeInTheDocument();
+    expect(screen.getAllByText(/Research Report/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("81%").length).toBeGreaterThan(0);
   });
 
   it("falls back to file name when assignment title metadata is unavailable", async () => {
@@ -505,7 +578,8 @@ describe("ExplainGrade", () => {
 
     renderExplainGrade();
 
-    expect(await screen.findByText("Released grade")).toBeInTheDocument();
+    expect(await screen.findByText("Released Result Summary")).toBeInTheDocument();
+    expect(screen.getAllByText("Released grade").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Sam Student/i)).not.toBeInTheDocument();
   });
 
@@ -517,6 +591,7 @@ describe("ExplainGrade", () => {
     expect(await screen.findByText("How to Improve")).toBeInTheDocument();
     expect(screen.getByText("Specific guidance to raise your grade band")).toBeInTheDocument();
     expect(screen.getByText(/Seek specific feedback on this area from your lecturer/i)).toBeInTheDocument();
+    expect(screen.getByText("Turn this released result into a short, specific plan for the next piece of work.")).toBeInTheDocument();
     expect(screen.queryByText(/provisional/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/approved/i)).not.toBeInTheDocument();
   });

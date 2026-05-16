@@ -54,6 +54,8 @@ describe("Assignments demo data isolation", () => {
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
     expect(screen.getByText("Demo Mode — synthetic sample data")).toBeInTheDocument();
+    expect(screen.getByText("Draft preparation position")).toBeInTheDocument();
+    expect(screen.getByText("Publish the next draft assignment when the brief and rubric are ready")).toBeInTheDocument();
     expect(screen.getByText("Create assignment")).toBeInTheDocument();
     expect(screen.getByText("Review marking and integrity")).toBeInTheDocument();
     expect(screen.getByText("Reusable assignment sets")).toBeInTheDocument();
@@ -119,7 +121,11 @@ describe("Assignments demo data isolation", () => {
     );
 
     expect(await screen.findByText("My Assignments")).toBeInTheDocument();
-    expect(screen.getAllByText("Open Assignment").length).toBeGreaterThan(0);
+    expect(screen.getByText("Released result position")).toBeInTheDocument();
+    expect(screen.getByText("Open the released result and review the feedback summary")).toBeInTheDocument();
+    expect(screen.getByText("Released result available")).toBeInTheDocument();
+    expect(screen.getByText("Submission received")).toBeInTheDocument();
+    expect(screen.getAllByText("Open Released Result").length).toBeGreaterThan(0);
     expect(screen.getByText("Published")).toBeInTheDocument();
     expect(screen.queryByText("Create assignment")).not.toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();

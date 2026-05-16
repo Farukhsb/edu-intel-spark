@@ -92,6 +92,21 @@ describe("student assignment due-date visibility", () => {
         };
       }
 
+      if (table === "submissions") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              in: vi.fn(() => ({
+                order: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              })),
+            })),
+          })),
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     });
 
@@ -134,6 +149,9 @@ describe("student assignment due-date visibility", () => {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
               order: vi.fn().mockResolvedValue({ data: [] }),
+              in: vi.fn(() => ({
+                order: vi.fn().mockResolvedValue({ data: [], error: null }),
+              })),
             })),
           })),
         };

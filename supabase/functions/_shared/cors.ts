@@ -76,9 +76,7 @@ function isAllowedOrigin(origin: string): boolean {
     return false;
   }
 
-  return (
-    url.hostname.endsWith(`.${PAGES_DEV_ROOT}`)
-  );
+  return url.hostname.endsWith(`.${PAGES_DEV_ROOT}`);
 }
 
 export function createCorsForbiddenResponse() {

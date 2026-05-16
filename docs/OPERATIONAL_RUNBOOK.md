@@ -44,8 +44,15 @@ Recommended local checks:
 ```bash
 npm install
 npm run test
+npm run test:perf
 npm run build
 ```
+
+The `test:perf` suite is a lightweight regression harness for large in-memory workflow paths. It is not a substitute for real load testing, but it helps catch accidental complexity spikes in:
+
+- performance analytics projection
+- moderation queue sorting
+- admin operational snapshot generation
 
 If the build fails:
 
@@ -179,7 +186,7 @@ Migration history note:
 The previous migration-history reconciliation work is documented separately in:
 
 ```text
-docs/SUPABASE_MIGRATION_HISTORY_RECONCILIATION_PLAN.md
+docs/archive/SUPABASE_MIGRATION_HISTORY_RECONCILIATION_PLAN.md
 ```
 
 A new database has been created, and the old migration-history blocker should be treated as resolved for the current operational baseline. Keep the reconciliation document for audit/history, but use the new database as the clean baseline going forward.
@@ -316,6 +323,15 @@ When checking Sentry or logs:
 2. Check error category before reading full context.
 3. Redact sensitive details before copying anything into GitHub issues or documentation.
 4. If sharing evidence publicly, use dummy data or screenshots with private fields hidden.
+
+The admin dashboard now includes a failure-oriented operational section that surfaces observed workflow pressure rather than claiming definitive service uptime. Use it to spot:
+
+- grading failures visible in the workflow audit window
+- approved but unreleased submissions
+- overdue moderation cases
+- escalated or high-risk integrity cases
+
+Treat those cards as triage signals. They are derived from observable application state, not from a dedicated monitoring backend.
 
 ---
 

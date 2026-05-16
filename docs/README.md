@@ -2,63 +2,79 @@
 
 This folder contains the main documentation for GradeAI, an AI-assisted academic workflow platform for assessment, feedback, integrity review, moderation, analytics, and early student support.
 
-The documentation is organised so technical reviewers, assessors, and contributors can quickly understand what the system does, how it works, and why the engineering decisions matter.
+The docs are organised for three kinds of readers:
+
+- someone reviewing the technical architecture
+- someone checking whether the product has been built with academic risk in mind
+- someone trying to understand how the lecturer workflow works in practice
 
 ## Start Here
 
-### 1. Project Overview
+### 1. Assessor Evidence Summary
 
-**File:** [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)
+**File:** [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 
-Use this first if you want the clearest summary of the product, problem, workflow, contribution, limitations, future work, and impact.
-
-It explains GradeAI as a workflow-first academic technology system rather than a simple AI marking demo.
+Start here if you want the clearest evidence-facing summary of the product, the problem, the technical work, and the current stage of the project.
 
 ### 2. Technical Architecture
 
 **File:** [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
-Use this to understand the technical structure of the application, including the frontend, backend, authentication, Supabase integration, database design, Edge Functions, and AI workflow boundaries.
-
-This is one of the most important documents for assessing technical ability.
+Use this to understand the frontend, backend, authentication, Supabase integration, database design, Edge Functions, and AI workflow boundaries.
 
 ### 3. Trust Model
 
 **File:** [`TRUST_MODEL.md`](TRUST_MODEL.md)
 
-Use this to understand how GradeAI keeps AI output under academic control.
-
-The system is designed around human-in-the-loop decision making, lecturer review, release controls, moderation, auditability, and clear boundaries between AI support and final academic judgement.
+Use this to understand how GradeAI keeps AI output inside a human-reviewed academic workflow rather than treating it as the final decision.
 
 ### 4. Security Model
 
 **File:** [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
 
-Use this to understand how GradeAI approaches authentication, role boundaries, data access, row-level security, and protection of sensitive academic information.
+Use this to understand authentication, role boundaries, data access, row-level security, and protection of sensitive academic information.
 
-This matters because the platform handles student submissions, grades, feedback, academic integrity signals, and intervention records.
+### 5. Academic Compliance and AI Governance
 
-### 5. Production Hardening Summary
+### 5. Authorization Reference
 
-**File:** [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
+**File:** [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
 
-Use this to review the recent engineering hardening work around AI/API response validation, student visibility boundaries, rate limiting, structured logging, environment validation, type safety, and test coverage.
+Use this when you need the fastest route from a critical workflow to the exact tables, RPCs, Edge Functions, and current RLS policies it depends on.
 
-This document is especially useful for showing that the project goes beyond a prototype and includes responsible engineering decisions.
+This is the most audit-friendly map of the current authorization surface.
+
+### 6. Production Hardening Summary
+
+Use this to understand the main adoption concerns around student data, lecturer control, academic integrity, AI use, and institutional review.
+
+### 6. Edge Function Authentication Audit
+
+**File:** [`EDGE_FUNCTION_AUTH_AUDIT.md`](EDGE_FUNCTION_AUTH_AUDIT.md)
+
+Use this to review the check carried out on Edge Functions that disable gateway JWT verification and rely on manual in-function auth checks.
 
 ## User and Workflow Documentation
+
+### User Guide
+
+**File:** [`USER_GUIDE.md`](USER_GUIDE.md)
+
+Use this for a practical first-time walkthrough of the platform across lecturer, student, moderator, and admin roles.
+
+It includes a worked assignment-creation example with a sample rubric so new users can understand how GradeAI is meant to be used in practice.
 
 ### Lecturer Guide
 
 **File:** [`Lecturer-Guide.md`](Lecturer-Guide.md)
 
-Explains the lecturer-facing workflow and how staff move through assignment setup, marking, integrity review, approval, release, analytics, and student support.
+Explains the lecturer-facing workflow, including invite-based access, assignment setup, marking, integrity review, approval, release, analytics, and student support.
 
 ### Release Readiness Checklist
 
 **File:** [`RELEASE_READINESS_CHECKLIST.md`](RELEASE_READINESS_CHECKLIST.md)
 
-Provides a practical pre-release checklist for checking database state, Edge Functions, role boundaries, testing, deployment readiness, and high-trust academic workflows.
+Provides a practical pre-release checklist for database state, Edge Functions, role boundaries, testing, deployment readiness, and high-trust academic workflows.
 
 ## Testing and Quality Evidence
 
@@ -82,6 +98,14 @@ Documents role-boundary checks used to confirm that users only see what they are
 
 This is important evidence for security and trust review.
 
+### Live Regression Checklist
+
+**File:** [`LIVE_REGRESSION_CHECKLIST.md`](LIVE_REGRESSION_CHECKLIST.md)
+
+Use this for a short cross-role smoke test after workflow, grading, notification, or architecture changes.
+
+It is intentionally shorter than the full testing checklist and more practical for quick demo or pilot validation.
+
 ## Role, Data, and Migration Notes
 
 ### Role Model Alignment
@@ -104,20 +128,6 @@ Records the database migration baseline and helps reviewers understand the datab
 
 A concise evidence-facing summary for reviewers. It explains what GradeAI is, the problem it addresses, what was built, the technical architecture, product evidence, and personal contribution.
 
-### GTV Evidence Summary: Production Hardening
-
-**File:** [`GTV_EVIDENCE_SUMMARY_GRADEAI_HARDENING.md`](GTV_EVIDENCE_SUMMARY_GRADEAI_HARDENING.md)
-
-A Global Talent evidence-oriented summary focused on the production-hardening work completed on GradeAI.
-
-This document is useful for explaining technical ability, responsible AI integration, and engineering judgement in an evidence pack.
-
-### Presentation Script
-
-**File:** [`PRESENTATION_SCRIPT.md`](PRESENTATION_SCRIPT.md)
-
-A supporting script for explaining the project verbally to reviewers, assessors, or technical contacts.
-
 ## Screenshots
 
 **Folder:** [`screenshots/`](screenshots/)
@@ -128,19 +138,20 @@ Contains visual evidence of the working product. Screenshots should be used alon
 
 For a technical reviewer, read the documents in this order:
 
-1. [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)
+1. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 2. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 3. [`TRUST_MODEL.md`](TRUST_MODEL.md)
 4. [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
-5. [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
-6. [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
-7. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
+5. [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
+6. [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
+7. [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
+8. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 
 For a non-technical reviewer or assessor, start with:
 
-1. [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)
+1. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 2. [`Lecturer-Guide.md`](Lecturer-Guide.md)
-3. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
+3. [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
 4. [`screenshots/`](screenshots/)
 
 ## What This Documentation Is Intended To Show
@@ -156,4 +167,4 @@ The documentation is intended to demonstrate:
 - testing and release-readiness discipline
 - responsible product judgement in a sensitive academic context
 
-GradeAI should be understood as a working full-stack academic technology prototype with hardened core workflows, not as a finished institution-wide platform.
+GradeAI should be understood as a working full-stack academic technology project in a controlled pilot stage, not as a finished institution-wide platform.

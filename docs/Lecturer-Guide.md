@@ -2,7 +2,7 @@
 
 ## Purpose
 
-GradeAI is an academic workflow platform designed to help lecturers manage the full marking cycle in one place. It supports:
+GradeAI is an academic workflow platform designed to help lecturers manage the marking cycle in one place. It supports:
 
 - assignment creation and rubric setup
 - student submission handling
@@ -12,6 +12,22 @@ GradeAI is an academic workflow platform designed to help lecturers manage the f
 - early support signals and intervention tracking
 
 The goal is not to replace lecturer judgement. The goal is to reduce repetitive marking effort, surface useful evidence faster, and keep the final decision with the lecturer.
+
+## Getting Access
+
+Lecturer accounts should be created through the invite flow.
+
+The usual process is:
+
+1. An admin or authorised staff member adds the lecturer to GradeAI.
+2. The lecturer receives an invitation email.
+3. The lecturer opens the secure invite link.
+4. The lecturer sets their password and signs in.
+5. GradeAI routes the lecturer to the lecturer dashboard.
+
+Avoid sharing passwords or sending account credentials in a separate file. The invite flow is easier to manage and gives a clearer onboarding trail.
+
+If the invite email does not arrive, check spam/junk first, then ask the admin to resend the invite.
 
 ## What Lecturers Can Do
 
@@ -31,24 +47,37 @@ As a lecturer, you can use the platform to:
 
 The lecturer dashboard is organised around the main assessment workflow.
 
+The sidebar is grouped like this:
+
+- `Teaching`
+  This is the day-to-day teaching workspace.
+- `Assessment`
+  This is where review and quality-control tasks live.
+- `Teaching Insights`
+  This is where you look at cohort patterns, performance movement, and outcome-level signals.
+- `Workspace`
+  This is where personal settings live.
+
+The main lecturer pages are:
+
 - `Overview`
   Use this to get a quick summary of submission activity, grading progress, and students who may need attention.
 - `Assignments`
   Use this to create assignments, open a specific assignment, and manage submission workflows.
-- `Learning Outcomes`
-  Use this to review assessment alignment and outcome visibility.
+- `Academic Integrity`
+  Use this to review persisted integrity cases after running checks from an assignment.
+- `Moderation`
+  Use this to review cases that need a second look before release.
 - `Cohort Analytics`
   Use this to see trends and distributions across groups of students.
 - `Performance Trends`
   Use this to track movement in grades over time and review early support signals.
-- `Academic Integrity`
-  Use this to review persisted integrity cases after running checks from an assignment.
-- `Institutional Insights`
-  Use this for broader reporting and compliance-style views.
-- `Accreditation`
-  Use this for evidence-oriented assessment reporting.
+- `Learning Outcomes`
+  Use this to review assessment alignment and outcome visibility.
 - `Settings`
   Use this for account and system-level preferences.
+
+Institution-level reporting pages such as `Institutional Insights`, `Accreditation`, and `External Examiner` now sit under the admin reporting area, not the lecturer sidebar.
 
 ## Recommended Lecturer Workflow
 

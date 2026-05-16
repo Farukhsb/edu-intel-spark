@@ -139,7 +139,7 @@ describe("workflow notifications", () => {
       recipientEmail: "sam@student.test",
       recipientId: "student-1",
       subject: "Feedback released",
-      body: "Your feedback for Algorithms Essay is now available",
+      body: "Your released result for Algorithms Essay is now available",
       relatedAssignmentId: "assignment-1",
       relatedStudentId: "student-1",
     });

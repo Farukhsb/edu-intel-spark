@@ -33,8 +33,9 @@ export type AssignmentDetailSubmission = Submission & {
 };
 
 export interface AssignmentDetailBreakdown
-  extends AcademicGradeBreakdownItem,
-    GradeBreakdown {
+  extends Omit<AcademicGradeBreakdownItem, "feedback">,
+    Omit<GradeBreakdown, "feedback"> {
+  feedback?: string;
   evidence_snippet?: string | null;
   review_required?: boolean | null;
   error_type?: "arithmetic_slip" | "conceptual_flaw" | "none";

@@ -328,7 +328,7 @@ Important areas for continued hardening include:
 
 - gradually tightening TypeScript configuration further
 - reducing any remaining low-risk `any` usage
-- broader live-environment testing
+- broader live scenario coverage beyond the role, load, and integrity checks already completed
 - deeper permissions and RLS validation after migration changes
 - more end-to-end tests across lecturer, student, moderator, admin, and external examiner flows
 - longer-term load and usage validation once real users are involved

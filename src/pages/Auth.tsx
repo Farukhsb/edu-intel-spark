@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { getAuthReadiness } from "@/lib/authReadiness";
 
 const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
@@ -44,10 +45,11 @@ const getPasswordStrength = (password: string): { score: number; label: string; 
 };
 
 const Auth = () => {
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { signIn, signUp, resetPassword, resendVerification, pendingVerificationEmail } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -63,6 +65,9 @@ const Auth = () => {
   const [signupDepartment, setSignupDepartment] = useState("");
 
   const passwordStrength = getPasswordStrength(signupPassword);
+  const readiness = getAuthReadiness({
+    forgotPassword: showForgotPassword,
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +150,27 @@ const Auth = () => {
     }
   };
 
+  const handleResendVerification = async () => {
+    setResendingVerification(true);
+    try {
+      await resendVerification();
+      toast({
+        title: "Verification email resent",
+        description: pendingVerificationEmail
+          ? `Check ${pendingVerificationEmail} for a new confirmation link.`
+          : "Check your inbox for a new confirmation link.",
+      });
+    } catch (err) {
+      toast({
+        title: "Resend failed",
+        description: getErrorMessage(getErrorFromUnknown(err)),
+        variant: "destructive",
+      });
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
   if (showForgotPassword) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -152,6 +178,16 @@ const Auth = () => {
           <Button variant="ghost" onClick={() => setShowForgotPassword(false)}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to login
           </Button>
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+            <CardContent className="grid gap-4 p-6">
+              <div className="rounded-lg border bg-background/70 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Access Readiness</p>
+                <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{readiness.likelyChallenge}</p>
+                <p className="mt-3 text-sm font-medium">{readiness.bestNextAction}</p>
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Reset Password</CardTitle>
@@ -185,7 +221,18 @@ const Auth = () => {
           <p className="text-muted-foreground">AI-Powered Academic Marking & Intelligence Platform</p>
         </div>
 
-        <Tabs defaultValue="login" className="w-full">
+        <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+          <CardContent className="grid gap-4 p-6">
+            <div className="rounded-lg border bg-background/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Access Readiness</p>
+              <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{readiness.likelyChallenge}</p>
+              <p className="mt-3 text-sm font-medium">{readiness.bestNextAction}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Tabs defaultValue={pendingVerificationEmail ? "signup" : "login"} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Sign In</TabsTrigger>
             <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -230,6 +277,23 @@ const Auth = () => {
                 <CardDescription>Join GradeAI as a lecturer or student</CardDescription>
               </CardHeader>
               <CardContent>
+                {pendingVerificationEmail ? (
+                  <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                    <p className="text-sm font-semibold">Email confirmation pending</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      We are waiting for {pendingVerificationEmail} to confirm the account before sign-in.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={handleResendVerification}
+                      disabled={resendingVerification}
+                    >
+                      {resendingVerification ? "Resending..." : "Resend verification email"}
+                    </Button>
+                  </div>
+                ) : null}
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Full Name *</Label>

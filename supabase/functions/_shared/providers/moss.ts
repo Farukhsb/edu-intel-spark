@@ -40,7 +40,7 @@ export type MossComparableSubmission = {
 
 export type MossRunnerConfig = {
   runnerUrl: string;
-  bearerToken?: string | null;
+  apiKey?: string | null;
   timeoutMs: number;
 };
 
@@ -66,6 +66,18 @@ type MossRunnerFinding = {
   raw_metadata?: unknown;
   analysis_limited?: unknown;
 };
+
+function extractReportUrl(rawResponse: Record<string, unknown>) {
+  if (typeof rawResponse.report_url === "string" && rawResponse.report_url.trim()) {
+    return rawResponse.report_url.trim();
+  }
+
+  if (typeof rawResponse.reportUrl === "string" && rawResponse.reportUrl.trim()) {
+    return rawResponse.reportUrl.trim();
+  }
+
+  return undefined;
+}
 
 function getFileExtension(fileName: string | null | undefined) {
   const normalized = fileName?.trim().toLowerCase() ?? "";
@@ -133,8 +145,8 @@ export async function runMossSimilarityJob(params: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(params.config.bearerToken
-          ? { Authorization: `Bearer ${params.config.bearerToken}` }
+        ...(params.config.apiKey
+          ? { "x-api-key": params.config.apiKey }
           : {}),
       },
       body: JSON.stringify(requestBody),
@@ -146,6 +158,7 @@ export async function runMossSimilarityJob(params: {
     }
 
     const rawResponse = await response.json() as Record<string, unknown>;
+    const reportUrl = extractReportUrl(rawResponse);
     const rawFindings = Array.isArray(rawResponse.findings) ? rawResponse.findings : [];
 
     return rawFindings
@@ -160,7 +173,12 @@ export async function runMossSimilarityJob(params: {
             ? finding.evidence_summary.trim()
             : `MOSS reported code similarity in ${params.language} submissions.`;
 
-        if (!submissionId || !comparedSubmissionId || !Number.isFinite(similarityScore)) {
+        if (
+          !submissionId ||
+          !comparedSubmissionId ||
+          submissionId === comparedSubmissionId ||
+          !Number.isFinite(similarityScore)
+        ) {
           return null;
         }
 
@@ -175,7 +193,7 @@ export async function runMossSimilarityJob(params: {
           matched_phrases: normalizeMatchedPhrases(finding.matched_phrases),
           raw_metadata: {
             language: params.language,
-            report_url: rawResponse.report_url,
+            report_url: reportUrl,
             ...(finding.raw_metadata && typeof finding.raw_metadata === "object"
               ? finding.raw_metadata as Record<string, unknown>
               : {}),

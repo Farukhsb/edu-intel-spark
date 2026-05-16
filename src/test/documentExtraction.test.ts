@@ -172,6 +172,20 @@ describe("document extraction", () => {
     expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
   });
 
+  it("extracts readable text from a Python source file", async () => {
+    const result = await extractDocumentText({
+      fileName: "solution.py",
+      mimeType: "text/x-python",
+      bytes: new TextEncoder().encode(
+        Array.from({ length: 40 }, (_, index) => `print('line ${index}')`).join("\n"),
+      ),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.fileType).toBe("code");
+    expect(result.extractedText).toContain("print('line 0')");
+  });
+
   it("rejects unsupported file types", async () => {
     const result = await extractDocumentText({
       fileName: "archive.zip",

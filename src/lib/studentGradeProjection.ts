@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchStudentGradeProjectionFallbackDataset } from "@/lib/data/academic";
+import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 
 export interface StudentGradeProjectionRow {
   submission_id: string;
@@ -14,12 +16,51 @@ export interface StudentGradeProjectionRow {
   ai_score: number | null;
   final_feedback: string | null;
   ai_feedback: string | null;
-  ai_breakdown: Array<{ criterion: string; score: number; max_score: number }> | null;
+  ai_breakdown: Array<{
+    criterion: string;
+    score: number;
+    max_score: number;
+    feedback?: string;
+    comment?: string;
+  }> | null;
 }
 
-const SUBMISSION_FIELDS = "id, assignment_id, file_name, file_url, status, submitted_at, student_id";
-const GRADE_FIELDS = "submission_id, final_score, ai_score, final_feedback, ai_feedback, ai_breakdown";
-const ASSIGNMENT_FIELDS = "id, title, module_code, max_score";
+const toStudentGradeBreakdown = (
+  value: unknown,
+): StudentGradeProjectionRow["ai_breakdown"] => {
+  const parsed = safeParseGradeBreakdown(value);
+  return parsed.success
+    ? parsed.data.map((item) => ({
+        criterion: item.criterion,
+        score: item.score,
+        max_score: item.max_score,
+        feedback: item.feedback,
+        comment: item.comment,
+      }))
+    : null;
+};
+
+const sanitizeGradeVisibility = <T extends {
+  submission_status: string;
+  final_score: number | null;
+  ai_score: number | null;
+  final_feedback: string | null;
+  ai_feedback: string | null;
+  ai_breakdown: StudentGradeProjectionRow["ai_breakdown"];
+}>(row: T): T => {
+  if (row.submission_status === "released") {
+    return row;
+  }
+
+  return {
+    ...row,
+    final_score: null,
+    ai_score: null,
+    final_feedback: null,
+    ai_feedback: null,
+    ai_breakdown: null,
+  };
+};
 
 const buildProjectionFromFallbackRows = ({
   submissions,
@@ -40,7 +81,7 @@ const buildProjectionFromFallbackRows = ({
     ai_score: number | null;
     final_feedback: string | null;
     ai_feedback: string | null;
-    ai_breakdown: StudentGradeProjectionRow["ai_breakdown"];
+    ai_breakdown: unknown;
   }>;
   assignments: Array<{
     id: string;
@@ -56,7 +97,7 @@ const buildProjectionFromFallbackRows = ({
     const grade = gradeMap.get(submission.id);
     const assignment = assignmentMap.get(submission.assignment_id);
 
-    return {
+    return sanitizeGradeVisibility({
       submission_id: submission.id,
       assignment_id: submission.assignment_id,
       assignment_title: assignment?.title ?? null,
@@ -70,62 +111,31 @@ const buildProjectionFromFallbackRows = ({
       ai_score: grade?.ai_score ?? null,
       final_feedback: grade?.final_feedback ?? null,
       ai_feedback: grade?.ai_feedback ?? null,
-      ai_breakdown: grade?.ai_breakdown ?? null,
-    };
+      ai_breakdown: toStudentGradeBreakdown(grade?.ai_breakdown ?? null),
+    });
   });
 };
 
 const fetchStudentGradeProjectionFallback = async (userId?: string) => {
-  const submissionsQuery = supabase.from("submissions").select(SUBMISSION_FIELDS);
-  const submissionsResponse = userId
-    ? await submissionsQuery.eq("student_id", userId)
-    : await submissionsQuery;
-
-  if (submissionsResponse.error) {
+  const fallback = await fetchStudentGradeProjectionFallbackDataset(userId);
+  if (fallback.error) {
     return {
       data: [] as StudentGradeProjectionRow[],
-      error: submissionsResponse.error,
+      error: fallback.error,
     };
   }
-
-  const submissions = submissionsResponse.data ?? [];
-  if (submissions.length === 0) {
+  if (fallback.submissions.length === 0) {
     return {
       data: [] as StudentGradeProjectionRow[],
       error: null,
     };
   }
 
-  const submissionIds = submissions.map((submission) => submission.id);
-  const assignmentIds = [...new Set(submissions.map((submission) => submission.assignment_id))];
-
-  const [
-    gradesResponse,
-    assignmentsResponse,
-  ] = await Promise.all([
-    supabase.from("grades").select(GRADE_FIELDS).in("submission_id", submissionIds),
-    supabase.from("assignments").select(ASSIGNMENT_FIELDS).in("id", assignmentIds),
-  ]);
-
-  if (gradesResponse.error) {
-    return {
-      data: [] as StudentGradeProjectionRow[],
-      error: gradesResponse.error,
-    };
-  }
-
-  if (assignmentsResponse.error) {
-    return {
-      data: [] as StudentGradeProjectionRow[],
-      error: assignmentsResponse.error,
-    };
-  }
-
   return {
     data: buildProjectionFromFallbackRows({
-      submissions,
-      grades: gradesResponse.data ?? [],
-      assignments: assignmentsResponse.data ?? [],
+      submissions: fallback.submissions,
+      grades: fallback.grades,
+      assignments: fallback.assignments,
     }),
     error: null,
   };
@@ -135,7 +145,12 @@ export const fetchStudentGradeProjection = async (userId?: string) => {
   const { data, error } = await supabase.rpc("get_student_submission_grade_projection");
   if (!error) {
     return {
-      data: (data || []) as StudentGradeProjectionRow[],
+      data: ((data || []) as StudentGradeProjectionRow[]).map((row) =>
+        sanitizeGradeVisibility({
+          ...row,
+          ai_breakdown: toStudentGradeBreakdown(row.ai_breakdown),
+        }),
+      ),
       error: null,
     };
   }

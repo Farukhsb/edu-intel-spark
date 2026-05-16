@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Download, CheckCircle, Smartphone } from "lucide-react";
+import { getInstallReadiness } from "@/lib/edgePageReadiness";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -10,6 +12,10 @@ interface BeforeInstallPromptEvent extends Event {
 const Install = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
+  const readiness = getInstallReadiness({
+    installed,
+    installPromptAvailable: deferredPrompt !== null,
+  });
 
   useEffect(() => {
     const handlePrompt = (e: Event) => {
@@ -45,6 +51,17 @@ const Install = () => {
         <p className="text-muted-foreground">
           Install GradeAI on your device for quick access, offline support, and a native app experience.
         </p>
+
+        <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent text-left">
+          <CardContent className="grid gap-4 p-6">
+            <div className="rounded-lg border bg-background/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Install Readiness</p>
+              <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{readiness.likelyChallenge}</p>
+              <p className="mt-3 text-sm font-medium">{readiness.bestNextAction}</p>
+            </div>
+          </CardContent>
+        </Card>
 
         {installed ? (
           <div className="flex items-center justify-center gap-2 text-secondary">

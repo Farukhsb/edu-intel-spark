@@ -4,35 +4,58 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowRight, Award, Building2, Download, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
+import { fetchProgrammeReportDataset } from "@/lib/data/academic";
 import { log } from "@/lib/logger";
+import {
+  EMPTY_ACCREDITATION,
+  getInstitutionalReportingReadiness,
+} from "@/lib/institutionalInsights";
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
-  DashboardLiveBanner,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
-import {
-  buildInstitutionalInsightsSnapshot,
-  EMPTY_ACCREDITATION,
-  type AccreditationMetric,
-  type DepartmentStat,
-  type LowPerformingAssessment,
-} from "@/lib/institutionalInsights";
 
-const ASSIGNMENT_FIELDS = "id, title, module_code";
-const SUBMISSION_FIELDS = "id, assignment_id";
-const GRADE_FIELDS = "submission_id, ai_score, final_score";
+type DepartmentStat = {
+  dept: string;
+  students: number;
+  avgGrade: number;
+  passRate: number;
+};
+
+type LowPerformingAssessment = {
+  id: string;
+  name: string;
+  avgGrade: number;
+  passRate: number;
+  students: number;
+  issue: string;
+};
+
+type AccreditationMetric = {
+  metric: string;
+  value: number;
+  target: number;
+  status: "met" | "at-risk" | "below";
+};
+
+const getMetricStatus = (value: number, target: number): AccreditationMetric["status"] => {
+  if (value >= target) return "met";
+  if (value >= Math.max(target - 10, 0)) return "at-risk";
+  return "below";
+};
 
 const InstitutionalInsights = () => {
-  const { isDemo, user } = useAuth();
+  const { isDemo } = useAuth();
   const navigate = useNavigate();
   const [departmentStats, setDepartmentStats] = useState<DepartmentStat[]>([]);
   const [lowPerforming, setLowPerforming] = useState<LowPerformingAssessment[]>([]);
   const [accreditation, setAccreditation] = useState<AccreditationMetric[]>(EMPTY_ACCREDITATION);
   const [loading, setLoading] = useState(!isDemo);
   const [hasRealData, setHasRealData] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (isDemo) {
@@ -40,77 +63,163 @@ const InstitutionalInsights = () => {
       return;
     }
 
-    if (!user) return;
-
     const fetchData = async () => {
       try {
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .from("assignments")
-          .select(ASSIGNMENT_FIELDS)
-          .eq("lecturer_id", user.id);
+        const { assignments, submissions, grades } = await fetchProgrammeReportDataset();
+        const hasUsableData = assignments.length > 0 || submissions.length > 0 || grades.length > 0;
 
-        if (assignmentsError) throw assignmentsError;
+        setHasRealData(hasUsableData);
+        setLoadError(false);
 
-        const assignments = assignmentsData || [];
-        const assignmentIds = assignments.map((assignment) => assignment.id);
-
-        if (assignmentIds.length === 0) {
-          setHasRealData(false);
+        if (!hasUsableData) {
           setDepartmentStats([]);
           setLowPerforming([]);
           setAccreditation(EMPTY_ACCREDITATION);
-          setLoading(false);
           return;
         }
 
-        const { data: submissionsData, error: submissionsError } = await supabase
-          .from("submissions")
-          .select(SUBMISSION_FIELDS)
-          .in("assignment_id", assignmentIds);
+        const assignmentById = new Map(assignments.map((assignment) => [assignment.id, assignment]));
 
-        if (submissionsError) throw submissionsError;
+        const scores = grades
+          .map((grade) => Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score))
+          .filter((score) => Number.isFinite(score));
 
-        const submissions = submissionsData || [];
-        const submissionIds = submissions.map((submission) => submission.id);
-
-        let grades: Array<{ submission_id: string; ai_score: number | null; final_score: number | null }> = [];
-        if (submissionIds.length > 0) {
-          const { data: gradesData, error: gradesError } = await supabase
-            .from("grades")
-            .select(GRADE_FIELDS)
-            .in("submission_id", submissionIds);
-
-          if (gradesError) throw gradesError;
-          grades = gradesData || [];
-        }
-
-        const snapshot = buildInstitutionalInsightsSnapshot({
-          assignments,
-          submissions,
-          grades,
+        const gradeBySubmission: Record<string, number> = {};
+        grades.forEach((grade) => {
+          const score = Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score);
+          if (Number.isFinite(score)) {
+            gradeBySubmission[grade.submission_id] = score;
+          }
         });
 
-        setHasRealData(snapshot.hasRealData);
-        setLowPerforming(snapshot.lowPerforming);
-        setDepartmentStats(snapshot.departmentStats);
-        setAccreditation(snapshot.accreditation);
+        const assignmentScores: Record<string, { id: string; title: string; scores: number[]; students: number }> = {};
+        assignments.forEach((assignment) => {
+          assignmentScores[assignment.id] = { id: assignment.id, title: assignment.title, scores: [], students: 0 };
+        });
+
+        submissions.forEach((submission) => {
+          const stats = assignmentScores[submission.assignment_id];
+          if (!stats) return;
+
+          stats.students += 1;
+          const score = gradeBySubmission[submission.id];
+          if (Number.isFinite(score)) {
+            stats.scores.push(score);
+          }
+        });
+
+        const lowPerf = Object.values(assignmentScores)
+          .filter((assignment) => assignment.scores.length > 0)
+          .map((assignment) => {
+            const average = assignment.scores.reduce((sum, score) => sum + score, 0) / assignment.scores.length;
+            return {
+              id: assignment.id,
+              name: assignment.title,
+              avgGrade: Math.round(average),
+              passRate: Math.round((assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100),
+              students: assignment.students,
+              issue: average < 50 ? "Low average - review needed" : "Moderate performance",
+            };
+          })
+          .sort((a, b) => a.avgGrade - b.avgGrade)
+          .slice(0, 5);
+
+        setLowPerforming(lowPerf);
+
+        const moduleGroups: Record<string, number[]> = {};
+        submissions.forEach((submission) => {
+          const assignment = assignmentById.get(submission.assignment_id);
+          const key = assignment?.module_code?.trim() || assignment?.title?.trim() || "Unassigned module";
+          const score = gradeBySubmission[submission.id];
+
+          if (!moduleGroups[key]) {
+            moduleGroups[key] = [];
+          }
+
+          if (Number.isFinite(score)) {
+            moduleGroups[key].push(score);
+          }
+        });
+
+        const deptStats = Object.entries(moduleGroups)
+          .filter(([, moduleScores]) => moduleScores.length > 0)
+          .map(([moduleCode, moduleScores]) => ({
+            dept: moduleCode,
+            students: moduleScores.length,
+            avgGrade: Math.round(moduleScores.reduce((sum, score) => sum + score, 0) / moduleScores.length),
+            passRate: Math.round((moduleScores.filter((score) => score >= 40).length / moduleScores.length) * 100),
+          }))
+          .sort((a, b) => b.passRate - a.passRate);
+
+        setDepartmentStats(deptStats);
+
+        const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
+        const gradedPct = submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
+        const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
+        const completionRate = assignments.length > 0 ? Math.min(Math.round((submissions.length / assignments.length) * 100), 100) : 0;
+
+        setAccreditation([
+          { metric: "Module Pass Rate (Avg)", value: passRate, target: 75, status: getMetricStatus(passRate, 75) },
+          { metric: "Graded Submissions", value: gradedPct, target: 95, status: getMetricStatus(gradedPct, 95) },
+          { metric: "Average Score", value: avgScore, target: 60, status: getMetricStatus(avgScore, 60) },
+          { metric: "Assessment Completion Rate", value: completionRate, target: 90, status: getMetricStatus(completionRate, 90) },
+        ]);
       } catch (error) {
         log.error("Failed to fetch institutional data", error);
+        setHasRealData(false);
+        setLoadError(true);
+        setDepartmentStats([]);
+        setLowPerforming([]);
+        setAccreditation(EMPTY_ACCREDITATION);
       } finally {
         setLoading(false);
       }
     };
 
     void fetchData();
-  }, [isDemo, user?.id]);
+  }, [isDemo]);
 
   if (loading) {
     return <DashboardLoadingState />;
   }
 
+  if (loadError) {
+    return (
+      <DashboardEmptyState
+        title="Institutional reporting is unavailable"
+        description="Institutional insights could not be loaded right now. Try again later."
+      />
+    );
+  }
+
+  if (!isDemo && !hasRealData) {
+    return (
+      <DashboardEmptyState
+        title="No institutional data yet"
+        description="This page auto-populates after assignments, submissions, and grading activity exist in the live dataset."
+      />
+    );
+  }
+
   const weakestDepartment = [...departmentStats].sort((left, right) => left.passRate - right.passRate)[0];
   const weakestAssessment = lowPerforming[0];
   const weakestAccreditationMetric = [...accreditation].sort((left, right) => left.value - right.value)[0];
+  const weakestAssessmentWorkflowTarget = weakestAssessment
+    ? getAssignmentWorkflowTargetFromStats({
+        assignmentId: weakestAssessment.id,
+        stats: {
+          total: weakestAssessment.students,
+          needsReview: 0,
+          graded: weakestAssessment.students,
+          approved: 0,
+          released: 0,
+        },
+      })
+    : null;
+  const reportingReadiness = getInstitutionalReportingReadiness({
+    accreditation,
+    lowPerforming,
+  });
 
   const exportInsightsSnapshot = () => {
     const lines = [
@@ -151,23 +260,44 @@ const InstitutionalInsights = () => {
         <DashboardDemoBanner label="Viewing demo institutional data" />
       )}
 
-      {!isDemo && (
-        <DashboardLiveBanner label="Viewing live institutional insights derived from your lecturer-scoped assignments" />
-      )}
-
-      {!isDemo && !hasRealData && (
-        <DashboardEmptyState
-          title="No institutional data yet"
-          description="This page auto-populates after you create assignments, upload submissions, and complete grading."
-        />
-      )}
-
       <div className="flex items-center justify-end">
-        <Button variant="outline" size="sm" onClick={exportInsightsSnapshot} disabled={!hasRealData && !isDemo}>
+        <Button variant="outline" size="sm" onClick={exportInsightsSnapshot}>
           <Download className="mr-2 h-3.5 w-3.5" />
           Export snapshot
         </Button>
       </div>
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-base">Reporting Readiness</CardTitle>
+          <CardDescription>
+            The shortest path from institutional signal to the report line most likely to need explanation.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current posture</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current accreditation-style thresholds across grading, pass-rate, and completion signals.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely first challenge</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the line most likely to need a concrete explanation in a reporting or quality-review context.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next report</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextReport}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to move into accreditation detail or stay at institutional snapshot level first.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -214,27 +344,31 @@ const InstitutionalInsights = () => {
           <button
             type="button"
             className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-            onClick={() => navigate("/dashboard/assignments?view=needs-review")}
+            onClick={() =>
+              navigate(
+                weakestAssessmentWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review",
+              )
+            }
           >
             <p className="text-sm font-medium">Clear grading bottlenecks</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Pending grading and release work drags down completion, readiness, and feedback quality at the institutional level.
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              Open assignment queue <ArrowRight className="h-3.5 w-3.5" />
+              {weakestAssessmentWorkflowTarget?.label ?? "Open assignment queue"} <ArrowRight className="h-3.5 w-3.5" />
             </span>
           </button>
           <button
             type="button"
             className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40"
-            onClick={() => navigate("/dashboard/performance?risk=high-plus")}
+            onClick={() => navigate("/dashboard?view=submissions")}
           >
-            <p className="text-sm font-medium">Intervene with low-performing students</p>
+            <p className="text-sm font-medium">Review low-performing student signals</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use the risk workflow to act on the students most likely to be pulling down module and pass-rate performance.
+              Open the admin oversight view to review the submissions and result patterns most likely to be dragging down module and pass-rate performance.
             </p>
             <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              Open risk workflow <ArrowRight className="h-3.5 w-3.5" />
+              Open submission oversight <ArrowRight className="h-3.5 w-3.5" />
             </span>
           </button>
           <button

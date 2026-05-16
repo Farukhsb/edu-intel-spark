@@ -4,6 +4,7 @@ import { Brain, BarChart3, Shield, MessageSquare, TrendingUp, Users, Sparkles, A
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getPublicLandingReadiness } from "@/lib/publicLanding";
 
 const features = [
   { icon: Brain, title: "AI-Powered Grading", description: "Rubric-based automated grading with detailed criterion-level feedback using advanced AI models." },
@@ -26,6 +27,7 @@ const benefits = [
 const Index = () => {
   const navigate = useNavigate();
   const { enterDemo } = useAuth();
+  const readiness = getPublicLandingReadiness();
 
   const handleDemo = (role: "lecturer" | "student") => {
     enterDemo(role);
@@ -78,6 +80,32 @@ const Index = () => {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-16">
+        <Card className="mb-10 border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+          <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+            <div className="rounded-lg border bg-background/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Platform Readiness</p>
+              <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                GradeAI is structured around real academic workflow rather than disconnected AI utilities.
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Likely challenge</p>
+              <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This is the operational gap the platform is designed to close for institutions and teaching teams.
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background/70 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best next action</p>
+              <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use the public entry points to inspect the workflow before committing to a live account.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="mb-10 text-center">
           <h2 className="font-display text-2xl font-bold">Explore the Platform</h2>
           <p className="mt-2 text-muted-foreground">Try a live demo - no sign-up required</p>

@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NetworkStatus } from "@/components/NetworkStatus";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getForcedPasswordChangeRoute, getPasswordChangeRedirectPath } from "@/lib/passwordChangeRouting";
+import type { AppRole } from "@/lib/roles";
 import { isAdminRole, isLecturerEquivalentRole } from "@/lib/roles";
 
 import Index from "./pages/Index";
@@ -16,6 +18,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Install = lazy(() => import("./pages/Install"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange"));
 const DashboardLayout = lazy(() => import("./components/DashboardLayout").then((module) => ({ default: module.DashboardLayout })));
 const LecturerOverview = lazy(() => import("./pages/dashboard/LecturerOverview"));
 const CohortAnalytics = lazy(() => import("./pages/dashboard/CohortAnalytics"));
@@ -97,6 +100,26 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const PasswordChangeGate = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
+  const { user, loading, isDemo, mustChangePassword } = useAuth();
+
+  if (!loading) {
+    const redirectPath = getPasswordChangeRedirectPath({
+      isAuthenticated: Boolean(user),
+      isDemo,
+      mustChangePassword,
+      pathname: location.pathname,
+    });
+
+    if (redirectPath) {
+      return <Navigate to={redirectPath} replace />;
+    }
+  }
+
+  return <>{children}</>;
+};
+
 const DashboardRouter = () => {
   const { role } = useAuth();
   if (isAdminRole(role)) return <AdminDashboard />;
@@ -104,7 +127,7 @@ const DashboardRouter = () => {
   return <StudentGrades />;
 };
 
-const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
+const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
   const location = useLocation();
 
   return (
@@ -122,9 +145,9 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
   );
 };
 
-const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: "lecturer" | "student" }) => {
+export const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
   const { role } = useAuth();
-  const resolvedRole = isLecturerEquivalentRole(role) ? "lecturer" : role;
+  const resolvedRole = allowedRole === "lecturer" && isLecturerEquivalentRole(role) ? "lecturer" : role;
   if (allowedRole && resolvedRole && resolvedRole !== allowedRole) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -139,56 +162,68 @@ const App = () => (
       <NetworkStatus />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route
-              path="/auth"
-              element={
-                <Suspense fallback={<PageSkeleton />}>
-                  <Auth />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/reset-password"
-              element={
-                <Suspense fallback={<PageSkeleton />}>
-                  <ResetPassword />
-                </Suspense>
-              }
-            />
-            <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
-            <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
-            <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
-            <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
-            <Route path="/dashboard/moderation" element={<DashboardRoute allowedRole="lecturer"><ModerationDashboard /></DashboardRoute>} />
-            <Route path="/dashboard/institutional" element={<DashboardRoute allowedRole="lecturer"><InstitutionalInsights /></DashboardRoute>} />
-            <Route path="/dashboard/accreditation" element={<DashboardRoute allowedRole="lecturer"><AccreditationDashboard /></DashboardRoute>} />
-            <Route path="/dashboard/external-examiner" element={<DashboardRoute allowedRole="lecturer"><ExternalExaminerExport /></DashboardRoute>} />
-            <Route path="/dashboard/learning-outcomes" element={<DashboardRoute allowedRole="lecturer"><LearningOutcomes /></DashboardRoute>} />
-            <Route path="/dashboard/explain-grade" element={<DashboardRoute allowedRole="student"><ExplainGrade /></DashboardRoute>} />
-            <Route path="/dashboard/improvements" element={<DashboardRoute allowedRole="student"><ImprovementPlan /></DashboardRoute>} />
-            <Route path="/dashboard/assignments" element={<DashboardRoute><Assignments /></DashboardRoute>} />
-            <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
-            <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />
-            <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
-            <Route
-              path="/install"
-              element={
-                <Suspense fallback={<PageSkeleton />}>
-                  <Install />
-                </Suspense>
-              }
-            />
-            <Route
-              path="*"
-              element={
-                <Suspense fallback={<PageSkeleton />}>
-                  <NotFound />
-                </Suspense>
-              }
-            />
-          </Routes>
+          <PasswordChangeGate>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route
+                path="/auth"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <Auth />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/reset-password"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ResetPassword />
+                  </Suspense>
+                }
+              />
+              <Route
+                path={getForcedPasswordChangeRoute()}
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ForcePasswordChange />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
+              <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
+              <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
+              <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
+              <Route path="/dashboard/moderation" element={<DashboardRoute allowedRole="lecturer"><ModerationDashboard /></DashboardRoute>} />
+              <Route path="/dashboard/institutional" element={<DashboardRoute allowedRole="admin"><InstitutionalInsights /></DashboardRoute>} />
+              <Route path="/dashboard/accreditation" element={<DashboardRoute allowedRole="admin"><AccreditationDashboard /></DashboardRoute>} />
+              <Route path="/dashboard/external-examiner" element={<DashboardRoute allowedRole="admin"><ExternalExaminerExport /></DashboardRoute>} />
+              <Route path="/dashboard/learning-outcomes" element={<DashboardRoute allowedRole="lecturer"><LearningOutcomes /></DashboardRoute>} />
+              <Route path="/dashboard/explain-grade" element={<DashboardRoute allowedRole="student"><ExplainGrade /></DashboardRoute>} />
+              <Route path="/dashboard/improvements" element={<DashboardRoute allowedRole="student"><ImprovementPlan /></DashboardRoute>} />
+              <Route path="/dashboard/assignments" element={<DashboardRoute><Assignments /></DashboardRoute>} />
+              <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
+              <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />
+              <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
+              <Route
+                path="/install"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <Install />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <NotFound />
+                  </Suspense>
+                }
+              />
+            </Routes>
+          </PasswordChangeGate>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -48,6 +48,13 @@ describe("released explain-grade context", () => {
       totalGrade: 74,
       feedback: "Released feedback",
     });
+    expect(context.evidenceSummary).toMatchObject({
+      evidenceQuality: "moderate",
+      criterionCount: 1,
+      hasStructuredBreakdown: true,
+      hasFeedback: true,
+      gradingConfidence: 0.82,
+    });
   });
 
   it("orders criterion insights by percentage lost, not raw points lost", () => {
@@ -160,11 +167,41 @@ describe("released explain-grade context", () => {
     expect(prompt).toContain("Complexity Analysis.");
     expect(prompt).toContain("Do not recompute the weakest criterion.");
     expect(prompt).toContain(buildWeaknessIntentInstruction());
+    expect(prompt).toContain("Treat the structured released grade context as the source of truth.");
+    expect(prompt).toContain("Evidence guidance:");
     expect(prompt).toContain(
       "Complexity Analysis is the weakest criterion. The student scored 11/15, meaning they lost 26.7% of available marks. This is higher than the loss in Correct Implementation, where they lost 16%.",
     );
     expect(prompt).toContain("Do not use raw mark loss.");
     expect(prompt).not.toContain("Always use raw marks");
+  });
+
+  it("marks evidence quality as limited when released evidence is sparse", () => {
+    const context = buildReleasedGradeContext(
+      {
+        ...releasedRows,
+        grade: {
+          ...releasedRows.grade,
+          ai_feedback: "",
+          ai_breakdown: [],
+          grading_confidence: 0.55,
+        },
+      },
+      "student-1",
+      makeError,
+    );
+    const prompt = buildExplainGradeSystemPrompt(context, "Why did I get this mark?");
+
+    expect(context.evidenceSummary).toMatchObject({
+      evidenceQuality: "limited",
+      criterionCount: 0,
+      hasStructuredBreakdown: false,
+      hasFeedback: false,
+      gradingConfidence: 0.55,
+    });
+    expect(context.evidenceSummary.evidenceWarnings).toContain("No structured criterion breakdown is available.");
+    expect(prompt).toContain("Evidence quality is limited. Do not guess.");
+    expect(prompt).toContain("If a detail is missing from the released context, say it is unavailable instead of inferring it.");
   });
 
   it("detects weakness-ranking intent phrases", () => {
