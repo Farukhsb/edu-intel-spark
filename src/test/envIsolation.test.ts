@@ -17,4 +17,17 @@ describe("environment bootstrap isolation", () => {
 
     vi.doUnmock("@/lib/env");
   });
+
+  it("allows AuthContext to load before Supabase env is needed", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/env", () => ({
+      getEnv: () => {
+        throw new Error("Invalid environment configuration: VITE_SUPABASE_URL");
+      },
+    }));
+
+    await expect(import("@/contexts/AuthContext")).resolves.toHaveProperty("AuthProvider");
+
+    vi.doUnmock("@/lib/env");
+  });
 });
