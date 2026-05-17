@@ -22,7 +22,7 @@ const loadAssignmentTargetIds = async (
     .eq("assignment_id", assignmentId);
   const { data: assignmentDepartmentTargets, error: assignmentDepartmentTargetsError } = await supabase
     .from("assignment_departments")
-    .select("department_id")
+    .select("department_name")
     .eq("assignment_id", assignmentId);
 
   if (assignmentTargetsError) {
@@ -42,7 +42,11 @@ const loadAssignmentTargetIds = async (
       new Set((assignmentTargets || []).map((target) => target.cohort_id).filter(Boolean)),
     ),
     departmentIds: Array.from(
-      new Set((assignmentDepartmentTargets || []).map((target) => target.department_id).filter(Boolean)),
+      new Set(
+        (assignmentDepartmentTargets || [])
+          .map((target) => target.department_name)
+          .filter((value): value is string => Boolean(value)),
+      ),
     ),
     targetingLookupFailed: Boolean(assignmentTargetsError || assignmentDepartmentTargetsError),
   };
@@ -85,6 +89,7 @@ const upsertAssignmentDepartments = async (assignmentId: string, departmentIds: 
     .insert(
       departmentIds.map((departmentId) => ({
         assignment_id: assignmentId,
+        department_name: departmentId,
         department_id: departmentId,
       })),
     );
@@ -198,7 +203,7 @@ export const publishAssignment = async ({
   try {
     let studentProfilesQuery = supabase
       .from("profiles")
-      .select("id, full_name, email, role, cohort_id, department_id")
+      .select("id, full_name, email, role, cohort_id, department_name, department_id")
       .eq("role", "student");
 
     if (cohortIds.length > 0) {
@@ -206,7 +211,7 @@ export const publishAssignment = async ({
     }
 
     if (departmentIds.length > 0) {
-      studentProfilesQuery = studentProfilesQuery.in("department_id", departmentIds);
+      studentProfilesQuery = studentProfilesQuery.in("department_name", departmentIds);
     }
 
     const { data: studentProfiles, error: studentProfilesError } = await studentProfilesQuery;

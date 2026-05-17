@@ -31,7 +31,8 @@ export interface AssignmentCatalogItem {
 export interface StudentNotificationProfile {
   id: string;
   cohort_id: string | null;
-  department_id: string | null;
+  department_name?: string | null;
+  department_id?: string | null;
   full_name: string | null;
   email: string | null;
   role: string | null;

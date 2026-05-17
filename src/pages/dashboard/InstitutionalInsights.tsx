@@ -9,8 +9,12 @@ import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNa
 import { fetchProgrammeReportDataset } from "@/lib/data/academic";
 import { log } from "@/lib/logger";
 import {
+  buildInstitutionalInsightsSnapshot,
+  type AccreditationMetric,
+  type ModuleStat,
   EMPTY_ACCREDITATION,
   getInstitutionalReportingReadiness,
+  type LowPerformingAssessment,
 } from "@/lib/institutionalInsights";
 import {
   DashboardDemoBanner,
@@ -18,39 +22,10 @@ import {
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 
-type DepartmentStat = {
-  dept: string;
-  students: number;
-  avgGrade: number;
-  passRate: number;
-};
-
-type LowPerformingAssessment = {
-  id: string;
-  name: string;
-  avgGrade: number;
-  passRate: number;
-  students: number;
-  issue: string;
-};
-
-type AccreditationMetric = {
-  metric: string;
-  value: number;
-  target: number;
-  status: "met" | "at-risk" | "below";
-};
-
-const getMetricStatus = (value: number, target: number): AccreditationMetric["status"] => {
-  if (value >= target) return "met";
-  if (value >= Math.max(target - 10, 0)) return "at-risk";
-  return "below";
-};
-
 const InstitutionalInsights = () => {
   const { isDemo } = useAuth();
   const navigate = useNavigate();
-  const [departmentStats, setDepartmentStats] = useState<DepartmentStat[]>([]);
+  const [moduleStats, setModuleStats] = useState<ModuleStat[]>([]);
   const [lowPerforming, setLowPerforming] = useState<LowPerformingAssessment[]>([]);
   const [accreditation, setAccreditation] = useState<AccreditationMetric[]>(EMPTY_ACCREDITATION);
   const [loading, setLoading] = useState(!isDemo);
@@ -65,110 +40,33 @@ const InstitutionalInsights = () => {
 
     const fetchData = async () => {
       try {
-        const { assignments, submissions, grades } = await fetchProgrammeReportDataset();
-        const hasUsableData = assignments.length > 0 || submissions.length > 0 || grades.length > 0;
+        const { assignments, submissions, grades, profiles } = await fetchProgrammeReportDataset();
+        const snapshot = buildInstitutionalInsightsSnapshot({
+          assignments,
+          submissions,
+          grades,
+          profiles,
+        });
+        const hasUsableData = snapshot.hasRealData;
 
         setHasRealData(hasUsableData);
         setLoadError(false);
 
         if (!hasUsableData) {
-          setDepartmentStats([]);
+          setModuleStats([]);
           setLowPerforming([]);
           setAccreditation(EMPTY_ACCREDITATION);
           return;
         }
 
-        const assignmentById = new Map(assignments.map((assignment) => [assignment.id, assignment]));
-
-        const scores = grades
-          .map((grade) => Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score))
-          .filter((score) => Number.isFinite(score));
-
-        const gradeBySubmission: Record<string, number> = {};
-        grades.forEach((grade) => {
-          const score = Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score);
-          if (Number.isFinite(score)) {
-            gradeBySubmission[grade.submission_id] = score;
-          }
-        });
-
-        const assignmentScores: Record<string, { id: string; title: string; scores: number[]; students: number }> = {};
-        assignments.forEach((assignment) => {
-          assignmentScores[assignment.id] = { id: assignment.id, title: assignment.title, scores: [], students: 0 };
-        });
-
-        submissions.forEach((submission) => {
-          const stats = assignmentScores[submission.assignment_id];
-          if (!stats) return;
-
-          stats.students += 1;
-          const score = gradeBySubmission[submission.id];
-          if (Number.isFinite(score)) {
-            stats.scores.push(score);
-          }
-        });
-
-        const lowPerf = Object.values(assignmentScores)
-          .filter((assignment) => assignment.scores.length > 0)
-          .map((assignment) => {
-            const average = assignment.scores.reduce((sum, score) => sum + score, 0) / assignment.scores.length;
-            return {
-              id: assignment.id,
-              name: assignment.title,
-              avgGrade: Math.round(average),
-              passRate: Math.round((assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100),
-              students: assignment.students,
-              issue: average < 50 ? "Low average - review needed" : "Moderate performance",
-            };
-          })
-          .sort((a, b) => a.avgGrade - b.avgGrade)
-          .slice(0, 5);
-
-        setLowPerforming(lowPerf);
-
-        const moduleGroups: Record<string, number[]> = {};
-        submissions.forEach((submission) => {
-          const assignment = assignmentById.get(submission.assignment_id);
-          const key = assignment?.module_code?.trim() || assignment?.title?.trim() || "Unassigned module";
-          const score = gradeBySubmission[submission.id];
-
-          if (!moduleGroups[key]) {
-            moduleGroups[key] = [];
-          }
-
-          if (Number.isFinite(score)) {
-            moduleGroups[key].push(score);
-          }
-        });
-
-        const deptStats = Object.entries(moduleGroups)
-          .filter(([, moduleScores]) => moduleScores.length > 0)
-          .map(([moduleCode, moduleScores]) => ({
-            dept: moduleCode,
-            students: moduleScores.length,
-            avgGrade: Math.round(moduleScores.reduce((sum, score) => sum + score, 0) / moduleScores.length),
-            passRate: Math.round((moduleScores.filter((score) => score >= 40).length / moduleScores.length) * 100),
-          }))
-          .sort((a, b) => b.passRate - a.passRate);
-
-        setDepartmentStats(deptStats);
-
-        const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
-        const gradedPct = submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
-        const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
-        const completionRate = assignments.length > 0 ? Math.min(Math.round((submissions.length / assignments.length) * 100), 100) : 0;
-
-        setAccreditation([
-          { metric: "Module Pass Rate (Avg)", value: passRate, target: 75, status: getMetricStatus(passRate, 75) },
-          { metric: "Graded Submissions", value: gradedPct, target: 95, status: getMetricStatus(gradedPct, 95) },
-          { metric: "Average Score", value: avgScore, target: 60, status: getMetricStatus(avgScore, 60) },
-          { metric: "Assessment Completion Rate", value: completionRate, target: 90, status: getMetricStatus(completionRate, 90) },
-        ]);
+        setModuleStats(snapshot.moduleStats);
+        setLowPerforming(snapshot.lowPerforming);
+        setAccreditation(snapshot.accreditation);
       } catch (error) {
         log.error("Failed to fetch institutional data", error);
         setHasRealData(false);
         setLoadError(true);
-        setDepartmentStats([]);
+        setModuleStats([]);
         setLowPerforming([]);
         setAccreditation(EMPTY_ACCREDITATION);
       } finally {
@@ -201,7 +99,7 @@ const InstitutionalInsights = () => {
     );
   }
 
-  const weakestDepartment = [...departmentStats].sort((left, right) => left.passRate - right.passRate)[0];
+  const weakestModule = [...moduleStats].sort((left, right) => left.passRate - right.passRate)[0];
   const weakestAssessment = lowPerforming[0];
   const weakestAccreditationMetric = [...accreditation].sort((left, right) => left.value - right.value)[0];
   const weakestAssessmentWorkflowTarget = weakestAssessment
@@ -226,11 +124,11 @@ const InstitutionalInsights = () => {
       "Institutional Insights Snapshot",
       `Generated: ${new Date().toISOString().slice(0, 10)}`,
       "",
-      "Department,Students,Average Grade,Pass Rate",
+      "Module,Students,Average Grade,Pass Rate",
     ];
 
-    departmentStats.forEach((department) => {
-      lines.push(`"${department.dept}",${department.students},${department.avgGrade}%,${department.passRate}%`);
+    moduleStats.forEach((module) => {
+      lines.push(`"${module.module}",${module.students},${module.avgGrade}%,${module.passRate}%`);
     });
 
     lines.push("");
@@ -307,10 +205,10 @@ const InstitutionalInsights = () => {
         <CardContent className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg border p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weakest module grouping</p>
-            <p className="mt-2 text-sm font-semibold">{weakestDepartment?.dept || "No department comparison yet"}</p>
+            <p className="mt-2 text-sm font-semibold">{weakestModule?.module || "No module comparison yet"}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {weakestDepartment
-                ? `${weakestDepartment.passRate}% pass rate with ${weakestDepartment.avgGrade}% average. This is the clearest module-level concern in your data.`
+              {weakestModule
+                ? `${weakestModule.passRate}% pass rate with ${weakestModule.avgGrade}% average. This is the clearest module-level concern in your data.`
                 : "Module-level comparisons appear once graded submissions accumulate."}
             </p>
           </div>
@@ -391,32 +289,32 @@ const InstitutionalInsights = () => {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Department Performance</CardTitle>
+            <CardTitle className="text-base">Module Performance</CardTitle>
           </div>
-          <CardDescription>Cross-department comparison from your live marking data</CardDescription>
+          <CardDescription>Cross-module comparison from your live marking data</CardDescription>
         </CardHeader>
         <CardContent>
-            {departmentStats.length === 0 && !isDemo ? (
+            {moduleStats.length === 0 && !isDemo ? (
             <DashboardEmptyState
-              title="No department performance data yet"
+              title="No module performance data yet"
               description="Module-level comparisons appear here once graded submissions exist in the system."
             />
           ) : (
             <div className="space-y-3">
-              {departmentStats.map((dept) => (
-                <div key={dept.dept} className="flex items-center gap-4 rounded-lg border p-4">
+              {moduleStats.map((module) => (
+                <div key={module.module} className="flex items-center gap-4 rounded-lg border p-4">
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{dept.dept}</span>
-                      <Badge variant={dept.passRate >= 80 ? "default" : dept.passRate >= 70 ? "secondary" : "destructive"}>
-                        {dept.passRate}% pass rate
+                      <span className="font-medium text-sm">{module.module}</span>
+                      <Badge variant={module.passRate >= 80 ? "default" : module.passRate >= 70 ? "secondary" : "destructive"}>
+                        {module.passRate}% pass rate
                       </Badge>
                     </div>
                     <div className="mt-2 flex items-center gap-6 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" /> {dept.students} graded submissions
+                        <Users className="h-3 w-3" /> {module.students} graded submissions
                       </span>
-                      <span>Avg: {dept.avgGrade}%</span>
+                      <span>Avg: {module.avgGrade}%</span>
                     </div>
                   </div>
                 </div>

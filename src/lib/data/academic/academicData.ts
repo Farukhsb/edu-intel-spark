@@ -16,6 +16,7 @@ const ACCREDITATION_PROFILE_FIELDS = "id, role";
 const PROGRAMME_ASSIGNMENT_FIELDS = "id, title, module_code";
 const PROGRAMME_SUBMISSION_FIELDS = "id, assignment_id";
 const PROGRAMME_GRADE_FIELDS = "submission_id, ai_score, final_score, lecturer_score";
+const PROGRAMME_PROFILE_FIELDS = "id, role";
 
 const EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS = "id, title, module_code";
 const EXTERNAL_EXAMINER_SUBMISSION_FIELDS =
@@ -60,20 +61,24 @@ export const fetchProgrammeReportDataset = async () => {
     { data: assignments, error: assignmentsError },
     { data: submissions, error: submissionsError },
     { data: grades, error: gradesError },
+    { data: profiles, error: profilesError },
   ] = await Promise.all([
     supabase.from("assignments").select(PROGRAMME_ASSIGNMENT_FIELDS),
     supabase.from("submissions").select(PROGRAMME_SUBMISSION_FIELDS),
     supabase.from("grades").select(PROGRAMME_GRADE_FIELDS),
+    supabase.from("profiles").select(PROGRAMME_PROFILE_FIELDS),
   ]);
 
   if (assignmentsError) throw assignmentsError;
   if (submissionsError) throw submissionsError;
   if (gradesError) throw gradesError;
+  if (profilesError) throw profilesError;
 
   return {
     assignments: assignments || [],
     submissions: submissions || [],
     grades: grades || [],
+    profiles: profiles || [],
   };
 };
 

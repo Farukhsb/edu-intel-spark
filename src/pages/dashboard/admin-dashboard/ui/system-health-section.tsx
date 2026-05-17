@@ -42,8 +42,8 @@ export const SystemHealthSection = ({
 
     <Card className="border-border/70 shadow-sm">
       <CardHeader className="border-b border-border/60 pb-4">
-        <CardTitle className="text-base">Admin settings posture</CardTitle>
-        <CardDescription>Reserved control surface for future platform settings without changing current behavior.</CardDescription>
+        <CardTitle className="text-base">Governance controls</CardTitle>
+        <CardDescription>Current controls that are monitored at platform level, even where editing remains intentionally restricted.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 p-6 text-sm">
         <div className="rounded-xl border border-border/70 p-4">
@@ -51,21 +51,21 @@ export const SystemHealthSection = ({
             <Settings2 className="h-4 w-4 text-primary" />
             <p className="font-medium">AI grading controls</p>
           </div>
-          <p className="mt-2 text-muted-foreground">Enabled state and thresholds should remain backend-governed until dedicated admin settings are wired.</p>
+          <p className="mt-2 text-muted-foreground">Enabled state and grading thresholds are currently backend-governed. This view makes the control area visible without exposing direct runtime edits.</p>
         </div>
         <div className="rounded-xl border border-border/70 p-4">
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-primary" />
             <p className="font-medium">Integrity thresholds</p>
           </div>
-          <p className="mt-2 text-muted-foreground">Similarity, AI-writing, and baseline-deviation thresholds are shown as monitored controls, not editable controls, for now.</p>
+          <p className="mt-2 text-muted-foreground">Similarity, AI-writing, and baseline-deviation thresholds are treated as monitored academic controls rather than inline admin settings.</p>
         </div>
         <div className="rounded-xl border border-border/70 p-4">
           <div className="flex items-center gap-2">
             <Mail className="h-4 w-4 text-primary" />
             <p className="font-medium">Notifications and maintenance</p>
           </div>
-          <p className="mt-2 text-muted-foreground">Email enablement and maintenance mode are intentionally placeholder states until a governed settings screen is introduced.</p>
+          <p className="mt-2 text-muted-foreground">Notification delivery and maintenance controls are managed outside this dashboard today. This panel signals the governance area without implying that those switches are available here.</p>
         </div>
       </CardContent>
     </Card>

@@ -40,8 +40,6 @@ Priority areas for policy-oriented testing:
 
 ## Edge Function Security Note
 
-TODO:
-
 The local Supabase function config still uses `verify_jwt = false` for several
 edge functions, while the handlers enforce auth internally. After each function
 has been rechecked for request validation and auth handling, plan a follow-up

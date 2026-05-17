@@ -36,6 +36,47 @@ function getPassSpreadThreshold(maxScore: number) {
   return Math.max(PASS_SPREAD_REVIEW_THRESHOLD_MIN, Math.round(maxScore * PASS_SPREAD_REVIEW_THRESHOLD_RATIO));
 }
 
+async function recordGradingFailureAudit({
+  supabaseAdmin,
+  submissionId,
+  userId,
+  actorRole,
+  assignmentId,
+  reason,
+  gradingModel,
+  forceRegenerate,
+}: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  submissionId: string;
+  userId: string;
+  actorRole: "admin" | "lecturer";
+  assignmentId: string;
+  reason: string;
+  gradingModel: string;
+  forceRegenerate: boolean;
+}) {
+  const { error } = await supabaseAdmin.from("grade_audit_log").insert({
+    submission_id: submissionId,
+    changed_by: userId,
+    event_type: "grading_failed",
+    actor_role: actorRole,
+    new_values: {
+      assignment_id: assignmentId,
+      grading_model: gradingModel,
+      force_regenerate: forceRegenerate,
+    },
+    reason,
+  });
+
+  if (error) {
+    logWarn("grade-submission failure audit insert failed", {
+      submissionId,
+      assignmentId,
+      error,
+    });
+  }
+}
+
 async function fetchSubmissionContent(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   sub: { file_url: string; file_name: string | null },
@@ -141,6 +182,7 @@ Deno.serve(async (req) => {
     }
 
     const actorIsAdmin = actorRoles.includes("admin");
+    const actorRole = actorIsAdmin ? "admin" : "lecturer";
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");
     }
@@ -223,9 +265,20 @@ Deno.serve(async (req) => {
     const generatedResultsByFingerprint = new Map<string, CachedGradeResult>();
     const invalidSubmissionPaths = submissions.filter((sub) => !normalizeSubmissionStoragePath(sub.file_url));
     for (const sub of invalidSubmissionPaths) {
+      const reason = "Submission file URL is missing. Re-upload the document and try again.";
+      await recordGradingFailureAudit({
+        supabaseAdmin,
+        submissionId: sub.id,
+        userId: user.id,
+        actorRole,
+        assignmentId: requestedAssignmentId,
+        reason,
+        gradingModel,
+        forceRegenerate,
+      });
       results.push({
         submissionId: sub.id,
-        error: "Submission file URL is missing. Re-upload the document and try again.",
+        error: reason,
         success: false,
       });
     }
@@ -249,12 +302,23 @@ Deno.serve(async (req) => {
           fetchSubmissionContent: (submission) => fetchSubmissionContent(supabaseAdmin, submission),
         }));
       } catch (gradeErr) {
+        const reason = gradeErr instanceof Error ? gradeErr.message : String(gradeErr);
         logError("Grading error for submission", gradeErr, {
           submissionId: sub.id,
         });
+        await recordGradingFailureAudit({
+          supabaseAdmin,
+          submissionId: sub.id,
+          userId: user.id,
+          actorRole,
+          assignmentId: requestedAssignmentId,
+          reason,
+          gradingModel,
+          forceRegenerate,
+        });
         results.push({
           submissionId: sub.id,
-          error: gradeErr instanceof Error ? gradeErr.message : String(gradeErr),
+          error: reason,
           success: false,
         });
       }

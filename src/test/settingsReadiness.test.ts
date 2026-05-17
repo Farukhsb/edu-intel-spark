@@ -8,7 +8,7 @@ describe("settings readiness", () => {
       role: "lecturer",
       fullName: "Dr Ada Lovelace",
       email: "ada@example.com",
-      departmentId: null,
+      departmentName: null,
     });
 
     expect(readiness.postureLabel).toBe("Profile completion position");
@@ -23,7 +23,7 @@ describe("settings readiness", () => {
       role: "lecturer",
       fullName: "Dr Ada Lovelace",
       email: "ada@example.com",
-      departmentId: "Computer Science",
+      departmentName: "Computer Science",
     });
 
     expect(readiness.postureLabel).toBe("Teaching workflow position");

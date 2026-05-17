@@ -727,7 +727,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         <div className="px-4 pt-4 pb-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
-            <Input placeholder="Search workspace" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-10 rounded-xl border-sidebar-border bg-sidebar-accent/55 pl-9 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground/40" />
+            <Input placeholder="Filter navigation" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-10 rounded-xl border-sidebar-border bg-sidebar-accent/55 pl-9 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground/40" />
           </div>
         </div>
 

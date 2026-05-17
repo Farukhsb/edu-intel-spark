@@ -71,13 +71,17 @@ describe("InstitutionalInsights integration", () => {
         { submission_id: "s2", ai_score: 38, final_score: 42 },
         { submission_id: "s3", ai_score: 35, final_score: 36 },
       ],
+      profiles: [
+        { id: "student-1", role: "student" },
+        { id: "student-2", role: "student" },
+      ],
     });
 
     await renderInstitutionalInsights();
 
     expect(await screen.findByText("Reporting Readiness")).toBeInTheDocument();
     expect(screen.queryByText("No institutional data yet")).not.toBeInTheDocument();
-    expect(screen.getByText("Department Performance")).toBeInTheDocument();
+    expect(screen.getByText("Module Performance")).toBeInTheDocument();
     expect(screen.getByText("Low-Performing Assessments")).toBeInTheDocument();
     expect(screen.getByText("Accreditation Readiness")).toBeInTheDocument();
     expect(screen.getAllByText("CS402").length).toBeGreaterThan(0);
@@ -92,13 +96,16 @@ describe("InstitutionalInsights integration", () => {
       ],
       submissions: [],
       grades: [],
+      profiles: [
+        { id: "student-1", role: "student" },
+      ],
     });
 
     await renderInstitutionalInsights();
 
     expect(await screen.findByText("Reporting Readiness")).toBeInTheDocument();
     expect(screen.queryByText("No institutional data yet")).not.toBeInTheDocument();
-    expect(screen.getByText("No department performance data yet")).toBeInTheDocument();
+    expect(screen.getByText("No module performance data yet")).toBeInTheDocument();
     expect(screen.getByText("No low-performing assessments yet")).toBeInTheDocument();
     expect(screen.getAllByText("Module Pass Rate (Avg)").length).toBeGreaterThan(0);
   });
@@ -108,6 +115,7 @@ describe("InstitutionalInsights integration", () => {
       assignments: [],
       submissions: [],
       grades: [],
+      profiles: [],
     });
 
     await renderInstitutionalInsights();

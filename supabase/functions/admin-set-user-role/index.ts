@@ -11,6 +11,11 @@ const RoleChangeRequestSchema = z.object({
   syncOnly: z.boolean().optional(),
 });
 
+const resolveDepartmentName = (input: {
+  department_name?: string | null;
+  department_id?: string | null;
+}) => input.department_name ?? input.department_id ?? null;
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
@@ -52,7 +57,7 @@ Deno.serve(async (req) => {
     const { targetUserId, nextRole, syncOnly = false } = parsed.data;
     const { data: actorProfile, error: actorProfileError } = await supabase
       .from("profiles")
-      .select("id, full_name, email, role, cohort_id, department_id")
+      .select("id, full_name, email, role, cohort_id, department_name, department_id")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -64,7 +69,7 @@ Deno.serve(async (req) => {
 
     const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, email, role, cohort_id, department_id")
+      .select("id, full_name, email, role, cohort_id, department_name, department_id")
       .eq("id", targetUserId)
       .maybeSingle();
 
@@ -149,12 +154,15 @@ Deno.serve(async (req) => {
         ? authUserResult.user.user_metadata
         : {};
 
+    const departmentName = resolveDepartmentName(targetProfile);
+
     const nextMetadata = {
       ...existingMetadata,
       full_name: targetProfile.full_name || existingMetadata.full_name || null,
       role: resolvedNextRole,
       cohort_id: targetProfile.cohort_id ?? existingMetadata.cohort_id ?? null,
-      department_id: targetProfile.department_id ?? existingMetadata.department_id ?? null,
+      department_name: departmentName ?? existingMetadata.department_name ?? existingMetadata.department_id ?? null,
+      department_id: departmentName ?? existingMetadata.department_id ?? existingMetadata.department_name ?? null,
     };
 
     const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {

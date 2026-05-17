@@ -1,1 +1,1 @@
-export { useAdminDashboardController } from "./useAdminDashboardController";
+export { useAdminDashboardController } from "../useAdminDashboardController";

@@ -45,11 +45,13 @@ type AssignmentCohortRow = {
 };
 
 type AssignmentDepartmentRow = {
+  department_name: string;
   department_id: string;
 };
 
 type ProfileRow = {
   id: string;
+  department_name?: string | null;
   department_id?: string | null;
   full_name: string | null;
   email: string | null;
@@ -250,7 +252,7 @@ Deno.serve(async (req) => {
         .eq("assignment_id", assignment.id);
       const assignmentDepartmentsRes = await admin
         .from("assignment_departments")
-        .select("department_id")
+        .select("department_name, department_id")
         .eq("assignment_id", assignment.id);
 
       if (assignmentCohortsRes.error || assignmentDepartmentsRes.error) {
@@ -267,7 +269,7 @@ Deno.serve(async (req) => {
       const departmentIds = Array.from(
         new Set(
           ((assignmentDepartmentsRes.data || []) as AssignmentDepartmentRow[])
-            .map((row) => row.department_id)
+            .map((row) => row.department_name ?? row.department_id)
             .filter(Boolean),
         ),
       );
@@ -281,14 +283,14 @@ Deno.serve(async (req) => {
 
       let studentsQuery = admin
         .from("profiles")
-        .select("id, full_name, email, role, cohort_id, department_id")
+        .select("id, full_name, email, role, cohort_id, department_name, department_id")
         .eq("role", "student");
 
       if (cohortIds.length > 0) {
         studentsQuery = studentsQuery.in("cohort_id", cohortIds);
       }
       if (departmentIds.length > 0) {
-        studentsQuery = studentsQuery.in("department_id", departmentIds);
+        studentsQuery = studentsQuery.in("department_name", departmentIds);
       }
 
       const studentsRes = await studentsQuery;

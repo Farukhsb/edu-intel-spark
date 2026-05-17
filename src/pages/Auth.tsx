@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Brain, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthReadiness } from "@/lib/authReadiness";
+import { DEPARTMENT_OPTIONS } from "@/lib/departmentOptions";
 
-const DEPARTMENTS = ["Computer Science", "Mathematics", "Engineering", "Business", "Economics", "Political Science", "History", "Physics", "Biology"];
 const COHORTS = [
   { value: "100", label: "Level 100 (Year 1)" },
   { value: "200", label: "Level 200 (Year 2)" },
@@ -340,7 +340,7 @@ const Auth = () => {
                     <Select value={signupDepartment} onValueChange={setSignupDepartment}>
                       <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
                       <SelectContent>
-                        {DEPARTMENTS.map((d) => (
+                        {DEPARTMENT_OPTIONS.map((d) => (
                           <SelectItem key={d} value={d}>{d}</SelectItem>
                         ))}
                       </SelectContent>
@@ -367,6 +367,15 @@ const Auth = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <p className="text-center text-xs text-muted-foreground">
+          By continuing, you are using a pilot academic platform.
+          {" "}
+          <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
+            Read the privacy notice
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );

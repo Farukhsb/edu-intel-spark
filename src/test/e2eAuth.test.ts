@@ -67,12 +67,13 @@ describe("e2eAuth", () => {
         id: "user-1",
         full_name: "Demo Lecturer",
         email: "lecturer@example.test",
-        role: "lecturer",
-        avatar_url: null,
-        cohort_id: null,
-        department_id: "cs",
-        must_change_password: false,
-      },
-    });
+      role: "lecturer",
+      avatar_url: null,
+      cohort_id: null,
+      department_name: "cs",
+      department_id: "cs",
+      must_change_password: false,
+    },
+  });
   });
 });

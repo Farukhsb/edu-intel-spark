@@ -1,16 +1,5 @@
 import type { RubricCriterion } from "@/components/RubricBuilder";
-
-export const ASSIGNMENT_TARGET_DEPARTMENTS = [
-  "Computer Science",
-  "Mathematics",
-  "Engineering",
-  "Business",
-  "Economics",
-  "Political Science",
-  "History",
-  "Physics",
-  "Biology",
-];
+export { ASSIGNMENT_TARGET_DEPARTMENTS } from "@/lib/departmentOptions";
 
 export const ASSIGNMENT_TARGET_COHORTS = [
   { value: "100", label: "Level 100" },

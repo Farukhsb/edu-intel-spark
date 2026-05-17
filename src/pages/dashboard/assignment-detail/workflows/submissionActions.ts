@@ -53,6 +53,7 @@ export interface TargetedStudentProfile {
   email: string | null;
   role: string | null;
   cohort_id: string | null;
+  department_name: string | null;
   department_id: string | null;
 }
 
@@ -97,7 +98,7 @@ export const loadTargetedStudentProfiles = async (assignmentId: string) => {
       .eq("assignment_id", assignmentId),
     supabase
       .from("assignment_departments")
-      .select("department_id")
+      .select("department_name")
       .eq("assignment_id", assignmentId),
   ]);
 
@@ -108,7 +109,7 @@ export const loadTargetedStudentProfiles = async (assignmentId: string) => {
     new Set((cohortResult.data || []).map((row) => row.cohort_id).filter(Boolean)),
   );
   const departmentIds = Array.from(
-    new Set((departmentResult.data || []).map((row) => row.department_id).filter(Boolean)),
+    new Set((departmentResult.data || []).map((row) => row.department_name).filter(Boolean)),
   );
 
   if (cohortIds.length === 0 && departmentIds.length === 0) {
@@ -117,17 +118,17 @@ export const loadTargetedStudentProfiles = async (assignmentId: string) => {
 
   let query = supabase
     .from("profiles")
-    .select("id, full_name, email, role, cohort_id, department_id")
+    .select("id, full_name, email, role, cohort_id, department_name, department_id")
     .eq("role", "student");
 
   if (cohortIds.length > 0 && departmentIds.length > 0) {
     query = query.or(
-      `cohort_id.in.(${cohortIds.join(",")}),department_id.in.(${departmentIds.join(",")})`,
+      `cohort_id.in.(${cohortIds.join(",")}),department_name.in.(${departmentIds.join(",")})`,
     );
   } else if (cohortIds.length > 0) {
     query = query.in("cohort_id", cohortIds);
   } else {
-    query = query.in("department_id", departmentIds);
+    query = query.in("department_name", departmentIds);
   }
 
   const { data, error } = await query;

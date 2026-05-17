@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { posthog } from "@/lib/posthog";
 import { clearE2EAuthState, createE2EUser, readE2EAuthState } from "@/lib/e2eAuth";
 import { getPasswordResetRedirectUrl } from "@/lib/authUrls";
+import { getDepartmentName, toDepartmentColumns } from "@/lib/department";
 import { env } from "@/lib/env";
 import { parseAppRole, type AppRole, type PublicSignupRole } from "@/lib/roles";
 import type { User } from "@supabase/supabase-js";
@@ -15,6 +16,7 @@ export interface Profile {
   role: AppRole;
   avatar_url: string | null;
   cohort_id: string | null;
+  department_name: string | null;
   department_id: string | null;
   must_change_password: boolean;
 }
@@ -64,6 +66,7 @@ const DEMO_LECTURER_PROFILE: Profile = {
   role: "lecturer",
   avatar_url: null,
   cohort_id: null,
+  department_name: null,
   department_id: null,
   must_change_password: false,
 };
@@ -75,6 +78,7 @@ const DEMO_STUDENT_PROFILE: Profile = {
   role: "student",
   avatar_url: null,
   cohort_id: "200",
+  department_name: "Computer Science",
   department_id: "Computer Science",
   must_change_password: false,
 };
@@ -105,6 +109,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       role: string | null;
       avatar_url: string | null;
       cohort_id: string | null;
+      department_name: string | null;
       department_id: string | null;
       must_change_password: boolean | null;
     } | null = null;
@@ -132,6 +137,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
+      const departmentName = getDepartmentName(data);
+
       setProfile({
         id: data.id,
         full_name: data.full_name,
@@ -139,7 +146,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role: resolvedRole,
         avatar_url: data.avatar_url,
         cohort_id: data.cohort_id ?? null,
-        department_id: data.department_id ?? null,
+        department_name: departmentName,
+        department_id: departmentName,
         must_change_password: data.must_change_password ?? false,
       });
       setProfileError(null);
@@ -217,7 +225,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           full_name: fullName,
           role,
           cohort_id: role === "student" ? (cohortId || null) : null,
-          department_id: departmentId || null,
+          ...toDepartmentColumns(departmentId),
         },
       },
     });
@@ -235,7 +243,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role,
         avatar_url: null,
         cohort_id: role === "student" ? (cohortId || null) : null,
-        department_id: departmentId || null,
+        ...toDepartmentColumns(departmentId),
         must_change_password: false,
       });
     } else {

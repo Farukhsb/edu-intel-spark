@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import { z } from "zod";
+import { getDepartmentName, toDepartmentColumns } from "@/lib/department";
 import { env } from "@/lib/env";
 import { log } from "@/lib/logger";
 
@@ -15,7 +16,7 @@ interface ParsedStudent {
   name: string;
   email: string;
   cohort_id: string;
-  department_id: string;
+  department_name: string;
   valid: boolean;
   error?: string;
 }
@@ -33,6 +34,7 @@ interface CreatedStudentVerification {
   email: string;
   full_name: string | null;
   cohort_id: string | null;
+  department_name: string | null;
   department_id: string | null;
   must_change_password: boolean;
 }
@@ -221,7 +223,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
           name,
           email,
           cohort_id: cohort,
-          department_id: dept,
+          department_name: dept,
           valid: errors.length === 0,
           error: errors.join(", "),
         };
@@ -249,7 +251,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
             name: student.name,
             email: student.email,
             cohort_id: student.cohort_id,
-            department_id: student.department_id,
+            ...toDepartmentColumns(student.department_name),
           })),
         },
       });
@@ -487,7 +489,7 @@ export const BulkStudentUpload = ({ triggerClassName, compact = false }: BulkStu
                     <div key={profile.email} className="flex items-center justify-between gap-3 rounded bg-muted/40 px-2 py-1">
                       <span>{profile.full_name || profile.email}</span>
                       <span>{profile.cohort_id || "-"}</span>
-                      <span>{profile.department_id || "-"}</span>
+                      <span>{getDepartmentName(profile) || "-"}</span>
                       <span>{profile.must_change_password ? "Password setup required" : "Profile active"}</span>
                     </div>
                   ))}

@@ -458,7 +458,7 @@ describe("StudentProfile", () => {
     renderStudentProfile();
 
     expect(await screen.findByText("Sam Student")).toBeInTheDocument();
-    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Support Priorities")).toBeInTheDocument();
     expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
     expect(screen.getByText("1 missed assignment still unresolved")).toBeInTheDocument();
     expect(screen.getByText("Log the first intervention and send a student support alert")).toBeInTheDocument();

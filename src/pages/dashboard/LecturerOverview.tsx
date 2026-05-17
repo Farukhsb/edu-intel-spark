@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { DashboardLoadingState } from "@/components/dashboard/PageStates";
 
 import { LecturerOverviewScreen, useLecturerOverviewController } from "@/pages/dashboard/lecturer-overview";
 
@@ -21,11 +21,7 @@ const LecturerOverview = () => {
   } = useLecturerOverviewController();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" data-testid="loading-spinner" />
-      </div>
-    );
+    return <DashboardLoadingState testId="loading-spinner" />;
   }
 
   return (

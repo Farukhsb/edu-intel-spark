@@ -120,7 +120,7 @@ export const buildOperationalMonitoringSnapshot = ({
       tone: aiGradingFailures == null ? "placeholder" : aiGradingFailures > 0 ? "warning" : "healthy",
       detail:
         aiGradingFailures == null
-          ? "Failure counts remain placeholder until grading error events are exposed consistently to admins."
+          ? "The admin audit feed is not exposing a reliable grading-failure count in this snapshot."
           : aiGradingFailures > 0
             ? "At least one workflow audit event suggests a grading failure today."
             : "No grading failures were detected in the visible workflow audit entries today.",

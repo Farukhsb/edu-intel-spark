@@ -230,6 +230,7 @@ export const useAdminDashboardController = () => {
         integrityReviewsRes,
         latestGradeRes,
         notificationsRes,
+        gradingFailureCountRes,
       } = await fetchAdminDashboardDataset();
 
       const profileRows = profiles.map((row) => ({
@@ -442,11 +443,7 @@ export const useAdminDashboardController = () => {
           source: "workflow" as const,
         }));
 
-        const todayKey = new Date().toISOString().slice(0, 10);
-        aiGradingFailures = workflowDataAccessEvents.filter((row) => {
-          const eventType = String(row.event_type).toLowerCase();
-          return row.created_at.startsWith(todayKey) && (eventType.includes("fail") || eventType.includes("error"));
-        }).length;
+        aiGradingFailures = gradingFailureCountRes.error ? null : gradingFailureCountRes.count ?? 0;
       } catch {
         log.warn("Grade workflow audit is unavailable to admin", {
           view: "system",

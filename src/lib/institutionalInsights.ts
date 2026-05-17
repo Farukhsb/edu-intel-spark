@@ -1,13 +1,14 @@
 import type { Tables } from "@/integrations/supabase/types";
 
-export type DepartmentStat = {
-  dept: string;
+export type ModuleStat = {
+  module: string;
   students: number;
   avgGrade: number;
   passRate: number;
 };
 
 export type LowPerformingAssessment = {
+  id: string;
   name: string;
   avgGrade: number;
   passRate: number;
@@ -38,7 +39,8 @@ export const EMPTY_ACCREDITATION: AccreditationMetric[] = [
 
 type AssignmentRow = Pick<Tables<"assignments">, "id" | "title" | "module_code">;
 type SubmissionRow = Pick<Tables<"submissions">, "id" | "assignment_id">;
-type GradeRow = Pick<Tables<"grades">, "submission_id" | "ai_score" | "final_score">;
+type GradeRow = Pick<Tables<"grades">, "submission_id" | "ai_score" | "final_score" | "lecturer_score">;
+type ProfileRow = Pick<Tables<"profiles">, "id" | "role">;
 
 export const getMetricStatus = (value: number, target: number): AccreditationMetric["status"] => {
   if (value >= target) return "met";
@@ -50,20 +52,22 @@ export const buildInstitutionalInsightsSnapshot = ({
   assignments,
   submissions,
   grades,
+  profiles,
 }: {
   assignments: AssignmentRow[];
   submissions: SubmissionRow[];
   grades: GradeRow[];
+  profiles: ProfileRow[];
 }) => {
   const assignmentById = new Map(assignments.map((assignment) => [assignment.id, assignment]));
 
   const scores = grades
-    .map((grade) => Number(grade.final_score ?? grade.ai_score))
+    .map((grade) => Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score))
     .filter((score) => Number.isFinite(score));
 
   const gradeBySubmission: Record<string, number> = {};
   grades.forEach((grade) => {
-    const score = Number(grade.final_score ?? grade.ai_score);
+    const score = Number(grade.final_score ?? grade.lecturer_score ?? grade.ai_score);
     if (Number.isFinite(score)) {
       gradeBySubmission[grade.submission_id] = score;
     }
@@ -90,6 +94,7 @@ export const buildInstitutionalInsightsSnapshot = ({
     .map((assignment) => {
       const average = assignment.scores.reduce((sum, score) => sum + score, 0) / assignment.scores.length;
       return {
+        id: assignments.find((row) => row.title === assignment.title)?.id ?? assignment.title,
         name: assignment.title,
         avgGrade: Math.round(average),
         passRate: Math.round((assignment.scores.filter((score) => score >= 40).length / assignment.scores.length) * 100),
@@ -103,7 +108,7 @@ export const buildInstitutionalInsightsSnapshot = ({
   const moduleGroups: Record<string, number[]> = {};
   submissions.forEach((submission) => {
     const assignment = assignmentById.get(submission.assignment_id);
-    const key = assignment?.module_code?.trim() || "Unassigned module";
+    const key = assignment?.module_code?.trim() || assignment?.title?.trim() || "Unassigned module";
     const score = gradeBySubmission[submission.id];
 
     if (!moduleGroups[key]) {
@@ -115,20 +120,24 @@ export const buildInstitutionalInsightsSnapshot = ({
     }
   });
 
-  const departmentStats = Object.entries(moduleGroups)
+  const moduleStats = Object.entries(moduleGroups)
     .filter(([, moduleScores]) => moduleScores.length > 0)
     .map(([moduleCode, moduleScores]) => ({
-      dept: moduleCode,
+      module: moduleCode,
       students: moduleScores.length,
       avgGrade: Math.round(moduleScores.reduce((sum, score) => sum + score, 0) / moduleScores.length),
       passRate: Math.round((moduleScores.filter((score) => score >= 40).length / moduleScores.length) * 100),
-    } satisfies DepartmentStat))
+    } satisfies ModuleStat))
     .sort((left, right) => right.passRate - left.passRate);
 
+  const studentCount = profiles.filter((profile) => profile.role === "student").length;
   const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
   const gradedPct = submissions.length > 0 ? Math.min(Math.round((grades.length / submissions.length) * 100), 100) : 0;
   const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
-  const completionRate = assignments.length > 0 ? Math.min(Math.round((submissions.length / assignments.length) * 100), 100) : 0;
+  const completionRate =
+    submissions.length > 0 && assignments.length > 0 && studentCount > 0
+      ? Math.min(Math.round((submissions.length / (assignments.length * studentCount)) * 100), 100)
+      : 0;
 
   const accreditation = [
     { metric: "Module Pass Rate (Avg)", value: passRate, target: 75, status: getMetricStatus(passRate, 75) },
@@ -138,7 +147,7 @@ export const buildInstitutionalInsightsSnapshot = ({
   ] satisfies AccreditationMetric[];
 
   return {
-    departmentStats,
+    moduleStats,
     lowPerforming,
     accreditation,
     hasRealData: assignments.length > 0 || submissions.length > 0 || grades.length > 0,
