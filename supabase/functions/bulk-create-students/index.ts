@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { createAdminClient, jsonError, requireAdmin, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
@@ -130,7 +129,7 @@ const BulkCreateStudentsRequestSchema = z.object({
   students: z.array(StudentInputSchema).min(1).max(500),
 });
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

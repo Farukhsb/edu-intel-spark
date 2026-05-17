@@ -29,8 +29,8 @@ export function calculateRiskScore({
 
   const avgRisk = avg >= 70 ? 20 : avg >= 50 ? 50 : 80;
 
-  let trendRisk = 50;
-  if (scores.length >= 4) {
+  let trendRisk = 20;
+  if (scores.length >= 2) {
     const mid = Math.floor(scores.length / 2);
     const first = scores.slice(0, mid);
     const last = scores.slice(mid);
