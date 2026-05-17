@@ -55,4 +55,18 @@ export function parseEnv(rawEnv: Record<string, unknown>): AppEnv {
   );
 }
 
-export const env = parseEnv(import.meta.env);
+let cachedEnv: AppEnv | null = null;
+
+export function getEnv(): AppEnv {
+  if (!cachedEnv) {
+    cachedEnv = parseEnv(import.meta.env);
+  }
+
+  return cachedEnv;
+}
+
+export const env = new Proxy({} as AppEnv, {
+  get(_target, property) {
+    return getEnv()[property as keyof AppEnv];
+  },
+});

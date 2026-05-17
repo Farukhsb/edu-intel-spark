@@ -3,6 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { RubricCriterion } from "@/components/RubricBuilder";
 import {
+  normalizeAssessmentWorkflowStatus,
+  type AssessmentWorkflowStatus,
+} from "@/lib/assessmentWorkflow";
+import {
   buildAssignmentSubmissionStats,
   normalizeAssignment,
   type AssignmentCatalogItem,
@@ -36,7 +40,7 @@ export interface AssignmentDataItem {
 export interface StudentAssignmentWorkflowState {
   assignmentId: string;
   submissionId: string;
-  status: string;
+  status: AssessmentWorkflowStatus;
   submittedAt: string;
 }
 
@@ -56,7 +60,7 @@ const buildLatestStudentWorkflowMap = (
       latestByAssignment[submission.assignment_id] = {
         assignmentId: submission.assignment_id,
         submissionId: submission.id,
-        status: submission.status,
+        status: normalizeAssessmentWorkflowStatus(submission.status),
         submittedAt: submission.submitted_at,
       };
     }

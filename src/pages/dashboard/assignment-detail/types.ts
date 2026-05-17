@@ -1,4 +1,5 @@
 import type { Tables } from "@/integrations/supabase/types";
+import type { AssessmentWorkflowStatus } from "@/lib/assessmentWorkflow";
 import type { Assignment, GradeBreakdown, Submission } from "@/types";
 import type {
   AcademicIntegrityFlag,
@@ -6,18 +7,7 @@ import type {
   WorkflowRubricCriterion,
 } from "@/types/academic";
 
-export type SubmissionStatus =
-  | "submitted"
-  | "ai_grading"
-  | "ai_graded"
-  | "first_review"
-  | "moderation_pending"
-  | "moderation_in_progress"
-  | "moderated"
-  | "escalated"
-  | "under_review"
-  | "approved"
-  | "released";
+export type SubmissionStatus = AssessmentWorkflowStatus;
 
 export type AssignmentDetailSubmission = Submission & {
   id: string;

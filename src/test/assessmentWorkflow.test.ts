@@ -9,6 +9,8 @@ import {
   isApprovableWorkflowStatus,
   isRegradableWorkflowStatus,
   isStudentGradeVisible,
+  normalizeAssessmentWorkflowStatus,
+  parseAssessmentWorkflowStatus,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
 
@@ -50,6 +52,14 @@ describe("assessment workflow rules", () => {
     expect(isApprovableWorkflowStatus("first_review")).toBe(true);
     expect(isApprovableWorkflowStatus("moderated")).toBe(true);
     expect(isApprovableWorkflowStatus("approved")).toBe(false);
+  });
+
+  it("normalizes invalid workflow status values at the edge instead of trusting raw strings", () => {
+    expect(parseAssessmentWorkflowStatus("approved")).toBe("approved");
+    expect(parseAssessmentWorkflowStatus("not-a-real-status")).toBeNull();
+    expect(normalizeAssessmentWorkflowStatus("not-a-real-status")).toBe("submitted");
+    expect(isRegradableWorkflowStatus("not-a-real-status")).toBe(true);
+    expect(canReleaseStatus("not-a-real-status")).toBe(false);
   });
 
   it("summarizes selected workflow actions consistently for the assignment page", () => {

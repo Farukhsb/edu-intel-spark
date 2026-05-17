@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeAssessmentWorkflowStatus } from "@/lib/assessmentWorkflow";
 import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
 import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 import {
@@ -198,7 +199,7 @@ export const useAssignmentDetailData = ({
       file_name: submission.file_name,
       file_type: submission.file_type,
       file_url: submission.file_url,
-      status: submission.status as SubmissionStatus,
+      status: normalizeAssessmentWorkflowStatus(submission.status) as SubmissionStatus,
       submitted_at: submission.submitted_at,
       student_id: submission.student_id,
     }));
