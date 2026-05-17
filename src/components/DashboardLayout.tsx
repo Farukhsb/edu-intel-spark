@@ -34,6 +34,7 @@ import {
 } from "@/lib/communications";
 import { safeFormatDate } from "@/lib/date";
 import { getStudentSupportNotificationDestination } from "@/lib/studentSupportWorkflow";
+import { preloadCommonRoleRoutes, preloadRoute } from "@/lib/routePreloads";
 
 const DEMO_LECTURER_NOTIFICATIONS: CommunicationMessage[] = [
   {
@@ -591,6 +592,10 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   }, [openSections, sidebarStateKey]);
 
   useEffect(() => {
+    preloadCommonRoleRoutes(profile?.role);
+  }, [profile?.role]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || isDemo || !isLecturerEquivalent || isAdmin) {
       setShowOnboarding(false);
       return;
@@ -618,6 +623,8 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       <Link
         key={link.to}
         to={link.to}
+        onMouseEnter={() => preloadRoute(link.to)}
+        onFocus={() => preloadRoute(link.to)}
         onClick={(event) => {
           setSidebarOpen(false);
           setSearchQuery("");
