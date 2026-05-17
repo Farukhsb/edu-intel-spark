@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createAdminClient, HttpError, jsonError, requireUser } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { buildReleasedGradeContext } from "../_shared/explain-grade-context.ts";
@@ -30,7 +29,7 @@ function createSseResponse(content: string, corsHeaders: HeadersInit) {
   });
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

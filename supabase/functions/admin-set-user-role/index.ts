@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 
 import { createAdminClient, HttpError, jsonError, requireAdmin } from "../_shared/auth.ts";
@@ -12,7 +11,7 @@ const RoleChangeRequestSchema = z.object({
   syncOnly: z.boolean().optional(),
 });
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
