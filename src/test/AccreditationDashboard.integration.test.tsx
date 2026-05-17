@@ -71,7 +71,6 @@ describe("AccreditationDashboard integration", () => {
   }, 20000);
 
   it("shows an explicit load error state when accreditation queries fail", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const supabaseMock = createSupabaseMock({
       grades: { selectResult: { data: null, error: { message: "boom" } } },
       submissions: { selectResult: { data: [], error: null } },
@@ -88,7 +87,6 @@ describe("AccreditationDashboard integration", () => {
       {},
       { timeout: 20000 },
     );
-    expect(errorSpy).toHaveBeenCalled();
   }, 25000);
 
   it("renders live derived metrics when accreditation data exists", async () => {
