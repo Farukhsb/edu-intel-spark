@@ -22,6 +22,13 @@ export type AccreditationMetric = {
   status: "met" | "at-risk" | "below";
 };
 
+export type InstitutionalReportingReadiness = {
+  posture: "strong" | "watch" | "risk";
+  postureLabel: string;
+  likelyChallenge: string;
+  bestNextReport: string;
+};
+
 export const EMPTY_ACCREDITATION: AccreditationMetric[] = [
   { metric: "Module Pass Rate (Avg)", value: 0, target: 75, status: "below" },
   { metric: "Graded Submissions", value: 0, target: 95, status: "below" },
@@ -135,5 +142,38 @@ export const buildInstitutionalInsightsSnapshot = ({
     lowPerforming,
     accreditation,
     hasRealData: assignments.length > 0 || submissions.length > 0 || grades.length > 0,
+  };
+};
+
+export const getInstitutionalReportingReadiness = ({
+  accreditation,
+  lowPerforming,
+}: {
+  accreditation: AccreditationMetric[];
+  lowPerforming: LowPerformingAssessment[];
+}): InstitutionalReportingReadiness => {
+  const weakestAccreditationMetric = [...accreditation].sort((left, right) => left.value - right.value)[0];
+  const belowCount = accreditation.filter((metric) => metric.status === "below").length;
+  const atRiskCount = accreditation.filter((metric) => metric.status === "at-risk").length;
+  const metCount = accreditation.filter((metric) => metric.status === "met").length;
+
+  const posture =
+    belowCount > 0 ? "risk" : atRiskCount > 0 ? "watch" : metCount > 0 ? "strong" : "risk";
+
+  return {
+    posture,
+    postureLabel:
+      posture === "strong"
+        ? "Strong reporting position"
+        : posture === "watch"
+          ? "Watch list position"
+          : "Evidence risk position",
+    likelyChallenge: weakestAccreditationMetric?.metric || "No readiness signal yet",
+    bestNextReport:
+      belowCount > 0 || atRiskCount > 0
+        ? "Accreditation compliance review"
+        : lowPerforming.length > 0
+          ? "Institutional performance snapshot"
+          : "No report priority yet",
   };
 };

@@ -5,6 +5,7 @@ import {
   buildPerformanceProjection,
   EMPTY_GRADE_DIST,
   filterAtRiskStudents,
+  getPerformanceReportingReadiness,
 } from "@/lib/performanceAnalytics";
 
 describe("performanceAnalytics", () => {
@@ -76,5 +77,35 @@ describe("performanceAnalytics", () => {
 
   it("returns an empty grade distribution shape for no scores", () => {
     expect(buildGradeDistribution([])).toEqual(EMPTY_GRADE_DIST);
+  });
+
+  it("derives a reporting-readiness summary from risk, failing-band, and assessment signals", () => {
+    const readiness = getPerformanceReportingReadiness({
+      assessmentTrends: [
+        { name: "Normalisation Case Study", avgGrade: 52, participation: 86 },
+        { name: "Schema Redesign Memo", avgGrade: 61, participation: 90 },
+      ],
+      atRiskStudents: [
+        {
+          studentId: "risk-1",
+          name: "Mariam Okeke",
+          email: "mariam@example.edu",
+          avgGrade: 37,
+          lastGrade: 26,
+          predictedNext: 24,
+          trend: "declining",
+          riskScore: 88,
+          riskLevel: "critical",
+          flags: ["Average below 40%"],
+          recommendation: "Immediate support",
+          sparkline: [49, 37, 26],
+        },
+      ],
+      gradeDist: buildGradeDistribution([72, 66, 52, 39, 34]),
+    });
+
+    expect(readiness.postureLabel).toBe("Immediate intervention position");
+    expect(readiness.likelyChallenge).toBe("Normalisation Case Study");
+    expect(readiness.bestNextAction).toBe("Open early support signals and act on high-risk students");
   });
 });

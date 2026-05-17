@@ -35,6 +35,8 @@ describe("AccreditationDashboard demo mode", () => {
 
     expect(await screen.findByText("Viewing demo accreditation data")).toBeInTheDocument();
     expect(screen.getByText("Overall Compliance")).toBeInTheDocument();
+    expect(screen.getByText("Reporting Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Current posture")).toBeInTheDocument();
     expect(screen.getByText("Assessment Criteria Transparency")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
 

@@ -56,28 +56,30 @@ describe("moss provider bridge", () => {
   });
 
   it("normalizes findings returned by the external MOSS runner", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        reportUrl: "https://moss.example/report/123",
+        findings: [
+          {
+            submission_id: "submission-a",
+            compared_submission_id: "submission-b",
+            similarity_score: 78,
+            evidence_summary: "Substantial overlap in control-flow and helper functions.",
+            matched_phrases: ["def validate_input", "for index in range"],
+          },
+        ],
+      }),
+    });
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          report_url: "https://moss.example/report/123",
-          findings: [
-            {
-              submission_id: "submission-a",
-              compared_submission_id: "submission-b",
-              similarity_score: 78,
-              evidence_summary: "Substantial overlap in control-flow and helper functions.",
-              matched_phrases: ["def validate_input", "for index in range"],
-            },
-          ],
-        }),
-      }),
+      fetchMock,
     );
 
     const findings = await runMossSimilarityJob({
       config: {
         runnerUrl: "https://moss-runner.example/jobs",
+        apiKey: "runner-secret",
         timeoutMs: 5_000,
       },
       assignmentId: "assignment-1",
@@ -116,5 +118,64 @@ describe("moss provider bridge", () => {
       language: "python",
       report_url: "https://moss.example/report/123",
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://moss-runner.example/jobs",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "x-api-key": "runner-secret",
+        }),
+      }),
+    );
+  });
+
+  it("skips self-match findings returned by the external MOSS runner", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          reportUrl: "https://moss.example/report/456",
+          findings: [
+            {
+              submission_id: "submission-a",
+              compared_submission_id: "submission-a",
+              similarity_score: 95,
+              evidence_summary: "Self match that should be ignored.",
+            },
+          ],
+        }),
+      }),
+    );
+
+    const findings = await runMossSimilarityJob({
+      config: {
+        runnerUrl: "https://moss-runner.example/jobs",
+        apiKey: "runner-secret",
+        timeoutMs: 5_000,
+      },
+      assignmentId: "assignment-1",
+      language: "python",
+      submissions: [
+        {
+          submissionId: "submission-a",
+          fileName: "one.py",
+          sourceText: "print('a')",
+          studentName: "A",
+          studentEmail: null,
+          language: "python",
+        },
+        {
+          submissionId: "submission-b",
+          fileName: "two.py",
+          sourceText: "print('b')",
+          studentName: "B",
+          studentEmail: null,
+          language: "python",
+        },
+      ],
+    });
+
+    expect(findings).toEqual([]);
   });
 });

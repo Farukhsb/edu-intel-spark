@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { type AtRiskStudent, computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
+import { type AtRiskStudent, computeRisk } from "@/lib/studentRisk";
+import { fetchLecturerPerformanceDataset } from "@/lib/data/student";
 import { log } from "@/lib/logger";
+import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
-  DashboardLiveBanner,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 import {
@@ -17,6 +18,7 @@ import {
   buildPerformanceProjection,
   EMPTY_GRADE_DIST,
   filterAtRiskStudents,
+  getPerformanceReportingReadiness,
 } from "@/lib/performanceAnalytics";
 import {
   AssessmentTrendsCard,
@@ -26,100 +28,18 @@ import {
   PerformanceFiltersBar,
   StudentSupportSummaryCard,
 } from "@/pages/dashboard/performance-trends/sections";
-
-const ASSIGNMENT_FIELDS = "id, title, module_code";
-const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, submitted_at";
-const GRADE_FIELDS = "submission_id, ai_score, final_score";
-
-type DemoAssessmentTrend = {
-  module: string;
-  name: string;
-  avgGrade: number;
-  participation: number;
-};
-
-type DemoTrajectory = StudentTrajectory & {
-  module: string;
-};
-
-const DEMO_ASSESSMENT_TRENDS: DemoAssessmentTrend[] = [
-  { module: "CS301", name: "Sorting Report Draft", avgGrade: 68, participation: 94 },
-  { module: "CS301", name: "Algorithm Benchmark Reflection", avgGrade: 63, participation: 91 },
-  { module: "CS220", name: "Normalisation Case Study", avgGrade: 57, participation: 89 },
-  { module: "CS220", name: "Schema Redesign Memo", avgGrade: 61, participation: 86 },
-];
-
-const DEMO_GRADE_SCORES: Array<{ module: string; score: number }> = [
-  { module: "CS301", score: 81 },
-  { module: "CS301", score: 76 },
-  { module: "CS301", score: 74 },
-  { module: "CS301", score: 69 },
-  { module: "CS301", score: 66 },
-  { module: "CS301", score: 58 },
-  { module: "CS301", score: 45 },
-  { module: "CS301", score: 34 },
-  { module: "CS220", score: 72 },
-  { module: "CS220", score: 64 },
-  { module: "CS220", score: 59 },
-  { module: "CS220", score: 56 },
-  { module: "CS220", score: 48 },
-  { module: "CS220", score: 41 },
-  { module: "CS220", score: 38 },
-  { module: "CS220", score: 29 },
-];
-
-const DEMO_TRAJECTORIES: DemoTrajectory[] = [
-  {
-    module: "CS301",
-    name: "Mariam Okeke",
-    email: "mariam.okeke@example.edu",
-    studentId: "demo-risk-1",
-    scores: [
-      { score: 49, date: "2026-01-20T09:00:00.000Z", assignmentTitle: "Sorting Lab Checkpoint" },
-      { score: 37, date: "2026-02-18T09:00:00.000Z", assignmentTitle: "Algorithm Reflection" },
-      { score: 26, date: "2026-03-22T09:00:00.000Z", assignmentTitle: "Benchmark Planning Memo" },
-    ],
-  },
-  {
-    module: "CS301",
-    name: "Oliver Grant",
-    email: "oliver.grant@example.edu",
-    studentId: "demo-risk-2",
-    scores: [
-      { score: 62, date: "2026-01-20T09:00:00.000Z", assignmentTitle: "Sorting Lab Checkpoint" },
-      { score: 48, date: "2026-02-18T09:00:00.000Z", assignmentTitle: "Algorithm Reflection" },
-      { score: 34, date: "2026-03-22T09:00:00.000Z", assignmentTitle: "Benchmark Planning Memo" },
-    ],
-  },
-  {
-    module: "CS220",
-    name: "Fatima Bello",
-    email: "fatima.bello@example.edu",
-    studentId: "demo-risk-3",
-    scores: [
-      { score: 71, date: "2026-01-16T09:00:00.000Z", assignmentTitle: "ER Model Exercise" },
-      { score: 55, date: "2026-02-14T09:00:00.000Z", assignmentTitle: "Functional Dependency Quiz" },
-      { score: 38, date: "2026-03-12T09:00:00.000Z", assignmentTitle: "Normalisation Case Study" },
-    ],
-  },
-  {
-    module: "CS220",
-    name: "Samuel Hart",
-    email: "samuel.hart@example.edu",
-    studentId: "demo-risk-4",
-    scores: [
-      { score: 52, date: "2026-01-16T09:00:00.000Z", assignmentTitle: "ER Model Exercise" },
-      { score: 47, date: "2026-02-14T09:00:00.000Z", assignmentTitle: "Functional Dependency Quiz" },
-      { score: 43, date: "2026-03-12T09:00:00.000Z", assignmentTitle: "Normalisation Case Study" },
-    ],
-  },
-];
+import {
+  DEMO_ASSESSMENT_TRENDS,
+  DEMO_GRADE_SCORES,
+  DEMO_TRAJECTORIES,
+} from "@/pages/dashboard/performance-trends/demoData";
 
 const PerformanceTrends = () => {
   const { user, isDemo } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const performanceSearchState = parsePerformanceTrendsSearchState(searchParams);
   const [moduleFilter, setModuleFilter] = useState("all");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,8 +49,7 @@ const PerformanceTrends = () => {
   const [gradeDist, setGradeDist] = useState(EMPTY_GRADE_DIST);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
 
-  const riskFilter = searchParams.get("risk") || "all";
-  const scoreBandFilter = searchParams.get("scoreBand") || "all";
+  const { riskFilter, scoreBandFilter } = performanceSearchState;
 
   useEffect(() => {
     if (isDemo) {
@@ -166,14 +85,7 @@ const PerformanceTrends = () => {
 
     const fetchLiveData = async () => {
       try {
-        const { data: assignmentsData, error: assignmentsError } = await supabase
-          .from("assignments")
-          .select(ASSIGNMENT_FIELDS)
-          .eq("lecturer_id", user.id);
-
-        if (assignmentsError) throw assignmentsError;
-
-        const assignments = assignmentsData || [];
+        const { assignments, submissions, grades } = await fetchLecturerPerformanceDataset(user.id);
         if (assignments.length === 0) {
           setModules([]);
           setAssessmentTrends([]);
@@ -187,14 +99,6 @@ const PerformanceTrends = () => {
         const moduleSet = new Set(assignments.map((assignment) => assignment.module_code).filter(Boolean) as string[]);
         setModules(Array.from(moduleSet));
 
-        const { data: submissionsData, error: submissionsError } = await supabase
-          .from("submissions")
-          .select(SUBMISSION_FIELDS)
-          .in("assignment_id", assignmentIds);
-
-        if (submissionsError) throw submissionsError;
-
-        const submissions = submissionsData || [];
         if (submissions.length === 0) {
           setAssessmentTrends([]);
           setGradeDist(EMPTY_GRADE_DIST);
@@ -202,19 +106,6 @@ const PerformanceTrends = () => {
           setLoading(false);
           return;
         }
-
-        const submissionIds = submissions.map((submission) => submission.id);
-        let grades: Array<{ submission_id: string; ai_score: number | null; final_score: number | null }> = [];
-        if (submissionIds.length > 0) {
-          const { data: gradesData, error: gradesError } = await supabase
-            .from("grades")
-            .select(GRADE_FIELDS)
-            .in("submission_id", submissionIds);
-
-          if (gradesError) throw gradesError;
-          grades = gradesData || [];
-        }
-
         const projection = buildPerformanceProjection({
           assignments,
           submissions,
@@ -268,6 +159,16 @@ const PerformanceTrends = () => {
     });
   }, [atRiskStudents, riskFilter, scoreBandFilter]);
 
+  const reportingReadiness = useMemo(
+    () =>
+      getPerformanceReportingReadiness({
+        assessmentTrends,
+        atRiskStudents,
+        gradeDist,
+      }),
+    [assessmentTrends, atRiskStudents, gradeDist],
+  );
+
   const updateFilters = (nextRisk: string, nextScoreBand: string) => {
     const next = new URLSearchParams(searchParams);
     if (nextRisk === "all") next.delete("risk");
@@ -288,7 +189,39 @@ const PerformanceTrends = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && <DashboardDemoBanner label="Viewing demo performance trends data" />}
-      {!isDemo && <DashboardLiveBanner label="Viewing live performance trends for your lecturer-scoped assignments" />}
+
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+        <CardTitle className="text-base">Teaching Focus</CardTitle>
+        <CardDescription>
+          A compact reading of which performance signal is most likely to need teaching attention next.
+        </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border bg-background/70 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Based on current risk, failing-band, and assessment-average signals in this performance view.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What needs attention</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This is the signal most likely to require either lecturer intervention or a clear explanation in review.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-background/70 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
+            <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextAction}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use this to decide whether to act on student support first or review assessment performance first.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <PerformanceFiltersBar
         modules={modules}
         moduleFilter={moduleFilter}

@@ -36,11 +36,61 @@ const sanitizeContext = (context?: SafeContext): SafeContext => {
   );
 };
 
+const isErrorRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const readStringField = (record: Record<string, unknown>, key: string) => {
+  const value = record[key];
+  return typeof value === "string" ? value.trim() : "";
+};
+
+const readNumberField = (record: Record<string, unknown>, key: string) => {
+  const value = record[key];
+  return typeof value === "number" ? value : undefined;
+};
+
 const toSafeErrorName = (error: unknown) => {
-  if (!(error instanceof Error)) return "UnknownError";
+  if (!(error instanceof Error)) {
+    if (!isErrorRecord(error)) return "UnknownError";
+
+    const namedCandidate =
+      readStringField(error, "name") ||
+      readStringField(error, "errorName") ||
+      readStringField(error, "type");
+
+    if (namedCandidate) return namedCandidate;
+
+    if (
+      readStringField(error, "code") ||
+      readStringField(error, "message") ||
+      readNumberField(error, "status") !== undefined ||
+      readNumberField(error, "statusCode") !== undefined
+    ) {
+      return "SupabaseError";
+    }
+
+    return "UnknownError";
+  }
 
   const normalizedName = error.name?.trim();
   return normalizedName || "Error";
+};
+
+const toSafeErrorMetadata = (error: unknown): SafeContext => {
+  if (!isErrorRecord(error)) return undefined;
+
+  const metadata: Record<string, unknown> = {};
+  const code = readStringField(error, "code");
+  const hint = readStringField(error, "hint");
+  const details = readStringField(error, "details");
+  const status = readNumberField(error, "status") ?? readNumberField(error, "statusCode");
+
+  if (code) metadata.errorCode = code;
+  if (hint) metadata.errorHint = hint;
+  if (details) metadata.errorDetails = details;
+  if (status !== undefined) metadata.errorStatus = status;
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 };
 
 const toSafeError = (error: unknown, fallbackMessage: string) => {
@@ -87,7 +137,10 @@ export const log = {
     writeConsole("warn", message, context);
   },
   error(message: string, error?: unknown, context?: SafeContext) {
-    const safeContext = sanitizeContext(context);
+    const safeContext = sanitizeContext({
+      ...toSafeErrorMetadata(error),
+      ...context,
+    });
     const safeError = toSafeError(error, message);
     captureAppError(safeError, {
       message,

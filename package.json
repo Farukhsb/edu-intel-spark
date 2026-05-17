@@ -9,12 +9,15 @@
     "build:dev": "vite build --mode development",
     "check": "npm run test && npm run build",
     "lint": "eslint .",
-    "moss:runner": "node tools/moss-runner/server.mjs",
+    "moss:runner": "node tools/moss-runner/server.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:load": "node tools/load-test/run.mjs",
+    "test:perf": "vitest run src/test/workflowPerformance.test.ts",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -194,12 +194,11 @@ Expected result:
 
 Use a lecturer account with enough assignment and submission data to produce meaningful output.
 
-Open and check these pages:
+Open and check these lecturer pages:
 
 - Cohort Analytics
 - Performance Trends
-- Institutional Insights
-- Accreditation
+- Learning Outcomes
 
 For each page:
 
@@ -216,9 +215,34 @@ Expected result:
 - counts and labels look plausible for the current dataset
 - empty states are understandable instead of broken
 
+### Admin reporting pages
+
+Use an admin account with enough live assignment, submission, and grading data to produce meaningful output.
+
+Open and check these pages:
+
+- Institutional Insights
+- Accreditation
+- External Examiner
+
+For each page:
+
+1. Confirm the page loads without a runtime error.
+2. Confirm live data appears when records exist.
+3. Confirm the empty state only appears when there is genuinely no usable data.
+4. Refresh the page once to catch any fragile client-side assumptions.
+5. If filters, exports, or drill-down links exist, click through at least one.
+
+Expected result:
+
+- no blank states caused by JS errors
+- reporting cards and tables render from real data
+- admin-only routes stay admin-only
+- empty states are understandable instead of broken
+
 ## 6. Export Features
 
-Use a lecturer account with some graded submissions.
+Use an admin account with some graded and released submissions.
 
 ### External examiner export
 

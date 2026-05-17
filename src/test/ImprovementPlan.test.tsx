@@ -4,9 +4,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ImprovementPlan from "@/pages/dashboard/ImprovementPlan";
 
-const renderWithRouter = (ui: React.ReactNode) =>
+// Workspace view changes are covered here so completed/open/module modes stay aligned with the student UI.
+const hasTextContent = (expected: RegExp | string) => (_: string, element: Element | null) => {
+  const text = element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  if (typeof expected === "string") {
+    return text.includes(expected);
+  }
+
+  return expected.test(text);
+};
+
+const renderWithRouter = (
+  ui: React.ReactNode,
+  initialEntries:
+    | string[]
+    | Array<
+        | string
+        | {
+            pathname: string;
+            search?: string;
+            hash?: string;
+            state?: unknown;
+          }
+      > = ["/dashboard/improvements"],
+) =>
   render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter initialEntries={initialEntries} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       {ui}
     </MemoryRouter>,
   );
@@ -80,6 +103,10 @@ describe("ImprovementPlan explanation validation", () => {
   beforeEach(() => {
     mocks.authState.isDemo = true;
     mocks.authState.user = { id: "student-1" };
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
   afterEach(() => {
@@ -90,7 +117,17 @@ describe("ImprovementPlan explanation validation", () => {
   it("renders suggested focus areas without a misleading refresh action", () => {
     renderWithRouter(<ImprovementPlan />);
 
-    expect(screen.getByRole("heading", { name: "Best Next Moves" })).toBeInTheDocument();
+    expect(screen.getByText("Current focus")).toBeInTheDocument();
+    expect(screen.getByText("You have active improvement work")).toBeInTheDocument();
+    expect(
+      screen.getByText("CS205: Dynamic Programming Structure is still the highest-priority improvement area"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Complete Complete Big-O analysis worksheet before the next submission window"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Progress you have already made")).toBeInTheDocument();
+    expect(screen.getAllByText("2 of 5 tasks complete").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Improvement plan" })).toBeInTheDocument();
     expect(
       screen.getByText(/Focused on the weakest repeated criteria so you know which skills to strengthen for future assignments/i),
     ).toBeInTheDocument();
@@ -105,9 +142,10 @@ describe("ImprovementPlan explanation validation", () => {
     renderWithRouter(<ImprovementPlan />);
 
     expect(screen.getByText("Priority 1 - CS205: Dynamic Programming Structure")).toBeInTheDocument();
-    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+    expect(screen.getByTestId("workspace-progress-indicator")).toBeInTheDocument();
+    expect(screen.getAllByText("Needs attention").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/(Good|Strong|High) recovery opportunity \| (short|12 min|15 min|20 min) review/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Future improvement plan").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading", { name: "Improvement plan" }).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
         /Based on (direct criterion feedback from graded work|repeated low criterion scores with some supporting feedback|limited evidence from current graded work, so this guidance is intentionally broad)\./,
@@ -134,6 +172,48 @@ describe("ImprovementPlan explanation validation", () => {
 
     expect(screen.getByText("Review lecturer feedback before next lab")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /hide completed tasks/i })).toBeInTheDocument();
+  });
+
+  it("uses the hero action buttons to jump to module sections and reveal completed tasks", () => {
+    renderWithRouter(<ImprovementPlan />);
+
+    fireEvent.click(screen.getByRole("button", { name: /view completed tasks/i }));
+
+    expect(screen.getByText("Review lecturer feedback before next lab")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /hide completed tasks/i }).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /view modules/i }));
+    expect(screen.getByText("Complete Big-O analysis worksheet")).toBeInTheDocument();
+  });
+
+  it("shows a focused support handoff when opened from an intervention notification", () => {
+    renderWithRouter(
+      <ImprovementPlan />,
+      [
+        {
+          pathname: "/dashboard/improvements",
+          state: {
+            notification: {
+              id: "notice-1",
+              createdAt: "2026-05-03T09:00:00.000Z",
+              cleared: false,
+              read: false,
+              category: "intervention-follow-up",
+              recipientName: "Student",
+              recipientEmail: "student@example.com",
+              recipientId: "student-1",
+              subject: "Study plan reminder",
+              body: "Review the complexity-analysis tasks in your improvement plan before the next submission window.",
+            },
+          },
+        },
+      ],
+    );
+
+    expect(screen.getByTestId("improvement-plan-notice-focus")).toBeInTheDocument();
+    expect(screen.getByText("Opened from support notice")).toBeInTheDocument();
+    expect(screen.getByText("Start Here")).toBeInTheDocument();
+    expect(screen.getByText("First Open Task")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review improvement plan" })).toBeInTheDocument();
   });
 
   it("builds a plan for a real student using assignment metadata RPC", async () => {
@@ -194,11 +274,13 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.queryByText("No improvement plan yet")).not.toBeInTheDocument();
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
     expect(screen.getByText("Priority 1 - CS101: Testing")).toBeInTheDocument();
-    expect(screen.getByText("Strong recovery opportunity | 15 min review")).toBeInTheDocument();
+    expect(screen.getAllByText(hasTextContent(/Strong recovery opportunity\s*\|\s*15 min review/i)).length).toBeGreaterThan(0);
     expect(screen.getByText("Weakest criterion: Testing (50% loss)")).toBeInTheDocument();
     expect(
-      screen.getByText(/Feedback:\s*BST deletion and traversal logic are not demonstrated with test output\./i),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        hasTextContent(/Feedback:\s*BST deletion and traversal logic are not demonstrated with test output\./i),
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText("In your CS101 submission, your bst deletion and traversal logic are not visibly demonstrated, so the marker could not verify it clearly."),
     ).toBeInTheDocument();
@@ -358,15 +440,17 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.getByText(/Focused on the most important fixes to recover weaker submissions/i)).toBeInTheDocument();
     expect(screen.getByText("Recovery plan")).toBeInTheDocument();
     expect(
-      screen.getByText(/Feedback:\s*Your discussion is descriptive and does not clearly evaluate the fairness risks\./i),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        hasTextContent(/Feedback:\s*Your discussion is descriptive and does not clearly evaluate the fairness risks\./i),
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(/For resubmission, rewrite (analysis|ai fairness risk) so it compares at least two viewpoints/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/What to fix to recover this submission/i)).toBeInTheDocument();
+    expect(screen.getByText(/What to do next/i)).toBeInTheDocument();
   });
 
-  it("collapses a fully completed real module plan by default", async () => {
+  it("removes a fully completed real module plan from the active workspace", async () => {
     mocks.authState.isDemo = false;
     mocks.supabase.rpc.mockResolvedValue({
       data: [
@@ -409,10 +493,17 @@ describe("ImprovementPlan explanation validation", () => {
 
     renderWithRouter(<ImprovementPlan />);
 
-    expect(await screen.findByText("Completed module plan")).toBeInTheDocument();
-    expect(screen.getAllByText("Testing").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /show completed plan/i })).toBeInTheDocument();
-    expect(screen.queryByText("What to improve before your next submission")).not.toBeInTheDocument();
-    expect(screen.queryByText("All current tasks are completed for this module.")).not.toBeInTheDocument();
+    expect(await screen.findByText("Current improvement tasks complete")).toBeInTheDocument();
+    expect(screen.getByText(/completed module plans are hidden from the active workspace/i)).toBeInTheDocument();
+    expect(screen.queryByText("Completed module plan")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /show completed plan/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("No open tasks remain for this module.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /view completed tasks/i }));
+
+    expect(await screen.findByText("Showing modules that contain completed tasks.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Testing" })).toBeInTheDocument();
+    expect(screen.getByText("No open tasks remain for this module.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /hide module details/i })).toBeInTheDocument();
   });
 });

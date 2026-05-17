@@ -41,6 +41,7 @@ drop policy if exists "Lecturers can update own interventions" on public.student
 drop policy if exists "Lecturers can update their own interventions" on public.student_interventions;
 drop policy if exists "Lecturers can delete own interventions" on public.student_interventions;
 drop policy if exists "Lecturers can delete their own interventions" on public.student_interventions;
+drop policy if exists "Lecturers can manage own interventions" on public.student_interventions;
 
 create policy "Lecturers can manage own interventions"
 on public.student_interventions

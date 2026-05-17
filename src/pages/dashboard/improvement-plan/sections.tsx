@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { BookOpen, CheckCircle2, Target, TrendingDown, TrendingUp } from "lucide-react";
 
-import type { PlanModule, Resource } from "@/lib/improvementPlan";
+import type { ImprovementPlanReadiness, PlanModule, Resource } from "@/lib/improvementPlan";
 
 export const InlineProgressBar = ({
   value,
@@ -34,6 +34,144 @@ export const InlineProgressBar = ({
   );
 };
 
+export const ImprovementPlanHero = ({
+  module,
+  readiness,
+  modulesCount,
+  completed,
+  total,
+  activeView,
+  onViewModules,
+  onViewCompletedTasks,
+}: {
+  module: PlanModule | null;
+  readiness: ImprovementPlanReadiness;
+  modulesCount: number;
+  completed: number;
+  total: number;
+  activeView: "modules" | "completed" | "open";
+  onViewModules: () => void;
+  onViewCompletedTasks: () => void;
+}) => {
+  const openTasks = Math.max(0, total - completed);
+  const hasActiveModule = module != null;
+
+  return (
+    <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-background shadow-sm">
+      <CardContent className="space-y-6 p-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Improvement Plan</h1>
+              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                Use this page to understand your latest result, see what improved, and focus on the next action before your next submission.
+              </p>
+            </div>
+
+            {hasActiveModule ? (
+              <div className="rounded-2xl border bg-background/80 p-4">
+                <p className="text-sm font-semibold text-foreground">{module.module}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <Badge variant="secondary">Current score: {module.currentGrade}%</Badge>
+                  <Badge variant="outline">Target score: {module.targetGrade}%</Badge>
+                  <Badge variant="outline">
+                    Progress: {module.trend === "up" ? "Improving" : module.trend === "down" ? "Needs attention" : "Steady"}
+                  </Badge>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strengths</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {module.strengths.map((strength) => (
+                        <Badge key={strength} variant="default">
+                          {strength}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Main area to improve</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {module.weaknesses.map((weakness) => (
+                        <Badge key={weakness} variant="outline">
+                          {weakness}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed bg-background/80 p-4">
+                <p className="text-sm font-semibold text-foreground">Current improvement tasks complete</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  You have cleared the current module tasks in this workspace. New priorities will appear here after your next released result adds a fresh improvement signal.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-2xl border bg-background/80 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current focus</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{readiness.postureLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Based on your current support tasks, recurring weak criteria, and recommended next moves.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border bg-background/80 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Why this matters</p>
+              <p className="mt-2 text-sm text-foreground">
+                {hasActiveModule
+                  ? readiness.likelyChallenge
+                  : "Completed module plans are hidden from the active workspace so your page stays focused on what still needs attention."}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">
+                {hasActiveModule
+                  ? readiness.bestNextAction
+                  : "Wait for the next released result or reopen completed tasks only if you want to review past work."}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border bg-background/75 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Modules tracked</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{modulesCount}</p>
+          </div>
+          <div className="rounded-xl border bg-background/75 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tasks completed</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{completed}</p>
+          </div>
+          <div className="rounded-xl border bg-background/75 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tasks open</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{openTasks}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button type="button" variant={activeView === "modules" ? "default" : "outline"} onClick={onViewModules}>
+            View modules
+          </Button>
+          <Button
+            type="button"
+            variant={activeView === "completed" ? "default" : "outline"}
+            onClick={onViewCompletedTasks}
+          >
+            View completed tasks
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 export const ImprovementPlanOverview = ({
   modulesCount,
   completed,
@@ -49,9 +187,9 @@ export const ImprovementPlanOverview = ({
     <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
       <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm font-medium">Your next-step study plan</p>
+          <p className="text-sm font-medium">Progress summary</p>
           <p className="text-xs text-muted-foreground">
-            Focus on the lowest-scoring criteria first, then track completion before the next submission.
+            Track what you have completed and keep the next priority visible before your next submission.
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -134,36 +272,37 @@ export const ImprovementPlanModuleCard = ({
   }
 
   return (
-    <Card>
+    <Card id={`improvement-module-${module.module}`}>
       <CardHeader>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-4">
           <div>
             <CardTitle className="text-base">{module.module}</CardTitle>
-            <CardDescription>
-              Current {module.currentGrade}% | Target {module.targetGrade}% |{" "}
-              {module.trend === "up" ? "improving" : module.trend === "down" ? "declining" : "steady"} trend |{" "}
-              {module.guidanceMode === "recovery" ? "recovery guidance" : "future improvement guidance"}
+            <CardDescription className="mt-2">
+              Use this summary to see what went well, what needs improvement, and what to carry into your next submission.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-sm">
-              {module.trend === "up" ? (
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              ) : module.trend === "down" ? (
-                <TrendingDown className="h-4 w-4 text-destructive" />
-              ) : (
-                <Target className="h-4 w-4 text-primary" />
-              )}
-              <span className="font-medium">
-                {module.trendDelta > 0 ? `+${module.trendDelta}` : module.trendDelta} pts
-              </span>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current score</p>
+              <p className="mt-2 text-lg font-semibold">{module.currentGrade}%</p>
             </div>
-            <div className="w-32">
-              <InlineProgressBar value={progress} className="h-2" />
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Target score</p>
+              <p className="mt-2 text-lg font-semibold">{module.targetGrade}%</p>
             </div>
-            <span className="text-xs text-muted-foreground">
-              {completed}/{module.tasks.length}
-            </span>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Trend</p>
+              <div className="mt-2 flex items-center gap-2 text-sm font-semibold">
+                {module.trend === "up" ? (
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                ) : module.trend === "down" ? (
+                  <TrendingDown className="h-4 w-4 text-destructive" />
+                ) : (
+                  <Target className="h-4 w-4 text-primary" />
+                )}
+                <span>{module.trend === "up" ? "Improving" : module.trend === "down" ? "Needs attention" : "Steady"}</span>
+              </div>
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -172,7 +311,7 @@ export const ImprovementPlanModuleCard = ({
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border bg-muted/20 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strengths</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What you did well</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {module.strengths.length > 0 ? (
                     module.strengths.map((strength) => (
@@ -187,7 +326,7 @@ export const ImprovementPlanModuleCard = ({
               </div>
 
               <div className="rounded-lg border bg-muted/20 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weaknesses</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Main area to improve</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {module.weaknesses.length > 0 ? (
                     module.weaknesses.map((weakness) => (
@@ -203,11 +342,7 @@ export const ImprovementPlanModuleCard = ({
             </div>
 
             <div className="rounded-lg border p-4">
-              <p className="text-sm font-medium">
-                {module.guidanceMode === "recovery"
-                  ? "What to fix to recover this submission"
-                  : "What to improve before your next submission"}
-              </p>
+              <p className="text-sm font-medium">What to do next</p>
               <div className="mt-3 space-y-2">
                 {module.nextSubmissionFocus.map((focus) => (
                   <div key={focus} className="flex items-start gap-2 text-sm">
@@ -247,8 +382,15 @@ export const ImprovementPlanModuleCard = ({
           </div>
         </div>
 
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium">Track your improvement tasks</p>
+        <div id={`improvement-module-tasks-${module.module}`} className="rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">Tasks</p>
+            {openTasks.length > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                {completed} of {module.tasks.length} completed
+              </span>
+            ) : null}
+          </div>
           <div className="mt-4 space-y-3">
             {openTasks.length > 0 ? openTasks.map((task) => (
               <div key={task.id} className="flex items-start gap-3">
@@ -262,28 +404,28 @@ export const ImprovementPlanModuleCard = ({
               </div>
             )) : (
               <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
-                All current tasks are completed for this module.
+                No open tasks remain for this module.
               </div>
             )}
           </div>
 
           {completedTasks.length > 0 && (
-            <div className="mt-4 border-t pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-auto px-0 text-sm text-muted-foreground hover:text-foreground"
-                  onClick={() => onToggleCompletedSection(module.module)}
-                >
+              <div className="mt-4 border-t pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-auto px-0 text-sm text-muted-foreground hover:text-foreground"
+                    onClick={() => onToggleCompletedSection(module.module)}
+                  >
                   {expandedCompletedSection ? "Hide completed tasks" : `Show completed tasks (${completedTasks.length})`}
-                </Button>
-                {isFullyCompleted && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => onToggleCompletedCard(module.module)}>
-                    Collapse module
                   </Button>
-                )}
-              </div>
+                  {isFullyCompleted && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => onToggleCompletedCard(module.module)}>
+                    Hide module details
+                  </Button>
+                  )}
+                </div>
               {expandedCompletedSection && (
                 <div className="mt-3 space-y-3">
                   {completedTasks.map((task) => (
@@ -311,11 +453,11 @@ export const ImprovementPlanResourcesSection = ({ resources }: { resources: Reso
   const hasRecoveryGuidance = resources.some((resource) => resource.guidanceMode === "recovery");
 
   return (
-    <Card>
+    <Card id="best-next-moves">
       <CardHeader>
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
-          <CardTitle className="text-base">Best Next Moves</CardTitle>
+          <CardTitle className="text-base">Improvement plan</CardTitle>
         </div>
         <CardDescription>
           {hasRecoveryGuidance

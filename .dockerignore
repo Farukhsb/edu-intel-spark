@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.codex-dev.log
+.codex-dev.err.log
+npm-debug.log*
+tools/moss-runner/local
+supabase/.temp
+Dockerfile.prod
+docker-compose.prod.yml

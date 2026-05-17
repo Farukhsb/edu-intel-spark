@@ -2,6 +2,8 @@ import {
   canReleaseStatus,
   getApprovalBlockReason,
   getAssessmentSummary,
+  getLecturerSelectionGuidance,
+  getLecturerWorkflowLaneSummary,
   getSelectedWorkflowActionState,
   getSubmissionDisplayState,
   isApprovableWorkflowStatus,
@@ -44,7 +46,8 @@ describe("assessment workflow rules", () => {
     expect(isRegradableWorkflowStatus("approved")).toBe(true);
     expect(isRegradableWorkflowStatus("released")).toBe(false);
 
-    expect(isApprovableWorkflowStatus("ai_graded")).toBe(true);
+    expect(isApprovableWorkflowStatus("ai_graded")).toBe(false);
+    expect(isApprovableWorkflowStatus("first_review")).toBe(true);
     expect(isApprovableWorkflowStatus("moderated")).toBe(true);
     expect(isApprovableWorkflowStatus("approved")).toBe(false);
   });
@@ -61,11 +64,46 @@ describe("assessment workflow rules", () => {
     ).toEqual({
       submittedCount: 1,
       regradableCount: 4,
-      approvableCount: 2,
+      approvableCount: 1,
       releaseReadyCount: 1,
       hasRegradable: true,
       hasApprovable: true,
       hasReleaseReady: true,
+    });
+  });
+
+  it("summarizes workflow lanes consistently for lecturer operations", () => {
+    expect(
+      getLecturerWorkflowLaneSummary([
+        "submitted",
+        "ai_grading",
+        "ai_graded",
+        "moderation_pending",
+        "approved",
+        "released",
+      ]),
+    ).toEqual({
+      intakeCount: 1,
+      aiInProgressCount: 1,
+      firstReviewCount: 1,
+      manualReviewCount: 0,
+      moderationCount: 1,
+      releaseReadyCount: 1,
+      releasedCount: 1,
+    });
+  });
+
+  it("guides selected submissions toward the clearest next lecturer action", () => {
+    expect(getLecturerSelectionGuidance(["approved"])).toEqual({
+      headline: "Release-ready submissions selected",
+      detail:
+        "1 approved submission is ready for student release. Release them only after the final feedback and score look correct.",
+    });
+
+    expect(getLecturerSelectionGuidance(["ai_graded"])).toEqual({
+      headline: "First-review work is selected",
+      detail:
+        "These submissions already have AI output. Open the review surface, confirm or adjust the score and feedback, and let the workflow decide whether moderation is needed.",
     });
   });
 
@@ -84,6 +122,27 @@ describe("assessment workflow rules", () => {
       studentVisibleFeedback: null,
       showFeedbackSummary: true,
       showFirstReview: true,
+      showApprove: false,
+      showRelease: false,
+      showReleaseNote: false,
+    });
+  });
+
+  it("shows approval without first-review editing once work has moved into moderation-complete state", () => {
+    expect(
+      getSubmissionDisplayState({
+        status: "moderated",
+        grade: {
+          ai_score: 58,
+          ai_feedback: "AI feedback",
+        },
+        isLecturer: true,
+      }),
+    ).toEqual({
+      scoreToDisplay: 58,
+      studentVisibleFeedback: null,
+      showFeedbackSummary: true,
+      showFirstReview: false,
       showApprove: true,
       showRelease: false,
       showReleaseNote: false,

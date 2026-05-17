@@ -10,7 +10,11 @@ import {
 } from "@/lib/assignmentCatalog";
 import { log } from "@/lib/logger";
 import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
-import { DEMO_ASSIGNMENTS, DEMO_STUDENT_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
+import {
+  DEMO_ASSIGNMENTS,
+  DEMO_STUDENT_ASSIGNMENTS,
+  DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
+} from "@/pages/dashboard/demoAssignments";
 
 export interface AssignmentDataItem {
   id: string;
@@ -29,6 +33,38 @@ export interface AssignmentDataItem {
   target_departments: string[];
 }
 
+export interface StudentAssignmentWorkflowState {
+  assignmentId: string;
+  submissionId: string;
+  status: string;
+  submittedAt: string;
+}
+
+const buildLatestStudentWorkflowMap = (
+  submissions: Array<{
+    id: string;
+    assignment_id: string;
+    status: string;
+    submitted_at: string;
+  }>,
+) => {
+  const latestByAssignment: Record<string, StudentAssignmentWorkflowState> = {};
+
+  for (const submission of submissions) {
+    const existing = latestByAssignment[submission.assignment_id];
+    if (!existing || new Date(submission.submitted_at).getTime() > new Date(existing.submittedAt).getTime()) {
+      latestByAssignment[submission.assignment_id] = {
+        assignmentId: submission.assignment_id,
+        submissionId: submission.id,
+        status: submission.status,
+        submittedAt: submission.submitted_at,
+      };
+    }
+  }
+
+  return latestByAssignment;
+};
+
 export const useAssignmentsData = ({
   role,
   userId,
@@ -40,6 +76,7 @@ export const useAssignmentsData = ({
 }) => {
   const [assignments, setAssignments] = useState<AssignmentDataItem[]>([]);
   const [submissionStats, setSubmissionStats] = useState<Record<string, AssignmentSubmissionStats>>({});
+  const [studentWorkflow, setStudentWorkflow] = useState<Record<string, StudentAssignmentWorkflowState>>({});
   const [loading, setLoading] = useState(true);
 
   const fetchAssignments = async () => {
@@ -47,11 +84,26 @@ export const useAssignmentsData = ({
       const demoAssignments = role === "student" ? DEMO_STUDENT_ASSIGNMENTS : DEMO_ASSIGNMENTS;
       setAssignments((demoAssignments ?? []).map(normalizeAssignment));
       setSubmissionStats({});
+      setStudentWorkflow(
+        role === "student"
+          ? buildLatestStudentWorkflowMap(
+              Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
+                .flat()
+                .map((submission) => ({
+                  id: submission.id,
+                  assignment_id: submission.assignment_id,
+                  status: submission.status,
+                  submitted_at: submission.submitted_at,
+                })),
+            )
+          : {},
+      );
       setLoading(false);
       return;
     }
 
     if (!userId) {
+      setStudentWorkflow({});
       setLoading(false);
       return;
     }
@@ -132,8 +184,36 @@ export const useAssignmentsData = ({
       if (submissions) {
         setSubmissionStats(buildAssignmentSubmissionStats(mapped as AssignmentCatalogItem[], submissions));
       }
+      setStudentWorkflow({});
+    } else if (role === "student" && mapped.length > 0) {
+      const { data: studentSubmissions, error: studentSubmissionsError } = await supabase
+        .from("submissions")
+        .select("id, assignment_id, status, submitted_at")
+        .eq("student_id", userId)
+        .in("assignment_id", mapped.map((assignment) => assignment.id))
+        .order("submitted_at", { ascending: false });
+
+      if (studentSubmissionsError) {
+        log.error("Student assignment workflow query failed", studentSubmissionsError, {
+          role,
+          userId,
+        });
+        setStudentWorkflow({});
+      } else {
+        setStudentWorkflow(
+          buildLatestStudentWorkflowMap(
+            (studentSubmissions ?? []) as Array<{
+              id: string;
+              assignment_id: string;
+              status: string;
+              submitted_at: string;
+            }>,
+          ),
+        );
+      }
     } else {
       setSubmissionStats({});
+      setStudentWorkflow({});
     }
 
     setLoading(false);
@@ -146,6 +226,7 @@ export const useAssignmentsData = ({
   return {
     assignments,
     submissionStats,
+    studentWorkflow,
     loading,
     refreshAssignments: fetchAssignments,
   };

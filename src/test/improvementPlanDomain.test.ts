@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPlanModules,
   buildResourceRecommendations,
+  getImprovementPlanReadiness,
   getOverallTaskSummary,
 } from "@/lib/improvementPlan";
 
@@ -223,5 +224,73 @@ describe("improvement plan domain helpers", () => {
     );
     expect(resources[0].actionItems[0]).toMatch(/For resubmission, rewrite ai fairness risk so it compares at least two viewpoints/i);
     expect(resources[0].evidenceOfImprovement).toMatch(/resubmission meet the rubric minimums/i);
+  });
+
+  it("builds readiness from the top priority resource and first open task", () => {
+    const plan = buildPlanModules({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          submitted_at: "2026-04-20T10:00:00.000Z",
+        },
+      ],
+      grades: [
+        {
+          submission_id: "submission-1",
+          final_score: 68,
+          ai_score: 68,
+          ai_breakdown: [
+            {
+              criterion: "Analysis",
+              score: 6,
+              max_score: 10,
+              feedback:
+                "Your discussion of AI fairness risk describes concepts but does not clearly evaluate their impact.",
+            },
+            {
+              criterion: "Testing",
+              score: 5,
+              max_score: 10,
+              feedback: "BST deletion and traversal logic are not demonstrated with test output.",
+            },
+          ],
+        },
+      ],
+      assignmentMap: {
+        "assignment-1": {
+          id: "assignment-1",
+          title: "Algorithms Coursework",
+          module_code: "CS101",
+          max_score: 100,
+        },
+      },
+      taskOverrides: {},
+    });
+
+    const resources = buildResourceRecommendations(plan);
+    const readiness = getImprovementPlanReadiness({
+      plan,
+      resources,
+      overallTasks: getOverallTaskSummary(plan),
+    });
+
+    expect(readiness.postureLabel).toBe("You have active improvement work");
+    expect(readiness.likelyChallenge).toBe("CS101: Testing is still the highest-priority improvement area");
+    expect(readiness.bestNextAction).toBe("Complete Review lecturer feedback for Testing before the next submission window");
+  });
+
+  it("falls back to a no-support readiness state when no plan exists", () => {
+    const readiness = getImprovementPlanReadiness({
+      plan: [],
+      resources: [],
+      overallTasks: { total: 0, completed: 0, progress: 0 },
+    });
+
+    expect(readiness).toEqual({
+      postureLabel: "No active improvement tasks yet",
+      likelyChallenge: "No personalised improvement tasks are active yet",
+      bestNextAction: "Receive released feedback first so the platform can build a focused support plan",
+    });
   });
 });

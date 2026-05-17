@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 
-GradeAI is an academic risk intelligence platform for higher education. It helps lecturers and institutions surface academic risk earlier by turning assessment activity, grading signals, integrity review, moderation, feedback release, cohort analytics, and intervention workflows into one connected picture.
+GradeAI is an academic risk intelligence platform for higher education and wider education settings. It helps lecturers, teachers, tutors, and institutions surface academic risk earlier by turning assessment activity, grading signals, integrity review, moderation, feedback release, cohort analytics, and intervention workflows into one connected picture.
 
-The platform is built on a simple premise: academic risk is easier to understand when assessment, feedback, integrity signals, and support actions are connected instead of scattered across separate tools. AI helps prepare evidence, summaries, and draft grading output, while academic judgement stays firmly with lecturers.
+The platform is built on a simple premise: academic risk is easier to understand when assessment, feedback, integrity signals, and support actions are connected instead of scattered across separate tools. AI helps prepare evidence, summaries, and draft grading output, while academic judgement stays firmly with educators.
 
 GradeAI is not a black-box auto-grading tool. It is designed to help educators see problems earlier, understand what is driving them, and act with more confidence through reviewable, evidence-led workflows.
 
@@ -19,7 +19,7 @@ student submits work
   -> student progress is tracked over time
 ```
 
-This is the product loop GradeAI is built around: assessment evidence becomes risk intelligence, and risk intelligence becomes timely lecturer-led action.
+This is the product loop GradeAI is built around: assessment evidence becomes risk intelligence, and risk intelligence becomes timely educator-led action.
 
 ## Why This Exists
 
@@ -27,7 +27,15 @@ Struggling students are often identified too late. The warning signs may already
 
 Assessment is central to this problem because it creates some of the clearest evidence of student progress. But marking, feedback, moderation, academic integrity review, analytics, and intervention records are often disconnected.
 
-GradeAI brings these parts together. The aim is not to automate academic judgement. The aim is to give lecturers clearer evidence and a more connected workflow for earlier support.
+GradeAI brings these parts together. The aim is not to automate academic judgement. The aim is to give educators clearer evidence and a more connected workflow for earlier support.
+
+## Where GradeAI Could Be Used
+
+Although GradeAI is currently framed around higher education workflows, the same problem exists across many education settings. Secondary schools, sixth-form colleges, further education colleges, polytechnics, training providers, and universities all need better ways to track assessment evidence, spot students who may be falling behind, manage feedback, review integrity concerns, and support learners before problems become harder to fix.
+
+The product is therefore intended to be adaptable across education levels. A university might use it for moderation, external examiner evidence, academic integrity review, and cohort-level analytics. A college or polytechnic might use it to track coursework, practical assignments, resubmissions, and learner support. A secondary school might use a more controlled version for teacher-reviewed feedback, progress monitoring, and early intervention.
+
+The core idea stays the same: GradeAI should support educators with clearer evidence and better workflows, while the institution keeps control of its data, policies, and final academic decisions.
 
 ## Academic Risk Intelligence
 
@@ -35,14 +43,14 @@ GradeAI treats academic risk as something institutions should be able to see ear
 
 Instead of waiting for end-of-term results, it reads day-to-day academic workflow data such as missing submissions, weak rubric performance, integrity concerns, repeated feedback patterns, release status, and cohort-level shifts to highlight where attention may be needed sooner.
 
-The goal is to help lecturers answer practical questions earlier:
+The goal is to help educators answer practical questions earlier:
 
 - Which students are showing early signs of academic risk?
 - Which assignments are generating weak outcomes or integrity concerns?
 - Which feedback patterns suggest recurring misunderstanding?
 - Which cases need moderation, review, or follow-up support?
 
-That makes GradeAI less about isolated grading automation and more about giving lecturers a live view of what is working, what is starting to drift, and where timely support could make the biggest difference.
+That makes GradeAI less about isolated grading automation and more about giving educators a live view of what is working, what is starting to drift, and where timely support could make the biggest difference.
 
 ## What GradeAI Does
 
@@ -51,7 +59,7 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - brings together assignment, submission, grading, integrity, moderation, and intervention data
 - highlights academic risk indicators from live workflow activity
 - shows where weak performance, missing work, or repeated issues are starting to build
-- supports earlier lecturer review before risk turns into failure, disengagement, or withdrawal
+- supports earlier educator review before risk turns into failure, disengagement, or withdrawal
 
 ### Assessment intelligence
 
@@ -59,7 +67,7 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - collect and review student submissions
 - run AI-assisted grading through backend Edge Functions
 - return criterion-level feedback, scores, evidence, and confidence signals
-- keep lecturer review at the centre before approval and release
+- keep educator review at the centre before approval and release
 
 ### Academic integrity and moderation
 
@@ -75,7 +83,7 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - support intervention notes and follow-up actions
 - give students released feedback and improvement guidance
 - keep provisional AI output away from students until work is approved and released
-- connect assessment evidence to practical lecturer follow-up
+- connect assessment evidence to practical educator follow-up
 
 ### Analytics and oversight
 
@@ -84,13 +92,13 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - assignment comparison
 - performance trends
 - integrity signal monitoring
-- rule-based recommendations for lecturer review
+- rule-based recommendations for educator review
 
 ### Workflow notifications
 
 - in-app workflow notifications
-- email notification backend for assignment, submission, and grade-release events
-- email delivery is feature-flagged and remains optional until sender and provider setup are ready
+- backend email notification infrastructure exists for assignment, submission, and grade-release events
+- live app flows are currently bell-first, with workflow email dispatch disabled until sender and provider setup are intentionally re-enabled
 
 ## How The Workflow Fits Together
 
@@ -100,7 +108,7 @@ submission
   -> document extraction
   -> AI-assisted grading
   -> integrity and confidence signals
-  -> lecturer review
+  -> educator review
   -> moderation if required
   -> approval
   -> release
@@ -109,7 +117,7 @@ submission
   -> intervention / follow-up
 ```
 
-AI output is not treated as the final academic decision. Students only see feedback after it has passed through the lecturer review and release workflow.
+AI output is not treated as the final academic decision. Students only see feedback after it has passed through the educator review and release workflow.
 
 ## Platform Preview
 
@@ -141,17 +149,17 @@ Demo mode:
 
 Reusable synthetic assignment sets are used to demonstrate assignment briefs, rubric setup, AI-facing grading context, sample feedback, integrity review, and moderation examples.
 
-For real lecturers, sample assignment templates can prefill the assignment form, but they do not auto-create submissions, grades, integrity cases, or moderation records.
+For real lecturers or teachers, sample assignment templates can prefill the assignment form, but they do not auto-create submissions, grades, integrity cases, or moderation records.
 
 ## Key Product Areas
 
-### Lecturer workspace
+### Educator workspace
 
-Lecturers can identify students who may be struggling, review why a student or assessment has been flagged, create assignments, run AI-assisted grading and integrity checks, edit marks and feedback, manage moderation cases, and record intervention or follow-up actions.
+Educators can identify students who may be struggling, review why a student or assessment has been flagged, create assignments, run AI-assisted grading and integrity checks, edit marks and feedback, manage moderation cases, and record intervention or follow-up actions.
 
 ### Student workspace
 
-Students can submit work for open assignments, view released grades, read lecturer-approved feedback, use support tools to understand their performance, and track improvement-plan progress.
+Students can submit work for open assignments, view released grades, read educator-approved feedback, use support tools to understand their performance, and track improvement-plan progress.
 
 ### Institutional workflows
 
@@ -185,29 +193,69 @@ Important Edge Functions:
 
 ### Integrity provider modes
 
-`check-plagiarism` now supports two live backend integrity providers:
+`check-plagiarism` now supports provider-abstracted backend integrity checks:
 
 - `llm_legacy`
 - `internal_text_similarity`
 - `both` through `INTEGRITY_PROVIDER_MODE`
+- optional MOSS code-similarity evidence through the private runner bridge
 
-The visible plagiarism UI still uses the legacy response shape so lecturer-facing integrity cards remain stable. The newer `internal_text_similarity` provider currently writes pairwise evidence rows to `public.integrity_findings` for backend review and future UI work.
+The lecturer-facing plagiarism workflow still keeps the established response shape, but `internal_text_similarity` is now part of the live backend decision path. It contributes pairwise similarity flags and risk scoring during `check-plagiarism`, and it also writes evidence rows to `public.integrity_findings` for audit and future provider-specific UI work.
 
-An optional MOSS bridge is also available for code assignments. It is disabled by default and does not change the visible plagiarism UI. When explicitly configured, it:
+GradeAI also includes a working provider-abstracted MOSS integration for code-based assignments. The main app does not call Stanford MOSS directly. Instead, the `check-plagiarism` Edge Function sends eligible code submissions to a separately hosted private MOSS runner over HTTPS using `x-api-key` authentication.
 
-- only runs for code-like file extensions
-- calls an external HTTP runner that performs the actual MOSS submission
+When configured, the MOSS provider:
+
+- only runs for supported code-like file extensions
+- sends eligible extracted source text to the private runner
+- lets the private runner perform the actual Stanford MOSS submission
 - stores code-similarity evidence in `public.integrity_findings` with `provider = 'moss'`
+- keeps the existing lecturer plagiarism UI stable
 - never blocks or replaces the existing plagiarism response path
 
-Required MOSS bridge secrets:
+This keeps the public GradeAI application separate from the private MOSS execution environment. The Stanford MOSS script, MOSS user ID, runner secrets, and production runner deployment stay outside this public repository.
+
+Required GradeAI-side MOSS bridge secrets:
 
 - `MOSS_PROVIDER_ENABLED=true`
-- `MOSS_RUNNER_URL=https://...`
-- optional `MOSS_RUNNER_BEARER_TOKEN`
+- `MOSS_RUNNER_URL=https://your-runner/run-moss`
+- `MOSS_RUNNER_API_SECRET=your_shared_secret`
 - optional `MOSS_RUNNER_TIMEOUT_MS`
 
-The local HTTP runner scaffold for this bridge lives in [`tools/moss-runner`](tools/moss-runner/README.md).
+The production MOSS runner is hosted from a separate private repository. This public repo documents the integration contract and expected environment variables only.
+
+## Legal, Compliance, And Education Data Handling
+
+GradeAI is built for education workflows where submissions, marks, feedback, integrity records, moderation decisions, and intervention notes may contain personal data. Because of that, the platform is designed with UK GDPR, GDPR-style data protection principles, institutional assessment rules, and academic governance expectations in mind.
+
+A key principle is that the institution should remain in control of its own academic data. In a real deployment, the school, college, polytechnic, or university would decide where the database and storage live, who has access, how long records are kept, which providers are approved, and what policies apply to student submissions, marks, feedback, and integrity evidence. GradeAI is intended to sit on top of a controlled institutional backend rather than forcing academic records into an uncontrolled external database.
+
+This repository is a working prototype, not a claim of formal legal certification or institutional approval. Before any real institutional rollout, the organisation would still need its own data protection review, DPIA where appropriate, data processing agreement, retention policy, and review of external providers and cross-border transfer arrangements.
+
+Current design controls include:
+
+- institution-controlled database and storage deployment model
+- role-based access between students, educators, moderators, admins, and external examiner-style views
+- Row-Level Security policies for database-level access control
+- educator approval before AI-assisted marks or feedback are released to students
+- student-facing views restricted to released feedback and approved assessment records
+- integrity and risk outputs treated as review evidence, not automatic misconduct or progression decisions
+- audit-oriented records for moderation, integrity findings, workflow events, and admin oversight
+- feature flags and server-side secrets for email, AI, analytics, and external provider integrations
+- privacy-minimised analytics guidance, with academic content, names, and email addresses kept out of product analytics
+- demo mode using synthetic data rather than real academic records for reviewer walkthroughs
+
+Education-specific concerns still requiring deployment-level governance include:
+
+- clear student and staff notices explaining how the system is used
+- lawful basis for processing academic and support data
+- retention periods for submissions, marks, feedback, integrity findings, and intervention records
+- handling of data subject rights such as access, correction, deletion, and objection where applicable
+- institutional rules on AI-assisted marking, moderation, academic judgement, appeals, and academic misconduct procedures
+- external processing boundaries for AI providers, email delivery, analytics, error monitoring, and the private MOSS runner
+- whether student work, marks, identifiers, or feedback may leave the institution's approved region or approved vendors
+
+GradeAI's intended position is decision-support, not automated academic decision-making. Educators remain responsible for reviewing evidence, approving marks, releasing feedback, and deciding whether integrity or support concerns need formal action under institutional policy.
 
 ## Key Engineering Decisions
 
@@ -215,10 +263,10 @@ A few decisions shape how the platform works:
 
 - AI output is treated as draft support, not a final academic decision.
 - Students only see feedback after it has been approved and released.
-- Lecturer review remains central to grading, moderation, and integrity workflows.
+- Educator review remains central to grading, moderation, and integrity workflows.
 - Backend Edge Functions validate requests and check the authenticated user before sensitive operations.
 - Service-role access is limited to server-side functions with role and ownership checks.
-- Risk signals are explainable prompts for lecturer review, not automatic judgements about students.
+- Risk signals are explainable prompts for educator review, not automatic judgements about students.
 - Email notifications are controlled by feature flags and Supabase secrets so delivery can stay disabled until provider setup is complete.
 - Schema, RLS policies, workflow RPCs, and migrations are treated as part of the product, not just backend plumbing.
 
@@ -235,7 +283,7 @@ Current safeguards include:
 - application-level error boundaries show safe fallback messages rather than raw runtime error details
 - network and API failure paths are tested so failed requests do not leave users with misleading or stale academic data
 - integrity signals are presented as evidence for review, not proof of misconduct
-- risk indicators are presented as lecturer review prompts, not automated judgements
+- risk indicators are presented as educator review prompts, not automated judgements
 
 ## Current State
 
@@ -247,24 +295,23 @@ Working well:
 
 - core assignment and submission workflow
 - AI-assisted grading pipeline
-- lecturer review, approval, and release flow
+- educator review, approval, and release flow
 - student-facing released feedback
 - moderation workflow direction
 - citation-aware integrity review direction
+- provider-abstracted integrity pipeline with internal text similarity and private-runner MOSS support
 - cohort analytics and early support signals
 - GitHub Actions CI, tests, and build checks
 - backend hardening around CORS, lint, service-role usage, and secrets handling
-- production-readiness documentation around security, testing, rollout, and monitoring
+- production-readiness documentation around security, testing, rollout, monitoring, and education data governance
 
 Still improving:
 
-- broader live-environment verification
-- stronger automated tests for role boundaries and RLS behaviour
+- broader live scenario coverage beyond the role, load, and integrity checks already completed
+- more live verification of less common role boundaries and RLS edge cases
 - stricter TypeScript coverage
-- targeted recipient logic for assignment-published email notifications
-- final live email delivery validation after verified sender/API key setup
 - continued extraction of large page logic into smaller domain services
-- deeper operational logging and audit visibility
+- deeper operational history, alerting, and long-window audit visibility
 
 ## Recent Hardening and Improvements
 
@@ -285,6 +332,9 @@ Recent work has focused on making the product more reliable, safer to test, and 
 - improved route-level lazy loading and vendor bundle splitting
 - tightened the role model so admin is part of the real schema and public signup no longer trusts admin role input
 - added read-only admin oversight views for users, assignments, submissions, reporting, and system-level navigation
+- added an admin operational snapshot so backlog, moderation pressure, integrity risk, and grading failures are easier to see in one place
+- added local performance benchmarking and live read-path load testing for safer regression checks
+- added auth metadata role sync for admin role changes so Supabase auth metadata stays aligned with the database role model
 
 ## Documentation
 
@@ -371,6 +421,12 @@ Run unit and integration tests:
 npm run test
 ```
 
+Run local performance benchmarks:
+
+```bash
+npm run test:perf
+```
+
 Run coverage reporting:
 
 ```bash
@@ -389,6 +445,14 @@ Run Playwright browser tests:
 npx playwright install
 npm run test:e2e
 ```
+
+Run the live read-heavy load test against a deployed stack:
+
+```bash
+npm run test:load
+```
+
+The load test is intentionally conservative. It is meant to check read-path latency and access behaviour with scoped pilot accounts, not to simulate destructive grading or integrity writes.
 
 A useful local quality gate is:
 
@@ -410,11 +474,7 @@ Or run the relevant SQL migrations in the Supabase SQL Editor.
 
 High-trust workflows depend on the database layer, not just the UI. That includes RLS policies, recommendation action RPCs, moderation tables, audit logging triggers, integrity review constraints, and in-app workflow notifications.
 
-Recent assignment visibility work depends on the related targeting migrations being applied together. They persist cohort and department targeting, enforce student assignment visibility through targeting-aware RLS, and provide the safe student-grade assignment metadata lookup used by `StudentGrades`.
-
-If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. Schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
-
-These migrations do three connected things:
+Recent assignment visibility work depends on the related targeting migrations being applied together. Those migrations do three connected things:
 - persist assignment cohort and department targeting
 - enforce student assignment visibility and submission access through targeting-aware RLS
 - provide the safe student-grade assignment metadata lookup used by `StudentGrades`
@@ -434,6 +494,20 @@ Those migrations do four connected things:
 - allow safe refresh of `internal_text_similarity` evidence rows
 - close service-role permission gaps discovered during live grading and plagiarism checks
 - dedupe and stabilise repeated integrity evidence writes across reruns
+
+The current grading and notification hardening also depends on these newer migrations:
+
+- `20260508004500_fix_submission_targeting_policy_private_helper.sql`
+- `20260508011500_fix_lecturer_submission_update_policy.sql`
+- `20260508013000_fix_communication_message_update_policy.sql`
+- `20260508020000_reset_communication_message_policies.sql`
+
+Those migrations do four connected things:
+
+- repair targeted submission access to use the private helper boundary correctly
+- restore lecturer submission updates needed for grading-state transitions
+- remove recursive `communication_messages` policy behavior
+- stabilise bell-notification clear/update paths under RLS
 
 If the app layer and database layer drift apart, the trust boundary becomes weaker quickly. That is why schema, policies, and workflow RPCs are treated as part of the product, not just backend plumbing.
 
@@ -471,7 +545,7 @@ npx supabase functions deploy bulk-create-students
 npx supabase functions deploy send-workflow-notification-email
 ```
 
-For workflow email notifications, these Supabase secrets are expected when live email delivery is ready:
+For workflow email notifications, these Supabase secrets are expected when live email delivery is intentionally re-enabled:
 
 ```bash
 EMAIL_NOTIFICATIONS_ENABLED=true
@@ -486,13 +560,13 @@ Before sender verification and API key setup are complete, keep email delivery d
 EMAIL_NOTIFICATIONS_ENABLED=false
 ```
 
-Current email-backed workflow events are:
+The backend is prepared for these workflow email categories:
 
 - `assignment-published`
 - `submission-received`
 - `grade-released`
 
-The bell notification remains the primary in-app record. Email delivery is a non-blocking mirror of those safe workflow events.
+The bell notification is the active workflow record. Email delivery should only be turned back on as an optional non-blocking mirror after provider, sender, and recipient-flow validation are complete.
 
 Analytics is disabled by default. If you explicitly enable PostHog for a controlled test, keep it privacy-minimised and avoid sending academic content, names, or email addresses.
 

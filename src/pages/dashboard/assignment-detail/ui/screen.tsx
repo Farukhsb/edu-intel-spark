@@ -1,0 +1,147 @@
+import { Suspense, lazy, type ComponentProps } from "react";
+
+import {
+  AssignmentDemoBanner,
+  AssignmentDemoSetCard,
+  AssignmentDemoWorkflowCard,
+  AssignmentFocusCard,
+  AssignmentHeroCard,
+  AssignmentIntegrityCard,
+  AssignmentReadinessCard,
+  AssignmentRubricCard,
+} from "@/pages/dashboard/assignment-detail/ui/presentation";
+import {
+  SubmissionListSection,
+  WorkflowActionsSection,
+} from "@/pages/dashboard/assignment-detail/ui/sections";
+import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
+import type { WorkflowRubricCriterion } from "@/types/academic";
+
+const SubmissionReviewDialog = lazy(() =>
+  import("@/pages/dashboard/assignment-detail/ui/review-dialog").then((module) => ({
+    default: module.SubmissionReviewDialog,
+  })),
+);
+
+type DemoAssignmentSet = {
+  label: string;
+  name: string;
+  reviewerSummary: string;
+};
+
+type FocusState = {
+  description: string;
+  title: string;
+};
+
+export interface AssignmentDetailScreenProps {
+  assignmentNotificationFocusState: FocusState | null;
+  demoAssignmentSet: DemoAssignmentSet | null;
+  integrityCardProps: ComponentProps<typeof AssignmentIntegrityCard> | null;
+  isDemo: boolean;
+  isLecturer: boolean;
+  moderationReleaseFocus: boolean;
+  moderationReleaseHandoffState: FocusState;
+  onCopyModerationFocus: () => void;
+  onCopyNotificationFocus: () => void;
+  queueFocusState: FocusState | null;
+  onClearQueueFocus: () => void;
+  onClearModerationFocus: () => void;
+  onClearNotificationFocus: () => void;
+  reviewDialogProps: SubmissionReviewDialogProps;
+  rubric: WorkflowRubricCriterion[];
+  submissionListProps: ComponentProps<typeof SubmissionListSection>;
+  workflowActionsProps: ComponentProps<typeof WorkflowActionsSection>;
+  heroCardProps: ComponentProps<typeof AssignmentHeroCard>;
+  readinessCardProps: ComponentProps<typeof AssignmentReadinessCard>;
+}
+
+export const AssignmentDetailScreen = ({
+  assignmentNotificationFocusState,
+  demoAssignmentSet,
+  integrityCardProps,
+  isDemo,
+  isLecturer,
+  moderationReleaseFocus,
+  moderationReleaseHandoffState,
+  onCopyModerationFocus,
+  onCopyNotificationFocus,
+  queueFocusState,
+  onClearQueueFocus,
+  onClearModerationFocus,
+  onClearNotificationFocus,
+  reviewDialogProps,
+  rubric,
+  submissionListProps,
+  workflowActionsProps,
+  heroCardProps,
+  readinessCardProps,
+}: AssignmentDetailScreenProps) => (
+  <div className="space-y-6 animate-fade-in">
+    {isDemo && <AssignmentDemoBanner />}
+    {isDemo && demoAssignmentSet && isLecturer && (
+      <AssignmentDemoSetCard
+        label={demoAssignmentSet.label}
+        name={demoAssignmentSet.name}
+        reviewerSummary={demoAssignmentSet.reviewerSummary}
+      />
+    )}
+    {isDemo && isLecturer && <AssignmentDemoWorkflowCard />}
+
+    <AssignmentHeroCard {...heroCardProps} />
+
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
+      <div className="space-y-6">
+        <AssignmentReadinessCard {...readinessCardProps} />
+
+        {moderationReleaseFocus && isLecturer && (
+          <AssignmentFocusCard
+            clearLabel="Show all submissions"
+            description={moderationReleaseHandoffState.description}
+            onClear={onClearModerationFocus}
+            onShare={onCopyModerationFocus}
+            shareLabel="Copy focus link"
+            testId="assignment-moderation-release-focus"
+            title={moderationReleaseHandoffState.title}
+          />
+        )}
+
+        {assignmentNotificationFocusState && isLecturer && (
+          <AssignmentFocusCard
+            clearLabel="Clear notice focus"
+            description={assignmentNotificationFocusState.description}
+            onClear={onClearNotificationFocus}
+            onShare={onCopyNotificationFocus}
+            shareLabel="Copy notice link"
+            testId="assignment-notification-focus"
+            title={assignmentNotificationFocusState.title}
+          />
+        )}
+
+        {queueFocusState && isLecturer && (
+          <AssignmentFocusCard
+            clearLabel="Show all submissions"
+            description={queueFocusState.description}
+            onClear={onClearQueueFocus}
+            testId="assignment-queue-focus"
+            title={queueFocusState.title}
+          />
+        )}
+
+        <WorkflowActionsSection {...workflowActionsProps} />
+        <SubmissionListSection {...submissionListProps} />
+      </div>
+
+      <div className="space-y-6">
+        {rubric.length > 0 && <AssignmentRubricCard rubric={rubric} />}
+        {integrityCardProps && <AssignmentIntegrityCard {...integrityCardProps} />}
+      </div>
+    </div>
+
+    {reviewDialogProps.open ? (
+      <Suspense fallback={null}>
+        <SubmissionReviewDialog {...reviewDialogProps} />
+      </Suspense>
+    ) : null}
+  </div>
+);

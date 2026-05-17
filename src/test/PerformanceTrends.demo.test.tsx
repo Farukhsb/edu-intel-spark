@@ -65,7 +65,10 @@ describe("PerformanceTrends demo mode", () => {
     );
 
     expect(await screen.findByText("Average Grades Over Time")).toBeInTheDocument();
-    expect(screen.getByText("Filtered intervention view")).toBeInTheDocument();
+    expect(screen.getByText("Teaching Focus")).toBeInTheDocument();
+    expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
+    expect(screen.getByText("Open early support signals and act on high-risk students")).toBeInTheDocument();
+    expect(await screen.findByText("Filtered intervention view")).toBeInTheDocument();
     expect(screen.getByText(/Showing 1 student matching the current risk and score criteria\./)).toBeInTheDocument();
     expect(screen.getAllByText("Mariam Okeke").length).toBeGreaterThan(0);
     expect(screen.queryByText("No graded submissions yet. Performance trends will appear once assignments are graded.")).not.toBeInTheDocument();

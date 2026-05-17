@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildManualInterventionPayload,
   buildRecommendationInterventionRows,
+  getStudentInterventionReadiness,
   mapInterventionRow,
   normalizeManualInterventionStatus,
   normalizeManualInterventionType,
@@ -79,5 +80,19 @@ describe("interventions", () => {
     expect(rows[0].intervention_type).toBe("check_in");
     expect(rows[0].priority).toBe("high");
     expect(rows[0].assignment_id).toBe("assignment-1");
+  });
+
+  it("derives a student intervention readiness summary from risk and follow-up state", () => {
+    const readiness = getStudentInterventionReadiness({
+      riskLevel: "critical",
+      recommendation: "Schedule a support meeting and agree a short-term plan.",
+      missedAssignmentsCount: 1,
+      openInterventions: 0,
+      latestIntervention: null,
+    });
+
+    expect(readiness.postureLabel).toBe("Immediate intervention position");
+    expect(readiness.likelyChallenge).toBe("1 missed assignment still unresolved");
+    expect(readiness.bestNextAction).toBe("Log the first intervention and send a student support alert");
   });
 });

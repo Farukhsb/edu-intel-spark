@@ -50,6 +50,7 @@ interface GradeLike {
   lecturer_score?: number | null;
   reviewed_by?: string | null;
   created_at?: string | null;
+  reviewed_at?: string | null;
 }
 
 interface SubmissionLike {
@@ -78,6 +79,8 @@ export const tefRating = (score: number): "gold" | "silver" | "bronze" | "pendin
 
 export const ensureNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 export const ensureString = (value: unknown, fallback = "") => (typeof value === "string" ? value : fallback);
+const resolveGradeScore = (grade: Pick<GradeLike, "final_score" | "lecturer_score" | "ai_score">) =>
+  grade.final_score ?? grade.lecturer_score ?? grade.ai_score;
 
 const percentTrend = (score: number, benchmark: number) => (score >= benchmark ? `+${score - benchmark}%` : `${score - benchmark}%`);
 
@@ -93,7 +96,7 @@ export const deriveAccreditationMetrics = ({
   profiles: ProfileLike[];
 }) => {
   const scores = grades
-    .map((grade) => ensureNumber(grade.final_score ?? grade.ai_score))
+    .map((grade) => ensureNumber(resolveGradeScore(grade)))
     .filter((score) => Number.isFinite(score));
 
   const studentCount = profiles.filter((profile) => profile.role === "student").length;
@@ -109,9 +112,10 @@ export const deriveAccreditationMetrics = ({
   const turnaroundDays: number[] = [];
   submissions.forEach((submission) => {
     const grade = gradeMap[submission.id];
-    if (grade?.created_at && submission.submitted_at) {
+    const feedbackTimestamp = grade?.reviewed_at ?? grade?.created_at;
+    if (feedbackTimestamp && submission.submitted_at) {
       const diff =
-        (new Date(grade.created_at).getTime() - new Date(submission.submitted_at).getTime()) / (1000 * 60 * 60 * 24);
+        (new Date(feedbackTimestamp).getTime() - new Date(submission.submitted_at).getTime()) / (1000 * 60 * 60 * 24);
       if (diff >= 0) turnaroundDays.push(diff);
     }
   });
@@ -332,11 +336,11 @@ export const deriveProgrammeReports = ({
 }: {
   assignments: AssignmentLike[];
   submissions: Array<Pick<SubmissionLike, "id" | "assignment_id">>;
-  grades: Array<Pick<GradeLike, "submission_id" | "ai_score" | "final_score">>;
+  grades: Array<Pick<GradeLike, "submission_id" | "ai_score" | "final_score" | "lecturer_score">>;
 }): ProgrammeReport[] => {
   const gradeBySubmission: Record<string, number> = {};
   grades.forEach((grade) => {
-    gradeBySubmission[grade.submission_id] = ensureNumber(grade.final_score ?? grade.ai_score);
+    gradeBySubmission[grade.submission_id] = ensureNumber(resolveGradeScore(grade));
   });
 
   const modules: Record<string, { title: string; scores: number[]; submissions: number }> = {};

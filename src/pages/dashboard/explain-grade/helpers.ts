@@ -48,6 +48,7 @@ export type ExplainGradeBreakdownItem = AcademicGradeBreakdownItem & SharedGrade
 export interface SubmissionOption {
   gradeId: string;
   submissionId: string;
+  assignmentId: string;
   label: string;
   secondaryLabel: string | null;
   totalGrade: number;
@@ -203,6 +204,7 @@ export const buildSubmissionOptions = ({
     return [{
       gradeId: grade.id,
       submissionId: grade.submission_id,
+      assignmentId: submission.assignment_id ?? "",
       label: labels.label,
       secondaryLabel: labels.secondaryLabel,
       totalGrade,
@@ -275,6 +277,7 @@ export const buildSubmissionOptionsFromProjection = (projection: StudentGradePro
     return [{
       gradeId: row.submission_id,
       submissionId: row.submission_id,
+      assignmentId: row.assignment_id,
       label: labels.label,
       secondaryLabel: labels.secondaryLabel,
       totalGrade,
@@ -338,6 +341,7 @@ export const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_A
     return [{
       gradeId: grade.id,
       submissionId: submission.id,
+      assignmentId: submission.assignment_id,
       label: labels.label,
       secondaryLabel: labels.secondaryLabel,
       totalGrade,

@@ -5,6 +5,12 @@ export interface AcademicIntegrityOverviewStat {
   value: string;
 }
 
+export interface AcademicIntegrityReadiness {
+  postureLabel: string;
+  likelyChallenge: string;
+  bestNextAction: string;
+}
+
 export interface FlaggedIntegrityCase {
   submissionId: string;
   assignmentId: string;
@@ -190,3 +196,39 @@ export const buildIntegrityDrafts = (cases: FlaggedIntegrityCase[]) => ({
     ])
   ),
 });
+
+export const getAcademicIntegrityReadiness = ({
+  cases,
+  totals,
+}: {
+  cases: FlaggedIntegrityCase[];
+  totals: ReturnType<typeof buildIntegrityTotals>;
+}): AcademicIntegrityReadiness => {
+  const highestRiskCase = [...cases].sort((left, right) => right.totalScore - left.totalScore)[0];
+  const activeInvestigations = cases.filter(
+    (item) => item.decision === "investigate" || item.decision === "misconduct-concern"
+  ).length;
+  const pendingLimitedCases = cases.filter(
+    (item) => item.decision === "pending" && item.analysisLimited
+  ).length;
+
+  return {
+    postureLabel:
+      activeInvestigations > 0
+        ? "Escalated review position"
+        : totals.pending > 0 || pendingLimitedCases > 0
+          ? "Pending review position"
+          : "Stable integrity position",
+    likelyChallenge:
+      highestRiskCase?.assignment ||
+      (pendingLimitedCases > 0
+        ? "Analysis-limited integrity evidence still pending"
+        : "No integrity pressure point yet"),
+    bestNextAction:
+      activeInvestigations > 0
+        ? "Complete active investigations and record lecturer decisions"
+        : totals.pending > 0
+          ? "Review pending flagged cases and save lecturer decisions"
+          : "Maintain integrity monitoring and communicate expectations before the next submission",
+  };
+};

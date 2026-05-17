@@ -42,7 +42,10 @@ export function calculateRiskScore({
     else if (lastAvg < firstAvg) trendRisk = 80;
   }
 
-  const completionRisk = submissionRisk;
+  const completionRate =
+    grades.filter((grade) => grade.final_score != null).length / totalAssignments;
+  const completionRisk =
+    completionRate >= 0.9 ? 10 : completionRate >= 0.7 ? 40 : 80;
 
   const riskScore =
     submissionRisk * 0.3 +

@@ -36,6 +36,7 @@ The current direction is:
 
 - page files act as feature shells
 - shared domain and workflow rules live in `src/lib`
+- shared cross-table read services and dataset loaders live in `src/lib/data`
 - page-local UI sections and dialogs live beside the page in page-specific subfolders
 - Supabase remains the system of record and authorization boundary
 - Edge Functions remain the place for AI orchestration and server-side validation
@@ -52,6 +53,7 @@ The main frontend areas are:
 - `src/components/ui`: lower-level shadcn/Radix UI primitives
 - `src/contexts`: app-wide state, mainly auth
 - `src/lib`: shared domain helpers, workflow helpers, and feature logic
+- `src/lib/data`: shared read-service and dataset loaders grouped by domain
 - `src/integrations/supabase`: Supabase client and generated types
 - `src/test`: Vitest and Testing Library coverage
 
@@ -66,6 +68,11 @@ Current examples:
 
 - `src/pages/dashboard/assignment-detail/`
 - `src/pages/dashboard/assignments/`
+- `src/pages/dashboard/academic-integrity/`
+- `src/pages/dashboard/accreditation-dashboard/`
+- `src/pages/dashboard/admin-dashboard/`
+- `src/pages/dashboard/cohort-analytics/`
+- `src/pages/dashboard/lecturer-overview/`
 - `src/pages/dashboard/improvement-plan/`
 - `src/pages/dashboard/moderation-dashboard/`
 - `src/pages/dashboard/performance-trends/`
@@ -90,7 +97,7 @@ Protected dashboard routes use:
 
 ## Domain Logic Layout
 
-The main architectural improvement in the frontend is that workflow and feature rules are increasingly centralized in `src/lib`.
+The main architectural improvement in the frontend is that workflow and feature rules are increasingly centralized in `src/lib`, while shared read choreography is increasingly centralized in `src/lib/data`.
 
 Important examples:
 
@@ -112,6 +119,8 @@ Important examples:
   owns moderation signal evaluation and reviewer-oriented moderation helpers
 - `communications.ts`
   owns notification message shaping and communication queue helpers
+- `data/*`
+  owns shared academic, admin, cohort, integrity, moderation, and student dataset loaders
 
 This means the app is less dependent on page-local heuristics than it was earlier.
 
@@ -124,20 +133,26 @@ Several larger pages now follow a clearer split between orchestration and presen
 `AssignmentDetail.tsx` now delegates heavily to:
 
 - `assignment-detail/useAssignmentDetailData.ts`
-- `assignment-detail/sections.tsx`
-- `assignment-detail/review-dialog.tsx`
+- `assignment-detail/controllers/`
+- `assignment-detail/state/`
+- `assignment-detail/workflows/`
+- `assignment-detail/ui/`
+- `assignment-detail/domain/`
+- `assignment-detail/screen-props/`
 - `assignment-detail/types.ts`
 
-That page used to carry fetch orchestration, display state, queue rendering, and dialog rendering inline. It is now much closer to a route shell.
+That page used to carry fetch orchestration, display state, queue rendering, grading actions, and dialog rendering inline. It is now much closer to a route shell over feature-local modules.
 
 ### Assignments
 
 `Assignments.tsx` now combines:
 
 - shared catalog logic from `src/lib/assignmentCatalog.ts`
-- page-local form UI in `assignments/assignment-form-dialog.tsx`
+- page-local orchestration in `assignments/useAssignmentsController.ts`
+- page-local rendering in `assignments/screen.tsx`
+- page-local mutation helpers in `assignments/workflows.ts`
 
-This keeps assignment filtering and summarization reusable while keeping form rendering out of the main page body.
+This keeps assignment filtering and summarization reusable while keeping orchestration and mutations out of the main page body.
 
 ### Improvement Plan
 
@@ -154,9 +169,22 @@ This is especially important because recommendation generation and plan shaping 
 
 - shared workflow logic from `src/lib/moderationWorkflow.ts`
 - moderation signal helpers from `src/lib/moderation.ts`
-- page-local queue and dialog sections in `moderation-dashboard/sections.tsx`
+- page-local queue state in `moderation-dashboard/state/`
+- page-local action handling in `moderation-dashboard/workflows/`
+- page-local UI composition in `moderation-dashboard/ui/`
+- page-local controller and screen-props composition in `moderation-dashboard/controllers/` and `moderation-dashboard/screen-props/`
 
 This keeps the moderation page aligned with the same architectural pattern as other larger dashboard flows.
+
+### Other Normalized Dashboard Features
+
+The same feature-shell pattern now applies beyond the original workflow-heavy pages:
+
+- `admin-dashboard/` separates controller logic from section-level UI
+- `lecturer-overview/` separates controller logic from section-level UI
+- `academic-integrity/`, `cohort-analytics/`, and `accreditation-dashboard/` each use feature-local controller and screen splits
+
+This matters because the dashboard surface is now materially more uniform instead of only one or two pages being well-structured.
 
 ### Performance Trends
 
@@ -369,6 +397,8 @@ Relationship shape:
 
 RLS remains the strongest authorization boundary in the product.
 
+For the current workflow-to-policy map, use [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md). That document is the fastest way to trace a page or workflow back to the tables, RPCs, Edge Functions, and latest policy source files it depends on.
+
 The common access shape is:
 
 - students access only their own records and released student-visible outcomes
@@ -408,8 +438,10 @@ The current architecture is stronger and more consistent than the earlier projec
 Meaningful improvements now in place:
 
 - repeated workflow rules extracted from pages into `src/lib`
+- shared read/dataset loaders grouped under `src/lib/data/*`
 - large dashboard pages increasingly follow a shared page-folder pattern
 - page files are smaller and more clearly focused on orchestration
+- major features now use clearer internal splits such as `controllers`, `state`, `workflows`, `ui`, `domain`, and `screen-props`
 - recommendation and explanation logic is less ad hoc
 - student visibility, assessment workflow, catalog logic, moderation logic, and improvement-plan logic are more centralized
 

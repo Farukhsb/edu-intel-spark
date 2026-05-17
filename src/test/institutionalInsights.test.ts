@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildInstitutionalInsightsSnapshot,
   EMPTY_ACCREDITATION,
+  getInstitutionalReportingReadiness,
   getMetricStatus,
 } from "@/lib/institutionalInsights";
 
@@ -83,5 +84,30 @@ describe("institutionalInsights", () => {
     expect(getMetricStatus(75, 75)).toBe("met");
     expect(getMetricStatus(68, 75)).toBe("at-risk");
     expect(getMetricStatus(50, 75)).toBe("below");
+  });
+
+  it("derives a concise reporting-readiness summary from institutional signals", () => {
+    expect(
+      getInstitutionalReportingReadiness({
+        accreditation: [
+          { metric: "Module Pass Rate (Avg)", value: 67, target: 75, status: "at-risk" },
+          { metric: "Graded Submissions", value: 100, target: 95, status: "met" },
+        ],
+        lowPerforming: [
+          {
+            name: "Incident Report",
+            avgGrade: 45,
+            passRate: 50,
+            students: 2,
+            issue: "Low average - review needed",
+          },
+        ],
+      }),
+    ).toEqual({
+      posture: "watch",
+      postureLabel: "Watch list position",
+      likelyChallenge: "Module Pass Rate (Avg)",
+      bestNextReport: "Accreditation compliance review",
+    });
   });
 });

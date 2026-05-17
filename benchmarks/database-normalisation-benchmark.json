@@ -1,0 +1,233 @@
+{
+  "benchmark_name": "GradeAI internal pilot grading benchmark",
+  "benchmark_version": "2026-05-12",
+  "assignment": {
+    "assignment_id": "benchmark-dbnorm-assignment-01",
+    "title": "Database Normalisation Case Study",
+    "module_code": "CS220",
+    "max_score": 80,
+    "brief": "Redesign the provided enrolment dataset to third normal form. Explain the functional dependencies you identified, show the resulting tables and keys, and justify any trade-offs in your final schema.",
+    "rubric": [
+      {
+        "criterion": "Functional dependency analysis",
+        "max_score": 20,
+        "description": "Identifies the main functional dependencies and shows why they matter for decomposition."
+      },
+      {
+        "criterion": "Normalisation and table design",
+        "max_score": 20,
+        "description": "Produces a coherent 3NF structure with sensible decomposition."
+      },
+      {
+        "criterion": "Keys and integrity constraints",
+        "max_score": 20,
+        "description": "Defines primary keys, foreign keys, and relationship integrity clearly."
+      },
+      {
+        "criterion": "Justification and trade-offs",
+        "max_score": 20,
+        "description": "Explains design choices, limitations, and practical implementation trade-offs."
+      }
+    ]
+  },
+  "grade_bands": [
+    { "label": "First", "min_score": 70, "max_score": 80 },
+    { "label": "Upper Second", "min_score": 60, "max_score": 69 },
+    { "label": "Lower Second", "min_score": 50, "max_score": 59 },
+    { "label": "Third / Pass", "min_score": 40, "max_score": 49 },
+    { "label": "Fail", "min_score": 0, "max_score": 39 }
+  ],
+  "submissions": [
+    {
+      "submission_id": "benchmark-dbnorm-01",
+      "short_answer_text": "I identified student_id -> student_name and programme_id, module_id -> module_title and credits, lecturer_id -> lecturer_name, and enrolment_id -> student_id, module_id, grade. I split the original sheet into Student, Programme, Module, Lecturer, TeachingAllocation, and Enrolment tables. Each table has a clear primary key and the enrolment table keeps only the keys plus grade. This removes repeated lecturer and module text and avoids update anomalies. I would keep teaching allocation separate because the same lecturer can teach more than one module and modules may move between staff over time.",
+      "expected_manual_score": 76,
+      "expected_grade_band": "First",
+      "reason_for_expected_score": "Strong coverage across all four criteria with a clear 3NF decomposition, explicit dependencies, and sensible implementation reasoning. Slightly brief on candidate keys and composite-key discussion, so not full marks.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Keys and integrity constraints",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-02",
+      "short_answer_text": "The main issue is duplication of module and lecturer details inside every enrolment row. I moved student details into one table, modules into another, and enrolments into a linking table. I also separated lecturer details. The design is close to third normal form because each table now stores one topic. Foreign keys from enrolment to student and module enforce consistency. I would still review whether programme belongs in student or needs a history table.",
+      "expected_manual_score": 68,
+      "expected_grade_band": "Upper Second",
+      "reason_for_expected_score": "Good practical decomposition and some awareness of trade-offs, but the dependency analysis is not very explicit and the treatment of key structure is lighter than a top-band answer.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Keys and integrity constraints",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-03",
+      "short_answer_text": "I started by listing dependencies such as module_code determining module_title and lecturer_email determining lecturer_name. I then created Student, Module, Lecturer, Assessment, and Enrolment tables. Enrolment keeps the student and module keys, while Assessment keeps assessment-specific information. This reduces transitive dependencies. The explanation is correct but I have not discussed how repeating students across terms would be handled.",
+      "expected_manual_score": 64,
+      "expected_grade_band": "Upper Second",
+      "reason_for_expected_score": "Accurate dependency reasoning and solid table split, but the answer leaves some integrity detail and trade-off discussion underdeveloped.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-04",
+      "short_answer_text": "The spreadsheet should be broken into separate tables because names and module titles are repeated too often. I created Student(student_id, student_name), Module(module_id, module_name), and Result(student_id, module_id, mark). This is better than the original because duplication is reduced. However, I did not include lecturer information or explain partial dependencies in detail.",
+      "expected_manual_score": 52,
+      "expected_grade_band": "Lower Second",
+      "reason_for_expected_score": "Basic normalisation move is correct, but the submission is thin on dependency analysis, misses some entity structure, and does not justify the design very well.",
+      "rubric_criteria_assessed": [
+        "Normalisation and table design",
+        "Keys and integrity constraints"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-05",
+      "short_answer_text": "I would use tables for students, modules, lecturers, and enrolments. The student table stores student data, the module table stores module data, and the enrolment table joins them. The main benefit is less repetition. Primary keys should be IDs and the join table should contain foreign keys. This is good database design because it is more organised.",
+      "expected_manual_score": 46,
+      "expected_grade_band": "Third / Pass",
+      "reason_for_expected_score": "Shows a basic grasp of decomposition and key usage, but it is generic, lightly justified, and does not show enough evidence of rigorous 3NF reasoning.",
+      "rubric_criteria_assessed": [
+        "Normalisation and table design",
+        "Keys and integrity constraints"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-06",
+      "short_answer_text": "The original data has update anomalies because a lecturer name may need to be changed in many rows. I decomposed to Student, Lecturer, Module, Delivery, and Enrolment. Module references a delivery record rather than a lecturer directly because staffing can change by run. I used surrogate keys and foreign keys and kept final grade in enrolment because it depends on the student taking that module. The design is in 3NF because non-key attributes depend on the key, the whole key, and nothing but the key.",
+      "expected_manual_score": 74,
+      "expected_grade_band": "First",
+      "reason_for_expected_score": "Very strong explanation with clear anomaly reasoning, a defensible model, and good integrity thinking. Slightly abstract in places but clearly high quality.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Keys and integrity constraints",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-07",
+      "short_answer_text": "I normalised the sheet by making each column its own table so there is no duplication at all. Student names go in one table, module names in one table, marks in another table, and lecturer names in another table. This guarantees third normal form because everything is separated. I would join them later in queries.",
+      "expected_manual_score": 18,
+      "expected_grade_band": "Fail",
+      "reason_for_expected_score": "The answer shows a misunderstanding of normalisation by splitting attributes mechanically rather than modelling relations and dependencies.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-08",
+      "short_answer_text": "The most important dependencies are student_id -> student details and module_code -> module details. I would create Student, Module, Lecturer, and StudentModule tables. StudentModule uses a composite key of student_id and module_code and stores the mark. That removes transitive dependencies from the original table. The answer could be improved by explaining whether lecturer belongs to module or to a separate teaching instance.",
+      "expected_manual_score": 58,
+      "expected_grade_band": "Lower Second",
+      "reason_for_expected_score": "Reasonable structure and some explicit dependency thinking, but the submission stops short of deeper trade-off analysis and leaves some relationship modelling unresolved.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Keys and integrity constraints"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-09",
+      "short_answer_text": "I identified repeating groups and transitive dependencies and decomposed the source into Student, Module, Lecturer, Programme, and Enrolment tables. Programme_id sits on Student because many students belong to one programme. Module has a lecturer_id foreign key in my version, which is simple but assumes one lead lecturer per module. I noted that a delivery table would be safer if teaching assignments change between years.",
+      "expected_manual_score": 66,
+      "expected_grade_band": "Upper Second",
+      "reason_for_expected_score": "Competent and realistic answer with useful trade-off awareness, but it is not detailed enough on constraints and full dependency tracing to reach the highest band.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-10",
+      "short_answer_text": "To achieve third normal form I used Student(student_id, student_name, programme_name), Module(module_id, module_name, lecturer_name), and Enrolment(enrolment_id, student_id, module_id, grade). This removes duplicate rows and keeps the result simple. I did not split programme or lecturer out because it seemed unnecessary for a small dataset.",
+      "expected_manual_score": 34,
+      "expected_grade_band": "Fail",
+      "reason_for_expected_score": "The decomposition still leaves transitive dependencies in Student and Module, so the core 3NF requirement is not met even though the answer is tidy.",
+      "rubric_criteria_assessed": [
+        "Normalisation and table design",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-11",
+      "short_answer_text": "I first wrote the dependencies, then decomposed the dataset into Student, Programme, Module, Lecturer, and Enrolment. I used student_id, programme_id, module_id, and lecturer_id as primary keys and added foreign keys from enrolment to student and module. The decomposition removes repeated descriptive text and makes deletions safer. My weak point is that I have not said much about candidate keys or why lecturer should maybe sit in a delivery table instead of module.",
+      "expected_manual_score": 61,
+      "expected_grade_band": "Upper Second",
+      "reason_for_expected_score": "Solid structure and correct overall direction, but less complete and less reflective than the stronger upper-band submissions.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Keys and integrity constraints"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-12",
+      "short_answer_text": "The original enrolment sheet mixes entity data with transaction data. I separated stable entities from event data by creating Student, Module, Lecturer, Delivery, and Enrolment tables. Delivery links lecturers to modules by academic period, and Enrolment links students to delivery. That avoids hidden assumptions about one lecturer per module. I also explained that this adds joins but gives cleaner update behaviour and clearer integrity constraints.",
+      "expected_manual_score": 79,
+      "expected_grade_band": "First",
+      "reason_for_expected_score": "Excellent answer with mature modelling, explicit trade-offs, and strong integrity reasoning. This is close to full marks.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Keys and integrity constraints",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-13",
+      "short_answer_text": "I normalised the table by removing duplicated text and creating Student, Module, and Lecturer tables. The result is easier to query and update. Each table has an ID field and the original row can point at those IDs. This should improve consistency, although I have not shown the exact dependencies or explained whether the final design is 2NF or 3NF.",
+      "expected_manual_score": 42,
+      "expected_grade_band": "Third / Pass",
+      "reason_for_expected_score": "Some useful instinct about decomposition, but weak analytical support and limited evidence that the student can justify 3NF properly.",
+      "rubric_criteria_assessed": [
+        "Normalisation and table design",
+        "Keys and integrity constraints"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-14",
+      "short_answer_text": "The dependencies are mostly obvious from the business entities, but I did not list them formally. I created Student, Programme, Module, Lecturer, and Enrolment tables, and used a composite key on enrolment to stop duplicate registrations. I would also add uniqueness on student email and module code. The design is fairly clean, but the explanation is shorter than it should be for a full answer.",
+      "expected_manual_score": 56,
+      "expected_grade_band": "Lower Second",
+      "reason_for_expected_score": "Good practical database instincts and some integrity detail, but not enough formal dependency analysis or trade-off discussion for a higher band.",
+      "rubric_criteria_assessed": [
+        "Normalisation and table design",
+        "Keys and integrity constraints",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-15",
+      "short_answer_text": "Because every enrolment row has one student and one module, I kept all fields in one table and just added an enrolment_id primary key. This avoids duplicate rows and is already normalised enough for reporting. Queries will also be simpler because there are no joins.",
+      "expected_manual_score": 12,
+      "expected_grade_band": "Fail",
+      "reason_for_expected_score": "This does not address the normalisation problem and leaves the original redundancy and anomalies in place.",
+      "rubric_criteria_assessed": [
+        "Normalisation and table design",
+        "Justification and trade-offs"
+      ]
+    },
+    {
+      "submission_id": "benchmark-dbnorm-16",
+      "short_answer_text": "I decomposed the original structure into Student, Programme, Module, Lecturer, Delivery, and Enrolment, then justified each link using the functional dependencies. I explicitly separated delivery from module because staffing and timetable data change over time. Composite uniqueness on student_id plus delivery_id prevents duplicate registrations. The only thing I have not covered in detail is indexing strategy, which was outside the brief.",
+      "expected_manual_score": 77,
+      "expected_grade_band": "First",
+      "reason_for_expected_score": "Clear, complete, and tightly aligned to the brief. Strong on dependency logic, relation design, and trade-offs.",
+      "rubric_criteria_assessed": [
+        "Functional dependency analysis",
+        "Normalisation and table design",
+        "Keys and integrity constraints",
+        "Justification and trade-offs"
+      ]
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import {
   Bar,
   Cell,
 } from "recharts";
+import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 import type { AtRiskStudent } from "@/lib/studentRisk";
 import type { AssessmentTrendEntry, GradeDistributionEntry } from "@/lib/performanceAnalytics";
@@ -143,7 +144,13 @@ export const GradeDistributionCard = ({ gradeDist }: { gradeDist: GradeDistribut
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
           <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis type="category" dataKey="band" tick={{ fontSize: 10 }} width={100} stroke="hsl(var(--muted-foreground))" />
-          <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} formatter={(value: number) => [`${value} students`, "Count"]} />
+          <Tooltip
+            contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+            formatter={(value: ValueType | undefined, _name: NameType | undefined) => {
+              const count = typeof value === "number" ? value : Number(value ?? 0);
+              return [`${count} students`, "Count"];
+            }}
+          />
           <Bar dataKey="count" radius={[0, 6, 6, 0]}>
             {gradeDist.map((entry, index) => (
               <Cell key={index} fill={entry.fill} />

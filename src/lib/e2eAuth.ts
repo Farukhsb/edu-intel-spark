@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { z } from "zod";
 import { log } from "@/lib/logger";
 import { parseAppRole, type AppRole } from "@/lib/roles";
 
@@ -14,6 +15,7 @@ export interface E2EAuthProfile {
   avatar_url: string | null;
   cohort_id: string | null;
   department_id: string | null;
+  must_change_password: boolean;
 }
 
 interface E2EAuthState {
@@ -23,6 +25,23 @@ interface E2EAuthState {
   };
   profile: E2EAuthProfile;
 }
+
+const E2EAuthStateSchema = z.object({
+  user: z.object({
+    id: z.string().min(1),
+    email: z.string().email().nullable().optional(),
+  }),
+  profile: z.object({
+    id: z.string().min(1),
+    full_name: z.string().nullable().optional(),
+    email: z.string().email().nullable().optional(),
+    role: z.enum(["lecturer", "student", "admin"]),
+    avatar_url: z.string().nullable().optional(),
+    cohort_id: z.string().nullable().optional(),
+    department_id: z.string().nullable().optional(),
+    must_change_password: z.boolean().optional(),
+  }),
+});
 
 const LOCAL_E2E_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
@@ -36,28 +55,28 @@ export const readE2EAuthState = (): E2EAuthState | null => {
     const raw = window.localStorage.getItem(E2E_AUTH_STORAGE_KEY);
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as Partial<E2EAuthState>;
-    if (
-      !parsed?.user?.id ||
-      !parsed?.profile?.id ||
-      !parseAppRole(parsed?.profile?.role)
-    ) {
+    const parsed = E2EAuthStateSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) {
       return null;
     }
 
+    const role = parseAppRole(parsed.data.profile.role);
+    if (!role) return null;
+
     return {
       user: {
-        id: parsed.user.id,
-        email: parsed.user.email ?? parsed.profile.email ?? undefined,
+        id: parsed.data.user.id,
+        email: parsed.data.user.email ?? parsed.data.profile.email ?? undefined,
       },
       profile: {
-        id: parsed.profile.id,
-        full_name: parsed.profile.full_name ?? null,
-        email: parsed.profile.email ?? null,
-        role: parseAppRole(parsed.profile.role)!,
-        avatar_url: parsed.profile.avatar_url ?? null,
-        cohort_id: parsed.profile.cohort_id ?? null,
-        department_id: parsed.profile.department_id ?? null,
+        id: parsed.data.profile.id,
+        full_name: parsed.data.profile.full_name ?? null,
+        email: parsed.data.profile.email ?? null,
+        role,
+        avatar_url: parsed.data.profile.avatar_url ?? null,
+        cohort_id: parsed.data.profile.cohort_id ?? null,
+        department_id: parsed.data.profile.department_id ?? null,
+        must_change_password: parsed.data.profile.must_change_password ?? false,
       },
     };
   } catch (error) {
