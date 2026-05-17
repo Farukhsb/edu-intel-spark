@@ -147,7 +147,8 @@ describe("edge function hardening", () => {
     expect(source).toContain("email: z.string().trim().email()");
     expect(source).toContain("name: z.string().trim().min(1)");
     expect(source).toContain("cohort_id: z.string().trim().min(1)");
-    expect(source).toContain("department_id: z.string().trim().min(1)");
+    expect(source).toContain("department_name: z.string().trim().min(1).optional()");
+    expect(source).toContain("department_id: z.string().trim().min(1).optional()");
     expect(source).toContain("inviteUserByEmail");
     expect(source).not.toContain("results.push({ name, email, password, success: true })");
   });
@@ -281,5 +282,13 @@ describe("edge function hardening", () => {
     expect(authSource).toContain("export async function requireAdmin");
     expect(gradingSource).not.toContain("async function resolveActorRoles");
     expect(gradingSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
+  });
+
+  it("persists grading failure audit events for admin operational monitoring", () => {
+    const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+
+    expect(gradingSource).toContain('event_type: "grading_failed"');
+    expect(gradingSource).toContain('await recordGradingFailureAudit({');
+    expect(gradingSource).toContain('logWarn("grade-submission failure audit insert failed"');
   });
 });

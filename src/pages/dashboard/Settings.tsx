@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { User, Shield } from "lucide-react";
+import { getDepartmentName } from "@/lib/department";
 import { isLecturerEquivalentRole } from "@/lib/roles";
 import { getSettingsReadiness } from "@/lib/settingsReadiness";
 
@@ -12,7 +13,7 @@ const Settings = () => {
     role: profile?.role,
     fullName: profile?.full_name,
     email: profile?.email,
-    departmentId: profile?.department_id,
+    departmentName: getDepartmentName(profile),
   });
 
   return (
@@ -79,7 +80,7 @@ const Settings = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Department</span>
-            <span className="text-sm font-medium">{profile?.department_id || "-"}</span>
+            <span className="text-sm font-medium">{getDepartmentName(profile) || "-"}</span>
           </div>
         </CardContent>
       </Card>

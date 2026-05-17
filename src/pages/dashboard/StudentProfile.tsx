@@ -460,7 +460,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
 
       <div className="rounded-lg border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <div className="flex flex-col space-y-1.5 p-6">
-          <h3 className="text-base font-semibold tracking-tight">Reporting Readiness</h3>
+          <h3 className="text-base font-semibold tracking-tight">Support Priorities</h3>
           <p className="text-sm text-muted-foreground">
             A compact reading of what this student support view is most likely to require next.
           </p>

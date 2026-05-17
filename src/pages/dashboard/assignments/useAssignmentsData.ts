@@ -138,7 +138,7 @@ export const useAssignmentsData = ({
       role === "lecturer" && assignmentIds.length > 0
         ? await supabase
             .from("assignment_departments")
-            .select("assignment_id, department_id")
+            .select("assignment_id, department_name")
             .in("assignment_id", assignmentIds)
         : { data: [] };
 
@@ -151,8 +151,9 @@ export const useAssignmentsData = ({
 
     const departmentMap = new Map<string, string[]>();
     for (const row of assignmentDepartments || []) {
+      if (!row.department_name) continue;
       const existing = departmentMap.get(row.assignment_id) ?? [];
-      existing.push(row.department_id);
+      existing.push(row.department_name);
       departmentMap.set(row.assignment_id, existing);
     }
 

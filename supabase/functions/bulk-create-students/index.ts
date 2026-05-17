@@ -10,6 +10,7 @@ type StudentInput = {
   email: string;
   studentId?: string;
   cohort_id?: string;
+  department_name?: string;
   department_id?: string;
 };
 
@@ -17,9 +18,20 @@ type ProfileVerification = {
   email: string;
   full_name: string | null;
   cohort_id: string | null;
+  department_name: string | null;
   department_id: string | null;
   must_change_password: boolean;
 };
+
+const resolveDepartmentName = (input: {
+  department_name?: string | null;
+  department_id?: string | null;
+}) => input.department_name?.trim() || input.department_id?.trim() || null;
+
+const buildDepartmentColumns = (departmentName: string | null) => ({
+  department_name: departmentName,
+  department_id: departmentName,
+});
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
@@ -85,7 +97,7 @@ async function fetchVerifiedProfile(
   for (let attempt = 0; attempt < PROFILE_FLAG_RETRY_COUNT; attempt++) {
     let query = supabaseAdmin
       .from("profiles")
-      .select("email, full_name, cohort_id, department_id, must_change_password");
+      .select("email, full_name, cohort_id, department_name, department_id, must_change_password");
 
     if (options.userId) {
       query = query.eq("id", options.userId);
@@ -119,7 +131,11 @@ const StudentInputSchema = z.object({
   name: z.string().trim().min(1),
   studentId: z.string().trim().min(1).optional(),
   cohort_id: z.string().trim().min(1),
-  department_id: z.string().trim().min(1),
+  department_name: z.string().trim().min(1).optional(),
+  department_id: z.string().trim().min(1).optional(),
+}).refine((value) => Boolean(value.department_name || value.department_id), {
+  message: "Missing department",
+  path: ["department_name"],
 });
 
 const BulkCreateStudentsRequestSchema = z.object({
@@ -183,9 +199,9 @@ Deno.serve(async (req) => {
       const name = student?.name?.trim();
       const email = student?.email?.trim().toLowerCase();
       const cohortId = student?.cohort_id?.trim();
-      const departmentId = student?.department_id?.trim();
+      const departmentName = resolveDepartmentName(student);
 
-      if (!name || !email || !email.includes("@") || !cohortId || !departmentId) {
+      if (!name || !email || !email.includes("@") || !cohortId || !departmentName) {
         results.push({
           name: student?.name ?? "",
           email: student?.email ?? "",
@@ -200,7 +216,7 @@ Deno.serve(async (req) => {
           full_name: name,
           role: "student",
           cohort_id: cohortId,
-          department_id: departmentId,
+          ...buildDepartmentColumns(departmentName),
         },
         redirectTo: passwordSetupRedirectTo,
       });

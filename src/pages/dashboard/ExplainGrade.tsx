@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { env } from "@/lib/env";
 import { getExplainGradeReadiness } from "@/lib/explainGradeReadiness";
+import { getGradeTone } from "@/lib/gradePresentation";
 import { log } from "@/lib/logger";
 import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 import { parseExplainGradeSearchState } from "@/lib/schemas/navigation";
@@ -37,12 +38,6 @@ const INITIAL_ASSISTANT_MESSAGE: ChatMsg = {
   role: "assistant",
   content:
     "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
-};
-
-const getScoreTone = (score: number) => {
-  if (score >= 70) return "success";
-  if (score >= 50) return "primary";
-  return "destructive";
 };
 
 const ExplainGrade = () => {
@@ -414,9 +409,9 @@ const ExplainGrade = () => {
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
                     className={`h-full rounded-full ${
-                      getScoreTone(component.score) === "success"
+                      getGradeTone(component.score) === "success"
                         ? "bg-success"
-                        : getScoreTone(component.score) === "primary"
+                        : getGradeTone(component.score) === "primary"
                           ? "bg-primary"
                           : "bg-destructive"
                     }`}

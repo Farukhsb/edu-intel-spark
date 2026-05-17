@@ -1,4 +1,4 @@
-import { Suspense, lazy, type Dispatch, type SetStateAction } from "react";
+﻿import { Suspense, lazy, type Dispatch, type SetStateAction } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -128,7 +128,7 @@ const OverviewCards = ({
     { title: "Assignments", value: String(metrics.totalAssignments), helper: "Draft and published assignment records.", href: "/dashboard?view=assignments", icon: BookCopy },
     { title: "Submissions", value: String(metrics.totalSubmissions), helper: "All submission rows across the platform.", href: "/dashboard?view=submissions", icon: FileOutput },
     { title: "Pending Moderation", value: String(metrics.pendingModerationCases), helper: "Cases still awaiting academic resolution.", href: "/dashboard?view=system", icon: Scale },
-    { title: "AI Grading Failures", value: formatCount(metrics.aiGradingFailures), helper: "Marked as placeholder until failure events are fully exposed to admins.", href: "/dashboard?view=system", icon: AlertTriangle },
+    { title: "AI Grading Failures", value: formatCount(metrics.aiGradingFailures), helper: "Workflow audit events visible to admin are used to count grading failures recorded today.", href: "/dashboard?view=system", icon: AlertTriangle },
     { title: "High Integrity Risk", value: String(metrics.highIntegrityRiskCases), helper: "Cases with elevated integrity risk or escalation signals.", href: "/dashboard?view=system", icon: ShieldAlert },
   ];
 
@@ -584,7 +584,7 @@ const PolicyExceptionsSection = ({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-medium">{row.type}</p>
-                  <p className="text-sm text-muted-foreground">{row.assignmentTitle} · {row.studentLabel}</p>
+                  <p className="text-sm text-muted-foreground">{row.assignmentTitle} | {row.studentLabel}</p>
                 </div>
                 <Badge variant="outline" className={row.severity === "high" ? "border-amber-500/30 bg-amber-500/10 text-amber-700" : "border-slate-500/30 bg-slate-500/10 text-slate-700"}>
                   {row.severity === "high" ? "High severity" : "Medium severity"}
@@ -592,7 +592,7 @@ const PolicyExceptionsSection = ({
               </div>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">{row.details}</p>
               <p className="mt-3 text-xs text-muted-foreground">
-                Status: {row.status} · Detected {safeFormatDate(row.detectedAt, "MMM d, yyyy HH:mm", "Not available")}
+                Status: {row.status} | Detected {safeFormatDate(row.detectedAt, "MMM d, yyyy HH:mm", "Not available")}
               </p>
             </div>
           ))}
@@ -840,3 +840,4 @@ export const AdminDashboardScreen = ({
     </div>
   );
 };
+

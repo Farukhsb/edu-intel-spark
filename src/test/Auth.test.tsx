@@ -60,6 +60,7 @@ describe("Auth", () => {
         "Use your institutional account or create one so the platform can route you into the right workspace",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /read the privacy notice/i })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("tab", { name: "Sign In" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Sign Up" })).toBeInTheDocument();
   });

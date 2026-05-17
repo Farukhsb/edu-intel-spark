@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { DashboardLoadingState } from "@/components/dashboard/PageStates";
 
 import { useAdminDashboardController } from "@/pages/dashboard/admin-dashboard/controllers";
 import { AdminDashboardScreen } from "@/pages/dashboard/admin-dashboard/ui";
@@ -8,11 +8,7 @@ const AdminDashboard = () => {
   const { profile, state, actions } = useAdminDashboardController();
 
   if (state.loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardLoadingState />;
   }
 
   if (profile?.role !== "admin") {

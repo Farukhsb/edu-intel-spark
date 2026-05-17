@@ -283,14 +283,27 @@ const buildQueryResponse = (
 
   if (table === "grade_audit_log") {
     return {
-      select: () => ({
-        order: () => ({
-          limit: vi.fn().mockResolvedValue({
-            data: gradeAuditRows,
-            error: null,
+      select: (_columns?: string, options?: { count?: string; head?: boolean }) => {
+        if (options?.head) {
+          return {
+            eq: () => ({
+              gte: vi.fn().mockResolvedValue({
+                count: 0,
+                error: null,
+              }),
+            }),
+          };
+        }
+
+        return {
+          order: () => ({
+            limit: vi.fn().mockResolvedValue({
+              data: gradeAuditRows,
+              error: null,
+            }),
           }),
-        }),
-      }),
+        };
+      },
     };
   }
 
@@ -375,7 +388,6 @@ describe("AdminDashboard", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
-    expect(screen.getByText("No role change")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Promote to Lecturer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Demote to Student" })).toBeInTheDocument();
     expect(screen.queryByText(/Promote to Admin/i)).not.toBeInTheDocument();
@@ -686,7 +698,7 @@ describe("AdminDashboard", () => {
         };
       }
 
-      if (table === "admin_audit_log" || table === "grade_audit_log" || table === "academic_integrity_reviews" || table === "academic_access_events") {
+      if (table === "admin_audit_log" || table === "academic_integrity_reviews" || table === "academic_access_events") {
         return {
           select: () => ({
             order: () => ({
@@ -696,6 +708,32 @@ describe("AdminDashboard", () => {
               }),
             }),
           }),
+        };
+      }
+
+      if (table === "grade_audit_log") {
+        return {
+          select: (_columns?: string, options?: { count?: string; head?: boolean }) => {
+            if (options?.head) {
+              return {
+                eq: () => ({
+                  gte: vi.fn().mockResolvedValue({
+                    count: 0,
+                    error: null,
+                  }),
+                }),
+              };
+            }
+
+            return {
+              order: () => ({
+                limit: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              }),
+            };
+          },
         };
       }
 
@@ -731,14 +769,27 @@ describe("AdminDashboard", () => {
 
       if (table === "grade_audit_log") {
         return {
-          select: () => ({
-            order: () => ({
-              limit: vi.fn().mockResolvedValue({
-                data: null,
-                error: new Error("grade audit unavailable"),
+          select: (_columns?: string, options?: { count?: string; head?: boolean }) => {
+            if (options?.head) {
+              return {
+                eq: () => ({
+                  gte: vi.fn().mockResolvedValue({
+                    count: null,
+                    error: new Error("grade audit unavailable"),
+                  }),
+                }),
+              };
+            }
+
+            return {
+              order: () => ({
+                limit: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: new Error("grade audit unavailable"),
+                }),
               }),
-            }),
-          }),
+            };
+          },
         };
       }
 

@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import { z } from "zod";
+import { getDepartmentName } from "@/lib/department";
 import { log } from "@/lib/logger";
 import { parseAppRole, type AppRole } from "@/lib/roles";
 
@@ -14,6 +15,7 @@ export interface E2EAuthProfile {
   role: E2EAuthRole;
   avatar_url: string | null;
   cohort_id: string | null;
+  department_name: string | null;
   department_id: string | null;
   must_change_password: boolean;
 }
@@ -38,6 +40,7 @@ const E2EAuthStateSchema = z.object({
     role: z.enum(["lecturer", "student", "admin"]),
     avatar_url: z.string().nullable().optional(),
     cohort_id: z.string().nullable().optional(),
+    department_name: z.string().nullable().optional(),
     department_id: z.string().nullable().optional(),
     must_change_password: z.boolean().optional(),
   }),
@@ -63,6 +66,8 @@ export const readE2EAuthState = (): E2EAuthState | null => {
     const role = parseAppRole(parsed.data.profile.role);
     if (!role) return null;
 
+    const departmentName = getDepartmentName(parsed.data.profile);
+
     return {
       user: {
         id: parsed.data.user.id,
@@ -75,7 +80,8 @@ export const readE2EAuthState = (): E2EAuthState | null => {
         role,
         avatar_url: parsed.data.profile.avatar_url ?? null,
         cohort_id: parsed.data.profile.cohort_id ?? null,
-        department_id: parsed.data.profile.department_id ?? null,
+        department_name: departmentName,
+        department_id: departmentName,
         must_change_password: parsed.data.profile.must_change_password ?? false,
       },
     };

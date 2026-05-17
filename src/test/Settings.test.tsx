@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
       full_name: "Dr Ada Lovelace",
       email: "ada@example.com",
       role: "lecturer",
+      department_name: "Computer Science",
       department_id: "Computer Science",
     },
     signOut: vi.fn(),

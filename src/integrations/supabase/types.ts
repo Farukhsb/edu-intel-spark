@@ -307,16 +307,19 @@ export type Database = {
         Row: {
           assignment_id: string
           created_at: string
+          department_name: string | null
           department_id: string
         }
         Insert: {
           assignment_id: string
           created_at?: string
+          department_name?: string | null
           department_id: string
         }
         Update: {
           assignment_id?: string
           created_at?: string
+          department_name?: string | null
           department_id?: string
         }
         Relationships: [
@@ -736,6 +739,7 @@ export type Database = {
           avatar_url: string | null
           cohort_id: string | null
           created_at: string
+          department_name: string | null
           department_id: string | null
           email: string | null
           full_name: string | null
@@ -748,6 +752,7 @@ export type Database = {
           avatar_url?: string | null
           cohort_id?: string | null
           created_at?: string
+          department_name?: string | null
           department_id?: string | null
           email?: string | null
           full_name?: string | null
@@ -760,6 +765,7 @@ export type Database = {
           avatar_url?: string | null
           cohort_id?: string | null
           created_at?: string
+          department_name?: string | null
           department_id?: string | null
           email?: string | null
           full_name?: string | null

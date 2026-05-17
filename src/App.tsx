@@ -17,6 +17,7 @@ import { AppErrorBoundary } from "./components/AppErrorBoundary";
 const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Install = lazy(() => import("./pages/Install"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange"));
 const DashboardLayout = lazy(() => import("./components/DashboardLayout").then((module) => ({ default: module.DashboardLayout })));
@@ -165,6 +166,14 @@ const App = () => (
           <PasswordChangeGate>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route
+                path="/privacy"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <Privacy />
+                  </Suspense>
+                }
+              />
               <Route
                 path="/auth"
                 element={

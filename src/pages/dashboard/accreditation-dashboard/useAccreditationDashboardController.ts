@@ -240,8 +240,8 @@ export const useAccreditationDashboardController = () => {
     tefColor,
     exportQAAReport: () => exportQAAReport(qaaMetrics, summary),
     pendingWorkflowTarget,
-    openPendingSubmissions: () => navigate(pendingWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review"),
-    openAtRiskCohort: () => navigate("/dashboard?view=submissions"),
-    openLearningOutcomes: () => navigate("/dashboard?view=assignments"),
+    openPendingWorkflow: () => navigate(pendingWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review"),
+    openSubmissionOversight: () => navigate("/dashboard?view=submissions"),
+    openAssignmentOversight: () => navigate("/dashboard?view=assignments"),
   };
 };

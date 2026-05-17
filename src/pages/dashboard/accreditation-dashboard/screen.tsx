@@ -40,9 +40,9 @@ export const AccreditationDashboardScreen = ({
   tefColor,
   exportQAAReport,
   pendingWorkflowTarget,
-  openPendingSubmissions,
-  openAtRiskCohort,
-  openLearningOutcomes,
+  openPendingWorkflow,
+  openSubmissionOversight,
+  openAssignmentOversight,
 }: AccreditationDashboardScreenProps) => (
   <div className="space-y-6 animate-fade-in">
     {isDemo && <DashboardDemoBanner label="Viewing demo accreditation data" />}
@@ -152,7 +152,7 @@ export const AccreditationDashboardScreen = ({
         <CardDescription>Jump from quality signals to the workflows that improve them</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">
-        <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openPendingSubmissions}>
+        <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openPendingWorkflow}>
           <p className="text-sm font-medium">Reduce feedback backlog</p>
           <p className="mt-1 text-sm text-muted-foreground">
             {pendingWorkflowTarget
@@ -163,7 +163,7 @@ export const AccreditationDashboardScreen = ({
             {pendingWorkflowTarget?.label ?? "Open pending submissions"} <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </button>
-        <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openAtRiskCohort}>
+        <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openSubmissionOversight}>
           <p className="text-sm font-medium">Review student outcome risk</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Open the admin submission oversight view and inspect where pass rates and outcome signals are weakest.
@@ -172,7 +172,7 @@ export const AccreditationDashboardScreen = ({
             Open submission oversight <ArrowRight className="h-3.5 w-3.5" />
           </span>
         </button>
-        <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openLearningOutcomes}>
+        <button type="button" className="rounded-lg border p-4 text-left transition-colors hover:bg-muted/40" onClick={openAssignmentOversight}>
           <p className="text-sm font-medium">Review assignment evidence</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Open assignment oversight to inspect rubric coverage and the assessment evidence likely to need explanation in a quality review.

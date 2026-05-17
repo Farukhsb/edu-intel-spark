@@ -2,10 +2,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
-export const DashboardLoadingState = () => (
-  <div className="flex items-center justify-center py-12">
-    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+export const DashboardLoadingState = ({
+  className,
+  testId,
+}: {
+  className?: string;
+  testId?: string;
+}) => (
+  <div className={cn("flex items-center justify-center py-12", className)}>
+    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" data-testid={testId} />
   </div>
 );
 

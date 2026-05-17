@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Brain, BarChart3, Shield, MessageSquare, TrendingUp, Users, Sparkles, ArrowRight, CheckCircle, GraduationCap, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -218,7 +218,12 @@ const Index = () => {
             <Brain className="h-5 w-5 text-primary" />
             <span className="font-display font-semibold">GradeAI</span>
           </div>
-          <p className="text-xs text-muted-foreground">(c) 2025 GradeAI. AI-Powered Academic Intelligence.</p>
+          <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground sm:items-end">
+            <p>(c) 2025 GradeAI. AI-Powered Academic Intelligence.</p>
+            <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
+              Privacy notice
+            </Link>
+          </div>
         </div>
       </footer>
     </div>

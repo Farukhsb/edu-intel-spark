@@ -4,12 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2 } from "lucide-react";
+import { Download } from "lucide-react";
 import { safeToLocaleDate } from "@/lib/date";
 import { log } from "@/lib/logger";
 import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
 import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
-import { DashboardEmptyState } from "@/components/dashboard/PageStates";
+import { getFirstName } from "@/lib/formatters";
+import { getGradeBadgeVariant, getGradeTone } from "@/lib/gradePresentation";
+import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
   DEMO_STUDENT_ASSIGNMENT_GRADES,
@@ -36,25 +38,6 @@ interface StudentGrade {
 }
 
 const PASS_MARK_PERCENT = 40;
-
-const getFirstName = (fullName: string | null | undefined) => {
-  const first = fullName?.trim().split(/\s+/)[0];
-  return first && first.length > 0 ? first : "there";
-};
-
-const getScoreTone = (score: number, maxScore: number) => {
-  const ratio = score / maxScore;
-  if (ratio >= 0.7) return "success";
-  if (ratio >= 0.5) return "primary";
-  return "destructive";
-};
-
-const getScoreBadgeVariant = (score: number, maxScore: number) => {
-  const ratio = score / maxScore;
-  if (ratio >= 0.7) return "default" as const;
-  if (ratio >= 0.5) return "secondary" as const;
-  return "destructive" as const;
-};
 
 const getBreakdownInsights = (
   breakdown: Array<{
@@ -206,11 +189,7 @@ const StudentGrades = () => {
   }, [user, isDemo]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardLoadingState />;
   }
 
   const releasedGrades = grades.filter((grade) => grade.score != null);
@@ -322,7 +301,7 @@ const StudentGrades = () => {
                           {grade.score}/{grade.maxScore}
                         </span>
                         <Badge
-                          variant={getScoreBadgeVariant(grade.score, grade.maxScore)}
+                          variant={getGradeBadgeVariant(grade.score, grade.maxScore)}
                         >
                           {Math.round((grade.score / grade.maxScore) * 100)}%
                         </Badge>
@@ -348,9 +327,9 @@ const StudentGrades = () => {
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
                         <div
                           className={`h-full rounded-full ${
-                            getScoreTone(grade.score, grade.maxScore) === "success"
+                            getGradeTone(grade.score, grade.maxScore) === "success"
                               ? "bg-success"
-                              : getScoreTone(grade.score, grade.maxScore) === "primary"
+                              : getGradeTone(grade.score, grade.maxScore) === "primary"
                                 ? "bg-primary"
                                 : "bg-destructive"
                           }`}

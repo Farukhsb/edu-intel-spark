@@ -24,11 +24,16 @@ describe("institutionalInsights", () => {
         { submission_id: "s2", final_score: 55, ai_score: null },
         { submission_id: "s3", final_score: null, ai_score: 72 },
       ],
+      profiles: [
+        { id: "student-1", role: "student" },
+        { id: "student-2", role: "student" },
+      ],
     });
 
     expect(snapshot.hasRealData).toBe(true);
     expect(snapshot.lowPerforming).toEqual([
       {
+        id: "a1",
         name: "Incident Report",
         avgGrade: 45,
         passRate: 50,
@@ -36,6 +41,7 @@ describe("institutionalInsights", () => {
         issue: "Low average - review needed",
       },
       {
+        id: "a2",
         name: "Schema Reflection",
         avgGrade: 72,
         passRate: 100,
@@ -44,15 +50,15 @@ describe("institutionalInsights", () => {
       },
     ]);
 
-    expect(snapshot.departmentStats).toEqual([
+    expect(snapshot.moduleStats).toEqual([
       {
-        dept: "CS402",
+        module: "CS402",
         students: 1,
         avgGrade: 72,
         passRate: 100,
       },
       {
-        dept: "CS401",
+        module: "CS401",
         students: 2,
         avgGrade: 45,
         passRate: 50,
@@ -63,7 +69,7 @@ describe("institutionalInsights", () => {
       { metric: "Module Pass Rate (Avg)", value: 67, target: 75, status: "at-risk" },
       { metric: "Graded Submissions", value: 100, target: 95, status: "met" },
       { metric: "Average Score", value: 54, target: 60, status: "at-risk" },
-      { metric: "Assessment Completion Rate", value: 100, target: 90, status: "met" },
+      { metric: "Assessment Completion Rate", value: 75, target: 90, status: "below" },
     ]);
   });
 
@@ -72,11 +78,12 @@ describe("institutionalInsights", () => {
       assignments: [],
       submissions: [],
       grades: [],
+      profiles: [],
     });
 
     expect(snapshot.hasRealData).toBe(false);
     expect(snapshot.lowPerforming).toEqual([]);
-    expect(snapshot.departmentStats).toEqual([]);
+    expect(snapshot.moduleStats).toEqual([]);
     expect(snapshot.accreditation).toEqual(EMPTY_ACCREDITATION);
   });
 
@@ -95,6 +102,7 @@ describe("institutionalInsights", () => {
         ],
         lowPerforming: [
           {
+            id: "a1",
             name: "Incident Report",
             avgGrade: 45,
             passRate: 50,

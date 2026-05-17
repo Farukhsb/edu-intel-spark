@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { DashboardLoadingState } from "@/components/dashboard/PageStates";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
 
 import { useAssignmentDetailController } from "@/pages/dashboard/assignment-detail/controllers";
 import { getDemoAssignmentSetById } from "@/pages/dashboard/demoAssignments";
@@ -24,11 +24,7 @@ const AssignmentDetail = () => {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardLoadingState />;
   }
 
   if (!assignment) {

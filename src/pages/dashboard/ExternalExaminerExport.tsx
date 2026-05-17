@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, FileText, Loader2, Shield, Users } from "lucide-react";
+import { Download, FileText, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
-import { DashboardEmptyState } from "@/components/dashboard/PageStates";
+import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS,
   DEMO_EXTERNAL_EXAMINER_EXPORT_DATA,
@@ -230,7 +230,7 @@ const ExternalExaminerExport = () => {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+    return <DashboardLoadingState />;
   }
 
   if (loadError) {
@@ -391,9 +391,9 @@ const ExternalExaminerExport = () => {
                       <td className="py-2">{row.studentName}</td>
                       <td className="max-w-[150px] truncate py-2">{row.assignmentTitle}</td>
                       <td className="py-2">{row.moduleCode}</td>
-                      <td className="py-2 text-right">{row.aiScore ?? "N/A"}</td>
-                      <td className="py-2 text-right">{row.lecturerScore ?? "N/A"}</td>
-                      <td className="py-2 text-right font-medium">{row.finalScore ?? "N/A"}</td>
+                      <td className="py-2 text-right">{row.aiScore ?? MISSING_FIELD_LABEL}</td>
+                      <td className="py-2 text-right">{row.lecturerScore ?? MISSING_FIELD_LABEL}</td>
+                      <td className="py-2 text-right font-medium">{row.finalScore ?? MISSING_FIELD_LABEL}</td>
                       <td className="py-2"><Badge variant="outline" className="text-xs">{row.classification}</Badge></td>
                       <td className="py-2"><Badge variant={row.status === "released" ? "default" : "secondary"} className="text-xs">{row.status}</Badge></td>
                     </tr>

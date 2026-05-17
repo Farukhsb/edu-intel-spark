@@ -66,8 +66,7 @@ export const UserManagementSection = ({
         <div className="flex items-start justify-between gap-4">
           <div>
             <CardTitle className="text-base">User and role management</CardTitle>
-            <CardDescription>Role changes stay narrow, confirmed, and traceable. Account status is not wired yet, so this view only confirms that a profile record exists.</CardDescription>
-            <p className="mt-2 text-xs text-muted-foreground">No role change</p>
+            <CardDescription>Role changes stay narrow, confirmed, and traceable. This view confirms profile presence and role assignment, while broader account status controls remain outside the dashboard.</CardDescription>
           </div>
           {compact ? (
             <Button variant="outline" size="sm" onClick={() => navigate("/dashboard?view=users")}>

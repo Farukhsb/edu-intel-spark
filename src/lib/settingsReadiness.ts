@@ -10,17 +10,17 @@ export const getSettingsReadiness = ({
   role,
   fullName,
   email,
-  departmentId,
+  departmentName,
 }: {
   role: string | null | undefined;
   fullName: string | null | undefined;
   email: string | null | undefined;
-  departmentId: string | null | undefined;
+  departmentName: string | null | undefined;
 }): SettingsReadiness => {
   const missingFields = [
     !fullName ? "name" : null,
     !email ? "email" : null,
-    !departmentId ? "department" : null,
+    !departmentName ? "department" : null,
   ].filter(Boolean) as string[];
 
   if (missingFields.length > 0) {

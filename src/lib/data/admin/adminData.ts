@@ -14,6 +14,9 @@ const LATEST_GRADE_FIELDS = "id, created_at";
 const INTEGRITY_REVIEW_FIELDS = "id, submission_id, decision, lecturer_note, review_type, created_at, updated_at";
 
 export const fetchAdminDashboardDataset = async () => {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
   const [
     metricsRes,
     assignmentOversightRes,
@@ -29,6 +32,7 @@ export const fetchAdminDashboardDataset = async () => {
     integrityReviewsRes,
     latestGradeRes,
     notificationsRes,
+    gradingFailureCountRes,
   ] = await Promise.all([
     supabase.rpc("get_admin_dashboard_metrics"),
     supabase.rpc("get_admin_assignment_oversight"),
@@ -44,6 +48,11 @@ export const fetchAdminDashboardDataset = async () => {
     supabase.from("academic_integrity_reviews").select(INTEGRITY_REVIEW_FIELDS).order("updated_at", { ascending: false }).limit(100),
     supabase.from("grades").select(LATEST_GRADE_FIELDS).order("created_at", { ascending: false }).limit(1),
     supabase.from("communication_messages").select(COMMUNICATION_FIELDS).order("created_at", { ascending: false }).limit(10),
+    supabase
+      .from("grade_audit_log")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "grading_failed")
+      .gte("created_at", todayStart.toISOString()),
   ]);
 
   if (profilesRes.error || assignmentsRes.error || submissionsRes.error || moderationCasesRes.error) {
@@ -65,5 +74,6 @@ export const fetchAdminDashboardDataset = async () => {
     integrityReviewsRes,
     latestGradeRes,
     notificationsRes,
+    gradingFailureCountRes,
   };
 };
