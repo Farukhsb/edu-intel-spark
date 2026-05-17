@@ -10,7 +10,7 @@ import {
 import { safeParseEdgeAIGradeResponse, safeParseIntegrityBatchResponse } from "@/lib/schemas/aiResponses";
 import { buildIntegrityClientOutcome } from "@/pages/dashboard/assignment-detail/domain";
 import { log } from "@/lib/logger";
-import { env } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 import { isRegradableWorkflowStatus } from "@/lib/assessmentWorkflow";
 import { persistWorkflowNotification } from "@/pages/dashboard/assignment-detail/workflows/submissionActions";
 import type {
@@ -341,6 +341,7 @@ export const useAutomatedAssessmentActions = ({
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) throw new Error("Please sign in again");
+      const env = getEnv();
 
       const gradeSubmissionUrl = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;
       const response = await fetch(gradeSubmissionUrl, {
@@ -599,6 +600,7 @@ export const useAutomatedAssessmentActions = ({
         toast.error("Your session has expired. Please sign in again before running an integrity check.");
         return;
       }
+      const env = getEnv();
 
       if (submissions.length > LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD) {
         toast.warning(

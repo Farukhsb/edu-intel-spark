@@ -1,13 +1,12 @@
 import * as Sentry from "@sentry/react";
-import { env } from "@/lib/env";
 
 export function initSentry() {
-  const sentryDsn = env.VITE_SENTRY_DSN;
+  const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
   if (!sentryDsn) {
     return;
   }
 
-  const appEnvironment = env.VITE_APP_ENV;
+  const appEnvironment = import.meta.env.VITE_APP_ENV || "development";
 
   Sentry.init({
     dsn: sentryDsn,

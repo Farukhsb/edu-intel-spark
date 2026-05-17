@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getDepartmentName, toDepartmentColumns } from "@/lib/department";
-import { env } from "@/lib/env";
 import { log } from "@/lib/logger";
 
 interface ParsedStudent {
@@ -129,7 +128,7 @@ const readFunctionErrorBody = async (response?: Response) => {
 };
 
 const formatBulkCreateError = async (error: unknown, response?: Response) => {
-  const supabaseProjectId = env.VITE_SUPABASE_PROJECT_ID;
+  const supabaseProjectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   if (error instanceof FunctionsHttpError) {
     const details = await readFunctionErrorBody(response);
     const status = response?.status;

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -6,13 +7,12 @@ import {
   Shield,
   TrendingDown,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { DashboardEmptyState } from "@/components/dashboard/PageStates";
+import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   formatStatusLabel,
   getRecommendationActionSummary,
@@ -22,6 +22,12 @@ import {
 } from "./useCohortAnalyticsController";
 
 type CohortAnalyticsScreenProps = ReturnType<typeof useCohortAnalyticsController>;
+
+const GradeDistributionChart = lazy(() =>
+  import("@/pages/dashboard/cohort-analytics/distribution-chart").then((module) => ({
+    default: module.GradeDistributionChart,
+  })),
+);
 
 export const CohortAnalyticsScreen = ({
   modules,
@@ -111,25 +117,9 @@ export const CohortAnalyticsScreen = ({
                 description="This view will populate once submissions have been graded and released, so there is live cohort performance data to compare."
               />
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={gradeDistChart}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="band" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {gradeDistChart.map((entry, index) => (
-                      <Cell key={index} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<DashboardLoadingState testId="cohort-analytics-grade-distribution-loading" />}>
+                <GradeDistributionChart gradeDistChart={gradeDistChart} />
+              </Suspense>
             )}
           </CardContent>
         </Card>

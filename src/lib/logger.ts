@@ -1,4 +1,3 @@
-import { env } from "@/lib/env";
 import { captureAppError } from "@/lib/sentry";
 
 type SafeContext = Record<string, unknown> | undefined;
@@ -103,7 +102,7 @@ const writeConsole = (
   context?: SafeContext,
   error?: unknown,
 ) => {
-  const isDevelopment = env.VITE_APP_ENV === "development";
+  const isDevelopment = (import.meta.env.VITE_APP_ENV || "development") === "development";
   if (!isDevelopment) return;
 
   const safeContext = sanitizeContext(context);

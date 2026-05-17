@@ -17,7 +17,7 @@ import {
 } from "@/components/dashboard/PageStates";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { env } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 import { getExplainGradeReadiness } from "@/lib/explainGradeReadiness";
 import { getGradeTone } from "@/lib/gradePresentation";
 import { log } from "@/lib/logger";
@@ -146,6 +146,7 @@ const ExplainGrade = () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error("Not signed in");
+      const env = getEnv();
 
       const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
       const response = await fetch(chatUrl, {

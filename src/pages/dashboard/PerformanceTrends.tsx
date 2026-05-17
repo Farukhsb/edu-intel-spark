@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,10 +21,8 @@ import {
   getPerformanceReportingReadiness,
 } from "@/lib/performanceAnalytics";
 import {
-  AssessmentTrendsCard,
   EarlySupportSignalsCard,
   FilteredInterventionBanner,
-  GradeDistributionCard,
   PerformanceFiltersBar,
   StudentSupportSummaryCard,
 } from "@/pages/dashboard/performance-trends/sections";
@@ -33,6 +31,18 @@ import {
   DEMO_GRADE_SCORES,
   DEMO_TRAJECTORIES,
 } from "@/pages/dashboard/performance-trends/demoData";
+
+const AssessmentTrendsCard = lazy(() =>
+  import("@/pages/dashboard/performance-trends/charts").then((module) => ({
+    default: module.AssessmentTrendsCard,
+  })),
+);
+
+const GradeDistributionCard = lazy(() =>
+  import("@/pages/dashboard/performance-trends/charts").then((module) => ({
+    default: module.GradeDistributionCard,
+  })),
+);
 
 const PerformanceTrends = () => {
   const { user, isDemo } = useAuth();
@@ -245,11 +255,15 @@ const PerformanceTrends = () => {
       ) : (
         <>
           {assessmentTrends.length > 0 && (
-            <AssessmentTrendsCard assessmentTrends={assessmentTrends} />
+            <Suspense fallback={<DashboardLoadingState testId="performance-trends-chart-loading" />}>
+              <AssessmentTrendsCard assessmentTrends={assessmentTrends} />
+            </Suspense>
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <GradeDistributionCard gradeDist={gradeDist} />
+            <Suspense fallback={<DashboardLoadingState testId="performance-grade-distribution-loading" />}>
+              <GradeDistributionCard gradeDist={gradeDist} />
+            </Suspense>
             <StudentSupportSummaryCard filteredStudents={filteredAtRiskStudents} allAtRiskCount={atRiskStudents.length} />
           </div>
 

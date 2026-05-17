@@ -178,6 +178,7 @@ describe("edge function hardening", () => {
     const automationHookSource = readRepoFile("src/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions.ts");
     const explainGradeSource = readRepoFile("src/pages/dashboard/ExplainGrade.tsx");
 
+    expect(automationHookSource).toContain("const env = getEnv();");
     expect(automationHookSource).toContain("const gradeSubmissionUrl = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;");
     expect(automationHookSource).toContain("const plagiarismCheckUrl = `${env.VITE_SUPABASE_URL}/functions/v1/check-plagiarism`;");
     expect(automationHookSource).toContain("supabase.auth.getSession()");
@@ -185,6 +186,7 @@ describe("edge function hardening", () => {
     expect(automationHookSource).toContain("Authorization: `Bearer ${session.access_token}`");
 
     expect(explainGradeSource).toContain("supabase.auth.getSession()");
+    expect(explainGradeSource).toContain("const env = getEnv();");
     expect(explainGradeSource).toContain("const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;");
     expect(explainGradeSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
     expect(explainGradeSource).toContain("Authorization: `Bearer ${accessToken}`");

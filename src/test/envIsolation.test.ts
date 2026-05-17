@@ -30,4 +30,24 @@ describe("environment bootstrap isolation", () => {
 
     vi.doUnmock("@/lib/env");
   });
+
+  it("allows optional telemetry and bulk-upload modules to load before Supabase env is needed", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/env", () => ({
+      getEnv: () => {
+        throw new Error("Invalid environment configuration: VITE_SUPABASE_URL");
+      },
+    }));
+
+    await expect(import("@/lib/logger")).resolves.toHaveProperty("log");
+    await expect(import("@/lib/posthog")).resolves.toHaveProperty("initPostHog");
+    await expect(import("@/lib/sentry")).resolves.toHaveProperty("initSentry");
+    await expect(import("@/components/BulkStudentUpload")).resolves.toHaveProperty("BulkStudentUpload");
+    await expect(import("@/pages/dashboard/ExplainGrade")).resolves.toHaveProperty("default");
+    await expect(
+      import("@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions"),
+    ).resolves.toHaveProperty("useAutomatedAssessmentActions");
+
+    vi.doUnmock("@/lib/env");
+  });
 });
