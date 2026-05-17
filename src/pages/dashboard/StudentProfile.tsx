@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,7 +31,6 @@ import {
 } from "@/lib/studentProfile";
 import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
-  StudentGradesTrendCard,
   StudentInterventionFormCard,
   StudentInterventionHistoryCard,
   StudentMissedAssignmentsCard,
@@ -40,6 +39,24 @@ import {
   StudentProfileSummaryCards,
   StudentRiskReasonsCard,
 } from "@/pages/dashboard/student-profile/sections";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const StudentGradesTrendCard = lazy(() =>
+  import("@/pages/dashboard/student-profile/trend-card").then((module) => ({
+    default: module.StudentGradesTrendCard,
+  })),
+);
+
+const StudentTrendLoadingCard = () => (
+  <Card>
+    <CardHeader>
+      <CardTitle className="text-base">Recent Grades Trend</CardTitle>
+    </CardHeader>
+    <CardContent>
+      <div className="h-[260px] animate-pulse rounded-lg bg-muted/40" />
+    </CardContent>
+  </Card>
+);
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -500,7 +517,9 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-        <StudentGradesTrendCard student={student} trendDirection={trendDirection} />
+        <Suspense fallback={<StudentTrendLoadingCard />}>
+          <StudentGradesTrendCard student={student} trendDirection={trendDirection} />
+        </Suspense>
         <StudentRiskReasonsCard student={student} />
       </div>
 

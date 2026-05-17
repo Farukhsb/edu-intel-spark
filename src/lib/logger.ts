@@ -3,8 +3,6 @@ import { captureAppError } from "@/lib/sentry";
 
 type SafeContext = Record<string, unknown> | undefined;
 
-const isDevelopment = env.VITE_APP_ENV === "development";
-
 const SENSITIVE_KEYS = new Set([
   "submission",
   "submissions",
@@ -105,6 +103,7 @@ const writeConsole = (
   context?: SafeContext,
   error?: unknown,
 ) => {
+  const isDevelopment = env.VITE_APP_ENV === "development";
   if (!isDevelopment) return;
 
   const safeContext = sanitizeContext(context);

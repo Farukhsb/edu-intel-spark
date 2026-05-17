@@ -32,8 +32,6 @@ import { useExplainGradeData } from "@/pages/dashboard/explain-grade/useExplainG
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
-
 const INITIAL_ASSISTANT_MESSAGE: ChatMsg = {
   role: "assistant",
   content:
@@ -149,7 +147,8 @@ const ExplainGrade = () => {
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error("Not signed in");
 
-      const response = await fetch(CHAT_URL, {
+      const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
+      const response = await fetch(chatUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

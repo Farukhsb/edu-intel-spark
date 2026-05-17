@@ -46,7 +46,6 @@ interface BulkStudentUploadProps {
 
 const REQUIRED_HEADERS = ["name", "email", "cohort", "department"] as const;
 const BULK_CREATE_FUNCTION = "bulk-create-students";
-const SUPABASE_PROJECT_ID = env.VITE_SUPABASE_PROJECT_ID;
 const OPTIONAL_STUDENT_ID_HEADERS = ["studentid", "student_id", "student id"] as const;
 
 const CsvStudentRowSchema = z.object({
@@ -130,12 +129,13 @@ const readFunctionErrorBody = async (response?: Response) => {
 };
 
 const formatBulkCreateError = async (error: unknown, response?: Response) => {
+  const supabaseProjectId = env.VITE_SUPABASE_PROJECT_ID;
   if (error instanceof FunctionsHttpError) {
     const details = await readFunctionErrorBody(response);
     const status = response?.status;
 
     if (status === 404) {
-      return `Student account creation is unavailable because Edge Function "${BULK_CREATE_FUNCTION}" is not deployed to Supabase project ${SUPABASE_PROJECT_ID}. Deploy it with: supabase functions deploy ${BULK_CREATE_FUNCTION}`;
+      return `Student account creation is unavailable because Edge Function "${BULK_CREATE_FUNCTION}" is not deployed to Supabase project ${supabaseProjectId}. Deploy it with: supabase functions deploy ${BULK_CREATE_FUNCTION}`;
     }
 
     if (status === 401 || status === 403) {
@@ -148,11 +148,11 @@ const formatBulkCreateError = async (error: unknown, response?: Response) => {
   }
 
   if (error instanceof FunctionsRelayError) {
-    return `Supabase could not route the request to Edge Function "${BULK_CREATE_FUNCTION}". Check the function deployment and project status for ${SUPABASE_PROJECT_ID}.`;
+    return `Supabase could not route the request to Edge Function "${BULK_CREATE_FUNCTION}". Check the function deployment and project status for ${supabaseProjectId}.`;
   }
 
   if (error instanceof FunctionsFetchError) {
-    return `Could not reach Edge Function "${BULK_CREATE_FUNCTION}" for Supabase project ${SUPABASE_PROJECT_ID}. Check that the function is deployed and that your network can reach Supabase Edge Functions.`;
+    return `Could not reach Edge Function "${BULK_CREATE_FUNCTION}" for Supabase project ${supabaseProjectId}. Check that the function is deployed and that your network can reach Supabase Edge Functions.`;
   }
 
   return error instanceof Error ? error.message : "Bulk upload failed";

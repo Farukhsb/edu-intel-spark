@@ -1,15 +1,20 @@
-export type AssessmentWorkflowStatus =
-  | "submitted"
-  | "ai_grading"
-  | "ai_graded"
-  | "first_review"
-  | "moderation_pending"
-  | "moderation_in_progress"
-  | "moderated"
-  | "escalated"
-  | "under_review"
-  | "approved"
-  | "released";
+export const ALL_ASSESSMENT_WORKFLOW_STATUSES = [
+  "submitted",
+  "ai_grading",
+  "ai_graded",
+  "first_review",
+  "moderation_pending",
+  "moderation_in_progress",
+  "moderated",
+  "escalated",
+  "under_review",
+  "approved",
+  "released",
+] as const;
+
+export type AssessmentWorkflowStatus = (typeof ALL_ASSESSMENT_WORKFLOW_STATUSES)[number];
+
+const ASSESSMENT_WORKFLOW_STATUS_SET = new Set<string>(ALL_ASSESSMENT_WORKFLOW_STATUSES);
 
 export const REVIEW_QUEUE_STATUSES: AssessmentWorkflowStatus[] = [
   "submitted",
@@ -102,26 +107,38 @@ export interface LecturerSelectionGuidance {
   detail: string;
 }
 
+export const parseAssessmentWorkflowStatus = (
+  status: string | null | undefined,
+): AssessmentWorkflowStatus | null =>
+  typeof status === "string" && ASSESSMENT_WORKFLOW_STATUS_SET.has(status)
+    ? (status as AssessmentWorkflowStatus)
+    : null;
+
+export const normalizeAssessmentWorkflowStatus = (
+  status: string | null | undefined,
+  fallback: AssessmentWorkflowStatus = "submitted",
+): AssessmentWorkflowStatus => parseAssessmentWorkflowStatus(status) ?? fallback;
+
 export const isReviewQueueStatus = (status: string) =>
-  REVIEW_QUEUE_STATUSES.includes(status as AssessmentWorkflowStatus);
+  REVIEW_QUEUE_STATUSES.includes(normalizeAssessmentWorkflowStatus(status));
 
 export const isGradedWorkflowStatus = (status: string) =>
-  GRADED_WORKFLOW_STATUSES.includes(status as AssessmentWorkflowStatus);
+  GRADED_WORKFLOW_STATUSES.includes(normalizeAssessmentWorkflowStatus(status));
 
 export const isRegradableWorkflowStatus = (status: string) =>
-  REGRADABLE_WORKFLOW_STATUSES.includes(status as AssessmentWorkflowStatus);
+  REGRADABLE_WORKFLOW_STATUSES.includes(normalizeAssessmentWorkflowStatus(status));
 
 export const isApprovableWorkflowStatus = (status: string) =>
-  APPROVABLE_WORKFLOW_STATUSES.includes(status as AssessmentWorkflowStatus);
+  APPROVABLE_WORKFLOW_STATUSES.includes(normalizeAssessmentWorkflowStatus(status));
 
 export const isFirstReviewEditableStatus = (status: string) =>
-  FIRST_REVIEW_EDITABLE_STATUSES.includes(status as AssessmentWorkflowStatus);
+  FIRST_REVIEW_EDITABLE_STATUSES.includes(normalizeAssessmentWorkflowStatus(status));
 
 export const isModerationBlockingStatus = (status: string) =>
-  MODERATION_BLOCKING_STATUSES.includes(status as AssessmentWorkflowStatus);
+  MODERATION_BLOCKING_STATUSES.includes(normalizeAssessmentWorkflowStatus(status));
 
 export const canReleaseStatus = (status: string) =>
-  RELEASE_READY_STATUSES.includes(status as AssessmentWorkflowStatus);
+  RELEASE_READY_STATUSES.includes(normalizeAssessmentWorkflowStatus(status));
 
 export const isStudentGradeVisible = (status: string) => status === "released";
 

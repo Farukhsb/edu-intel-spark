@@ -40,8 +40,6 @@ interface GradeSubmissionInvokeData {
   results?: GradeSubmissionResult[];
 }
 
-const PLAGIARISM_CHECK_URL = `${env.VITE_SUPABASE_URL}/functions/v1/check-plagiarism`;
-const GRADE_SUBMISSION_URL = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;
 const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;
 const LEGACY_INTEGRITY_REQUEST_COMPAT_LIMIT = 80;
 const INTEGRITY_RUNTIME_WARNING_THRESHOLD = 30;
@@ -344,7 +342,8 @@ export const useAutomatedAssessmentActions = ({
 
       if (!session?.access_token) throw new Error("Please sign in again");
 
-      const response = await fetch(GRADE_SUBMISSION_URL, {
+      const gradeSubmissionUrl = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;
+      const response = await fetch(gradeSubmissionUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -611,7 +610,8 @@ export const useAutomatedAssessmentActions = ({
         );
       }
 
-      const response = await fetch(PLAGIARISM_CHECK_URL, {
+      const plagiarismCheckUrl = `${env.VITE_SUPABASE_URL}/functions/v1/check-plagiarism`;
+      const response = await fetch(plagiarismCheckUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

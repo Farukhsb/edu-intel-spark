@@ -8,6 +8,8 @@ import {
   isGradedWorkflowStatus,
   isReviewQueueStatus,
   isStudentGradeVisible,
+  normalizeAssessmentWorkflowStatus,
+  type AssessmentWorkflowStatus,
 } from "@/lib/assessmentWorkflow";
 import { isAssignmentDueSoon } from "@/lib/assignmentVisibility";
 
@@ -41,7 +43,7 @@ export interface StudentNotificationProfile {
 export interface AssignmentSubmissionLike {
   id: string;
   assignment_id: string;
-  status: string;
+  status: AssessmentWorkflowStatus | string;
 }
 
 export interface AssignmentSubmissionStats {
@@ -124,10 +126,14 @@ export const buildAssignmentSubmissionStats = (
   assignments: AssignmentCatalogItem[],
   submissions: AssignmentSubmissionLike[],
 ) => {
+  const normalizedSubmissions = submissions.map((submission) => ({
+    ...submission,
+    status: normalizeAssessmentWorkflowStatus(submission.status),
+  }));
   const statsMap: Record<string, AssignmentSubmissionStats> = {};
 
   for (const assignment of assignments) {
-    const relatedSubs = submissions.filter((submission) => submission.assignment_id === assignment.id);
+    const relatedSubs = normalizedSubmissions.filter((submission) => submission.assignment_id === assignment.id);
     statsMap[assignment.id] = {
       total: relatedSubs.length,
       graded: relatedSubs.filter((submission) => isGradedWorkflowStatus(submission.status)).length,
