@@ -48,12 +48,6 @@ This is the most audit-friendly map of the current authorization surface.
 
 Use this to understand the main adoption concerns around student data, lecturer control, academic integrity, AI use, and institutional review.
 
-### 6. Edge Function Authentication Audit
-
-**File:** [`EDGE_FUNCTION_AUTH_AUDIT.md`](EDGE_FUNCTION_AUTH_AUDIT.md)
-
-Use this to review the check carried out on Edge Functions that disable gateway JWT verification and rely on manual in-function auth checks.
-
 ## User and Workflow Documentation
 
 ### User Guide
@@ -70,29 +64,29 @@ It includes a worked assignment-creation example with a sample rubric so new use
 
 Explains the lecturer-facing workflow, including invite-based access, assignment setup, marking, integrity review, approval, release, analytics, and student support.
 
+## Support and QA
+
 ### Release Readiness Checklist
 
-**File:** [`RELEASE_READINESS_CHECKLIST.md`](RELEASE_READINESS_CHECKLIST.md)
+**File:** [`RELEASE_READINESS_CHECKLIST.md`](support/RELEASE_READINESS_CHECKLIST.md)
 
 Provides a practical pre-release checklist for database state, Edge Functions, role boundaries, testing, deployment readiness, and high-trust academic workflows.
 
-## Testing and Quality Evidence
-
 ### Testing Checklist
 
-**File:** [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
+**File:** [`TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
 
 Manual QA checklist covering important user flows across lecturer, student, and admin roles.
 
 ### Test Coverage Strategy
 
-**File:** [`TEST_COVERAGE_STRATEGY.md`](TEST_COVERAGE_STRATEGY.md)
+**File:** [`TEST_COVERAGE_STRATEGY.md`](support/TEST_COVERAGE_STRATEGY.md)
 
 Explains the testing approach and how the project should expand coverage across high-risk workflows.
 
 ### Live Role Boundary Smoke Test
 
-**File:** [`LIVE_ROLE_BOUNDARY_SMOKE.md`](LIVE_ROLE_BOUNDARY_SMOKE.md)
+**File:** [`LIVE_ROLE_BOUNDARY_SMOKE.md`](support/LIVE_ROLE_BOUNDARY_SMOKE.md)
 
 Documents role-boundary checks used to confirm that users only see what they are allowed to see.
 
@@ -100,25 +94,17 @@ This is important evidence for security and trust review.
 
 ### Live Regression Checklist
 
-**File:** [`LIVE_REGRESSION_CHECKLIST.md`](LIVE_REGRESSION_CHECKLIST.md)
+**File:** [`LIVE_REGRESSION_CHECKLIST.md`](support/LIVE_REGRESSION_CHECKLIST.md)
 
 Use this for a short cross-role smoke test after workflow, grading, notification, or architecture changes.
 
 It is intentionally shorter than the full testing checklist and more practical for quick demo or pilot validation.
 
-## Role, Data, and Migration Notes
+### Load Testing
 
-### Role Model Alignment
+**File:** [`LOAD_TESTING.md`](support/LOAD_TESTING.md)
 
-**File:** [`ROLE_MODEL_ALIGNMENT.md`](ROLE_MODEL_ALIGNMENT.md)
-
-Explains the role model used across the application and how lecturer, student, moderator, and admin responsibilities are separated.
-
-### Migration Baseline
-
-**File:** [`MIGRATION_BASELINE.md`](MIGRATION_BASELINE.md)
-
-Records the database migration baseline and helps reviewers understand the database evolution of the project.
+Explains the lightweight load-testing approach used for pilot-stage checks and where the supporting tooling lives.
 
 ## Assessor and Evidence-Facing Material
 
@@ -144,7 +130,7 @@ For a technical reviewer, read the documents in this order:
 4. [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
 5. [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
 6. [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
-7. [`TESTING_CHECKLIST.md`](TESTING_CHECKLIST.md)
+7. [`TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
 8. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
 
 For a non-technical reviewer or assessor, start with:
