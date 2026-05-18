@@ -3,12 +3,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Award, BarChart3, Bell, Brain, ChevronDown, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut,
-  Menu, MessageSquare, Moon, Search, Settings, Shield, Sun, Target, TrendingUp, University, AlertTriangle,
+  Menu, MessageSquare, Moon, Settings, Shield, Sun, Target, TrendingUp, University, AlertTriangle,
   Upload, Users, FileOutput,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -344,7 +343,6 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       ? LECTURER_SIDEBAR_STATE_KEY
       : STUDENT_SIDEBAR_STATE_KEY;
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== "undefined") return localStorage.getItem("theme") === "dark";
     return false;
@@ -552,15 +550,6 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate(isDemo ? "/" : "/auth");
   };
 
-  const filteredSections = roleSections
-    .map((section) => ({
-      ...section,
-      links: searchQuery
-        ? section.links.filter((link) => link.label.toLowerCase().includes(searchQuery.toLowerCase()))
-        : [...section.links],
-    }))
-    .filter((section) => section.links.length > 0);
-
   const isLinkActive = (to: string) => {
     const [path, query = ""] = to.split("?");
     if (location.pathname !== path) return false;
@@ -578,12 +567,12 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   });
 
   useEffect(() => {
-    if (!activeSection || searchQuery) return;
+    if (!activeSection) return;
 
     setOpenSections((current) => (
       current[activeSection.label] ? current : { ...current, [activeSection.label]: true }
     ));
-  }, [activeSection, searchQuery]);
+  }, [activeSection]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -625,9 +614,8 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         to={link.to}
         onMouseEnter={() => preloadRoute(link.to)}
         onFocus={() => preloadRoute(link.to)}
-        onClick={(event) => {
+        onClick={() => {
           setSidebarOpen(false);
-          setSearchQuery("");
         }}
         className={cn(
           "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
@@ -731,18 +719,11 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           </div>
         </div>
 
-        <div className="px-4 pt-4 pb-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
-            <Input placeholder="Filter navigation" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-10 rounded-xl border-sidebar-border bg-sidebar-accent/55 pl-9 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground/40" />
-          </div>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-4 py-3">
+        <nav className="flex-1 overflow-y-auto px-4 py-4">
           {isAdmin || isLecturerEquivalent || isStudentRole(profile?.role) ? (
             <div className="space-y-5">
-              {filteredSections.map((section) => {
-                const isExpanded = searchQuery ? true : openSections[section.label];
+              {roleSections.map((section) => {
+                const isExpanded = openSections[section.label];
 
                 return (
                 <div

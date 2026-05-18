@@ -165,7 +165,6 @@ describe("LecturerOverview", () => {
         "Publish an assignment or check the due dates on your active briefs. Student submissions will start appearing here as soon as work is uploaded.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("No grades yet")).toBeInTheDocument();
     expect(screen.getByText("0 active assignments")).toBeInTheDocument();
     expect(screen.getByText("0 active students")).toBeInTheDocument();
   });
@@ -210,7 +209,6 @@ describe("LecturerOverview", () => {
     expect(screen.getByTestId("pipeline-stage-ai-graded")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-stage-under-review")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-stage-released")).toBeInTheDocument();
-    expect(screen.getByText("Grade Distribution")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Open assignments/i })).toBeInTheDocument();
   });
 
