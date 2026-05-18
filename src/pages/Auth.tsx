@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Brain, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ButtonLoadingLabel } from "@/components/ui/loading-state";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -200,7 +201,7 @@ const Auth = () => {
                   <Input id="reset-email" type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="you@university.ac.uk" required />
                 </div>
                 <Button className="w-full" type="submit" disabled={loading}>
-                  {loading ? "Sending..." : "Send Reset Link"}
+                  {loading ? <ButtonLoadingLabel label="Sending..." /> : "Send Reset Link"}
                 </Button>
               </form>
             </CardContent>
@@ -263,7 +264,7 @@ const Auth = () => {
                     Forgot password?
                   </button>
                   <Button className="w-full" type="submit" disabled={loading}>
-                    {loading ? "Signing in..." : "Sign In"}
+                    {loading ? <ButtonLoadingLabel label="Signing in..." /> : "Sign In"}
                   </Button>
                 </form>
               </CardContent>
@@ -290,7 +291,7 @@ const Auth = () => {
                       onClick={handleResendVerification}
                       disabled={resendingVerification}
                     >
-                      {resendingVerification ? "Resending..." : "Resend verification email"}
+                      {resendingVerification ? <ButtonLoadingLabel label="Resending..." /> : "Resend verification email"}
                     </Button>
                   </div>
                 ) : null}
@@ -360,7 +361,7 @@ const Auth = () => {
                     </div>
                   )}
                   <Button className="w-full" type="submit" disabled={loading}>
-                    {loading ? "Creating account..." : "Create Account"}
+                    {loading ? <ButtonLoadingLabel label="Creating account..." /> : "Create Account"}
                   </Button>
                 </form>
               </CardContent>
