@@ -1,4 +1,5 @@
 import { log } from "@/lib/logger";
+import { getTelemetryFeatures } from "@/lib/features";
 
 type PostHogLike = {
   identify: (distinctId: string, properties?: Record<string, unknown>) => void;
@@ -11,7 +12,7 @@ let missingKeyWarningShown = false;
 const getClient = () => posthogClient;
 
 export const initPostHog = async () => {
-  const analyticsEnabled = import.meta.env.VITE_ANALYTICS_ENABLED === "true";
+  const { analyticsEnabled } = getTelemetryFeatures();
   // Analytics stays disabled by default because GradeAI handles academic assessment data.
   if (!analyticsEnabled) {
     if (import.meta.env.DEV && !missingKeyWarningShown) {

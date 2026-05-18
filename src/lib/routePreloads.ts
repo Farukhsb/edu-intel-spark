@@ -1,74 +1,114 @@
 import type { AppRole } from "@/lib/roles";
 
-const loadAuth = () => import("@/pages/Auth");
-const loadNotFound = () => import("@/pages/NotFound");
-const loadPrivacy = () => import("@/pages/Privacy");
-const loadResetPassword = () => import("@/pages/ResetPassword");
-const loadForcePasswordChange = () => import("@/pages/ForcePasswordChange");
-const loadDashboardLayout = () =>
-  import("@/components/DashboardLayout").then((module) => ({ default: module.DashboardLayout }));
-const loadLecturerOverview = () => import("@/pages/dashboard/LecturerOverview");
-const loadCohortAnalytics = () => import("@/pages/dashboard/CohortAnalytics");
-const loadPerformanceTrends = () => import("@/pages/dashboard/PerformanceTrends");
-const loadAcademicIntegrity = () => import("@/pages/dashboard/AcademicIntegrity");
-const loadModerationDashboard = () => import("@/pages/dashboard/ModerationDashboard");
-const loadAdminDashboard = () => import("@/pages/dashboard/AdminDashboard");
-const loadInstitutionalInsights = () => import("@/pages/dashboard/InstitutionalInsights");
-const loadLearningOutcomes = () => import("@/pages/dashboard/LearningOutcomes");
-const loadStudentGrades = () => import("@/pages/dashboard/StudentGrades");
-const loadExplainGrade = () => import("@/pages/dashboard/ExplainGrade");
-const loadImprovementPlan = () => import("@/pages/dashboard/ImprovementPlan");
-const loadAssignments = () => import("@/pages/dashboard/Assignments");
-const loadAssignmentDetail = () => import("@/pages/dashboard/AssignmentDetail");
-const loadStudentProfile = () => import("@/pages/dashboard/StudentProfile");
-const loadAccreditationDashboard = () => import("@/pages/dashboard/AccreditationDashboard");
-const loadExternalExaminerExport = () => import("@/pages/dashboard/ExternalExaminerExport");
-const loadSettings = () => import("@/pages/dashboard/Settings");
+type RouteLoader = () => Promise<unknown>;
 
-export const routeLoaders = {
-  auth: loadAuth,
-  notFound: loadNotFound,
-  privacy: loadPrivacy,
-  resetPassword: loadResetPassword,
-  forcePasswordChange: loadForcePasswordChange,
-  dashboardLayout: loadDashboardLayout,
-  lecturerOverview: loadLecturerOverview,
-  cohortAnalytics: loadCohortAnalytics,
-  performanceTrends: loadPerformanceTrends,
-  academicIntegrity: loadAcademicIntegrity,
-  moderationDashboard: loadModerationDashboard,
-  adminDashboard: loadAdminDashboard,
-  institutionalInsights: loadInstitutionalInsights,
-  learningOutcomes: loadLearningOutcomes,
-  studentGrades: loadStudentGrades,
-  explainGrade: loadExplainGrade,
-  improvementPlan: loadImprovementPlan,
-  assignments: loadAssignments,
-  assignmentDetail: loadAssignmentDetail,
-  studentProfile: loadStudentProfile,
-  accreditationDashboard: loadAccreditationDashboard,
-  externalExaminerExport: loadExternalExaminerExport,
-  settings: loadSettings,
-} as const;
+const routeDefinitions = {
+  auth: {
+    loader: () => import("@/pages/Auth"),
+    paths: ["/auth"],
+  },
+  notFound: {
+    loader: () => import("@/pages/NotFound"),
+    paths: [],
+  },
+  privacy: {
+    loader: () => import("@/pages/Privacy"),
+    paths: ["/privacy"],
+  },
+  resetPassword: {
+    loader: () => import("@/pages/ResetPassword"),
+    paths: ["/reset-password"],
+  },
+  forcePasswordChange: {
+    loader: () => import("@/pages/ForcePasswordChange"),
+    paths: [],
+  },
+  dashboardLayout: {
+    loader: () =>
+      import("@/components/DashboardLayout").then((module) => ({ default: module.DashboardLayout })),
+    paths: ["/dashboard"],
+  },
+  lecturerOverview: {
+    loader: () => import("@/pages/dashboard/LecturerOverview"),
+    paths: [],
+  },
+  cohortAnalytics: {
+    loader: () => import("@/pages/dashboard/CohortAnalytics"),
+    paths: ["/dashboard/cohort-analytics"],
+  },
+  performanceTrends: {
+    loader: () => import("@/pages/dashboard/PerformanceTrends"),
+    paths: ["/dashboard/performance"],
+  },
+  academicIntegrity: {
+    loader: () => import("@/pages/dashboard/AcademicIntegrity"),
+    paths: ["/dashboard/integrity"],
+  },
+  moderationDashboard: {
+    loader: () => import("@/pages/dashboard/ModerationDashboard"),
+    paths: ["/dashboard/moderation"],
+  },
+  adminDashboard: {
+    loader: () => import("@/pages/dashboard/AdminDashboard"),
+    paths: [],
+  },
+  institutionalInsights: {
+    loader: () => import("@/pages/dashboard/InstitutionalInsights"),
+    paths: ["/dashboard/institutional"],
+  },
+  learningOutcomes: {
+    loader: () => import("@/pages/dashboard/LearningOutcomes"),
+    paths: ["/dashboard/learning-outcomes"],
+  },
+  studentGrades: {
+    loader: () => import("@/pages/dashboard/StudentGrades"),
+    paths: [],
+  },
+  explainGrade: {
+    loader: () => import("@/pages/dashboard/ExplainGrade"),
+    paths: ["/dashboard/explain-grade"],
+  },
+  improvementPlan: {
+    loader: () => import("@/pages/dashboard/ImprovementPlan"),
+    paths: ["/dashboard/improvements"],
+  },
+  assignments: {
+    loader: () => import("@/pages/dashboard/Assignments"),
+    paths: ["/dashboard/assignments"],
+  },
+  assignmentDetail: {
+    loader: () => import("@/pages/dashboard/AssignmentDetail"),
+    paths: [],
+  },
+  studentProfile: {
+    loader: () => import("@/pages/dashboard/StudentProfile"),
+    paths: [],
+  },
+  accreditationDashboard: {
+    loader: () => import("@/pages/dashboard/AccreditationDashboard"),
+    paths: ["/dashboard/accreditation"],
+  },
+  externalExaminerExport: {
+    loader: () => import("@/pages/dashboard/ExternalExaminerExport"),
+    paths: ["/dashboard/external-examiner"],
+  },
+  settings: {
+    loader: () => import("@/pages/dashboard/Settings"),
+    paths: ["/dashboard/settings"],
+  },
+} as const satisfies Record<string, { loader: RouteLoader; paths: readonly string[] }>;
 
-const routePreloadMap: Record<string, () => Promise<unknown>> = {
-  "/auth": loadAuth,
-  "/privacy": loadPrivacy,
-  "/reset-password": loadResetPassword,
-  "/dashboard": loadDashboardLayout,
-  "/dashboard/cohort-analytics": loadCohortAnalytics,
-  "/dashboard/performance": loadPerformanceTrends,
-  "/dashboard/integrity": loadAcademicIntegrity,
-  "/dashboard/moderation": loadModerationDashboard,
-  "/dashboard/institutional": loadInstitutionalInsights,
-  "/dashboard/accreditation": loadAccreditationDashboard,
-  "/dashboard/external-examiner": loadExternalExaminerExport,
-  "/dashboard/learning-outcomes": loadLearningOutcomes,
-  "/dashboard/explain-grade": loadExplainGrade,
-  "/dashboard/improvements": loadImprovementPlan,
-  "/dashboard/assignments": loadAssignments,
-  "/dashboard/settings": loadSettings,
+export const routeLoaders = Object.fromEntries(
+  Object.entries(routeDefinitions).map(([key, definition]) => [key, definition.loader]),
+) as {
+  [Key in keyof typeof routeDefinitions]: (typeof routeDefinitions)[Key]["loader"];
 };
+
+const routePreloadMap = Object.fromEntries(
+  Object.values(routeDefinitions).flatMap((definition) =>
+    definition.paths.map((path) => [path, definition.loader] as const),
+  ),
+) as Record<string, RouteLoader>;
 
 const normalizeRoutePath = (value: string) => value.split("?")[0];
 
