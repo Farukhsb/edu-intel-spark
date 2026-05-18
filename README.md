@@ -343,10 +343,9 @@ Supporting documentation:
 - [Technical Summary](TECHNICAL_SUMMARY.md)
 - [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
 - [Security Model](docs/SECURITY_MODEL.md)
-- [Test Coverage Strategy](docs/TEST_COVERAGE_STRATEGY.md)
-- [Rollout Plan](docs/ROLLOUT_PLAN.md)
-- [Release Readiness Checklist](docs/RELEASE_READINESS_CHECKLIST.md)
-- [Live Role-Boundary Smoke Checklist](docs/LIVE_ROLE_BOUNDARY_SMOKE.md)
+- [Test Coverage Strategy](docs/support/TEST_COVERAGE_STRATEGY.md)
+- [Release Readiness Checklist](docs/support/RELEASE_READINESS_CHECKLIST.md)
+- [Live Role-Boundary Smoke Checklist](docs/support/LIVE_ROLE_BOUNDARY_SMOKE.md)
 
 ## Project Structure
 

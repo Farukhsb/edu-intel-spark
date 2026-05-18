@@ -66,7 +66,7 @@ Confirm these are still true:
 ## 6. Live Role-Boundary Smoke
 
 Run:
-- [LIVE_ROLE_BOUNDARY_SMOKE.md](C:/Users/a3dullahi/edu-intel-spark/docs/LIVE_ROLE_BOUNDARY_SMOKE.md)
+- [LIVE_ROLE_BOUNDARY_SMOKE.md](./LIVE_ROLE_BOUNDARY_SMOKE.md)
 
 Do not skip this when:
 - migrations changed
