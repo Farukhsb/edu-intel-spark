@@ -55,7 +55,7 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     score: 78,
     max_score: 100,
     workflowHref: "/dashboard/assignments/demo-assignment-1?source=queue&focus=released-results",
-    workflowLabel: "Open released results",
+    workflowLabel: "Continue workflow",
   },
   {
     id: "d2",
@@ -68,7 +68,7 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     score: 55,
     max_score: 100,
     workflowHref: "/dashboard/assignments/demo-assignment-2?source=notification&focus=ai-results",
-    workflowLabel: "Open workflow",
+    workflowLabel: "Continue workflow",
   },
   {
     id: "d3",
@@ -132,10 +132,43 @@ const buildPipelineStages = (statuses: string[]): LecturerOverviewPipelineStage[
   },
 ];
 
-export const formatStatusLabel = (status: string) =>
-  status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+const getOverviewWorkflowLabel = (status: string) => {
+  if (["submitted", "ai_grading"].includes(status)) {
+    return "Open review queue";
+  }
+
+  if (["under_review", "first_review"].includes(status)) {
+    return "Review submission";
+  }
+
+  return "Continue workflow";
+};
+
+export const formatStatusLabel = (status: string) => {
+  switch (status) {
+    case "submitted":
+    case "ai_grading":
+      return "Submitted";
+    case "ai_graded":
+    case "first_review":
+    case "under_review":
+      return "Lecturer Review";
+    case "moderation_pending":
+    case "moderation_in_progress":
+    case "escalated":
+      return "Moderation Required";
+    case "moderated":
+      return "Approved";
+    case "approved":
+      return "Ready to Release";
+    case "released":
+      return "Released";
+    default:
+      return status
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+};
 
 export const useLecturerOverviewController = () => {
   const { profile, user, isDemo } = useAuth();
@@ -275,7 +308,7 @@ export const useLecturerOverviewController = () => {
           score: grade?.final_score ?? grade?.ai_score ?? null,
           max_score: assignment?.max_score || 100,
           workflowHref: workflowTarget.href,
-          workflowLabel: workflowTarget.label,
+          workflowLabel: getOverviewWorkflowLabel(submission.status),
         };
       });
       setRecent(recentSubs);
@@ -314,15 +347,15 @@ export const useLecturerOverviewController = () => {
   });
   const heroSummary = useMemo(() => {
     if (stats.pendingCount > 0 && stats.atRisk > 0) {
-      return `${stats.pendingCount} submissions are awaiting review and ${stats.atRisk} student${stats.atRisk > 1 ? "s" : ""} may need attention.`;
+      return "Focus today: clear the review queue and support students showing early risk.";
     }
     if (stats.pendingCount > 0) {
-      return `${stats.pendingCount} submissions are awaiting review.`;
+      return "Focus today: keep the review queue moving so feedback does not stall.";
     }
     if (stats.atRisk > 0) {
-      return `${stats.atRisk} student${stats.atRisk > 1 ? "s" : ""} may need additional support.`;
+      return "Focus today: check students below target and follow up before pressure builds.";
     }
-    return "All submissions are up to date and no immediate interventions are currently flagged.";
+    return "Focus today: scan active teaching work and keep release-ready submissions moving.";
   }, [stats.pendingCount, stats.atRisk]);
 
   const primaryWorkflowTarget = useMemo<LecturerOverviewWorkflowTarget | null>(() => {
@@ -344,8 +377,7 @@ export const useLecturerOverviewController = () => {
 
     return {
       href: pendingTarget.workflowHref,
-      label:
-        pendingTarget.status === "under_review" ? "Open manual review queue" : "Open assignment workflow",
+      label: getOverviewWorkflowLabel(pendingTarget.status),
     };
   }, [recent]);
 

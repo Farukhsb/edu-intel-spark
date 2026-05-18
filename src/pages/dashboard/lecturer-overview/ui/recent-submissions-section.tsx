@@ -20,7 +20,7 @@ export const LecturerOverviewRecentSubmissionsSection = ({
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Recent Submissions</CardTitle>
-        <CardDescription>Latest student work that has entered your assessment workflow</CardDescription>
+        <CardDescription>Open the next submission that needs action in your marking workflow.</CardDescription>
       </CardHeader>
       <CardContent>
         {recent.length === 0 ? (
@@ -33,32 +33,13 @@ export const LecturerOverviewRecentSubmissionsSection = ({
         ) : (
           <div className="space-y-3">
             {recent.map((submission) => {
-              const needsAttention =
-                submission.score == null ||
-                [
-                  "submitted",
-                  "ai_grading",
-                  "ai_graded",
-                  "first_review",
-                  "moderation_pending",
-                  "moderation_in_progress",
-                  "escalated",
-                ].includes(submission.status);
-
               return (
                 <div
                   key={submission.id}
                   className="flex flex-col gap-3 rounded-xl border p-4 transition-colors hover:bg-muted/30 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium">{submission.student_name}</p>
-                      {needsAttention && (
-                        <Badge variant="outline" className="border-warning/30 text-[10px] uppercase tracking-wide text-warning">
-                          Needs attention
-                        </Badge>
-                      )}
-                    </div>
+                    <p className="truncate text-sm font-medium">{submission.student_name}</p>
                     <p className="truncate text-xs text-muted-foreground">{submission.assignment_title}</p>
                     <p className="truncate text-xs text-muted-foreground">{submission.file_name}</p>
                   </div>

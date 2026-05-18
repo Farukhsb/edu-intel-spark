@@ -37,7 +37,6 @@ export const LecturerOverviewScreen = ({
       <LecturerOverviewHeroSection
         profile={profile}
         heroSummary={heroSummary}
-        stats={stats}
       />
       <LecturerOverviewActionCardSection
         stats={stats}

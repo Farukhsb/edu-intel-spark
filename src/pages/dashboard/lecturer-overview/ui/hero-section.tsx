@@ -1,18 +1,13 @@
 import { Sparkles } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { getFirstName } from "@/lib/formatters";
-
-import type { LecturerOverviewStats } from "../types";
 
 export const LecturerOverviewHeroSection = ({
   profile,
   heroSummary,
-  stats,
 }: {
   profile: { full_name?: string | null } | null | undefined;
   heroSummary: string;
-  stats: LecturerOverviewStats;
 }) => {
   return (
     <section className="rounded-2xl border border-border/60 bg-background/70 px-5 py-4">
@@ -26,14 +21,6 @@ export const LecturerOverviewHeroSection = ({
             Welcome back, {getFirstName(profile?.full_name, "Lecturer")}
           </h2>
           <p className="max-w-2xl text-sm text-muted-foreground">{heroSummary}</p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Badge variant="outline" className="border-primary/20 bg-background text-xs">
-              {stats.assignmentCount} active assignment{stats.assignmentCount === 1 ? "" : "s"}
-            </Badge>
-            <Badge variant="outline" className="border-primary/20 bg-background text-xs">
-              {stats.activeStudents} active student{stats.activeStudents === 1 ? "" : "s"}
-            </Badge>
-          </div>
         </div>
       </div>
     </section>
