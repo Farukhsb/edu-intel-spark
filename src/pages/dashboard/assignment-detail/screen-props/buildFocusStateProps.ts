@@ -18,7 +18,6 @@ type FocusStateProps = Pick<
   | "moderationReleaseFocus"
   | "moderationReleaseHandoffState"
   | "onCopyModerationFocus"
-  | "onCopyNotificationFocus"
   | "queueFocusState"
   | "onClearQueueFocus"
   | "onClearModerationFocus"
@@ -48,17 +47,6 @@ export const buildFocusStateProps = ({
     void copyFocusLink(
       `${searchPathname}?source=moderation&focus=release-ready`,
       "Moderation handoff link copied.",
-    );
-  },
-  onCopyNotificationFocus: () => {
-    if (!viewState.notificationFocus) return;
-    const searchParams = new URLSearchParams({
-      source: "notification",
-      focus: viewState.notificationFocus,
-    });
-    void copyFocusLink(
-      `${searchPathname}?${searchParams.toString()}`,
-      "Notification focus link copied.",
     );
   },
   queueFocusState: viewState.queueFocusState,
