@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ButtonLoadingLabel } from "@/components/ui/loading-state";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -111,7 +112,7 @@ const ForcePasswordChange = () => {
                 />
               </div>
               <Button className="w-full" type="submit" disabled={loading}>
-                {loading ? "Updating password..." : "Update password"}
+                {loading ? <ButtonLoadingLabel label="Updating password..." /> : "Update password"}
               </Button>
             </form>
 

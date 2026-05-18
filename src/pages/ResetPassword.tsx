@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ButtonLoadingLabel, InlineLoadingState } from "@/components/ui/loading-state";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
@@ -229,10 +230,7 @@ const ResetPassword = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {!linkChecked ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                Verifying your reset link...
-              </div>
+              <InlineLoadingState label="Verifying your reset link..." />
             ) : !recoveryReady ? (
               <Alert>
                 <AlertTitle>Invalid or expired link</AlertTitle>
@@ -275,7 +273,7 @@ const ResetPassword = () => {
                   />
                 </div>
                 <Button className="w-full" type="submit" disabled={loading}>
-                  {loading ? "Updating password..." : "Update password"}
+                  {loading ? <ButtonLoadingLabel label="Updating password..." /> : "Update password"}
                 </Button>
               </form>
             )}
