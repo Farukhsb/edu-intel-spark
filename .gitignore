@@ -12,6 +12,7 @@ temp/
 *.temp
 
 node_modules/
+bun.lock
 dist/
 dist-ssr
 *.local

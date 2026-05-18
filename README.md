@@ -364,6 +364,14 @@ src/
 tests/
   e2e/                Playwright browser coverage
 
+benchmarks/
+  *.json              Saved benchmark snapshots and comparison output
+
+tools/
+  grading-benchmark/  Scripts and fixtures for grading benchmark work
+  load-test/          Read-heavy load test runner used by `npm run test:load`
+  moss-runner/        Private MOSS bridge used by `npm run moss:runner`
+
 supabase/
   functions/          Edge Functions for grading, integrity, email, and tutoring
   migrations/         Database schema and policy history
@@ -427,6 +435,8 @@ Run local performance benchmarks:
 npm run test:perf
 ```
 
+`npm run test:perf` runs the workflow performance spec in `src/test/workflowPerformance.test.ts`. It is a quick local check for regressions in the read-heavy workflow paths, not a full load test.
+
 Run coverage reporting:
 
 ```bash
@@ -453,6 +463,14 @@ npm run test:load
 ```
 
 The load test is intentionally conservative. It is meant to check read-path latency and access behaviour with scoped pilot accounts, not to simulate destructive grading or integrity writes.
+
+The support scripts for those checks live under `tools/`:
+
+- `tools/load-test/` contains the deployed-stack load runner used by `npm run test:load`
+- `tools/grading-benchmark/` holds grading benchmark support files
+- `tools/moss-runner/` contains the private MOSS bridge used for the optional code-similarity runner
+
+The `benchmarks/` directory is where saved benchmark snapshots live. At the moment it mainly holds the database normalisation benchmark output kept for reference.
 
 A useful local quality gate is:
 

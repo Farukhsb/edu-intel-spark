@@ -1,12 +1,13 @@
 import * as Sentry from "@sentry/react";
+import { getAppEnvironment, getTelemetryFeatures } from "@/lib/features";
 
 export function initSentry() {
-  const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+  const { sentryDsn } = getTelemetryFeatures();
   if (!sentryDsn) {
     return;
   }
 
-  const appEnvironment = import.meta.env.VITE_APP_ENV || "development";
+  const appEnvironment = getAppEnvironment();
 
   Sentry.init({
     dsn: sentryDsn,
