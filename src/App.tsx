@@ -17,7 +17,6 @@ import { AppErrorBoundary } from "./components/AppErrorBoundary";
 
 const Auth = lazy(routeLoaders.auth);
 const NotFound = lazy(routeLoaders.notFound);
-const Install = lazy(routeLoaders.install);
 const Privacy = lazy(routeLoaders.privacy);
 const ResetPassword = lazy(routeLoaders.resetPassword);
 const ForcePasswordChange = lazy(routeLoaders.forcePasswordChange);
@@ -216,14 +215,6 @@ const App = () => (
               <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
               <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />
               <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
-              <Route
-                path="/install"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <Install />
-                  </Suspense>
-                }
-              />
               <Route
                 path="*"
                 element={

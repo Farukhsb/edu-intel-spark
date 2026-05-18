@@ -2,7 +2,7 @@ import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { log } from "@/lib/logger";
 import { Card, CardContent } from "@/components/ui/card";
-import { getNotFoundReadiness } from "@/lib/edgePageReadiness";
+import { getNotFoundReadiness } from "@/lib/notFoundReadiness";
 
 const NotFound = () => {
   const location = useLocation();

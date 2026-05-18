@@ -2,7 +2,6 @@ import type { AppRole } from "@/lib/roles";
 
 const loadAuth = () => import("@/pages/Auth");
 const loadNotFound = () => import("@/pages/NotFound");
-const loadInstall = () => import("@/pages/Install");
 const loadPrivacy = () => import("@/pages/Privacy");
 const loadResetPassword = () => import("@/pages/ResetPassword");
 const loadForcePasswordChange = () => import("@/pages/ForcePasswordChange");
@@ -29,7 +28,6 @@ const loadSettings = () => import("@/pages/dashboard/Settings");
 export const routeLoaders = {
   auth: loadAuth,
   notFound: loadNotFound,
-  install: loadInstall,
   privacy: loadPrivacy,
   resetPassword: loadResetPassword,
   forcePasswordChange: loadForcePasswordChange,
@@ -57,7 +55,6 @@ const routePreloadMap: Record<string, () => Promise<unknown>> = {
   "/auth": loadAuth,
   "/privacy": loadPrivacy,
   "/reset-password": loadResetPassword,
-  "/install": loadInstall,
   "/dashboard": loadDashboardLayout,
   "/dashboard/cohort-analytics": loadCohortAnalytics,
   "/dashboard/performance": loadPerformanceTrends,

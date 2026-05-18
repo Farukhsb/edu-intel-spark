@@ -33,12 +33,6 @@ export interface LecturerOverviewQueueFocus {
   detail: string;
 }
 
-export type LecturerOverviewDistributionBand = {
-  label: string;
-  count: number;
-  fill: string;
-};
-
 export interface LecturerOverviewPipelineStage {
   label: string;
   count: number;

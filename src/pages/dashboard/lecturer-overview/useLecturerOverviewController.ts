@@ -4,13 +4,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation";
 import { isGradedWorkflowStatus, isReviewQueueStatus } from "@/lib/assessmentWorkflow";
 import { safeToLocaleDate } from "@/lib/date";
-import { exportLecturerOverviewPdf } from "@/lib/exportLecturerOverviewPdf";
 import { getLecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
 import { supabase } from "@/integrations/supabase/client";
 import { log } from "@/lib/logger";
 
 import type {
-  LecturerOverviewDistributionBand,
   LecturerOverviewPipelineStage,
   LecturerOverviewQueueFocus,
   LecturerOverviewRecentSubmission,
@@ -86,20 +84,6 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
   },
 ];
 
-const DEMO_DIST: LecturerOverviewDistributionBand[] = [
-  { label: "90-100%", count: 4, fill: "hsl(152, 56%, 45%)" },
-  { label: "70-89%", count: 12, fill: "hsl(230, 65%, 52%)" },
-  { label: "50-69%", count: 14, fill: "hsl(38, 92%, 60%)" },
-  { label: "< 50%", count: 5, fill: "hsl(0, 72%, 55%)" },
-];
-
-const EMPTY_DIST: LecturerOverviewDistributionBand[] = [
-  { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
-  { label: "70-89%", count: 0, fill: "hsl(230, 65%, 52%)" },
-  { label: "50-69%", count: 0, fill: "hsl(38, 92%, 60%)" },
-  { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
-];
-
 const EMPTY_PIPELINE: LecturerOverviewPipelineStage[] = [
   { label: "Submitted", count: 0, detail: "Newly received work waiting to move into marking." },
   { label: "AI Graded", count: 0, detail: "AI output is ready for lecturer review." },
@@ -147,27 +131,15 @@ const buildPipelineStages = (statuses: string[]): LecturerOverviewPipelineStage[
   },
 ];
 
-export const distributionInterpretation = (dist: { label: string; count: number }[]) => {
-  const top = [...dist].sort((a, b) => b.count - a.count)[0];
-  if (!top || top.count === 0) return "Grade distribution will appear once submissions have been graded.";
-  return `Most graded submissions currently fall in the ${top.label} band.`;
-};
-
 export const formatStatusLabel = (status: string) =>
   status
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const csvCell = (value: string | number | null | undefined) => {
-  const stringValue = String(value ?? "");
-  return `"${stringValue.replace(/"/g, '""')}"`;
-};
-
 export const useLecturerOverviewController = () => {
   const { profile, user, isDemo } = useAuth();
   const [stats, setStats] = useState<LecturerOverviewStats>(isDemo ? DEMO_STATS : EMPTY_STATS);
   const [recent, setRecent] = useState<LecturerOverviewRecentSubmission[]>(isDemo ? DEMO_RECENT : []);
-  const [gradeDistribution, setGradeDistribution] = useState<LecturerOverviewDistributionBand[]>(isDemo ? DEMO_DIST : EMPTY_DIST);
   const [pipeline, setPipeline] = useState<LecturerOverviewPipelineStage[]>(isDemo ? DEMO_PIPELINE : EMPTY_PIPELINE);
   const [loading, setLoading] = useState(!isDemo);
 
@@ -188,7 +160,6 @@ export const useLecturerOverviewController = () => {
       if (assignmentIds.length === 0) {
         setStats({ ...EMPTY_STATS, assignmentCount: 0 });
         setRecent([]);
-        setGradeDistribution(EMPTY_DIST);
         setPipeline(EMPTY_PIPELINE);
         setLoading(false);
         return;
@@ -280,19 +251,6 @@ export const useLecturerOverviewController = () => {
         atRisk,
       });
 
-      const dist: LecturerOverviewDistributionBand[] = [
-        { label: "90-100%", count: 0, fill: "hsl(152, 56%, 45%)" },
-        { label: "70-89%", count: 0, fill: "hsl(230, 65%, 52%)" },
-        { label: "50-69%", count: 0, fill: "hsl(38, 92%, 60%)" },
-        { label: "< 50%", count: 0, fill: "hsl(0, 72%, 55%)" },
-      ];
-      scores.forEach((score) => {
-        if (score >= 90) dist[0].count++;
-        else if (score >= 70) dist[1].count++;
-        else if (score >= 50) dist[2].count++;
-        else dist[3].count++;
-      });
-      setGradeDistribution(dist);
       setPipeline(buildPipelineStages(allSubs.map((submission) => submission.status)));
 
       const recentSubs: LecturerOverviewRecentSubmission[] = allSubs.slice(0, 6).map((submission) => {
@@ -331,8 +289,6 @@ export const useLecturerOverviewController = () => {
     if (isDemo) return;
     void fetchDashboard();
   }, [isDemo]);
-
-  const totalScored = gradeDistribution.reduce((total, band) => total + band.count, 0);
   const leadPendingAssignmentTitle =
     recent.find((submission) =>
       [
@@ -437,57 +393,17 @@ export const useLecturerOverviewController = () => {
     };
   }, [recent, stats.activeStudents, stats.assignmentCount, stats.atRisk, stats.pendingCount]);
 
-  const exportCsv = () => {
-    const rows = [["Student", "Assignment", "Score", "Max Score", "Status", "Submitted"]];
-    recent.forEach((submission) =>
-      rows.push([
-        submission.student_name || "Unknown",
-        submission.assignment_title,
-        String(submission.score ?? ""),
-        String(submission.max_score),
-        submission.status,
-        safeToLocaleDate(submission.submitted_at),
-      ]),
-    );
-    const csv = rows
-      .map((row) => row.map((cell) => csvCell(cell)).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "grades_export.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportPdf = async () => {
-    await exportLecturerOverviewPdf({
-      profile,
-      stats,
-      recent,
-      formatStatusLabel,
-      safeToLocaleDate,
-    });
-  };
-
   return {
     profile,
     state: {
       loading,
       stats,
       recent,
-      gradeDistribution,
       pipeline,
-      totalScored,
       readiness,
       heroSummary,
       primaryWorkflowTarget,
       queueFocus,
-    },
-    actions: {
-      exportCsv,
-      exportPdf,
     },
   };
 };
