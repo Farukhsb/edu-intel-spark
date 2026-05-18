@@ -43,7 +43,6 @@ export interface AssignmentDetailScreenProps {
   moderationReleaseFocus: boolean;
   moderationReleaseHandoffState: FocusState;
   onCopyModerationFocus: () => void;
-  onCopyNotificationFocus: () => void;
   queueFocusState: FocusState | null;
   onClearQueueFocus: () => void;
   onClearModerationFocus: () => void;
@@ -65,7 +64,6 @@ export const AssignmentDetailScreen = ({
   moderationReleaseFocus,
   moderationReleaseHandoffState,
   onCopyModerationFocus,
-  onCopyNotificationFocus,
   queueFocusState,
   onClearQueueFocus,
   onClearModerationFocus,
@@ -108,11 +106,9 @@ export const AssignmentDetailScreen = ({
 
         {assignmentNotificationFocusState && isLecturer && (
           <AssignmentFocusCard
-            clearLabel="Clear notice focus"
+            clearLabel="Show all submissions"
             description={assignmentNotificationFocusState.description}
             onClear={onClearNotificationFocus}
-            onShare={onCopyNotificationFocus}
-            shareLabel="Copy notice link"
             testId="assignment-notification-focus"
             title={assignmentNotificationFocusState.title}
           />
