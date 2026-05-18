@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NetworkStatus } from "@/components/NetworkStatus";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getForcedPasswordChangeRoute, getPasswordChangeRedirectPath } from "@/lib/passwordChangeRouting";
 import type { AppRole } from "@/lib/roles";
 import { isAdminRole, isLecturerEquivalentRole } from "@/lib/roles";
@@ -146,11 +148,33 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
   );
 };
 
+const AccessDeniedPage = () => (
+  <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+    <Card className="w-full max-w-lg shadow-sm">
+      <CardHeader className="space-y-2 text-center">
+        <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Access denied</p>
+        <CardTitle className="text-2xl">You don&apos;t have access to this area.</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          This page is limited to a different role. Return to your dashboard to continue with the tools available to
+          your account.
+        </p>
+        <div className="flex justify-center">
+          <Button asChild>
+            <Link to="/dashboard">Go to dashboard</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
+
 export const RoleGate = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
   const { role } = useAuth();
   const resolvedRole = allowedRole === "lecturer" && isLecturerEquivalentRole(role) ? "lecturer" : role;
   if (allowedRole && resolvedRole && resolvedRole !== allowedRole) {
-    return <Navigate to="/dashboard" replace />;
+    return <AccessDeniedPage />;
   }
   return <>{children}</>;
 };

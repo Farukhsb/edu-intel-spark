@@ -38,6 +38,7 @@ export const useModerationQueueState = ({
   userId,
 }: UseModerationQueueStateArgs) => {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [cases, setCases] = useState<ModerationCaseView[]>([]);
   const [lecturers, setLecturers] = useState<Profile[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -59,6 +60,7 @@ export const useModerationQueueState = ({
 
   const fetchCases = async () => {
     if (isDemo) {
+      setLoadError(null);
       setLecturers(DEMO_LECTURERS);
       setCases(DEMO_MODERATION_CASES);
       setModeratorDrafts(buildDemoModeratorDrafts(DEMO_MODERATION_CASES));
@@ -72,6 +74,7 @@ export const useModerationQueueState = ({
     }
 
     setLoading(true);
+    setLoadError(null);
     try {
       const { cases: caseViews, lecturers: lecturerRows } = await fetchModerationCaseViews(supabase, userId);
       setLecturers(lecturerRows as Profile[]);
@@ -79,6 +82,7 @@ export const useModerationQueueState = ({
       setModeratorDrafts(buildDemoModeratorDrafts(caseViews));
     } catch (error) {
       log.error("Failed to load moderation cases", error);
+      setLoadError("Moderation cases could not be loaded right now.");
       toast.error("Moderation cases could not be loaded right now. Refresh the page or try again in a moment.");
     }
     setLoading(false);
@@ -241,6 +245,7 @@ export const useModerationQueueState = ({
     fetchCases,
     filteredCases,
     lecturers,
+    loadError,
     loading,
     moderatorDrafts,
     noteDraft,

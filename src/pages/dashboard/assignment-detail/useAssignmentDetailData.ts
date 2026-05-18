@@ -56,6 +56,7 @@ export const useAssignmentDetailData = ({
   const [plagiarismFlags, setPlagiarismFlags] = useState<PlagiarismFlag[]>([]);
   const [plagiarismSummary, setPlagiarismSummary] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadGrades = useCallback(async (loadedSubmissions: AssignmentDetailSubmission[]) => {
     if (loadedSubmissions.length === 0) {
@@ -139,6 +140,7 @@ export const useAssignmentDetailData = ({
 
   const reloadSubmissions = useCallback(async () => {
     if (!id) return;
+    setLoadError(null);
 
     if (isDemo) {
       const demoSubmissions =
@@ -185,37 +187,46 @@ export const useAssignmentDetailData = ({
       return;
     }
 
-    const { data } = await supabase
-      .from("submissions")
-      .select("*")
-      .eq("assignment_id", id)
-      .order("submitted_at", { ascending: false });
+    try {
+      const { data } = await supabase
+        .from("submissions")
+        .select("*")
+        .eq("assignment_id", id)
+        .order("submitted_at", { ascending: false });
 
-    const loadedSubmissions: AssignmentDetailSubmission[] = (data || []).map((submission) => ({
-      id: submission.id,
-      assignment_id: submission.assignment_id,
-      student_name: submission.student_name,
-      student_email: submission.student_email,
-      file_name: submission.file_name,
-      file_type: submission.file_type,
-      file_url: submission.file_url,
-      status: normalizeAssessmentWorkflowStatus(submission.status) as SubmissionStatus,
-      submitted_at: submission.submitted_at,
-      student_id: submission.student_id,
-    }));
+      const loadedSubmissions: AssignmentDetailSubmission[] = (data || []).map((submission) => ({
+        id: submission.id,
+        assignment_id: submission.assignment_id,
+        student_name: submission.student_name,
+        student_email: submission.student_email,
+        file_name: submission.file_name,
+        file_type: submission.file_type,
+        file_url: submission.file_url,
+        status: normalizeAssessmentWorkflowStatus(submission.status) as SubmissionStatus,
+        submitted_at: submission.submitted_at,
+        student_id: submission.student_id,
+      }));
 
-    setSubmissions(loadedSubmissions);
-    await Promise.all([
-      loadGrades(loadedSubmissions),
-      loadIntegrityReviews(loadedSubmissions),
-      loadModerationCases(loadedSubmissions),
-    ]);
+      setSubmissions(loadedSubmissions);
+      await Promise.all([
+        loadGrades(loadedSubmissions),
+        loadIntegrityReviews(loadedSubmissions),
+        loadModerationCases(loadedSubmissions),
+      ]);
+    } catch (error) {
+      setSubmissions([]);
+      setGrades({});
+      setIntegrityReviews({});
+      setModerationCases({});
+      setLoadError("Assignment workflow data could not be loaded right now.");
+    }
   }, [id, isDemo, loadGrades, loadIntegrityReviews, loadModerationCases, role]);
 
   const loadAssignment = useCallback(async () => {
     if (!id || (!hasUser && !isDemo)) return;
 
     setLoading(true);
+    setLoadError(null);
 
     if (isDemo) {
       const demoAssignment =
@@ -247,33 +258,40 @@ export const useAssignmentDetailData = ({
       return;
     }
 
-    let query = supabase.from("assignments").select("*").eq("id", id);
-    if (role === "lecturer" && userId) {
-      query = query.eq("lecturer_id", userId);
-    }
+    try {
+      let query = supabase.from("assignments").select("*").eq("id", id);
+      if (role === "lecturer" && userId) {
+        query = query.eq("lecturer_id", userId);
+      }
 
-    const { data } = await query.maybeSingle();
+      const { data } = await query.maybeSingle();
 
-    if (data && role === "student" && !isAssignmentVisibleToStudent(data)) {
+      if (data && role === "student" && !isAssignmentVisibleToStudent(data)) {
+        setAssignment(null);
+        setSubmissions([]);
+        setGrades({});
+      } else if (data) {
+        setAssignment({
+          id: data.id,
+          title: data.title,
+          description: data.description,
+          module_code: data.module_code,
+          max_score: data.max_score,
+          due_date: data.due_date,
+          status: data.status,
+          lecturer_id: data.lecturer_id,
+          rubric: toWorkflowRubric(data.rubric),
+        });
+      } else {
+        setAssignment(null);
+        setSubmissions([]);
+        setGrades({});
+      }
+    } catch (error) {
       setAssignment(null);
       setSubmissions([]);
       setGrades({});
-    } else if (data) {
-      setAssignment({
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        module_code: data.module_code,
-        max_score: data.max_score,
-        due_date: data.due_date,
-        status: data.status,
-        lecturer_id: data.lecturer_id,
-        rubric: toWorkflowRubric(data.rubric),
-      });
-    } else {
-      setAssignment(null);
-      setSubmissions([]);
-      setGrades({});
+      setLoadError("Assignment workflow data could not be loaded right now.");
     }
 
     setPlagiarismFlags([]);
@@ -293,10 +311,15 @@ export const useAssignmentDetailData = ({
     assignment,
     grades,
     integrityReviews,
+    loadError,
     loading,
     moderationCases,
     plagiarismFlags,
     plagiarismSummary,
+    refreshData: async () => {
+      await loadAssignment();
+      await reloadSubmissions();
+    },
     reloadSubmissions,
     setModerationCases,
     setPlagiarismFlags,

@@ -72,6 +72,23 @@ const Privacy = () => (
         </CardContent>
       </Card>
 
+      <Card className="mb-6 border-amber-300/70 bg-amber-50/70">
+        <CardHeader>
+          <CardTitle className="text-lg">Pilot data retention note</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm leading-7 text-slate-700">
+          <p>
+            GradeAI is being presented as a pilot platform. Academic records, submissions, grades, workflow history,
+            and audit data should not be kept indefinitely by default.
+          </p>
+          <p>
+            Retention and deletion periods should be agreed with the institution responsible for the pilot before live
+            use. If no separate agreement applies, pilot data should be reviewed and removed once teaching, marking,
+            governance, and pilot evaluation activity are complete.
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4">
         {privacySections.map((section) => (
           <Card key={section.title}>

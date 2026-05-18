@@ -1,11 +1,14 @@
 import { createRef } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowActionsSection } from "@/pages/dashboard/assignment-detail/ui/workflow-actions-section";
 
 describe("WorkflowActionsSection", () => {
   it("surfaces the last grading run with recovery guidance for lecturers", () => {
+    const retryFailedOnly = vi.fn();
+    const startManualReviewForFailed = vi.fn();
+
     render(
       <WorkflowActionsSection
         isDemo={false}
@@ -28,6 +31,7 @@ describe("WorkflowActionsSection", () => {
         integrityRuntimeWarning={null}
         submissionsCount={4}
         handleAIGrade={vi.fn()}
+        handleRetryFailedOnly={retryFailedOnly}
         workflowLaneSummary={{
           intakeCount: 2,
           aiInProgressCount: 0,
@@ -69,6 +73,7 @@ describe("WorkflowActionsSection", () => {
         exportReviewedReports={vi.fn()}
         gradingElapsed={0}
         gradingCount={0}
+        handleStartManualReviewForFailed={startManualReviewForFailed}
         lastGradingRunSummary={{
           attemptedCount: 3,
           detail:
@@ -97,5 +102,11 @@ describe("WorkflowActionsSection", () => {
     expect(screen.getByText("Manual review")).toBeInTheDocument();
     expect(screen.getByText("1 manual review open")).toBeInTheDocument();
     expect(screen.getByText(/Continue with manual review if the retry still fails/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry failed only" }));
+    expect(retryFailedOnly).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start manual review" }));
+    expect(startManualReviewForFailed).toHaveBeenCalledTimes(1);
   });
 });

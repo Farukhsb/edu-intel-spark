@@ -18,6 +18,7 @@ interface BuildWorkflowActionsPropsArgs {
   };
   isDemo: boolean;
   lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
+  submissions: AssignmentDetailSubmission[];
   submissionsCount: number;
   viewState: ReturnType<typeof useAssignmentDetailViewState>;
 }
@@ -28,6 +29,7 @@ export const buildWorkflowActionsProps = ({
   fileActions,
   isDemo,
   lecturerActions,
+  submissions,
   submissionsCount,
   viewState,
 }: BuildWorkflowActionsPropsArgs): ComponentProps<typeof WorkflowActionsSection> => ({
@@ -49,6 +51,7 @@ export const buildWorkflowActionsProps = ({
   integrityRuntimeWarning: viewState.integrityRuntimeWarning,
   submissionsCount,
   handleAIGrade: automatedActions.handleAIGrade,
+  handleRetryFailedOnly: automatedActions.retryFailedOnly,
   workflowLaneSummary: viewState.workflowLaneSummary,
   workflowReadiness: viewState.workflowReadiness,
   selectedWorkflowGuidance: viewState.selectedWorkflowGuidance,
@@ -65,4 +68,11 @@ export const buildWorkflowActionsProps = ({
   gradingElapsed: automatedActions.gradingElapsed,
   gradingCount: automatedActions.gradingCount,
   lastGradingRunSummary: automatedActions.lastGradingRunSummary,
+  handleStartManualReviewForFailed: () =>
+    lecturerActions.startManualReviewForSubmissions(
+      submissions.filter((submission) => {
+        const issue = automatedActions.lastSubmissionRecoveryIssues[submission.id];
+        return issue != null && issue.type !== "missing_file";
+      }),
+    ),
 });

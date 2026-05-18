@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { DashboardLoadingState } from "@/components/dashboard/PageStates";
+import { DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import { Button } from "@/components/ui/button";
 
 import { useAssignmentDetailController } from "@/pages/dashboard/assignment-detail/controllers";
@@ -13,7 +13,7 @@ const AssignmentDetail = () => {
   const navigate = useNavigate();
   const demoAssignmentSet = isDemo && id ? getDemoAssignmentSetById(id) : null;
 
-  const { assignment, loading, screenProps } = useAssignmentDetailController({
+  const { assignment, loadError, loading, refreshData, screenProps } = useAssignmentDetailController({
     demoAssignmentSet,
     hasUser: Boolean(user),
     id,
@@ -25,6 +25,20 @@ const AssignmentDetail = () => {
 
   if (loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (loadError) {
+    return (
+      <DashboardErrorState
+        title="Assignment workflow unavailable"
+        description={loadError}
+        action={
+          <Button variant="outline" onClick={() => void refreshData()}>
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   if (!assignment) {

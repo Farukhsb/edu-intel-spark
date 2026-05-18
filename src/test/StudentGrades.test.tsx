@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   },
   logger: {
     warn: vi.fn(),
+    error: vi.fn(),
   },
   supabase: {
     from: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock("lucide-react", () => {
   );
 
   return {
+    AlertTriangle: Icon,
     Download: Icon,
     Loader2: () => <svg data-testid="loading-spinner" />,
   };
@@ -314,6 +316,20 @@ describe("StudentGrades", () => {
     expect(screen.getByText("Network Security Incident Reflection")).toBeInTheDocument();
     expect(screen.getByText("submitted")).toBeInTheDocument();
     expect(mocks.supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it("shows a page-level error state when grades cannot be loaded", async () => {
+    setupSupabase();
+    mocks.supabase.rpc.mockRejectedValueOnce(new Error("offline"));
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Results unavailable")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Your results could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("renders a safe pending-state card when feedback is not yet released", async () => {

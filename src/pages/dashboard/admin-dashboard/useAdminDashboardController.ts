@@ -169,6 +169,7 @@ export const useAdminDashboardController = () => {
   const adminSearchState = parseAdminDashboardSearchState(searchParams);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<AdminMetrics>(EMPTY_METRICS);
   const [healthItems, setHealthItems] = useState<AdminDashboardState["healthItems"]>([]);
   const [failureCards, setFailureCards] = useState<AdminDashboardState["failureCards"]>([]);
@@ -210,6 +211,7 @@ export const useAdminDashboardController = () => {
 
     if (!silent) {
       setLoading(true);
+      setLoadError(null);
     } else {
       setRefreshing(true);
     }
@@ -650,6 +652,7 @@ export const useAdminDashboardController = () => {
       log.error("Failed to load admin dashboard", error, {
         view: activeView,
       });
+      setLoadError("Admin dashboard data could not be loaded right now.");
       toast.error("Admin dashboard data could not be loaded right now.");
     }
 
@@ -741,6 +744,7 @@ export const useAdminDashboardController = () => {
     state: {
       loading,
       refreshing,
+      loadError,
       metrics,
       healthItems,
       failureCards,

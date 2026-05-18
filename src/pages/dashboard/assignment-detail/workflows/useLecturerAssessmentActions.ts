@@ -538,12 +538,18 @@ Please review the feedback in the platform and let me know if you would like to 
     setReviewOpen(true);
   };
 
-  const startManualReview = async (submission: AssignmentDetailSubmission) => {
+  const startManualReview = async (
+    submission: AssignmentDetailSubmission,
+    options?: { openReview?: boolean; skipReload?: boolean },
+  ) => {
+    const shouldOpenReview = options?.openReview ?? true;
+    const shouldSkipReload = options?.skipReload ?? false;
+
     if (isDemo) {
       toast.info("Manual review is disabled in demo mode");
-      return;
+      return false;
     }
-    if (!user) return;
+    if (!user) return false;
 
     try {
       let grade = grades[submission.id] ?? null;
@@ -590,18 +596,49 @@ Please review the feedback in the platform and let me know if you would like to 
         });
       }
 
-      await reloadSubmissions();
-      openReview(
-        submission.status === "submitted" || submission.status === "ai_grading"
-          ? { ...submission, status: "under_review" }
-          : submission,
-        grade,
-      );
+      if (!shouldSkipReload) {
+        await reloadSubmissions();
+      }
+
+      if (shouldOpenReview) {
+        openReview(
+          submission.status === "submitted" || submission.status === "ai_grading"
+            ? { ...submission, status: "under_review" }
+            : submission,
+          grade,
+        );
+      }
+      return true;
     } catch (error) {
       log.error("Manual review start failed", error, {
         submissionId: submission.id,
       });
       toast.error("Could not start manual review");
+      return false;
+    }
+  };
+
+  const startManualReviewForSubmissions = async (submissionsToReview: AssignmentDetailSubmission[]) => {
+    if (submissionsToReview.length === 0) {
+      toast.info("No failed submissions are ready for manual review.");
+      return;
+    }
+
+    let startedCount = 0;
+    for (const submission of submissionsToReview) {
+      const started = await startManualReview(submission, { openReview: false, skipReload: true });
+      if (started) {
+        startedCount++;
+      }
+    }
+
+    await reloadSubmissions();
+
+    if (startedCount > 0) {
+      setSelected(new Set(submissionsToReview.map((submission) => submission.id)));
+      toast.success(
+        `${startedCount} submission${startedCount === 1 ? "" : "s"} moved into manual review.`,
+      );
     }
   };
 
@@ -741,5 +778,6 @@ Please review the feedback in the platform and let me know if you would like to 
     setEditScore,
     setReviewOpen,
     startManualReview,
+    startManualReviewForSubmissions,
   };
 };

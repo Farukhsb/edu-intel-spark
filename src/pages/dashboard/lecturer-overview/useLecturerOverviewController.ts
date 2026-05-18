@@ -12,6 +12,7 @@ import type {
   LecturerOverviewPipelineStage,
   LecturerOverviewQueueFocus,
   LecturerOverviewRecentSubmission,
+  LecturerOverviewState,
   LecturerOverviewStats,
   LecturerOverviewWorkflowTarget,
 } from "./types";
@@ -142,9 +143,11 @@ export const useLecturerOverviewController = () => {
   const [recent, setRecent] = useState<LecturerOverviewRecentSubmission[]>(isDemo ? DEMO_RECENT : []);
   const [pipeline, setPipeline] = useState<LecturerOverviewPipelineStage[]>(isDemo ? DEMO_PIPELINE : EMPTY_PIPELINE);
   const [loading, setLoading] = useState(!isDemo);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchDashboard = async () => {
     if (!user) return;
+    setError(null);
 
     try {
       const { data: assignmentsData, error: assignmentsError } = await supabase
@@ -280,6 +283,7 @@ export const useLecturerOverviewController = () => {
       log.error("Lecturer overview fetch failed", error, {
         userId: user.id,
       });
+      setError("The lecturer overview could not be loaded right now.");
     }
 
     setLoading(false);
@@ -397,6 +401,7 @@ export const useLecturerOverviewController = () => {
     profile,
     state: {
       loading,
+      error,
       stats,
       recent,
       pipeline,
@@ -404,6 +409,9 @@ export const useLecturerOverviewController = () => {
       heroSummary,
       primaryWorkflowTarget,
       queueFocus,
+    } satisfies LecturerOverviewState,
+    actions: {
+      reload: () => void fetchDashboard(),
     },
   };
 };

@@ -84,10 +84,12 @@ export const useImprovementPlanData = ({
   const [plan, setPlan] = useState<PlanModule[]>(isDemo ? DEMO_PLAN : []);
   const [resources, setResources] = useState<Resource[]>(isDemo ? DEMO_RESOURCES : []);
   const [loading, setLoading] = useState(!isDemo);
+  const [error, setError] = useState<string | null>(null);
   const latestPlanRef = useRef<PlanModule[]>(isDemo ? DEMO_PLAN : []);
 
   const fetchPlan = async () => {
     if (isDemo) {
+      setError(null);
       setPlan(DEMO_PLAN);
       setResources(DEMO_RESOURCES);
       latestPlanRef.current = DEMO_PLAN;
@@ -101,6 +103,7 @@ export const useImprovementPlanData = ({
     }
 
     setLoading(true);
+    setError(null);
 
     try {
       const [projectionRes, { data: progressRows }] = await Promise.all([
@@ -163,6 +166,7 @@ export const useImprovementPlanData = ({
       log.error("Failed to fetch improvement plan", error, {
         studentId: userId,
       });
+      setError("Your improvement plan could not be loaded right now.");
       toast.error("Could not load your improvement plan.");
     }
 
@@ -227,6 +231,7 @@ export const useImprovementPlanData = ({
     plan,
     resources,
     loading,
+    error,
     overallTasks,
     toggleTask,
     refreshPlan: fetchPlan,

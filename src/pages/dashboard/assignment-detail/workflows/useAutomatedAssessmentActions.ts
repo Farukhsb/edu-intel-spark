@@ -113,6 +113,8 @@ export type SubmissionGradingRecoveryIssue = {
   type: "missing_file" | "extraction_failure" | "invalid_result" | "service_failure";
 };
 
+const isRetryableRecoveryType = (type: SubmissionGradingRecoveryIssue["type"]) => type !== "missing_file";
+
 type GradePersistenceClient = {
   from: (table: "grades" | "submissions") => {
     upsert?: (
@@ -286,12 +288,14 @@ export const useAutomatedAssessmentActions = ({
   >({});
   const gradingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleAIGrade = async () => {
+  const runAIGrade = async (selectedSubmissionIds: Set<string>) => {
     if (isDemo) {
       toast.info("AI grading is disabled in demo mode");
       return;
     }
-    const toGrade = submissions.filter((submission) => selected.has(submission.id) && isRegradableWorkflowStatus(submission.status));
+    const toGrade = submissions.filter(
+      (submission) => selectedSubmissionIds.has(submission.id) && isRegradableWorkflowStatus(submission.status),
+    );
     if (toGrade.length === 0) {
       toast.error("Select submitted or reviewable files to grade");
       return;
@@ -691,6 +695,23 @@ export const useAutomatedAssessmentActions = ({
     setCheckingPlagiarism(false);
   };
 
+  const handleAIGrade = async () => runAIGrade(selected);
+
+  const retryFailedOnly = async () => {
+    const retryableSubmissionIds = new Set(
+      Object.entries(lastSubmissionRecoveryIssues)
+        .filter(([, issue]) => isRetryableRecoveryType(issue.type))
+        .map(([submissionId]) => submissionId),
+    );
+
+    if (retryableSubmissionIds.size === 0) {
+      toast.info("No failed grading cases are ready for retry.");
+      return;
+    }
+
+    await runAIGrade(retryableSubmissionIds);
+  };
+
   return {
     checkingPlagiarism,
     grading,
@@ -700,5 +721,6 @@ export const useAutomatedAssessmentActions = ({
     handlePlagiarismCheck,
     lastGradingRunSummary,
     lastSubmissionRecoveryIssues,
+    retryFailedOnly,
   };
 };

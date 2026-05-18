@@ -39,6 +39,7 @@ vi.mock("lucide-react", () => {
   );
 
   return {
+    AlertTriangle: Icon,
     Brain: Icon,
     Check: Icon,
     ChevronDown: Icon,
@@ -641,7 +642,7 @@ describe("ExplainGrade", () => {
     consoleError.mockRestore();
   });
 
-  it("renders a safe fallback state if the request fails", async () => {
+  it("shows a page-level error state if released grades fail to load", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     setupSupabase({
       submissionsError: new Error("supabase unavailable"),
@@ -650,9 +651,10 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     await waitFor(() => {
-      expect(screen.getByText(/No graded submissions found/i)).toBeInTheDocument();
+      expect(screen.getByText("Released grades unavailable")).toBeInTheDocument();
     });
-    expect(screen.queryByText("Grade Breakdown")).not.toBeInTheDocument();
+    expect(screen.getByText("Released grades could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
 
     consoleError.mockRestore();
   });

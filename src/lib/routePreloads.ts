@@ -1,6 +1,7 @@
 import type { AppRole } from "@/lib/roles";
+import type { ComponentType } from "react";
 
-type RouteLoader = () => Promise<unknown>;
+type RouteLoader = () => Promise<{ default: ComponentType<any> }>;
 
 const routeDefinitions = {
   auth: {

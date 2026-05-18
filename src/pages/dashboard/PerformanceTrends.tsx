@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +12,7 @@ import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
+  DashboardErrorState,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 import {
@@ -53,6 +55,8 @@ const PerformanceTrends = () => {
   const [moduleFilter, setModuleFilter] = useState("all");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [alertsDismissed, setAlertsDismissed] = useState(false);
   const [modules, setModules] = useState<string[]>([]);
   const [assessmentTrends, setAssessmentTrends] = useState<{ name: string; avgGrade: number; participation: number }[]>([]);
@@ -63,6 +67,7 @@ const PerformanceTrends = () => {
 
   useEffect(() => {
     if (isDemo) {
+      setLoadError(null);
       const demoModules = Array.from(new Set(DEMO_ASSESSMENT_TRENDS.map((entry) => entry.module)));
       const filteredTrends =
         moduleFilter === "all"
@@ -94,6 +99,7 @@ const PerformanceTrends = () => {
     if (!user) return;
 
     const fetchLiveData = async () => {
+      setLoadError(null);
       try {
         const { assignments, submissions, grades } = await fetchLecturerPerformanceDataset(user.id);
         if (assignments.length === 0) {
@@ -129,13 +135,14 @@ const PerformanceTrends = () => {
         setAtRiskStudents(projection.atRiskStudents);
       } catch (error) {
         log.error("Failed to fetch performance data", error);
+        setLoadError("Performance trends could not be loaded right now.");
       }
 
       setLoading(false);
     };
 
     void fetchLiveData();
-  }, [isDemo, user?.id, moduleFilter]);
+  }, [isDemo, user?.id, moduleFilter, reloadKey]);
 
   useEffect(() => {
     if (alertsDismissed || atRiskStudents.length === 0) return;
@@ -192,6 +199,28 @@ const PerformanceTrends = () => {
 
   if (loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (loadError) {
+    return (
+      <DashboardErrorState
+        title="Performance trends unavailable"
+        description={loadError}
+        action={
+          <Button
+            variant="outline"
+            onClick={() => {
+              setLoading(true);
+              setLoadError(null);
+              setAlertsDismissed(false);
+              setReloadKey((current) => current + 1);
+            }}
+          >
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   const noData = assessmentTrends.length === 0 && gradeDist.every((entry) => entry.count === 0);

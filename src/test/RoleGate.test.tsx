@@ -24,7 +24,7 @@ describe("RoleGate", () => {
     ["/dashboard/institutional", "Institutional Insights"],
     ["/dashboard/accreditation", "Accreditation"],
     ["/dashboard/external-examiner", "External Examiner"],
-  ])("redirects lecturers away from %s", async (path, label) => {
+  ])("shows an access denied page for lecturers on %s", async (path, label) => {
     render(
       <MemoryRouter
         initialEntries={[path]}
@@ -55,12 +55,12 @@ describe("RoleGate", () => {
               </RoleGate>
             }
           />
-          <Route path="/dashboard" element={<div>Dashboard Home</div>} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Dashboard Home")).toBeInTheDocument();
+    expect(await screen.findByText("You don't have access to this area.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to dashboard" })).toHaveAttribute("href", "/dashboard");
     expect(screen.queryByText(label)).not.toBeInTheDocument();
   });
 
@@ -97,12 +97,11 @@ describe("RoleGate", () => {
               </RoleGate>
             }
           />
-          <Route path="/dashboard" element={<div>Dashboard Home</div>} />
         </Routes>
       </MemoryRouter>,
     );
 
     expect(await screen.findByText("External Examiner")).toBeInTheDocument();
-    expect(screen.queryByText("Dashboard Home")).not.toBeInTheDocument();
+    expect(screen.queryByText("You don't have access to this area.")).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { DashboardLoadingState } from "@/components/dashboard/PageStates";
+import { Button } from "@/components/ui/button";
+import { DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 
 import { useAdminDashboardController } from "@/pages/dashboard/admin-dashboard/controllers";
 import { AdminDashboardScreen } from "@/pages/dashboard/admin-dashboard/ui";
@@ -9,6 +10,20 @@ const AdminDashboard = () => {
 
   if (state.loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (state.loadError) {
+    return (
+      <DashboardErrorState
+        title="Admin dashboard unavailable"
+        description={state.loadError}
+        action={
+          <Button variant="outline" onClick={() => void actions.loadAdminDashboard()}>
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   if (profile?.role !== "admin") {

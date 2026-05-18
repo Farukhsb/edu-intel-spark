@@ -194,6 +194,7 @@ export type ModerationSummary = {
 export type AdminDashboardState = {
   loading: boolean;
   refreshing: boolean;
+  loadError: string | null;
   metrics: AdminMetrics;
   healthItems: OperationalHealthItem[];
   failureCards: OperationalFailureCard[];

@@ -67,6 +67,7 @@ type DashboardData = {
   submissions?: Array<Record<string, unknown>>;
   grades?: Array<Record<string, unknown>>;
   keepAssignmentsPending?: boolean;
+  assignmentsError?: Error | null;
 };
 
 const setupSupabase = ({
@@ -74,12 +75,16 @@ const setupSupabase = ({
   submissions = [],
   grades = [],
   keepAssignmentsPending = false,
+  assignmentsError = null,
 }: DashboardData) => {
   mocks.supabase.from.mockImplementation((table: string) => ({
     select: vi.fn(() => {
       if (table === "assignments") {
         return {
           eq: vi.fn(() =>
+            assignmentsError
+              ? Promise.reject(assignmentsError)
+              :
             keepAssignmentsPending
               ? new Promise(() => {})
               : Promise.resolve({ data: assignments, error: null })
@@ -152,6 +157,16 @@ describe("LecturerOverview", () => {
     renderLecturerOverview();
 
     expect(screen.getByTestId("loading-spinner")).toBeInTheDocument();
+  });
+
+  it("shows a page-level error state when the overview cannot be loaded", async () => {
+    setupSupabase({ assignmentsError: new Error("overview unavailable") });
+
+    renderLecturerOverview();
+
+    expect(await screen.findByText("Lecturer overview unavailable")).toBeInTheDocument();
+    expect(screen.getByText("The lecturer overview could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("shows empty states when no dashboard data is returned", async () => {

@@ -115,6 +115,7 @@ export const buildAssignmentDetailScreenProps = ({
     fileActions,
     isDemo,
     lecturerActions,
+    submissions,
     submissionsCount: submissions.length,
     viewState,
   }),
