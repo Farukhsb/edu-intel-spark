@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getPublicLandingReadiness } from "@/lib/publicLanding";
+import { usePageMetadata } from "@/lib/seo";
 
 const features = [
   { icon: Brain, title: "AI-Powered Grading", description: "Rubric-based automated grading with detailed criterion-level feedback using advanced AI models." },
@@ -28,6 +29,14 @@ const Index = () => {
   const navigate = useNavigate();
   const { enterDemo } = useAuth();
   const readiness = getPublicLandingReadiness();
+
+  usePageMetadata({
+    title: "GradeAI | AI Academic Assessment and Analytics Platform",
+    description:
+      "GradeAI helps universities streamline marking, monitor cohort performance, strengthen academic integrity, and deliver clearer student feedback.",
+    path: "/",
+    robots: "index,follow",
+  });
 
   const handleDemo = (role: "lecturer" | "student") => {
     enterDemo(role);

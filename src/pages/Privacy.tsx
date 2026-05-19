@@ -3,6 +3,7 @@ import { ArrowLeft, Brain } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePageMetadata } from "@/lib/seo";
 
 const privacySections = [
   {
@@ -37,72 +38,82 @@ const privacySections = [
   },
 ] as const;
 
-const Privacy = () => (
-  <div className="min-h-screen bg-background">
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary">
-            <Brain className="h-5 w-5 text-primary-foreground" />
+const Privacy = () => {
+  usePageMetadata({
+    title: "Privacy Notice | GradeAI",
+    description:
+      "Read how GradeAI handles academic workflow data, student submissions, AI-supported assessment, and pilot retention expectations.",
+    path: "/privacy",
+    robots: "index,follow",
+  });
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary">
+              <Brain className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <p className="font-display text-xl font-bold">GradeAI</p>
+              <p className="text-sm text-muted-foreground">Privacy notice</p>
+            </div>
           </div>
-          <div>
-            <p className="font-display text-xl font-bold">GradeAI</p>
-            <p className="text-sm text-muted-foreground">Privacy notice</p>
-          </div>
+          <Button asChild variant="ghost">
+            <Link to="/">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Link>
+          </Button>
         </div>
-        <Button asChild variant="ghost">
-          <Link to="/">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Link>
-        </Button>
-      </div>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Privacy notice</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
-          <p>
-            This page sets out, in plain language, what GradeAI holds, why that information is held, and how academic workflow data is used during the pilot.
-          </p>
-          <p>
-            It is intended as a practical notice for lecturers, students, and administrative users of the platform. It does not replace any fuller institutional privacy or data protection documentation that may also apply.
-          </p>
-        </CardContent>
-      </Card>
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Privacy notice</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
+            <p>
+              This page sets out, in plain language, what GradeAI holds, why that information is held, and how academic workflow data is used during the pilot.
+            </p>
+            <p>
+              It is intended as a practical notice for lecturers, students, and administrative users of the platform. It does not replace any fuller institutional privacy or data protection documentation that may also apply.
+            </p>
+          </CardContent>
+        </Card>
 
-      <Card className="mb-6 border-amber-300/70 bg-amber-50/70">
-        <CardHeader>
-          <CardTitle className="text-lg">Pilot data retention note</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm leading-7 text-slate-700">
-          <p>
-            GradeAI is being presented as a pilot platform. Academic records, submissions, grades, workflow history,
-            and audit data should not be kept indefinitely by default.
-          </p>
-          <p>
-            Retention and deletion periods should be agreed with the institution responsible for the pilot before live
-            use. If no separate agreement applies, pilot data should be reviewed and removed once teaching, marking,
-            governance, and pilot evaluation activity are complete.
-          </p>
-        </CardContent>
-      </Card>
+        <Card className="mb-6 border-amber-300/70 bg-amber-50/70">
+          <CardHeader>
+            <CardTitle className="text-lg">Pilot data retention note</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm leading-7 text-slate-700">
+            <p>
+              GradeAI is being presented as a pilot platform. Academic records, submissions, grades, workflow history,
+              and audit data should not be kept indefinitely by default.
+            </p>
+            <p>
+              Retention and deletion periods should be agreed with the institution responsible for the pilot before live
+              use. If no separate agreement applies, pilot data should be reviewed and removed once teaching, marking,
+              governance, and pilot evaluation activity are complete.
+            </p>
+          </CardContent>
+        </Card>
 
-      <div className="grid gap-4">
-        {privacySections.map((section) => (
-          <Card key={section.title}>
-            <CardHeader>
-              <CardTitle className="text-lg">{section.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-7 text-muted-foreground">{section.body}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <div className="grid gap-4">
+          {privacySections.map((section) => (
+            <Card key={section.title}>
+              <CardHeader>
+                <CardTitle className="text-lg">{section.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-7 text-muted-foreground">{section.body}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default Privacy;

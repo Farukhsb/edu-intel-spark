@@ -9,6 +9,7 @@ import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RouteMetadata } from "@/components/RouteMetadata";
 import { getForcedPasswordChangeRoute, getPasswordChangeRedirectPath } from "@/lib/passwordChangeRouting";
 import type { AppRole } from "@/lib/roles";
 import { isAdminRole, isLecturerEquivalentRole } from "@/lib/roles";
@@ -186,6 +187,7 @@ const App = () => (
       <Sonner />
       <NetworkStatus />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <RouteMetadata />
         <AuthProvider>
           <PasswordChangeGate>
             <Routes>
