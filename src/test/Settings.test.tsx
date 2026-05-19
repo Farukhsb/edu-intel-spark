@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,26 +16,11 @@ const mocks = vi.hoisted(() => ({
       department_id: "Computer Science",
     },
     signOut: vi.fn(),
-    updateProfile: vi.fn().mockResolvedValue(undefined),
-  },
-  toast: vi.fn(),
-  logger: {
-    error: vi.fn(),
   },
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mocks.authState,
-}));
-
-vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({
-    toast: mocks.toast,
-  }),
-}));
-
-vi.mock("@/lib/logger", () => ({
-  log: mocks.logger,
 }));
 
 vi.mock("lucide-react", async (importOriginal) => {
@@ -62,7 +47,7 @@ describe("Settings", () => {
     vi.clearAllMocks();
   });
 
-  it("renders account readiness and profile information", () => {
+  it("renders institution-managed account details and readiness information", () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Settings />
@@ -74,11 +59,58 @@ describe("Settings", () => {
     expect(
       screen.getByText("Role and department settings now control lecturer-only workflow access"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Check that your account details still match the teaching context you need to manage"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Your institution-managed account details")).toBeInTheDocument();
     expect(screen.getByText("Dr Ada Lovelace")).toBeInTheDocument();
     expect(screen.getByText("ada@example.com")).toBeInTheDocument();
+    expect(screen.getAllByText("Computer Science").length).toBeGreaterThan(0);
+    expect(screen.getByText("Year 2")).toBeInTheDocument();
+  });
+
+  it("displays the admin correction and role-governance messaging", () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText(
+        /These details are managed by your institution or platform administrator\. If your name, department, role, or level is incorrect, contact an administrator to request a correction\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Your role controls which academic records and workflows you can access\. For governance and security reasons, role changes are handled by an administrator\./i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render self-service profile editing controls", () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Save Profile" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Full name")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Department" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Level / Cohort" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Please specify your department")).not.toBeInTheDocument();
+  });
+
+  it("shows role, department, and cohort as read-only display values", () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Role")).toBeInTheDocument();
+    expect(screen.getByText("Department")).toBeInTheDocument();
+    expect(screen.getByText("Level / Cohort")).toBeInTheDocument();
+    expect(screen.getByText("lecturer")).toBeInTheDocument();
     expect(screen.getAllByText("Computer Science").length).toBeGreaterThan(0);
     expect(screen.getByText("Year 2")).toBeInTheDocument();
   });
@@ -92,104 +124,5 @@ describe("Settings", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
     expect(mocks.authState.signOut).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls updateProfile from the save action", async () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
-
-    fireEvent.change(screen.getByLabelText("Full name"), {
-      target: { value: "Professor Ada Lovelace" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
-
-    await waitFor(() => {
-      expect(mocks.authState.updateProfile).toHaveBeenCalledWith({
-        fullName: "Professor Ada Lovelace",
-        departmentName: "Computer Science",
-        cohortId: null,
-      });
-    });
-  });
-
-  it("shows a custom department input for Other and saves the specified value", async () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole("combobox", { name: "Department" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Other" }));
-    fireEvent.change(await screen.findByLabelText("Please specify your department"), {
-      target: { value: "Architecture" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
-
-    await waitFor(() => {
-      expect(mocks.authState.updateProfile).toHaveBeenCalledWith({
-        fullName: "Dr Ada Lovelace",
-        departmentName: "Architecture",
-        cohortId: null,
-      });
-    });
-  });
-
-  it("disables save and cancel controls while the profile update is in flight", async () => {
-    let resolveUpdate: (() => void) | null = null;
-    mocks.authState.updateProfile.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveUpdate = resolve;
-        }),
-    );
-
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled();
-      expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-    });
-
-    resolveUpdate?.();
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Save Profile" })).toBeEnabled();
-      expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
-    });
-  });
-
-  it("shows a stable error message and logs context when profile save fails", async () => {
-    const error = new Error("new row violates row-level security policy");
-    mocks.authState.updateProfile.mockRejectedValueOnce(error);
-
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
-
-    await waitFor(() => {
-      expect(mocks.toast).toHaveBeenCalledWith({
-        title: "Profile update failed",
-        description: "Your changes could not be saved. Please check your connection and try again.",
-        variant: "destructive",
-      });
-    });
-
-    expect(mocks.logger.error).toHaveBeenCalledWith("Failed to update profile settings", error, {
-      userId: "lecturer-1",
-    });
   });
 });

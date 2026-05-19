@@ -1,91 +1,22 @@
-import { useEffect, useState } from "react";
-
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ButtonLoadingLabel } from "@/components/ui/loading-state";
 import { User, Shield } from "lucide-react";
 import { getDepartmentName } from "@/lib/department";
-import {
-  DEPARTMENT_OPTIONS,
-  OTHER_DEPARTMENT_OPTION,
-  resolveDepartmentValue,
-} from "@/lib/departmentOptions";
-import { COHORT_LEVELS, formatCohortLevel } from "@/lib/formatters";
+import { formatCohortLevel } from "@/lib/formatters";
 import { isLecturerEquivalentRole } from "@/lib/roles";
 import { getSettingsReadiness } from "@/lib/settingsReadiness";
-import { log } from "@/lib/logger";
-import { useToast } from "@/hooks/use-toast";
 
 const Settings = () => {
-  const { profile, signOut, updateProfile } = useAuth();
-  const { toast } = useToast();
+  const { profile, signOut } = useAuth();
   const departmentName = getDepartmentName(profile);
-  const profileDepartmentSelection =
-    departmentName && DEPARTMENT_OPTIONS.includes(departmentName as (typeof DEPARTMENT_OPTIONS)[number])
-      ? departmentName
-      : departmentName
-        ? OTHER_DEPARTMENT_OPTION
-        : "";
-  const [fullName, setFullName] = useState(profile?.full_name ?? "");
-  const [selectedDepartmentName, setSelectedDepartmentName] = useState(profileDepartmentSelection);
-  const [customDepartmentName, setCustomDepartmentName] = useState(
-    profileDepartmentSelection === OTHER_DEPARTMENT_OPTION ? departmentName ?? "" : "",
-  );
-  const [cohortId, setCohortId] = useState(profile?.cohort_id ?? "");
-  const [saving, setSaving] = useState(false);
   const readiness = getSettingsReadiness({
     role: profile?.role,
     fullName: profile?.full_name,
     email: profile?.email,
     departmentName,
   });
-
-  useEffect(() => {
-    setFullName(profile?.full_name ?? "");
-    setSelectedDepartmentName(profileDepartmentSelection);
-    setCustomDepartmentName(profileDepartmentSelection === OTHER_DEPARTMENT_OPTION ? departmentName ?? "" : "");
-    setCohortId(profile?.cohort_id ?? "");
-  }, [departmentName, profile?.cohort_id, profile?.full_name, profileDepartmentSelection]);
-
-  const resetForm = () => {
-    setFullName(profile?.full_name ?? "");
-    setSelectedDepartmentName(profileDepartmentSelection);
-    setCustomDepartmentName(profileDepartmentSelection === OTHER_DEPARTMENT_OPTION ? departmentName ?? "" : "");
-    setCohortId(profile?.cohort_id ?? "");
-  };
-
-  const handleProfileUpdate = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-
-    try {
-      await updateProfile({
-        fullName,
-        departmentName: resolveDepartmentValue(selectedDepartmentName, customDepartmentName),
-        cohortId: profile?.role === "student" ? cohortId || null : null,
-      });
-      toast({
-        title: "Profile updated",
-        description: "Your account details have been saved.",
-      });
-    } catch (error) {
-      log.error("Failed to update profile settings", error, {
-        userId: profile?.id,
-      });
-      toast({
-        title: "Profile update failed",
-        description: "Your changes could not be saved. Please check your connection and try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -161,77 +92,6 @@ const Settings = () => {
             These details are managed by your institution or platform administrator. If your name, department, role, or
             level is incorrect, contact an administrator to request a correction.
           </p>
-
-          <form onSubmit={handleProfileUpdate} className="space-y-4 border-t pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="settings-full-name">Full name</Label>
-              <Input
-                id="settings-full-name"
-                value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
-                placeholder="Your full name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-department">Department</Label>
-              <Select
-                value={selectedDepartmentName}
-                onValueChange={(value) => {
-                  setSelectedDepartmentName(value);
-                  if (value !== OTHER_DEPARTMENT_OPTION) {
-                    setCustomDepartmentName("");
-                  }
-                }}
-              >
-                <SelectTrigger id="settings-department">
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEPARTMENT_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedDepartmentName === OTHER_DEPARTMENT_OPTION ? (
-              <div className="space-y-2">
-                <Label htmlFor="settings-custom-department">Please specify your department</Label>
-                <Input
-                  id="settings-custom-department"
-                  value={customDepartmentName}
-                  onChange={(event) => setCustomDepartmentName(event.target.value)}
-                  placeholder="Enter your department"
-                />
-              </div>
-            ) : null}
-            {profile?.role === "student" ? (
-              <div className="space-y-2">
-                <Label htmlFor="settings-cohort">Level / Cohort</Label>
-                <Select value={cohortId} onValueChange={setCohortId}>
-                  <SelectTrigger id="settings-cohort">
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COHORT_LEVELS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" disabled={saving} onClick={resetForm}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? <ButtonLoadingLabel label="Saving..." /> : "Save Profile"}
-              </Button>
-            </div>
-          </form>
         </CardContent>
       </Card>
 
