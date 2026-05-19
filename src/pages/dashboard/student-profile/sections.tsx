@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { safeFormatDate } from "@/lib/date";
 import {
+  formatManualInterventionStatus,
   isInterventionOverdue,
   type InterventionEntry,
   type ManualInterventionStatus,
@@ -254,7 +255,9 @@ export const StudentInterventionFormCard = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ongoing">Ongoing</SelectItem>
+              <SelectItem value="planned">Planned</SelectItem>
+              <SelectItem value="in_progress">Ongoing</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="resolved">Resolved</SelectItem>
             </SelectContent>
           </Select>
@@ -310,8 +313,8 @@ export const StudentInterventionHistoryCard = ({
           <div key={entry.id} className="rounded-lg border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="capitalize">{entry.type}</Badge>
-              <Badge variant={entry.status === "resolved" ? "default" : "secondary"} className="capitalize">
-                {entry.status}
+              <Badge variant={entry.status === "resolved" ? "default" : "secondary"}>
+                {formatManualInterventionStatus(entry.status)}
               </Badge>
               {isInterventionOverdue(entry) && (
                 <Badge variant="destructive">Follow-up overdue</Badge>
@@ -327,13 +330,13 @@ export const StudentInterventionHistoryCard = ({
               </p>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
-              {entry.status === "ongoing" ? (
-                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(entry.id, "resolved")}>
-                  Mark resolved
+              {entry.status === "resolved" ? (
+                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(entry.id, "in_progress")}>
+                  Reopen follow-up
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(entry.id, "ongoing")}>
-                  Reopen follow-up
+                <Button variant="outline" size="sm" onClick={() => onUpdateStatus(entry.id, "resolved")}>
+                  Mark resolved
                 </Button>
               )}
             </div>

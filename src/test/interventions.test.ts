@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildManualInterventionPayload,
   buildRecommendationInterventionRows,
+  formatManualInterventionStatus,
   getStudentInterventionReadiness,
   mapInterventionRow,
   normalizeManualInterventionStatus,
@@ -14,8 +15,10 @@ describe("interventions", () => {
     expect(normalizeManualInterventionType("referral")).toBe("referral");
     expect(normalizeManualInterventionType("unknown")).toBe("email");
 
+    expect(normalizeManualInterventionStatus("ongoing")).toBe("in_progress");
     expect(normalizeManualInterventionStatus("resolved")).toBe("resolved");
-    expect(normalizeManualInterventionStatus("invalid")).toBe("ongoing");
+    expect(normalizeManualInterventionStatus("invalid")).toBe("planned");
+    expect(formatManualInterventionStatus("in_progress")).toBe("Ongoing");
   });
 
   it("builds a manual intervention payload with db-safe values", () => {
@@ -25,7 +28,7 @@ describe("interventions", () => {
       studentName: "Ada Student",
       studentEmail: "ada@example.edu",
       interventionType: "referral",
-      interventionStatus: "ongoing",
+      interventionStatus: "in_progress",
       note: " Refer to academic support. ",
       followUpDate: "2026-04-30",
       riskLevel: "critical",
@@ -34,7 +37,7 @@ describe("interventions", () => {
     expect(payload.lecturer_id).toBe("lecturer-1");
     expect(payload.student_id).toBe("student-1");
     expect(payload.intervention_type).toBe("support_referral");
-    expect(payload.status).toBe("ongoing");
+    expect(payload.status).toBe("in_progress");
     expect(payload.priority).toBe("high");
     expect(payload.notes).toBe("Refer to academic support.");
   });
@@ -78,6 +81,7 @@ describe("interventions", () => {
 
     expect(rows).toHaveLength(2);
     expect(rows[0].intervention_type).toBe("check_in");
+    expect(rows[0].status).toBe("planned");
     expect(rows[0].priority).toBe("high");
     expect(rows[0].assignment_id).toBe("assignment-1");
   });

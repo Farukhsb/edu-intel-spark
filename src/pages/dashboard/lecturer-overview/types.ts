@@ -3,6 +3,7 @@ export interface LecturerOverviewStats {
   gradedCount: number;
   pendingCount: number;
   avgScore: number | null;
+  avgScoreScale: number | null;
   activeStudents: number;
   assignmentCount: number;
   onTarget: number;

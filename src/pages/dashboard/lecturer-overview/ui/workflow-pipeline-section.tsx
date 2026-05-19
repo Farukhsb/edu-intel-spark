@@ -11,8 +11,8 @@ export const LecturerOverviewWorkflowPipelineSection = ({
 }) => (
   <Card className="shadow-sm">
     <CardHeader className="pb-3">
-      <CardTitle className="text-base">Assignment Workflow Pipeline</CardTitle>
-      <CardDescription>See where submissions are waiting as they move from intake to release.</CardDescription>
+      <CardTitle className="text-base">Workflow pipeline</CardTitle>
+      <CardDescription>Track submissions from intake to release.</CardDescription>
     </CardHeader>
     <CardContent>
       <div className="grid gap-3 lg:grid-cols-[repeat(4,minmax(0,1fr))]">

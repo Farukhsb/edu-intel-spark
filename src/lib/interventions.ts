@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables, TablesInsert } from "@/integrations/supabase/types";
 
 export type ManualInterventionType = "email" | "meeting" | "feedback" | "referral";
-export type ManualInterventionStatus = "ongoing" | "resolved";
+export type ManualInterventionStatus = "planned" | "in_progress" | "completed" | "resolved";
 
 export interface InterventionEntry {
   id: string;
@@ -10,7 +10,7 @@ export interface InterventionEntry {
   type: string;
   note: string;
   followUpDate: string | null;
-  status: string;
+  status: ManualInterventionStatus;
 }
 
 export interface StudentInterventionReadiness {
@@ -57,11 +57,30 @@ export const normalizeManualInterventionType = (value: string): ManualInterventi
 };
 
 export const normalizeManualInterventionStatus = (value: string): ManualInterventionStatus => {
-  if (value === "ongoing" || value === "resolved") {
+  if (value === "ongoing") {
+    return "in_progress";
+  }
+
+  if (value === "planned" || value === "in_progress" || value === "completed" || value === "resolved") {
     return value;
   }
 
-  return "ongoing";
+  return "planned";
+};
+
+export const formatManualInterventionStatus = (value: ManualInterventionStatus) => {
+  switch (value) {
+    case "planned":
+      return "Planned";
+    case "in_progress":
+      return "Ongoing";
+    case "completed":
+      return "Completed";
+    case "resolved":
+      return "Resolved";
+    default:
+      return value;
+  }
 };
 
 export const getInterventionErrorText = (error: { message?: string; details?: string; hint?: string } | null) =>
@@ -73,7 +92,7 @@ export const mapInterventionRow = (row: StudentInterventionRow): InterventionEnt
   type: toDisplayInterventionType(row.intervention_type),
   note: row.notes || "",
   followUpDate: row.follow_up_date || null,
-  status: row.status,
+  status: normalizeManualInterventionStatus(row.status),
 });
 
 export const buildManualInterventionPayload = ({
@@ -134,7 +153,7 @@ export const buildRecommendationInterventionRows = ({
     notes: `${summary}\n\nRecommended actions:\n- ${recommendedActions.join("\n- ")}`,
     priority: severity === "critical" || severity === "high" ? "high" : "medium",
     follow_up_date: new Date(Date.now() + 7 * 86400000).toISOString(),
-    status: "ongoing",
+    status: "planned",
     assignment_id: assignmentId,
     updated_at: new Date().toISOString(),
   }));
@@ -222,7 +241,7 @@ export const isInterventionOverdue = (
   intervention: Pick<InterventionEntry, "status" | "followUpDate">,
   now = Date.now(),
 ) => {
-  if (intervention.status !== "ongoing" || !intervention.followUpDate) {
+  if (!["planned", "in_progress"].includes(intervention.status) || !intervention.followUpDate) {
     return false;
   }
 
@@ -245,7 +264,8 @@ export const getStudentInterventionReadiness = ({
   latestIntervention: InterventionEntry | null;
 }): StudentInterventionReadiness => {
   const urgentRisk = riskLevel === "critical" || riskLevel === "high";
-  const pendingFollowUp = latestIntervention?.status === "ongoing";
+  const pendingFollowUp =
+    latestIntervention?.status === "planned" || latestIntervention?.status === "in_progress";
 
   return {
     postureLabel:

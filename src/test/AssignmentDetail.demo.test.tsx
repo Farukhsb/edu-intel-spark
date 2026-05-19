@@ -188,4 +188,26 @@ describe("AssignmentDetail demo data isolation", () => {
     expect(screen.getByTestId("submission-review-demo-submission-1")).toBeInTheDocument();
     expect(screen.queryByTestId("submission-approve-demo-submission-1")).not.toBeInTheDocument();
   });
+
+  it("returns to the dashboard overview when opened from lecturer overview", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          `/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=submission-review&from=overview`,
+        ]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/dashboard" element={<div>Dashboard overview</div>} />
+          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(await screen.findByText("Dashboard overview")).toBeInTheDocument();
+  });
 });

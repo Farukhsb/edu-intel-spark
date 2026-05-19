@@ -177,11 +177,12 @@ describe("LecturerOverview", () => {
     expect(await screen.findByText("No submissions yet")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Publish an assignment or check the due dates on your active briefs. Student submissions will start appearing here as soon as work is uploaded.",
+        "Publish an assignment or check its due date. Student work will appear here once it is submitted.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Priority today")).toBeInTheDocument();
-    expect(screen.getByText("0 active assignments and 0 active students are in view.")).toBeInTheDocument();
+    expect(screen.getByText("Live teaching scope")).toBeInTheDocument();
+    expect(screen.getByText("Create or publish the next assignment to start the teaching workflow")).toBeInTheDocument();
   });
 
   it("renders basic overview UI elements", async () => {
@@ -209,16 +210,15 @@ describe("LecturerOverview", () => {
     });
     expect(screen.getByText("Priority today")).toBeInTheDocument();
     expect(screen.getByText("Live teaching scope")).toBeInTheDocument();
+    expect(screen.getByText("Next move")).toBeInTheDocument();
     expect(screen.getByText("No immediate blocker")).toBeInTheDocument();
-    expect(screen.getByText("1 active assignment still need routine monitoring")).toBeInTheDocument();
-    expect(
-      screen.getByText("Track live submissions and keep release-ready work moving through the workflow"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Live delivery position")).toBeInTheDocument();
+    expect(screen.getByText("Track submissions from intake to release.")).toBeInTheDocument();
     expect(screen.getByText("Awaiting Review")).toBeInTheDocument();
     expect(screen.getByText("Average Grade")).toBeInTheDocument();
     expect(screen.getByText("At-Risk Students")).toBeInTheDocument();
-    expect(screen.getByText("Recent Submissions")).toBeInTheDocument();
-    expect(screen.getByText("Assignment Workflow Pipeline")).toBeInTheDocument();
+    expect(screen.getByText("Review next")).toBeInTheDocument();
+    expect(screen.getByText("Workflow pipeline")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-stage-submitted")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-stage-ai-graded")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-stage-under-review")).toBeInTheDocument();
@@ -246,21 +246,22 @@ describe("LecturerOverview", () => {
 
     renderLecturerOverview();
 
-    const reviewButtons = await screen.findAllByRole("button", { name: "Review submission" });
+    const queueButton = await screen.findByRole("button", { name: "Open review queue" });
+    const submissionButton = screen.getByRole("button", { name: "Continue review" });
 
-    fireEvent.click(reviewButtons[0]);
+    fireEvent.click(submissionButton);
     expect(mocks.navigate).toHaveBeenCalledWith(
-      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
+      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review&from=overview",
     );
 
-    fireEvent.click(reviewButtons[1]);
+    fireEvent.click(queueButton);
     expect(mocks.navigate).toHaveBeenCalledWith(
-      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
+      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review&from=overview",
     );
 
     fireEvent.click(screen.getByText("Awaiting Review"));
     expect(mocks.navigate).toHaveBeenCalledWith(
-      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
+      "/dashboard/assignments/assignment-1?source=queue&focus=manual-review&from=overview",
     );
   });
 
@@ -321,7 +322,7 @@ describe("LecturerOverview", () => {
 
     renderLecturerOverview();
 
-    expect(await screen.findByText("Assignment Workflow Pipeline")).toBeInTheDocument();
+    expect(await screen.findByText("Workflow pipeline")).toBeInTheDocument();
 
     expect(screen.getByTestId("pipeline-stage-submitted")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-count-submitted")).toHaveTextContent("1");
@@ -331,5 +332,93 @@ describe("LecturerOverview", () => {
     expect(screen.getByTestId("pipeline-count-under-review")).toHaveTextContent("1");
     expect(screen.getByTestId("pipeline-stage-released")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-count-released")).toHaveTextContent("1");
+  });
+
+  it("formats average grade using the grading scale instead of always showing a percentage", async () => {
+    setupSupabase({
+      assignments: [{ id: "assignment-1", title: "Algorithms", max_score: 10 }],
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_id: "student-1",
+          student_name: "Sam Student",
+          student_email: "sam@example.com",
+          file_name: "essay.pdf",
+          status: "released",
+          submitted_at: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+      grades: [{ submission_id: "submission-1", ai_score: 8.9, final_score: null }],
+    });
+
+    renderLecturerOverview();
+
+    const averageGradeLabel = await screen.findByText("Average Grade");
+    expect(averageGradeLabel).toBeInTheDocument();
+    expect(averageGradeLabel.closest("div")).toHaveTextContent("8.9/10");
+    expect(screen.queryByText("8.9%")).not.toBeInTheDocument();
+  });
+
+  it("keeps the priority queue action aligned with the highlighted backlog assignment", async () => {
+    setupSupabase({
+      assignments: [
+        { id: "assignment-1", title: "Database Normalisation Case Study", max_score: 80 },
+        { id: "assignment-2", title: "Network Security Incident Reflection", max_score: 100 },
+      ],
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_id: "student-1",
+          student_name: "Sam Student",
+          student_email: "sam@example.com",
+          file_name: "essay.pdf",
+          status: "under_review",
+          submitted_at: "2026-05-08T00:00:00.000Z",
+        },
+        {
+          id: "submission-2",
+          assignment_id: "assignment-2",
+          student_id: "student-2",
+          student_name: "Riley Student",
+          student_email: "riley@example.com",
+          file_name: "incident-1.pdf",
+          status: "submitted",
+          submitted_at: "2026-05-05T00:00:00.000Z",
+        },
+        {
+          id: "submission-3",
+          assignment_id: "assignment-2",
+          student_id: "student-3",
+          student_name: "Ayo Student",
+          student_email: "ayo@example.com",
+          file_name: "incident-2.pdf",
+          status: "submitted",
+          submitted_at: "2026-05-04T00:00:00.000Z",
+        },
+        {
+          id: "submission-4",
+          assignment_id: "assignment-2",
+          student_id: "student-4",
+          student_name: "Chris Student",
+          student_email: "chris@example.com",
+          file_name: "incident-3.pdf",
+          status: "submitted",
+          submitted_at: "2026-05-03T00:00:00.000Z",
+        },
+      ],
+      grades: [],
+    });
+
+    renderLecturerOverview();
+
+    expect(await screen.findByText("Current pressure point")).toBeInTheDocument();
+    expect(screen.getAllByText("Network Security Incident Reflection").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open review queue" }));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      "/dashboard/assignments/assignment-2?source=notification&focus=submission-review&from=overview",
+    );
   });
 });

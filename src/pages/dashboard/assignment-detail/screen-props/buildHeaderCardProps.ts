@@ -10,17 +10,19 @@ import type { AssignmentDetailAssignment } from "@/pages/dashboard/assignment-de
 
 interface BuildHeaderCardPropsArgs {
   assignment: AssignmentDetailAssignment;
+  backHref: string;
   navigate: NavigateFunction;
   viewState: ReturnType<typeof useAssignmentDetailViewState>;
 }
 
 export const buildHeroCardProps = ({
   assignment,
+  backHref,
   navigate,
   viewState,
 }: BuildHeaderCardPropsArgs): ComponentProps<typeof AssignmentHeroCard> => ({
   assignment,
-  onBack: () => navigate("/dashboard/assignments"),
+  onBack: () => navigate(backHref),
   summary: viewState.summary,
 });
 
