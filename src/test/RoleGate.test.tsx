@@ -20,38 +20,43 @@ describe("RoleGate", () => {
     mocks.role = "lecturer";
   });
 
-  it.each([
-    ["/dashboard/institutional", "Institutional Insights"],
-    ["/dashboard/accreditation", "Accreditation"],
-    ["/dashboard/external-examiner", "External Examiner"],
-  ])("shows an access denied page for lecturers on %s", async (path, label) => {
+  it("denies students access to lecturer-only moderation routes", async () => {
+    mocks.role = "student";
+
     render(
       <MemoryRouter
-        initialEntries={[path]}
+        initialEntries={["/dashboard/moderation"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
           <Route
-            path="/dashboard/institutional"
+            path="/dashboard/moderation"
             element={
-              <RoleGate allowedRole="admin">
-                <div>Institutional Insights</div>
+              <RoleGate allowedRole="lecturer">
+                <div>Moderation</div>
               </RoleGate>
             }
           />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("You don't have access to this area.")).toBeInTheDocument();
+    expect(screen.queryByText("Moderation")).not.toBeInTheDocument();
+  });
+
+  it("denies lecturers access to admin-only accreditation routes", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard/accreditation"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
           <Route
             path="/dashboard/accreditation"
             element={
               <RoleGate allowedRole="admin">
                 <div>Accreditation</div>
-              </RoleGate>
-            }
-          />
-          <Route
-            path="/dashboard/external-examiner"
-            element={
-              <RoleGate allowedRole="admin">
-                <div>External Examiner</div>
               </RoleGate>
             }
           />
@@ -61,15 +66,15 @@ describe("RoleGate", () => {
 
     expect(await screen.findByText("You don't have access to this area.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Go to dashboard" })).toHaveAttribute("href", "/dashboard");
-    expect(screen.queryByText(label)).not.toBeInTheDocument();
+    expect(screen.queryByText("Accreditation")).not.toBeInTheDocument();
   });
 
-  it("allows admins into all admin-only reporting routes", async () => {
+  it("allows admins into admin-only institutional routes", async () => {
     mocks.role = "admin";
 
     render(
       <MemoryRouter
-        initialEntries={["/dashboard/external-examiner"]}
+        initialEntries={["/dashboard/institutional"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
@@ -81,19 +86,28 @@ describe("RoleGate", () => {
               </RoleGate>
             }
           />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Institutional Insights")).toBeInTheDocument();
+    expect(screen.queryByText("You don't have access to this area.")).not.toBeInTheDocument();
+  });
+
+  it("allows lecturer-equivalent admin roles into lecturer-only routes", async () => {
+    mocks.role = "admin";
+
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard/moderation"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
           <Route
-            path="/dashboard/accreditation"
+            path="/dashboard/moderation"
             element={
-              <RoleGate allowedRole="admin">
-                <div>Accreditation</div>
-              </RoleGate>
-            }
-          />
-          <Route
-            path="/dashboard/external-examiner"
-            element={
-              <RoleGate allowedRole="admin">
-                <div>External Examiner</div>
+              <RoleGate allowedRole="lecturer">
+                <div>Moderation</div>
               </RoleGate>
             }
           />
@@ -101,7 +115,7 @@ describe("RoleGate", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("External Examiner")).toBeInTheDocument();
+    expect(await screen.findByText("Moderation")).toBeInTheDocument();
     expect(screen.queryByText("You don't have access to this area.")).not.toBeInTheDocument();
   });
 });

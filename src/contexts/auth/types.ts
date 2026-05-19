@@ -10,6 +10,7 @@ export interface Profile {
   avatar_url: string | null;
   cohort_id: string | null;
   department_name: string | null;
+  // Temporary compatibility mirror. New UI logic should read department_name.
   department_id: string | null;
   must_change_password: boolean;
 }
@@ -29,10 +30,15 @@ export interface AuthContextType {
     fullName: string,
     role: PublicSignupRole,
     cohortId?: string,
-    departmentId?: string
+    departmentName?: string
   ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (input: {
+    fullName: string;
+    departmentName: string | null;
+    cohortId?: string | null;
+  }) => Promise<void>;
   completePasswordChange: (password: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;

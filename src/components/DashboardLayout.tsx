@@ -1,29 +1,16 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  Award, BarChart3, Bell, Brain, ChevronDown, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut,
-  Menu, MessageSquare, Moon, Settings, Shield, Sun, Target, TrendingUp, University, AlertTriangle,
-  Upload, Users, FileOutput,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { NotificationDropdown } from "@/components/dashboard/NotificationDropdown";
 import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
 import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
 import { getDashboardShellContext } from "@/lib/dashboardShell";
 import {
   getLecturerWorkflowNotificationDestination,
-  getLecturerWorkflowNotificationPreviewHint,
 } from "@/lib/lecturerWorkflowNotifications";
 import {
   clearCommunicationMessage,
@@ -31,299 +18,24 @@ import {
   markCommunicationMessageRead,
   type CommunicationMessage,
 } from "@/lib/communications";
-import { safeFormatDate } from "@/lib/date";
+import { LecturerOnboardingDialog } from "@/components/dashboard/LecturerOnboardingDialog";
 import { getStudentSupportNotificationDestination } from "@/lib/studentSupportWorkflow";
-import { preloadCommonRoleRoutes, preloadRoute } from "@/lib/routePreloads";
-
-const DEMO_LECTURER_NOTIFICATIONS: CommunicationMessage[] = [
-  {
-    id: "demo-notice-release-follow-up",
-    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    cleared: false,
-    read: false,
-    category: "grade-released",
-    recipientName: "Dr. Demo Lecturer",
-    recipientEmail: "demo@gradeai.com",
-    recipientId: "demo-lecturer",
-    subject: "Released result follow-up",
-    body: "Released results are ready to review for the policy brief assignment.",
-    relatedAssignmentId: "demo-assignment-policy-brief",
-  },
-  {
-    id: "demo-notice-ai-ready",
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    cleared: false,
-    read: false,
-    category: "ai-grading-ready",
-    recipientName: "Dr. Demo Lecturer",
-    recipientEmail: "demo@gradeai.com",
-    recipientId: "demo-lecturer",
-    subject: "Synthetic AI grading ready",
-    body: "AI grading is ready for the policy brief assignment.",
-    relatedAssignmentId: "demo-assignment-policy-brief",
-  },
-  {
-    id: "demo-notice-1",
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    cleared: false,
-    read: false,
-    category: "submission-received",
-    recipientName: "Dr. Demo Lecturer",
-    recipientEmail: "demo@gradeai.com",
-    recipientId: "demo-lecturer",
-    subject: "New synthetic submission received",
-    body: "Amina Hassan submitted Strategic Policy Brief: Housing Affordability Interventions.",
-    relatedAssignmentId: "demo-assignment-policy-brief",
-  },
-  {
-    id: "demo-notice-2",
-    createdAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
-    cleared: false,
-    read: true,
-    category: "integrity-check-ready",
-    recipientName: "Dr. Demo Lecturer",
-    recipientEmail: "demo@gradeai.com",
-    recipientId: "demo-lecturer",
-    subject: "Synthetic integrity review ready",
-    body: "The demo integrity evidence pack is ready for review on the policy brief assignment.",
-    relatedAssignmentId: "demo-assignment-policy-brief",
-  },
-];
-
-const DEMO_STUDENT_NOTIFICATIONS: CommunicationMessage[] = [
-  {
-    id: "demo-student-notice-1",
-    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    cleared: false,
-    read: false,
-    category: "grade-released",
-    recipientName: "Demo Student",
-    recipientEmail: "student@gradeai.com",
-    recipientId: "demo-student",
-    subject: "Feedback released",
-    body: "Your feedback for CS301 Assignment 1 - Data Structures is now available in the demo workspace.",
-    relatedAssignmentId: "demo-assignment-1",
-    relatedStudentId: "demo-student",
-  },
-  {
-    id: "demo-student-notice-2",
-    createdAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
-    cleared: false,
-    read: true,
-    category: "intervention-follow-up",
-    recipientName: "Demo Student",
-    recipientEmail: "student@gradeai.com",
-    recipientId: "demo-student",
-    subject: "Study plan reminder",
-    body: "Review the complexity-analysis tasks in your improvement plan before the next submission window.",
-    relatedStudentId: "demo-student",
-  },
-];
+import { preloadCommonRoleRoutes } from "@/lib/routePreloads";
+import {
+  adminSections,
+  getDefaultSectionState,
+  lecturerSections,
+  studentSections,
+} from "@/lib/dashboardNavigation";
+import {
+  DEMO_LECTURER_NOTIFICATIONS,
+  DEMO_STUDENT_NOTIFICATIONS,
+} from "@/lib/demoNotifications";
 
 const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
 const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 const STUDENT_SIDEBAR_STATE_KEY = "gradeai:student-sidebar-sections";
 const LECTURER_ONBOARDING_STATE_KEY = "gradeai:lecturer-onboarding-v1-dismissed";
-
-const lecturerOnboardingActions = [
-  {
-    title: "Review your workspace overview",
-    description: "Start on Overview to see current teaching pressure, recent submissions, and the next workflow that needs attention.",
-  },
-  {
-    title: "Create or open an assignment",
-    description: "Use Assignments to create new assessment work or reopen an existing assignment for grading and release activity.",
-  },
-  {
-    title: "Check grading, integrity, and moderation before release",
-    description: "Before students see results, confirm the grading flow is complete and review any integrity or moderation work that still needs action.",
-  },
-] as const;
-
-type SidebarLink = {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-};
-
-type SidebarSection = {
-  label: string;
-  description: string;
-  defaultOpen: boolean;
-  links: readonly SidebarLink[];
-};
-
-const lecturerSections = [
-  {
-    label: "Teaching",
-    description: "Daily teaching workflow",
-    defaultOpen: true,
-    links: [
-      { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-      { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
-    ],
-  },
-  {
-    label: "Assessment",
-    description: "Review, integrity, and moderation",
-    defaultOpen: true,
-    links: [
-      { to: "/dashboard/integrity", label: "Academic Integrity", icon: Shield },
-      { to: "/dashboard/moderation", label: "Moderation", icon: ClipboardCheck },
-    ],
-  },
-  {
-    label: "Teaching Insights",
-    description: "Cohort and learner signals",
-    defaultOpen: false,
-    links: [
-      { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
-      { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
-      { to: "/dashboard/learning-outcomes", label: "Learning Outcomes", icon: Target },
-    ],
-  },
-  {
-    label: "Workspace",
-    description: "Personal settings and account controls",
-    defaultOpen: false,
-    links: [
-      { to: "/dashboard/settings", label: "Settings", icon: Settings },
-    ],
-  },
-] as const satisfies readonly SidebarSection[];
-
-const adminSections = [
-  {
-    label: "Control",
-    description: "Platform overview and monitoring",
-    defaultOpen: true,
-    links: [
-      { to: "/dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
-      { to: "/dashboard?view=users", label: "User Management", icon: Users },
-      { to: "/dashboard?view=system", label: "System Overview", icon: Shield },
-      { to: "/dashboard?view=audit", label: "Audit Log", icon: FileOutput },
-    ],
-  },
-  {
-    label: "Reports",
-    description: "Institution-level reporting views",
-    defaultOpen: true,
-    links: [
-      { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
-      { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
-      { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
-    ],
-  },
-  {
-    label: "Academic Oversight",
-    description: "Read-only academic workflow visibility",
-    defaultOpen: false,
-    links: [
-      { to: "/dashboard?view=assignments", label: "Assignments", icon: Upload },
-      { to: "/dashboard?view=submissions", label: "Submissions", icon: FileOutput },
-      { to: "/dashboard?view=moderation", label: "Moderation", icon: ClipboardCheck },
-    ],
-  },
-  {
-    label: "Compliance & Governance",
-    description: "Audit and institutional governance views",
-    defaultOpen: false,
-    links: [
-      { to: "/dashboard?view=data-access-log", label: "Data Access Log", icon: FileOutput },
-      { to: "/dashboard?view=integrity-overview", label: "Academic Integrity Overview", icon: Shield },
-      { to: "/dashboard?view=moderation-audit", label: "Moderation Audit", icon: ClipboardCheck },
-      { to: "/dashboard?view=policy-exceptions", label: "Policy Exceptions", icon: AlertTriangle },
-    ],
-  },
-  {
-    label: "Workspace",
-    description: "Account-level tools",
-    defaultOpen: false,
-    links: [
-      { to: "/dashboard/settings", label: "Settings", icon: Settings },
-    ],
-  },
-] as const satisfies readonly SidebarSection[];
-
-const studentSections = [
-  {
-    label: "Learning",
-    description: "Assignments and current results",
-    defaultOpen: true,
-    links: [
-      { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
-      { to: "/dashboard", label: "My Grades", icon: GraduationCap },
-    ],
-  },
-  {
-    label: "Support & Improvement",
-    description: "Feedback understanding and next-step support",
-    defaultOpen: true,
-    links: [
-      { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
-      { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
-    ],
-  },
-  {
-    label: "Workspace",
-    description: "Personal settings and account controls",
-    defaultOpen: false,
-    links: [
-      { to: "/dashboard/settings", label: "Settings", icon: Settings },
-    ],
-  },
-] as const satisfies readonly SidebarSection[];
-
-const defaultLecturerSectionState = Object.fromEntries(
-  lecturerSections.map((section) => [section.label, section.defaultOpen]),
-) as Record<string, boolean>;
-
-const defaultAdminSectionState = Object.fromEntries(
-  adminSections.map((section) => [section.label, section.defaultOpen]),
-) as Record<string, boolean>;
-
-const defaultStudentSectionState = Object.fromEntries(
-  studentSections.map((section) => [section.label, section.defaultOpen]),
-) as Record<string, boolean>;
-
-const getNotificationCategoryLabel = (category: CommunicationMessage["category"]) => {
-  switch (category) {
-    case "grade-released":
-      return "Released result";
-    case "feedback-summary":
-      return "Feedback";
-    case "assignment-published":
-      return "Assignment";
-    case "submission-received":
-      return "Submission";
-    case "ai-grading-ready":
-      return "AI grading";
-    case "integrity-check-ready":
-      return "Integrity";
-    case "at-risk-alert":
-      return "At-risk";
-    case "intervention-follow-up":
-      return "Support";
-    default:
-      return "Notice";
-  }
-};
-
-const getStudentNotificationPreviewHint = (notification: CommunicationMessage) => {
-  switch (notification.category) {
-    case "grade-released":
-      return "Opens your released result and grade explanation.";
-    case "feedback-summary":
-      return "Opens your released result summary.";
-    case "assignment-published":
-      return "Opens the assignment submission window.";
-    case "at-risk-alert":
-    case "intervention-follow-up":
-      return "Opens your improvement plan.";
-    default:
-      return null;
-  }
-};
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { profile, user, signOut, isDemo } = useAuth();
@@ -332,11 +44,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const isAdmin = isAdminRole(profile?.role);
   const isLecturerEquivalent = isLecturerEquivalentRole(profile?.role);
   const roleSections = isAdmin ? adminSections : isLecturerEquivalent ? lecturerSections : studentSections;
-  const defaultSectionState = isAdmin
-    ? defaultAdminSectionState
-    : isLecturerEquivalent
-      ? defaultLecturerSectionState
-      : defaultStudentSectionState;
+  const defaultSectionState = getDefaultSectionState(roleSections);
   const sidebarStateKey = isAdmin
     ? ADMIN_SIDEBAR_STATE_KEY
     : isLecturerEquivalent
@@ -543,7 +251,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     navigate("/dashboard");
   };
 
-  const links: SidebarLink[] = roleSections.flatMap((section) => [...section.links]);
+  const links = roleSections.flatMap((section) => [...section.links]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -605,300 +313,59 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     setShowOnboarding(false);
   };
 
-  const renderNavLink = (link: SidebarLink) => {
-    const isActive = isLinkActive(link.to);
-
-    return (
-      <Link
-        key={link.to}
-        to={link.to}
-        onMouseEnter={() => preloadRoute(link.to)}
-        onFocus={() => preloadRoute(link.to)}
-        onClick={() => {
-          setSidebarOpen(false);
-        }}
-        className={cn(
-          "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
-          isActive
-            ? "bg-sidebar-accent text-sidebar-primary shadow-sm ring-1 ring-sidebar-border"
-            : "text-sidebar-foreground/78 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <span
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
-            isActive
-              ? "border-sidebar-primary/20 bg-sidebar-primary/10 text-sidebar-primary"
-              : "border-sidebar-border/60 bg-sidebar-accent/35 text-sidebar-foreground/70 group-hover:border-sidebar-border group-hover:bg-sidebar-accent",
-          )}
-        >
-          <link.icon className="h-4 w-4" />
-        </span>
-        <span className="min-w-0 flex-1 truncate">{link.label}</span>
-        {isActive && <span className="h-2 w-2 rounded-full bg-sidebar-primary" />}
-      </Link>
-    );
-  };
-
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.08),transparent_28%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.28))]">
-      <Dialog open={showOnboarding} onOpenChange={(open) => (!open ? dismissOnboarding() : setShowOnboarding(true))}>
-        <DialogContent className="max-w-3xl gap-5 p-0">
-          <div className="border-b border-border/70 px-6 py-5">
-            <DialogHeader className="space-y-2 text-left">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
-                  <Brain className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle>Welcome to GradeAI</DialogTitle>
-                   <DialogDescription>
-                     GradeAI helps you manage teaching and assessment work in one place. Start with these three first actions.
-                   </DialogDescription>
-                 </div>
-               </div>
-             </DialogHeader>
-           </div>
-
-           <div className="px-6">
-             <div className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
-               <p className="text-sm font-medium text-foreground">Start here</p>
-               <ol className="mt-2 space-y-1 text-sm text-muted-foreground">
-                 <li>1. Review your <span className="font-medium text-foreground">workspace overview</span>.</li>
-                 <li>2. Create or open an <span className="font-medium text-foreground">assignment</span>.</li>
-                 <li>3. Check <span className="font-medium text-foreground">grading, integrity, and moderation</span> before release.</li>
-               </ol>
-             </div>
-           </div>
-
-           <div className="grid gap-3 px-6 pb-1 md:grid-cols-3">
-             {lecturerOnboardingActions.map((card) => (
-               <div key={card.title} className="rounded-2xl border border-border/70 bg-background px-4 py-3 shadow-sm">
-                 <p className="text-sm font-semibold text-foreground">{card.title}</p>
-                 <p className="mt-1 text-sm leading-6 text-muted-foreground">{card.description}</p>
-               </div>
-            ))}
-          </div>
-
-          <DialogFooter className="border-t border-border/70 px-6 py-4 sm:justify-between sm:space-x-0">
-            <p className="text-xs text-muted-foreground">
-              You can close this now and start working immediately.
-            </p>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button type="button" variant="ghost" onClick={dismissOnboarding}>
-                Skip for now
-              </Button>
-              <Button type="button" onClick={dismissOnboarding}>
-                Start using GradeAI
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <LecturerOnboardingDialog open={showOnboarding} onDismiss={dismissOnboarding} />
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-sidebar-border/80 bg-sidebar/95 text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none",
-        sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="border-b border-sidebar-border/80 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent/60 shadow-sm">
-              <Brain className="h-5 w-5 text-sidebar-primary" />
-            </div>
-            <div className="min-w-0">
-              <p className="font-display text-lg font-bold tracking-tight text-sidebar-primary-foreground">GradeAI</p>
-              <p className="text-xs text-sidebar-foreground/60">
-                {isAdmin ? "Admin workspace" : isLecturerEquivalent ? "Academic workspace" : "Student workspace"}
-              </p>
-            </div>
-            {isDemo && <Badge variant="outline" className="ml-auto text-[10px] border-sidebar-border text-sidebar-foreground/60">Demo</Badge>}
-          </div>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-4 py-4">
-          {isAdmin || isLecturerEquivalent || isStudentRole(profile?.role) ? (
-            <div className="space-y-5">
-              {roleSections.map((section) => {
-                const isExpanded = openSections[section.label];
-
-                return (
-                <div
-                  key={section.label}
-                  className={cn(
-                    "space-y-2 rounded-2xl border border-transparent px-1 py-1 transition-colors",
-                    isExpanded && "border-sidebar-border/60 bg-sidebar-accent/15",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(section.label)}
-                    className="flex w-full items-start justify-between rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/30"
-                    aria-expanded={isExpanded}
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
-                          {section.label}
-                        </p>
-                        <span className="rounded-full border border-sidebar-border/70 bg-sidebar px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/55">
-                          {section.links.length}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-sidebar-foreground/50">
-                        {section.description}
-                      </p>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        "mt-0.5 h-4 w-4 shrink-0 text-sidebar-foreground/45 transition-transform",
-                        isExpanded && "rotate-180",
-                      )}
-                    />
-                  </button>
-                  {isExpanded && (
-                    <div className="space-y-1 pb-1">
-                      {section.links.map((link) => renderNavLink(link))}
-                    </div>
-                  )}
-                </div>
-                );
-              })}
-            </div>
-          ) : null}
-        </nav>
-
-        <div className="border-t border-sidebar-border/80 p-4">
-          <div className="rounded-2xl border border-sidebar-border/80 bg-sidebar-accent/35 p-3">
-            <div className="flex items-center gap-3 px-1 pb-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground shadow-sm">
-              {profile?.full_name?.[0]?.toUpperCase() || "U"}
-            </div>
-            <div className="flex-1 truncate">
-              <p className="text-sm font-medium">{profile?.full_name || "User"}</p>
-              <p className="text-xs text-sidebar-foreground/60 capitalize">{profile?.role}</p>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" className="w-full justify-start rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={handleSignOut}>
-            <LogOut className="mr-2 h-4 w-4" />
-            {isDemo ? "Exit Demo" : "Sign Out"}
-          </Button>
-          </div>
-        </div>
-      </aside>
+      <DashboardSidebar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        roleSections={roleSections}
+        openSections={openSections}
+        toggleSection={toggleSection}
+        isDemo={isDemo}
+        isAdmin={isAdmin}
+        isLecturerEquivalent={isLecturerEquivalent}
+        profile={profile}
+        handleSignOut={() => {
+          void handleSignOut();
+        }}
+        isLinkActive={isLinkActive}
+      />
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-xl lg:px-8">
           <Button variant="ghost" size="icon" className="rounded-xl lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              {shellContext.workspaceLabel}
-            </p>
-            <h1 className="truncate font-display text-xl font-semibold tracking-tight">
-              {activeLink?.label || "Dashboard"}
-            </h1>
-            <p className="mt-0.5 hidden max-w-2xl truncate text-xs text-muted-foreground md:block">
-              {shellContext.workspaceHint}
-            </p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            {isDemo && (
-              <Badge variant="secondary" className="text-xs">
-                Demo Mode
-              </Badge>
-            )}
-            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
-              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative rounded-xl"
-              aria-label="Open notifications"
-              onClick={() => setShowNotifications(!showNotifications)}
-            >
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
-            </Button>
-            {showNotifications && (
-              <div className="absolute right-4 top-16 z-50 w-80 rounded-2xl border bg-card shadow-xl">
-                <div className="border-b p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">Notifications</p>
-                    {unreadCount > 0 && <Badge variant="secondary">{unreadCount}</Badge>}
-                  </div>
-                </div>
-                {notifications.length === 0 ? (
-                  <p className="p-4 text-xs text-muted-foreground text-center">No new notifications</p>
-                ) : (
-                  <div className="max-h-80 overflow-y-auto p-2">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={cn(
-                          "rounded-xl text-left text-xs",
-                          notification.read ? "opacity-75" : "bg-muted/25",
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => void openNotification(notification)}
-                          className="block w-full rounded-xl p-3 text-left text-xs hover:bg-muted/40"
-                        >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            {!notification.read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                            <span className="truncate font-medium">{notification.subject}</span>
-                          </div>
-                          <span className="text-[10px] text-muted-foreground">
-                            {safeFormatDate(notification.createdAt, "MMM d, HH:mm")}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {getNotificationCategoryLabel(notification.category)}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 text-muted-foreground">{notification.recipientName}</p>
-                        <p className="mt-1 line-clamp-2 text-muted-foreground">{notification.body}</p>
-                        {isStudentRole(profile?.role) && getStudentNotificationPreviewHint(notification) && (
-                          <p className="mt-2 text-[11px] font-medium text-foreground/80">
-                            {getStudentNotificationPreviewHint(notification)}
-                          </p>
-                        )}
-                        {!isStudentRole(profile?.role) && getLecturerWorkflowNotificationPreviewHint({
-                          notification,
-                          notifications,
-                        }) && (
-                          <p className="mt-2 text-[11px] font-medium text-foreground/80">
-                            {getLecturerWorkflowNotificationPreviewHint({
-                              notification,
-                              notifications,
-                            })}
-                          </p>
-                        )}
-                        </button>
-                        <div className="flex justify-end px-3 pb-3">
-                          <button
-                            type="button"
-                            onClick={(event) => void handleClearNotification(event, notification)}
-                            className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                          >
-                            Clear
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <DashboardHeader
+            activeLabel={activeLink?.label || "Dashboard"}
+            workspaceLabel={shellContext.workspaceLabel}
+            workspaceHint={shellContext.workspaceHint}
+            isDemo={isDemo}
+            darkMode={darkMode}
+            setDarkMode={setDarkMode}
+            unreadCount={unreadCount}
+            showNotifications={showNotifications}
+            setShowNotifications={setShowNotifications}
+          />
+          {showNotifications && (
+            <NotificationDropdown
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isStudent={isStudentRole(profile?.role)}
+              onOpenNotification={(notification) => {
+                void openNotification(notification);
+              }}
+              onClearNotification={(event, notification) => {
+                void handleClearNotification(event, notification);
+              }}
+            />
+          )}
         </header>
         <main className="flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">{children}</div>

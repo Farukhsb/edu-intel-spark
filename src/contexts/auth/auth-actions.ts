@@ -12,14 +12,14 @@ export const signUpWithPassword = async ({
   fullName,
   role,
   cohortId,
-  departmentId,
+  departmentName,
 }: {
   email: string;
   password: string;
   fullName: string;
   role: PublicSignupRole;
   cohortId?: string;
-  departmentId?: string;
+  departmentName?: string;
 }) => {
   if (password.length < 8) throw new Error("Password must be at least 8 characters");
 
@@ -31,7 +31,7 @@ export const signUpWithPassword = async ({
         full_name: fullName,
         role,
         cohort_id: role === "student" ? (cohortId || null) : null,
-        ...toDepartmentColumns(departmentId),
+        ...toDepartmentColumns(departmentName),
       },
     },
   });
@@ -47,7 +47,7 @@ export const signUpWithPassword = async ({
         role,
         avatar_url: null,
         cohort_id: role === "student" ? (cohortId || null) : null,
-        ...toDepartmentColumns(departmentId),
+        ...toDepartmentColumns(departmentName),
         must_change_password: false,
       }
     : null;
@@ -65,6 +65,37 @@ export const signInWithPassword = async (email: string, password: string) => {
 
 export const signOutAuthSession = async () => {
   await supabase.auth.signOut();
+};
+
+export const updateUserProfile = async ({
+  userId,
+  fullName,
+  departmentName,
+  cohortId,
+  role,
+}: {
+  userId: string;
+  fullName: string;
+  departmentName: string | null;
+  cohortId?: string | null;
+  role: AppRole;
+}) => {
+  const trimmedName = fullName.trim();
+
+  if (!trimmedName) {
+    throw new Error("Name cannot be empty.");
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      full_name: trimmedName,
+      ...toDepartmentColumns(departmentName),
+      cohort_id: role === "student" ? cohortId || null : null,
+    })
+    .eq("id", userId);
+
+  if (error) throw error;
 };
 
 export const clearStoredE2EAuth = () => {

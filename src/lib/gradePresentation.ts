@@ -1,5 +1,11 @@
 export type GradeTone = "success" | "primary" | "destructive";
 
+export const clampPercentage = (score: number | null | undefined, maxScore: number | null | undefined) => {
+  if (score == null || maxScore == null || maxScore <= 0) return 0;
+  const percent = Math.round((score / maxScore) * 100);
+  return Math.min(100, Math.max(0, percent));
+};
+
 export const getGradeTone = (score: number, maxScore = 100): GradeTone => {
   const ratio = score / Math.max(maxScore, 1);
   if (ratio >= 0.7) return "success";

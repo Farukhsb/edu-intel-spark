@@ -4,6 +4,23 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+export type DashboardSignalType = "live" | "demo" | "inferred" | "placeholder";
+
+export const DashboardSignalBadge = ({
+  type,
+}: {
+  type: DashboardSignalType;
+}) => {
+  const labelMap: Record<DashboardSignalType, string> = {
+    live: "Live data",
+    demo: "Demo data",
+    inferred: "Inferred signal",
+    placeholder: "Not yet measured",
+  };
+
+  return <Badge variant="outline">{labelMap[type]}</Badge>;
+};
+
 export const DashboardLoadingState = ({
   className,
   testId,
@@ -60,9 +77,7 @@ export const DashboardErrorState = ({
 export const DashboardDemoBanner = ({ label }: { label: string }) => (
   <Card className="border-warning bg-warning/5">
     <CardContent className="flex items-center gap-2 p-3">
-      <Badge variant="outline" className="border-warning text-warning">
-        Demo
-      </Badge>
+      <DashboardSignalBadge type="demo" />
       <span className="text-sm text-muted-foreground">{label}</span>
     </CardContent>
   </Card>
@@ -71,9 +86,7 @@ export const DashboardDemoBanner = ({ label }: { label: string }) => (
 export const DashboardLiveBanner = ({ label }: { label: string }) => (
   <Card className="border-success/30 bg-success/5">
     <CardContent className="flex items-center gap-2 p-3">
-      <Badge variant="outline" className="border-success text-success">
-        Live
-      </Badge>
+      <DashboardSignalBadge type="live" />
       <span className="text-sm text-muted-foreground">{label}</span>
     </CardContent>
   </Card>

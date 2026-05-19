@@ -528,6 +528,64 @@ export type Database = {
           },
         ]
       }
+      grading_error_events: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          error_code: string
+          error_message: string | null
+          id: string
+          provider: string | null
+          safe_error_category: string
+          submission_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          error_code: string
+          error_message?: string | null
+          id?: string
+          provider?: string | null
+          safe_error_category?: string
+          submission_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          error_code?: string
+          error_message?: string | null
+          id?: string
+          provider?: string | null
+          safe_error_category?: string
+          submission_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grading_error_events_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grading_error_events_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grading_error_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       improvement_plan_progress: {
         Row: {
           completed: boolean
@@ -739,7 +797,9 @@ export type Database = {
           avatar_url: string | null
           cohort_id: string | null
           created_at: string
+          // Canonical application field.
           department_name: string | null
+          // Temporary compatibility column for legacy rows and policies.
           department_id: string | null
           email: string | null
           full_name: string | null
@@ -752,7 +812,9 @@ export type Database = {
           avatar_url?: string | null
           cohort_id?: string | null
           created_at?: string
+          // Canonical application field.
           department_name?: string | null
+          // Temporary compatibility column for legacy rows and policies.
           department_id?: string | null
           email?: string | null
           full_name?: string | null
@@ -765,7 +827,9 @@ export type Database = {
           avatar_url?: string | null
           cohort_id?: string | null
           created_at?: string
+          // Canonical application field.
           department_name?: string | null
+          // Temporary compatibility column for legacy rows and policies.
           department_id?: string | null
           email?: string | null
           full_name?: string | null
@@ -991,6 +1055,17 @@ export type Database = {
           updated_role: string
           user_id: string
         }[]
+      }
+      admin_update_user_profile: {
+        Args: {
+          target_user_id: string
+          new_full_name: string
+          new_role: Database["public"]["Enums"]["app_role"]
+          new_department_name: string | null
+          new_cohort_id: string | null
+          new_must_change_password: boolean
+        }
+        Returns: undefined
       }
         apply_recommendation_action: {
           Args: {

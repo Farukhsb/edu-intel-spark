@@ -19,6 +19,7 @@ import {
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
+  DashboardLiveBanner,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 
@@ -154,8 +155,10 @@ const InstitutionalInsights = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo && (
+      {isDemo ? (
         <DashboardDemoBanner label="Viewing demo institutional data" />
+      ) : (
+        <DashboardLiveBanner label="Viewing live institutional reporting data derived from assignment, submission, and grading records." />
       )}
 
       <div className="flex items-center justify-end">

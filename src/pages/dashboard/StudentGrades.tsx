@@ -5,12 +5,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import { toast } from "sonner";
 import { safeToLocaleDate } from "@/lib/date";
 import { log } from "@/lib/logger";
 import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
 import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
 import { getFirstName } from "@/lib/formatters";
-import { getGradeBadgeVariant, getGradeTone } from "@/lib/gradePresentation";
+import { clampPercentage, getGradeBadgeVariant, getGradeTone } from "@/lib/gradePresentation";
 import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
@@ -39,6 +40,24 @@ interface StudentGrade {
 
 const PASS_MARK_PERCENT = 40;
 
+export const calculateGradeStats = (scores: number[]) => {
+  if (scores.length === 0) {
+    return {
+      avg: 0,
+      count: 0,
+      highest: 0,
+      lowest: 0,
+    };
+  }
+
+  return {
+    avg: Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10,
+    count: scores.length,
+    highest: Math.max(...scores),
+    lowest: Math.min(...scores),
+  };
+};
+
 const getBreakdownInsights = (
   breakdown: Array<{
     criterion: string;
@@ -57,7 +76,7 @@ const getBreakdownInsights = (
 
   const normalized = breakdown.map((item) => ({
     criterion: item.criterion,
-    percent: Math.round((item.score / Math.max(item.max_score, 1)) * 100),
+    percent: clampPercentage(item.score, item.max_score),
   }));
 
   return {
@@ -131,12 +150,7 @@ const StudentGrades = () => {
     if (isDemo) {
       setLoadError(null);
       const scores = DEMO_GRADES.filter((grade) => grade.score != null).map((grade) => grade.score!);
-      setStats({
-        avg: Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10,
-        count: scores.length,
-        highest: Math.max(...scores),
-        lowest: Math.min(...scores),
-      });
+      setStats(calculateGradeStats(scores));
       return;
     }
     if (!user) {
@@ -159,7 +173,7 @@ const StudentGrades = () => {
             assignmentTitle: row.assignment_title || "Assignment title unavailable",
             moduleCode: row.module_code || null,
             score: isReleased ? (row.final_score ?? row.ai_score ?? null) : null,
-            maxScore: row.max_score || 100,
+            maxScore: row.max_score ?? 100,
             feedback: isReleased ? (row.final_feedback ?? row.ai_feedback ?? null) : null,
             status: row.submission_status,
             submittedAt: row.submitted_at,
@@ -171,16 +185,7 @@ const StudentGrades = () => {
         setGrades(studentGrades);
 
         const releasedScores = studentGrades.filter((grade) => grade.score != null).map((grade) => grade.score!);
-        if (releasedScores.length > 0) {
-          setStats({
-            avg: Math.round(
-              (releasedScores.reduce((total, score) => total + score, 0) / releasedScores.length) * 10,
-            ) / 10,
-            count: releasedScores.length,
-            highest: Math.max(...releasedScores),
-            lowest: Math.min(...releasedScores),
-          });
-        }
+        setStats(calculateGradeStats(releasedScores));
       } catch (err) {
         log.error("Failed to fetch student grades", err, {
           userId: user.id,
@@ -312,59 +317,67 @@ const StudentGrades = () => {
           {grades.map((grade) => (
             <Card key={grade.id}>
               <CardContent className="space-y-3 p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{grade.assignmentTitle}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {grade.moduleCode && `${grade.moduleCode} - `}
-                      {safeToLocaleDate(grade.submittedAt)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {grade.score != null ? (
-                      <>
-                        <span className="text-xl font-bold font-display">
-                          {grade.score}/{grade.maxScore}
-                        </span>
-                        <Badge
-                          variant={getGradeBadgeVariant(grade.score, grade.maxScore)}
-                        >
-                          {Math.round((grade.score / grade.maxScore) * 100)}%
-                        </Badge>
-                        <Badge variant="outline">Released</Badge>
-                      </>
-                    ) : (
-                      <Badge variant="outline" className="capitalize">
-                        {grade.status.replace(/_/g, " ")}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                {grade.score != null && (
-                  <>
-                    <div className="rounded-xl border bg-background p-4">
-                      <p className="text-base font-semibold">{getScoreSummary(grade.score, grade.maxScore).headline}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {getScoreSummary(grade.score, grade.maxScore).context}
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-foreground">
-                        {getScoreFollowUp(grade.score, grade.maxScore)}
-                      </p>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full ${
-                            getGradeTone(grade.score, grade.maxScore) === "success"
-                              ? "bg-success"
-                              : getGradeTone(grade.score, grade.maxScore) === "primary"
-                                ? "bg-primary"
-                                : "bg-destructive"
-                          }`}
-                          style={{ width: `${(grade.score / grade.maxScore) * 100}%` }}
-                        />
+                {(() => {
+                  const gradePercent = grade.score != null ? clampPercentage(grade.score, grade.maxScore) : 0;
+
+                  return (
+                    <>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{grade.assignmentTitle}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {grade.moduleCode && `${grade.moduleCode} - `}
+                            {safeToLocaleDate(grade.submittedAt)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {grade.score != null ? (
+                            <>
+                              <span className="text-xl font-bold font-display">
+                                {grade.score}/{grade.maxScore}
+                              </span>
+                              <Badge
+                                variant={getGradeBadgeVariant(grade.score, grade.maxScore)}
+                              >
+                                {gradePercent}%
+                              </Badge>
+                              <Badge variant="outline">Released</Badge>
+                            </>
+                          ) : (
+                            <Badge variant="outline" className="capitalize">
+                              {grade.status.replace(/_/g, " ")}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </>
-                )}
+                      {grade.score != null && (
+                        <>
+                          <div className="rounded-xl border bg-background p-4">
+                            <p className="text-base font-semibold">{getScoreSummary(grade.score, grade.maxScore).headline}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {getScoreSummary(grade.score, grade.maxScore).context}
+                            </p>
+                            <p className="mt-2 text-sm font-medium text-foreground">
+                              {getScoreFollowUp(grade.score, grade.maxScore)}
+                            </p>
+                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={`h-full rounded-full ${
+                                  getGradeTone(grade.score, grade.maxScore) === "success"
+                                    ? "bg-success"
+                                    : getGradeTone(grade.score, grade.maxScore) === "primary"
+                                      ? "bg-primary"
+                                      : "bg-destructive"
+                                }`}
+                                style={{ width: `${gradePercent}%` }}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span>Submission status: {grade.status.replace(/_/g, " ")}</span>
                   {grade.score != null && <span>Feedback visible to student</span>}
@@ -377,7 +390,7 @@ const StudentGrades = () => {
                       </p>
                       <div className="space-y-2">
                         {grade.breakdown.map((breakdownItem, index) => {
-                          const percent = Math.round((breakdownItem.score / Math.max(breakdownItem.max_score, 1)) * 100);
+                          const percent = clampPercentage(breakdownItem.score, breakdownItem.max_score);
                           const commentary = getCriterionCommentary(breakdownItem);
                           return (
                             <div key={index} className="space-y-2 rounded-lg border bg-background p-3">
@@ -457,9 +470,18 @@ const StudentGrades = () => {
                         log.error("Failed to create student submission download URL", error, {
                           submissionId: grade.id,
                         });
+                        toast.error("Download unavailable", {
+                          description: "Your submission could not be opened right now. Please try again later.",
+                        });
                         return;
                       }
-                      if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                      if (data?.signedUrl) {
+                        window.open(data.signedUrl, "_blank");
+                        return;
+                      }
+                      toast.error("Download unavailable", {
+                        description: "The file link could not be created.",
+                      });
                     }}
                   >
                     <Download className="mr-1.5 h-3.5 w-3.5" /> Download Submission

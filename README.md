@@ -291,27 +291,43 @@ GradeAI is a working full-stack prototype with hardened core workflows. It is no
 
 The backend is now running against a clean Supabase project with RLS, API grants, storage, Edge Functions, and AI secrets reconfigured under the controlled project setup.
 
-Working well:
+### Implemented and working in core workflow
 
-- core assignment and submission workflow
-- AI-assisted grading pipeline
-- educator review, approval, and release flow
-- student-facing released feedback
-- moderation workflow direction
-- citation-aware integrity review direction
-- provider-abstracted integrity pipeline with internal text similarity and private-runner MOSS support
+- assignment creation
+- student submission
+- AI-assisted grading through Edge Functions
+- lecturer review, approval, and release flow
+- student view of released feedback
+- role-based dashboard routing
 - cohort analytics and early support signals
 - GitHub Actions CI, tests, and build checks
 - backend hardening around CORS, lint, service-role usage, and secrets handling
-- production-readiness documentation around security, testing, rollout, monitoring, and education data governance
 
-Still improving:
+### Implemented but configuration-dependent
 
-- broader live scenario coverage beyond the role, load, and integrity checks already completed
-- more live verification of less common role boundaries and RLS edge cases
-- stricter TypeScript coverage
+- email workflow notifications
+- PostHog analytics
+- Sentry monitoring
+- provider-abstracted integrity pipeline with internal text similarity and private-runner MOSS support
+- external AI provider behaviour
+- deployment-facing security, testing, rollout, monitoring, and education data governance documentation
+
+### Demo/synthetic evidence
+
+- demo lecturer workspace
+- demo student results
+- synthetic integrity examples
+- sample moderation cases
+- reusable synthetic assignment sets for reviewer walkthroughs
+
+### Still improving
+
+- editable profile settings
+- moderation workflow breadth and less common live scenario coverage
+- deeper grading error telemetry and longer-window operational monitoring
+- wider live role-boundary and RLS edge-case testing
 - continued extraction of large page logic into smaller domain services
-- deeper operational history, alerting, and long-window audit visibility
+- stricter TypeScript coverage
 
 ## Recent Hardening and Improvements
 

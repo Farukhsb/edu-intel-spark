@@ -14,6 +14,7 @@ export interface OperationalHealthItem {
   statusLabel: string;
   tone: "healthy" | "warning" | "placeholder";
   detail: string;
+  signalType: "live" | "inferred" | "placeholder";
 }
 
 export interface OperationalFailureCard {
@@ -22,6 +23,7 @@ export interface OperationalFailureCard {
   tone: "healthy" | "warning" | "placeholder";
   detail: string;
   action: string;
+  signalType: "live" | "inferred" | "placeholder";
 }
 
 export interface OperationalMonitoringSnapshot {
@@ -71,9 +73,10 @@ export const buildOperationalMonitoringSnapshot = ({
 
   const healthItems: OperationalHealthItem[] = [
     {
-      label: "AI grading service",
-      statusLabel: latestGradeRun ? (staleGradingRun ? "Signal is stale" : "Observed activity") : "No direct signal",
+      label: "AI grading workflow signal",
+      statusLabel: latestGradeRun ? (staleGradingRun ? "Signal is stale" : "Recent workflow activity") : "No provider telemetry",
       tone: latestGradeRun ? (staleGradingRun ? "warning" : "healthy") : "placeholder",
+      signalType: latestGradeRun ? "inferred" : "placeholder",
       detail: latestGradeRun
         ? staleGradingRun
           ? "A grade row exists, but the latest visible grading activity is more than 24 hours old. Treat this as a stale signal, not a confirmed outage."
@@ -81,33 +84,37 @@ export const buildOperationalMonitoringSnapshot = ({
         : "Admin can see platform workflow, but direct grading-run telemetry is not yet exposed here.",
     },
     {
-      label: "Integrity checker",
+      label: "Integrity workflow signal",
       statusLabel: moderationRows.length > 0 ? "Observed cases" : "No recent cases",
       tone: moderationRows.length > 0 ? (escalatedIntegrityCount > 0 ? "warning" : "healthy") : "placeholder",
+      signalType: moderationRows.length > 0 ? "inferred" : "placeholder",
       detail:
         moderationRows.length > 0
           ? `${escalatedIntegrityCount} elevated integrity case(s) are currently visible to admin. This reflects observed case data, not a provider heartbeat.`
           : "No integrity or moderation case is currently visible in this snapshot, so provider health cannot be inferred from this page.",
     },
     {
-      label: "Supabase connection",
+      label: "Dashboard database read",
       statusLabel: "Read snapshot succeeded",
       tone: "healthy",
+      signalType: "live",
       detail:
         "Profiles, assignments, submissions, and moderation tables loaded for this page refresh. This confirms dashboard reads, not full database health.",
     },
     {
-      label: "Email notifications",
-      statusLabel: emailNotificationsVisible ? "Records visible" : "No direct signal",
+      label: "Notification records",
+      statusLabel: emailNotificationsVisible ? "Records visible" : "No provider telemetry",
       tone: emailNotificationsVisible ? "healthy" : "placeholder",
+      signalType: emailNotificationsVisible ? "live" : "placeholder",
       detail: emailNotificationsVisible
         ? `${emailNotificationsCount} recent notification record(s) are visible from the communication log. This confirms records exist, not that delivery is enabled.`
         : "Notification enablement and delivery health are not yet directly observable from the admin dashboard.",
     },
     {
-      label: "Last successful grading run",
+      label: "Latest visible grading activity",
       statusLabel: latestGradeRun ? "Recorded" : "Not exposed",
       tone: latestGradeRun ? (staleGradingRun ? "warning" : "healthy") : "placeholder",
+      signalType: latestGradeRun ? "inferred" : "placeholder",
       detail: latestGradeRun
         ? staleGradingRun
           ? "A dedicated grading-run telemetry record would make stale grading signals easier to classify with confidence."
@@ -115,35 +122,38 @@ export const buildOperationalMonitoringSnapshot = ({
         : "A dedicated grading-run telemetry record would make this signal more reliable.",
     },
     {
-      label: "Failed grading attempts today",
-      statusLabel: aiGradingFailures == null ? "Pending" : String(aiGradingFailures),
+      label: "Visible grading failures today",
+      statusLabel: aiGradingFailures == null ? "Pending telemetry" : String(aiGradingFailures),
       tone: aiGradingFailures == null ? "placeholder" : aiGradingFailures > 0 ? "warning" : "healthy",
+      signalType: aiGradingFailures == null ? "placeholder" : "live",
       detail:
         aiGradingFailures == null
-          ? "The admin audit feed is not exposing a reliable grading-failure count in this snapshot."
+          ? "Grading error telemetry is not readable in this snapshot, so a direct failure count is unavailable."
           : aiGradingFailures > 0
-            ? "At least one workflow audit event suggests a grading failure today."
-            : "No grading failures were detected in the visible workflow audit entries today.",
+            ? `${aiGradingFailures} grading failure event(s) were recorded today.`
+            : "No grading failure events were recorded today.",
     },
   ];
 
   const failureCards: OperationalFailureCard[] = [
     {
       title: "Grading failures today",
-      value: aiGradingFailures == null ? "Pending" : String(aiGradingFailures),
+      value: aiGradingFailures == null ? "Pending telemetry" : String(aiGradingFailures),
       tone: aiGradingFailures == null ? "placeholder" : aiGradingFailures > 0 ? "warning" : "healthy",
+      signalType: aiGradingFailures == null ? "placeholder" : "live",
       detail:
         aiGradingFailures == null
-          ? "Workflow audit events are not yet exposing a reliable failure count to admin."
+          ? "Direct grading error telemetry could not be read for this admin snapshot."
           : aiGradingFailures > 0
-            ? "Visible grading failures need triage before more lecturer retries stack up."
-            : "No grading failures were detected in the currently visible audit window.",
-      action: "Check workflow audit events and the grading function logs.",
+            ? "Recorded grading failures need triage before more lecturer retries stack up."
+            : "No grading failure events were recorded in the current daily window.",
+      action: "Check grading error events and the grade-submission function logs.",
     },
     {
       title: "Release backlog",
       value: String(releaseBacklogCount),
       tone: releaseBacklogCount > 0 ? "warning" : "healthy",
+      signalType: "live",
       detail:
         releaseBacklogCount > 0
           ? `${releaseBacklogCount} approved submission(s) have not yet been released to students.`
@@ -154,6 +164,7 @@ export const buildOperationalMonitoringSnapshot = ({
       title: "Overdue moderation",
       value: String(overdueModerationCount),
       tone: overdueModerationCount > 0 ? "warning" : "healthy",
+      signalType: "live",
       detail:
         overdueModerationCount > 0
           ? `${overdueModerationCount} open moderation case(s) have been waiting for more than seven days.`
@@ -164,6 +175,7 @@ export const buildOperationalMonitoringSnapshot = ({
       title: "Integrity escalations",
       value: String(escalatedIntegrityCount),
       tone: escalatedIntegrityCount > 0 ? "warning" : "healthy",
+      signalType: "live",
       detail:
         escalatedIntegrityCount > 0
           ? `${escalatedIntegrityCount} moderation case(s) are escalated or already above the high-risk integrity threshold.`
