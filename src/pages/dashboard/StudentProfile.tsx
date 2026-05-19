@@ -104,7 +104,7 @@ const StudentProfile = () => {
   const [student, setStudent] = useState<StudentInsightData | null>(null);
   const [interventions, setInterventions] = useState<InterventionEntry[]>([]);
   const [interventionType, setInterventionType] = useState<ManualInterventionType>("email");
-  const [interventionStatus, setInterventionStatus] = useState<ManualInterventionStatus>("ongoing");
+  const [interventionStatus, setInterventionStatus] = useState<ManualInterventionStatus>("in_progress");
   const [interventionNote, setInterventionNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const resolvedStudentRecordId =
@@ -281,7 +281,7 @@ const StudentProfile = () => {
       setInterventionNote("");
       setFollowUpDate("");
       setInterventionType("email");
-      setInterventionStatus("ongoing");
+      setInterventionStatus("in_progress");
       return;
     }
 
@@ -316,7 +316,7 @@ const StudentProfile = () => {
     setInterventionNote("");
     setFollowUpDate("");
     setInterventionType("email");
-    setInterventionStatus("ongoing");
+    setInterventionStatus("in_progress");
     toast.success("Intervention logged");
 
     const notificationResult = await dispatchCommunicationMessage({
@@ -471,7 +471,9 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
     );
   }
 
-  const openInterventions = interventions.filter((entry) => entry.status === "ongoing").length;
+  const openInterventions = interventions.filter(
+    (entry) => entry.status === "planned" || entry.status === "in_progress",
+  ).length;
   const overdueInterventions = interventions.filter((entry) => isInterventionOverdue(entry)).length;
   const interventionReadiness = getStudentInterventionReadiness({
     riskLevel: student.riskLevel,

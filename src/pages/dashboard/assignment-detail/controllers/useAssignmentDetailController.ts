@@ -39,6 +39,8 @@ export const useAssignmentDetailController = ({
 }: AssignmentDetailControllerArgs): AssignmentDetailControllerResult => {
   const location = useLocation();
   const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const backHref = searchParams.get("from") === "overview" ? "/dashboard" : "/dashboard/assignments";
 
   const {
     assignment,
@@ -126,6 +128,7 @@ export const useAssignmentDetailController = ({
     screenProps: buildAssignmentDetailScreenProps({
       assignment,
       automatedActions,
+      backHref,
       currentUserId,
       demoAssignmentSet,
       fileActions: studentWorkflow,

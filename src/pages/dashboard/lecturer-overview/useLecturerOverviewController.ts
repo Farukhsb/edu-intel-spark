@@ -26,6 +26,7 @@ const EMPTY_STATS: LecturerOverviewStats = {
   gradedCount: 0,
   pendingCount: 0,
   avgScore: null,
+  avgScoreScale: null,
   activeStudents: 0,
   assignmentCount: 0,
   onTarget: 0,
@@ -37,6 +38,7 @@ const DEMO_STATS: LecturerOverviewStats = {
   gradedCount: 35,
   pendingCount: 7,
   avgScore: 64.3,
+  avgScoreScale: 100,
   activeStudents: 28,
   assignmentCount: 5,
   onTarget: 22,
@@ -68,7 +70,7 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     score: 55,
     max_score: 100,
     workflowHref: "/dashboard/assignments/demo-assignment-2?source=notification&focus=ai-results",
-    workflowLabel: "Continue workflow",
+    workflowLabel: "Review submission",
   },
   {
     id: "d3",
@@ -81,34 +83,34 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     score: null,
     max_score: 100,
     workflowHref: "/dashboard/assignments/demo-assignment-3?source=notification&focus=submission-review",
-    workflowLabel: "Open review queue",
+    workflowLabel: "Review submission",
   },
 ];
 
 const EMPTY_PIPELINE: LecturerOverviewPipelineStage[] = [
-  { label: "Submitted", count: 0, detail: "Newly received work waiting to move into marking." },
-  { label: "AI Graded", count: 0, detail: "AI output is ready for lecturer review." },
-  { label: "Under Review", count: 0, detail: "Lecturer, moderation, or approval work is still in progress." },
-  { label: "Released", count: 0, detail: "Student-visible results that have completed the workflow." },
+  { label: "Submitted", count: 0, detail: "Waiting to enter marking." },
+  { label: "AI Graded", count: 0, detail: "Ready for lecturer review." },
+  { label: "Under Review", count: 0, detail: "Review, moderation, or approval in progress." },
+  { label: "Released", count: 0, detail: "Visible to students." },
 ];
 
 const DEMO_PIPELINE: LecturerOverviewPipelineStage[] = [
-  { label: "Submitted", count: 0, detail: "Newly received work waiting to move into marking." },
-  { label: "AI Graded", count: 1, detail: "AI output is ready for lecturer review." },
-  { label: "Under Review", count: 1, detail: "Lecturer, moderation, or approval work is still in progress." },
-  { label: "Released", count: 1, detail: "Student-visible results that have completed the workflow." },
+  { label: "Submitted", count: 0, detail: "Waiting to enter marking." },
+  { label: "AI Graded", count: 1, detail: "Ready for lecturer review." },
+  { label: "Under Review", count: 1, detail: "Review, moderation, or approval in progress." },
+  { label: "Released", count: 1, detail: "Visible to students." },
 ];
 
 const buildPipelineStages = (statuses: string[]): LecturerOverviewPipelineStage[] => [
   {
     label: "Submitted",
     count: statuses.filter((status) => ["submitted", "ai_grading"].includes(status)).length,
-    detail: "Newly received work waiting to move into marking.",
+    detail: "Waiting to enter marking.",
   },
   {
     label: "AI Graded",
     count: statuses.filter((status) => status === "ai_graded").length,
-    detail: "AI output is ready for lecturer review.",
+    detail: "Ready for lecturer review.",
   },
   {
     label: "Under Review",
@@ -123,26 +125,48 @@ const buildPipelineStages = (statuses: string[]): LecturerOverviewPipelineStage[
         "approved",
       ].includes(status),
     ).length,
-    detail: "Lecturer, moderation, or approval work is still in progress.",
+    detail: "Review, moderation, or approval in progress.",
   },
   {
     label: "Released",
     count: statuses.filter((status) => status === "released").length,
-    detail: "Student-visible results that have completed the workflow.",
+    detail: "Visible to students.",
   },
 ];
 
-const getOverviewWorkflowLabel = (status: string) => {
-  if (["submitted", "ai_grading"].includes(status)) {
+const getOverviewQueueActionLabel = (status: string) => {
+  if (
+    [
+      "submitted",
+      "ai_grading",
+      "ai_graded",
+      "first_review",
+      "moderation_pending",
+      "moderation_in_progress",
+      "escalated",
+      "under_review",
+    ].includes(status)
+  ) {
     return "Open review queue";
-  }
-
-  if (["under_review", "first_review"].includes(status)) {
-    return "Review submission";
   }
 
   return "Continue workflow";
 };
+
+const getOverviewSubmissionActionLabel = (status: string) => {
+  if (["submitted", "ai_grading", "ai_graded", "first_review"].includes(status)) {
+    return "Review submission";
+  }
+
+  if (["under_review", "moderation_pending", "moderation_in_progress", "escalated"].includes(status)) {
+    return "Continue review";
+  }
+
+  return "Continue workflow";
+};
+
+const appendOverviewReturnContext = (href: string) =>
+  href.includes("?") ? `${href}&from=overview` : `${href}?from=overview`;
 
 export const formatStatusLabel = (status: string) => {
   switch (status) {
@@ -240,13 +264,48 @@ export const useLecturerOverviewController = () => {
 
       const gradedSubs = allSubs.filter((submission) => isGradedWorkflowStatus(submission.status));
       const pendingSubs = allSubs.filter((submission) => isReviewQueueStatus(submission.status));
-      const scores = allGrades
-        .map((grade) => grade.final_score ?? grade.ai_score)
-        .filter((score): score is number => score != null);
-      const avgScore =
-        scores.length > 0
-          ? Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10
-          : null;
+      const scoredEntries = allSubs
+        .map((submission) => {
+          const grade = gradeMap[submission.id];
+          const score = grade?.final_score ?? grade?.ai_score;
+          const maxScore = assignmentMap[submission.assignment_id]?.max_score ?? null;
+
+          if (score == null || maxScore == null || maxScore <= 0) {
+            return null;
+          }
+
+          return {
+            score,
+            maxScore,
+          };
+        })
+        .filter((entry): entry is { score: number; maxScore: number } => entry != null);
+
+      const { avgScore, avgScoreScale } =
+        scoredEntries.length > 0
+          ? (() => {
+              const uniqueScales = new Set(scoredEntries.map((entry) => entry.maxScore));
+              if (uniqueScales.size === 1) {
+                return {
+                  avgScore:
+                    Math.round(
+                      (scoredEntries.reduce((total, entry) => total + entry.score, 0) / scoredEntries.length) * 10,
+                    ) / 10,
+                  avgScoreScale: scoredEntries[0].maxScore,
+                };
+              }
+
+              return {
+                avgScore:
+                  Math.round(
+                    (scoredEntries.reduce((total, entry) => total + (entry.score / entry.maxScore) * 100, 0) /
+                      scoredEntries.length) *
+                      10,
+                  ) / 10,
+                avgScoreScale: 100,
+              };
+            })()
+          : { avgScore: null, avgScoreScale: null };
 
       const studentScores: Record<string, number[]> = {};
       allSubs.forEach((submission) => {
@@ -281,6 +340,7 @@ export const useLecturerOverviewController = () => {
         gradedCount: gradedSubs.length,
         pendingCount: pendingSubs.length,
         avgScore,
+        avgScoreScale,
         activeStudents: uniqueStudents.size,
         assignmentCount: assignments.length,
         onTarget,
@@ -307,8 +367,8 @@ export const useLecturerOverviewController = () => {
           assignment_title: assignment?.title || "Unknown",
           score: grade?.final_score ?? grade?.ai_score ?? null,
           max_score: assignment?.max_score || 100,
-          workflowHref: workflowTarget.href,
-          workflowLabel: getOverviewWorkflowLabel(submission.status),
+          workflowHref: appendOverviewReturnContext(workflowTarget.href),
+          workflowLabel: getOverviewSubmissionActionLabel(submission.status),
         };
       });
       setRecent(recentSubs);
@@ -326,19 +386,52 @@ export const useLecturerOverviewController = () => {
     if (isDemo) return;
     void fetchDashboard();
   }, [isDemo]);
-  const leadPendingAssignmentTitle =
-    recent.find((submission) =>
-      [
-        "submitted",
-        "ai_grading",
-        "ai_graded",
-        "first_review",
-        "moderation_pending",
-        "moderation_in_progress",
-        "escalated",
-        "under_review",
-      ].includes(submission.status),
-    )?.assignment_title ?? null;
+  const pendingRecentSubmissions = useMemo(
+    () =>
+      recent.filter((submission) =>
+        [
+          "submitted",
+          "ai_grading",
+          "ai_graded",
+          "first_review",
+          "moderation_pending",
+          "moderation_in_progress",
+          "escalated",
+          "under_review",
+        ].includes(submission.status),
+      ),
+    [recent],
+  );
+
+  const leadPendingAssignment = useMemo(() => {
+    const pendingByAssignment = pendingRecentSubmissions.reduce<
+      Record<
+        string,
+        {
+          assignmentId: string;
+          title: string;
+          count: number;
+          targetHref: string;
+          targetStatus: string;
+        }
+      >
+    >((accumulator, submission) => {
+        const current = accumulator[submission.assignment_id] ?? {
+          assignmentId: submission.assignment_id,
+          title: submission.assignment_title,
+          count: 0,
+          targetHref: submission.workflowHref,
+        targetStatus: submission.status,
+      };
+      current.count += 1;
+      accumulator[submission.assignment_id] = current;
+      return accumulator;
+    }, {});
+
+    return Object.values(pendingByAssignment).sort((a, b) => b.count - a.count)[0] ?? null;
+  }, [pendingRecentSubmissions]);
+
+  const leadPendingAssignmentTitle = leadPendingAssignment?.title ?? null;
   const readiness = getLecturerOverviewReadiness({
     pendingCount: stats.pendingCount,
     atRiskCount: stats.atRisk,
@@ -359,59 +452,20 @@ export const useLecturerOverviewController = () => {
   }, [stats.pendingCount, stats.atRisk]);
 
   const primaryWorkflowTarget = useMemo<LecturerOverviewWorkflowTarget | null>(() => {
-    const pendingTarget = recent.find((submission) =>
-      [
-        "submitted",
-        "ai_grading",
-        "ai_graded",
-        "first_review",
-        "moderation_pending",
-        "moderation_in_progress",
-        "escalated",
-        "moderated",
-        "under_review",
-      ].includes(submission.status),
-    );
-
-    if (!pendingTarget) return null;
+    if (!leadPendingAssignment) return null;
 
     return {
-      href: pendingTarget.workflowHref,
-      label: getOverviewWorkflowLabel(pendingTarget.status),
+      href: leadPendingAssignment.targetHref,
+      label: getOverviewQueueActionLabel(leadPendingAssignment.targetStatus),
     };
-  }, [recent]);
+  }, [leadPendingAssignment]);
 
   const queueFocus = useMemo<LecturerOverviewQueueFocus>(() => {
     if (stats.pendingCount > 0) {
-      const pendingByAssignment = recent
-        .filter((submission) =>
-          [
-            "submitted",
-            "ai_grading",
-            "ai_graded",
-            "first_review",
-            "moderation_pending",
-            "moderation_in_progress",
-            "escalated",
-            "under_review",
-          ].includes(submission.status),
-        )
-        .reduce<Record<string, { title: string; count: number }>>((accumulator, submission) => {
-          const current = accumulator[submission.assignment_id] ?? {
-            title: submission.assignment_title,
-            count: 0,
-          };
-          current.count += 1;
-          accumulator[submission.assignment_id] = current;
-          return accumulator;
-        }, {});
-
-      const leadAssignment = Object.values(pendingByAssignment).sort((a, b) => b.count - a.count)[0];
-
       return {
-        label: leadAssignment ? leadAssignment.title : "Review queue",
-        detail: leadAssignment
-          ? `${leadAssignment.count} pending submission${leadAssignment.count === 1 ? "" : "s"} are currently stacking up here.`
+        label: leadPendingAssignment ? leadPendingAssignment.title : "Review queue",
+        detail: leadPendingAssignment
+          ? `${leadPendingAssignment.count} pending submission${leadPendingAssignment.count === 1 ? "" : "s"} are currently stacking up here.`
           : `${stats.pendingCount} submission${stats.pendingCount === 1 ? "" : "s"} are waiting in the review queue.`,
       };
     }
@@ -427,7 +481,7 @@ export const useLecturerOverviewController = () => {
       label: "Live teaching scope",
       detail: `${stats.assignmentCount} active assignment${stats.assignmentCount === 1 ? "" : "s"} and ${stats.activeStudents} active student${stats.activeStudents === 1 ? "" : "s"} are in view.`,
     };
-  }, [recent, stats.activeStudents, stats.assignmentCount, stats.atRisk, stats.pendingCount]);
+  }, [leadPendingAssignment, stats.activeStudents, stats.assignmentCount, stats.atRisk, stats.pendingCount]);
 
   return {
     profile,

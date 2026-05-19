@@ -91,7 +91,7 @@ export const AssignmentHeroCard = ({
   <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent shadow-sm">
     <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex items-start gap-4">
-        <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" onClick={onBack}>
+        <Button aria-label="Back" variant="ghost" size="icon" className="mt-0.5 shrink-0" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="space-y-2">

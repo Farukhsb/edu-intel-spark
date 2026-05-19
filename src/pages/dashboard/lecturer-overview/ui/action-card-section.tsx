@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,30 +10,14 @@ import type { LecturerOverviewQueueFocus, LecturerOverviewStats, LecturerOvervie
 
 const getAttentionNowLabel = (stats: LecturerOverviewStats, readiness: LecturerOverviewReadiness) => {
   if (stats.pendingCount > 0) {
-    return `${stats.pendingCount} submission${stats.pendingCount === 1 ? "" : "s"} need attention now`;
+    return `${stats.pendingCount} submission${stats.pendingCount === 1 ? "" : "s"} need review`;
   }
 
   if (stats.atRisk > 0) {
-    return `${stats.atRisk} student${stats.atRisk === 1 ? "" : "s"} need support attention`;
+    return `${stats.atRisk} student${stats.atRisk === 1 ? "" : "s"} need support`;
   }
 
   return readiness.postureLabel;
-};
-
-const getAttentionNowDetail = (stats: LecturerOverviewStats) => {
-  if (stats.pendingCount > 0) {
-    return "Clear the live review queue before routine marking turns into backlog.";
-  }
-
-  if (stats.atRisk > 0) {
-    return "Check below-target students early before performance pressure builds further.";
-  }
-
-  if (stats.assignmentCount > 0) {
-    return "No urgent blocker is active, but release-ready work still needs a quick scan to keep moving.";
-  }
-
-  return "Once assignments go live, this card will surface the next issue that needs action.";
 };
 
 export const LecturerOverviewActionCardSection = ({
@@ -86,7 +70,6 @@ export const LecturerOverviewActionCardSection = ({
             </div>
             <div>
               <h3 className="text-xl font-semibold font-display">{getAttentionNowLabel(stats, readiness)}</h3>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{getAttentionNowDetail(stats)}</p>
             </div>
           </div>
 
@@ -98,21 +81,21 @@ export const LecturerOverviewActionCardSection = ({
           </div>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-2">
           <div className="rounded-xl border bg-background/80 p-4">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 rounded-full bg-primary/10 p-2 text-primary">
                 <Clock3 className="h-4 w-4" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {stats.pendingCount > 0
-                    ? `${stats.pendingCount} submission${stats.pendingCount === 1 ? "" : "s"} need review`
+                    ? "Current pressure point"
                     : stats.atRisk > 0
-                      ? `${stats.atRisk} student${stats.atRisk === 1 ? "" : "s"} need support`
-                      : readiness.postureLabel}
+                      ? "Support focus"
+                      : "Teaching focus"}
                 </p>
-                <p className="text-xs text-muted-foreground">{queueFocus.detail}</p>
+                <p className="text-sm font-semibold">{queueFocus.label}</p>
               </div>
             </div>
           </div>
@@ -123,24 +106,19 @@ export const LecturerOverviewActionCardSection = ({
                 {stats.atRisk > 0 ? <AlertTriangle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold">{queueFocus.label}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {stats.pendingCount > 0
-                    ? "This is where the largest current backlog is building."
-                    : readiness.likelyChallenge}
+                    ? "Top backlog"
+                    : "Next move"}
                 </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-background/80 p-4">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-full bg-success/10 p-2 text-success">
-                <CheckCircle2 className="h-4 w-4" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">{readiness.bestNextAction}</p>
-                <p className="text-xs text-muted-foreground">Use the primary action above to jump straight into this workflow.</p>
+                {stats.pendingCount > 0 ? (
+                  <>
+                    <p className="text-sm font-semibold">{queueFocus.label}</p>
+                    <p className="text-xs text-muted-foreground">{queueFocus.detail}</p>
+                  </>
+                ) : (
+                  <p className="text-sm font-semibold">{readiness.bestNextAction}</p>
+                )}
               </div>
             </div>
           </div>

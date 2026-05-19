@@ -1,4 +1,3 @@
-import { Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,24 +18,24 @@ export const LecturerOverviewRecentSubmissionsSection = ({
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Recent Submissions</CardTitle>
-        <CardDescription>Open the next submission that needs action in your marking workflow.</CardDescription>
+        <CardTitle className="text-base">Review next</CardTitle>
+        <CardDescription>Open the next submission in the queue.</CardDescription>
       </CardHeader>
       <CardContent>
         {recent.length === 0 ? (
           <div className="rounded-lg border border-dashed p-8 text-center">
             <p className="text-sm font-medium">No submissions yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Publish an assignment or check the due dates on your active briefs. Student submissions will start appearing here as soon as work is uploaded.
+              Publish an assignment or check its due date. Student work will appear here once it is submitted.
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {recent.map((submission) => {
               return (
                 <div
                   key={submission.id}
-                  className="flex flex-col gap-3 rounded-xl border p-4 transition-colors hover:bg-muted/30 md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-2 rounded-xl border px-4 py-3 transition-colors hover:bg-muted/30 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="min-w-0 space-y-1">
                     <p className="truncate text-sm font-medium">{submission.student_name}</p>
@@ -53,11 +52,7 @@ export const LecturerOverviewRecentSubmissionsSection = ({
                       <Badge variant={submission.score >= 70 ? "default" : submission.score >= 50 ? "secondary" : "destructive"}>
                         {submission.score}/{submission.max_score}
                       </Badge>
-                    ) : (
-                      <Badge variant="outline">
-                        <Clock className="mr-1 h-3 w-3" /> Pending
-                      </Badge>
-                    )}
+                    ) : null}
                     <Button
                       size="sm"
                       variant="ghost"

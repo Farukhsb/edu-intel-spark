@@ -24,6 +24,7 @@ import type {
 
 interface BuildAssignmentDetailScreenPropsArgs {
   assignment: AssignmentDetailAssignment;
+  backHref: string;
   currentUserId: string | null;
   demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
   fileActions: ReturnType<typeof useSubmissionActions> & {
@@ -49,6 +50,7 @@ interface BuildAssignmentDetailScreenPropsArgs {
 export const buildAssignmentDetailScreenProps = ({
   assignment,
   automatedActions,
+  backHref,
   currentUserId,
   demoAssignmentSet,
   fileActions,
@@ -68,6 +70,7 @@ export const buildAssignmentDetailScreenProps = ({
   demoAssignmentSet,
   heroCardProps: buildHeroCardProps({
     assignment,
+    backHref,
     navigate,
     viewState,
   }),

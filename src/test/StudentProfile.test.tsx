@@ -199,7 +199,7 @@ const defaultInterventions = [
     type: "email",
     note: "Sent a check-in email with revision priorities.",
     followUpDate: "2026-04-27T00:00:00.000Z",
-    status: "ongoing",
+    status: "in_progress",
   },
   {
     id: "intervention-2",
@@ -386,7 +386,7 @@ describe("StudentProfile", () => {
                     intervention_type: "email",
                     note: "Immediate outreach required.",
                     follow_up_date: null,
-                    status: "ongoing",
+                    status: "in_progress",
                   },
                   error: null,
                 }),
@@ -492,8 +492,8 @@ describe("StudentProfile", () => {
 
     expect(await screen.findByText("Sent a check-in email with revision priorities.")).toBeInTheDocument();
     expect(screen.getByText("Reviewed missed coursework and agreed next steps.")).toBeInTheDocument();
-    expect(screen.getByText("ongoing")).toBeInTheDocument();
-    expect(screen.getByText("resolved")).toBeInTheDocument();
+    expect(screen.getAllByText("Ongoing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Resolved").length).toBeGreaterThan(0);
     expect(screen.getByText("Follow-up overdue")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mark resolved/i })).toBeInTheDocument();
   });
@@ -579,7 +579,7 @@ describe("StudentProfile", () => {
       expect(mocks.toast.success).toHaveBeenCalledWith("Intervention resolved");
     });
 
-    expect(screen.getAllByText("resolved").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Resolved").length).toBeGreaterThan(0);
   });
 
   it("renders a safe empty intervention state when no records exist", async () => {

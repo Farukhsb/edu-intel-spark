@@ -5,6 +5,18 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import type { LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
 
+const formatAverageGrade = (avgScore: number | null, avgScoreScale: number | null) => {
+  if (avgScore == null || avgScoreScale == null) {
+    return "-";
+  }
+
+  if (avgScoreScale === 100) {
+    return `${avgScore}%`;
+  }
+
+  return `${avgScore}/${avgScoreScale}`;
+};
+
 export const LecturerOverviewPrimaryStatsSection = ({
   stats,
   primaryWorkflowTarget,
@@ -35,7 +47,7 @@ export const LecturerOverviewPrimaryStatsSection = ({
         },
         {
           icon: BarChart3,
-          value: stats.avgScore != null ? `${stats.avgScore}%` : "-",
+          value: formatAverageGrade(stats.avgScore, stats.avgScoreScale),
           label: "Average Grade",
           hint: "Across graded submissions",
           accent: "border-border",
