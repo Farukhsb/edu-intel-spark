@@ -1,0 +1,11 @@
+/auth
+  X-Robots-Tag: noindex, nofollow
+
+/reset-password
+  X-Robots-Tag: noindex, nofollow
+
+/force-password-change
+  X-Robots-Tag: noindex, nofollow
+
+/dashboard/*
+  X-Robots-Tag: noindex, nofollow
