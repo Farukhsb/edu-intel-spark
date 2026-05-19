@@ -1,22 +1,26 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
+import {
+  DashboardErrorState,
+  DashboardLiveBanner,
+  DashboardLoadingState,
+} from "@/components/dashboard/PageStates";
 
 import { useAdminDashboardController } from "@/pages/dashboard/admin-dashboard/controllers";
 import { AdminDashboardScreen } from "@/pages/dashboard/admin-dashboard/ui";
 
 const AdminDashboard = () => {
-  const { profile, state, actions } = useAdminDashboardController();
+  const { profile, status, viewModel, actions } = useAdminDashboardController();
 
-  if (state.loading) {
+  if (status.loading) {
     return <DashboardLoadingState />;
   }
 
-  if (state.loadError) {
+  if (status.loadError) {
     return (
       <DashboardErrorState
         title="Admin dashboard unavailable"
-        description={state.loadError}
+        description={status.loadError}
         action={
           <Button variant="outline" onClick={() => void actions.loadAdminDashboard()}>
             Try again
@@ -37,7 +41,12 @@ const AdminDashboard = () => {
     );
   }
 
-  return <AdminDashboardScreen state={state} actions={actions} />;
+  return (
+    <div className="space-y-6">
+      <DashboardLiveBanner label="Viewing live admin oversight data. Individual operational cards are tagged when a signal is inferred or not yet measured." />
+      <AdminDashboardScreen viewModel={viewModel} actions={actions} />
+    </div>
+  );
 };
 
 export default AdminDashboard;

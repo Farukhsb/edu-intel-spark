@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const PROFILE_FIELDS = "id, full_name, email, role, created_at";
+const PROFILE_FIELDS = "id, full_name, email, role, department_name, department_id, cohort_id, must_change_password, created_at";
 const ASSIGNMENT_FIELDS = "id, title, module_code, status, due_date, created_at, lecturer_id";
 const SUBMISSION_FIELDS = "id, assignment_id, student_name, student_email, status, submitted_at, file_name";
 const MODERATION_CASE_FIELDS =
@@ -16,6 +16,20 @@ const INTEGRITY_REVIEW_FIELDS = "id, submission_id, decision, lecturer_note, rev
 export const fetchAdminDashboardDataset = async () => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+
+  const fetchGradingFailureCount = async () => {
+    try {
+      return await supabase
+        .from("grading_error_events")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", todayStart.toISOString());
+    } catch (error) {
+      return {
+        count: null,
+        error: error instanceof Error ? error : new Error("grading error telemetry unavailable"),
+      };
+    }
+  };
 
   const [
     metricsRes,
@@ -48,11 +62,7 @@ export const fetchAdminDashboardDataset = async () => {
     supabase.from("academic_integrity_reviews").select(INTEGRITY_REVIEW_FIELDS).order("updated_at", { ascending: false }).limit(100),
     supabase.from("grades").select(LATEST_GRADE_FIELDS).order("created_at", { ascending: false }).limit(1),
     supabase.from("communication_messages").select(COMMUNICATION_FIELDS).order("created_at", { ascending: false }).limit(10),
-    supabase
-      .from("grade_audit_log")
-      .select("id", { count: "exact", head: true })
-      .eq("event_type", "grading_failed")
-      .gte("created_at", todayStart.toISOString()),
+    fetchGradingFailureCount(),
   ]);
 
   if (profilesRes.error || assignmentsRes.error || submissionsRes.error || moderationCasesRes.error) {

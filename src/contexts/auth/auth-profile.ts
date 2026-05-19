@@ -70,6 +70,7 @@ export const fetchAuthProfile = async ({
     avatar_url: data.avatar_url,
     cohort_id: data.cohort_id ?? null,
     department_name: departmentName,
+    // Keep the compatibility mirror populated until legacy reads are removed.
     department_id: departmentName,
     must_change_password: data.must_change_password ?? false,
   };

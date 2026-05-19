@@ -1,5 +1,6 @@
 import { AlertTriangle, Clock3, Mail, Settings2, Shield, ShieldCheck } from "lucide-react";
 
+import { DashboardSignalBadge } from "@/components/dashboard/PageStates";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { OperationalHealthItem } from "@/lib/operationalMonitoring";
@@ -18,8 +19,11 @@ export const SystemHealthSection = ({
       <CardContent className="grid gap-3 p-6 sm:grid-cols-2">
         {items.map((item) => (
           <div key={item.label} className="rounded-xl border border-border/70 bg-background/80 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium">{item.label}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{item.label}</p>
+                <DashboardSignalBadge type={item.signalType} />
+              </div>
               <Badge
                 variant="outline"
                 className={

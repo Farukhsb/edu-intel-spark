@@ -11,7 +11,9 @@ import {
   signInWithPassword,
   signOutAuthSession,
   signUpWithPassword,
+  updateUserProfile,
 } from "@/contexts/auth/auth-actions";
+import { toDepartmentColumns } from "@/lib/department";
 import { fetchAuthProfile } from "@/contexts/auth/auth-profile";
 import { useAuthSessionSync } from "@/contexts/auth/auth-session";
 import type { AuthContextType, Profile } from "@/contexts/auth/types";
@@ -66,7 +68,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     fullName: string,
     role: PublicSignupRole,
     cohortId?: string,
-    departmentId?: string
+    departmentName?: string
   ) => {
     const { requiresEmailConfirmation, initialProfile } = await signUpWithPassword({
       email,
@@ -74,7 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       fullName,
       role,
       cohortId,
-      departmentId,
+      departmentName,
     });
 
     if (initialProfile) {
@@ -92,6 +94,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     await signInWithPassword(email, password);
     setPendingVerificationEmail(null);
+  };
+
+  const updateProfile = async ({
+    fullName,
+    departmentName,
+    cohortId,
+  }: {
+    fullName: string;
+    departmentName: string | null;
+    cohortId?: string | null;
+  }) => {
+    if (!user || !profile || isDemo) {
+      throw new Error("You must be signed in to update your profile.");
+    }
+
+    await updateUserProfile({
+      userId: user.id,
+      fullName,
+      departmentName,
+      cohortId,
+      role: profile.role,
+    });
+
+    const trimmedName = fullName.trim();
+    setProfile((current) =>
+      current
+        ? {
+            ...current,
+            full_name: trimmedName,
+            ...toDepartmentColumns(departmentName),
+            cohort_id: current.role === "student" ? cohortId || null : null,
+          }
+        : current,
+    );
   };
 
   const handleSignOut = async () => {
@@ -158,6 +194,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signUp,
         signIn,
         signOut: handleSignOut,
+        updateProfile,
         completePasswordChange,
         refreshProfile,
         resetPassword,

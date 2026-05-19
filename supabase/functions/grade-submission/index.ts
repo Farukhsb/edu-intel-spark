@@ -36,6 +36,28 @@ function getPassSpreadThreshold(maxScore: number) {
   return Math.max(PASS_SPREAD_REVIEW_THRESHOLD_MIN, Math.round(maxScore * PASS_SPREAD_REVIEW_THRESHOLD_RATIO));
 }
 
+function classifyGradingError(reason: string) {
+  const normalizedReason = reason.toLowerCase();
+
+  if (normalizedReason.includes("parse ai response")) {
+    return { errorCode: "response_parse_failed", safeErrorCategory: "grading_failure" };
+  }
+  if (normalizedReason.includes("download")) {
+    return { errorCode: "submission_download_failed", safeErrorCategory: "submission_access_failure" };
+  }
+  if (normalizedReason.includes("missing") && normalizedReason.includes("file url")) {
+    return { errorCode: "submission_file_missing", safeErrorCategory: "submission_access_failure" };
+  }
+  if (normalizedReason.includes("supported")) {
+    return { errorCode: "unsupported_submission_file", safeErrorCategory: "submission_validation_failure" };
+  }
+  if (normalizedReason.includes("extract")) {
+    return { errorCode: "document_extraction_failed", safeErrorCategory: "document_processing_failure" };
+  }
+
+  return { errorCode: "grading_failed", safeErrorCategory: "grading_failure" };
+}
+
 async function recordGradingFailureAudit({
   supabaseAdmin,
   submissionId,
@@ -70,6 +92,40 @@ async function recordGradingFailureAudit({
 
   if (error) {
     logWarn("grade-submission failure audit insert failed", {
+      submissionId,
+      assignmentId,
+      error,
+    });
+  }
+}
+
+async function recordGradingErrorEvent({
+  supabaseAdmin,
+  submissionId,
+  assignmentId,
+  userId,
+  provider,
+  reason,
+}: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  submissionId: string;
+  assignmentId: string;
+  userId: string;
+  provider: string;
+  reason: string;
+}) {
+  const classification = classifyGradingError(reason);
+  const { error } = await supabaseAdmin.from("grading_error_events").insert({
+    submission_id: submissionId,
+    assignment_id: assignmentId,
+    user_id: userId,
+    provider,
+    error_code: classification.errorCode,
+    safe_error_category: classification.safeErrorCategory,
+  });
+
+  if (error) {
+    logWarn("grade-submission grading error telemetry insert failed", {
       submissionId,
       assignmentId,
       error,
@@ -276,6 +332,14 @@ Deno.serve(async (req) => {
         gradingModel,
         forceRegenerate,
       });
+      await recordGradingErrorEvent({
+        supabaseAdmin,
+        submissionId: sub.id,
+        assignmentId: requestedAssignmentId,
+        userId: user.id,
+        provider: "openai",
+        reason,
+      });
       results.push({
         submissionId: sub.id,
         error: reason,
@@ -315,6 +379,14 @@ Deno.serve(async (req) => {
           reason,
           gradingModel,
           forceRegenerate,
+        });
+        await recordGradingErrorEvent({
+          supabaseAdmin,
+          submissionId: sub.id,
+          assignmentId: requestedAssignmentId,
+          userId: user.id,
+          provider: "openai",
+          reason,
         });
         results.push({
           submissionId: sub.id,
