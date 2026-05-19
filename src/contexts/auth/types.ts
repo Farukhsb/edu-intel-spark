@@ -34,11 +34,6 @@ export interface AuthContextType {
   ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  updateProfile: (input: {
-    fullName: string;
-    departmentName: string | null;
-    cohortId?: string | null;
-  }) => Promise<void>;
   completePasswordChange: (password: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;

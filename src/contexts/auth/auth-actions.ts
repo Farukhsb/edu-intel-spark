@@ -67,37 +67,6 @@ export const signOutAuthSession = async () => {
   await supabase.auth.signOut();
 };
 
-export const updateUserProfile = async ({
-  userId,
-  fullName,
-  departmentName,
-  cohortId,
-  role,
-}: {
-  userId: string;
-  fullName: string;
-  departmentName: string | null;
-  cohortId?: string | null;
-  role: AppRole;
-}) => {
-  const trimmedName = fullName.trim();
-
-  if (!trimmedName) {
-    throw new Error("Name cannot be empty.");
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      full_name: trimmedName,
-      ...toDepartmentColumns(departmentName),
-      cohort_id: role === "student" ? cohortId || null : null,
-    })
-    .eq("id", userId);
-
-  if (error) throw error;
-};
-
 export const clearStoredE2EAuth = () => {
   if (!readE2EAuthState()) return false;
   clearE2EAuthState();

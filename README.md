@@ -322,7 +322,7 @@ The backend is now running against a clean Supabase project with RLS, API grants
 
 ### Still improving
 
-- editable profile settings
+- admin-controlled profile correction and user management workflows
 - moderation workflow breadth and less common live scenario coverage
 - deeper grading error telemetry and longer-window operational monitoring
 - wider live role-boundary and RLS edge-case testing
