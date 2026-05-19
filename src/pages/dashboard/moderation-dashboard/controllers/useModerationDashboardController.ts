@@ -48,7 +48,9 @@ export const useModerationDashboardController = () => {
   });
 
   return {
+    loadError: queueState.loadError,
     loading: queueState.loading,
+    reload: () => void queueState.fetchCases(),
     screenProps,
   };
 };

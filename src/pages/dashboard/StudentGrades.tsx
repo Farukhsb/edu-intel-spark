@@ -11,7 +11,7 @@ import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
 import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
 import { getFirstName } from "@/lib/formatters";
 import { getGradeBadgeVariant, getGradeTone } from "@/lib/gradePresentation";
-import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
+import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
   DEMO_STUDENT_ASSIGNMENT_GRADES,
@@ -123,10 +123,13 @@ const StudentGrades = () => {
   const { user, profile, isDemo } = useAuth();
   const [grades, setGrades] = useState<StudentGrade[]>(isDemo ? DEMO_GRADES : []);
   const [loading, setLoading] = useState(!isDemo);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [stats, setStats] = useState({ avg: 0, count: 0, highest: 0, lowest: 0 });
 
   useEffect(() => {
     if (isDemo) {
+      setLoadError(null);
       const scores = DEMO_GRADES.filter((grade) => grade.score != null).map((grade) => grade.score!);
       setStats({
         avg: Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10,
@@ -142,6 +145,7 @@ const StudentGrades = () => {
     }
 
     const fetchGrades = async () => {
+      setLoadError(null);
       try {
         const projectionRes = await fetchStudentGradeProjection(user.id);
         if (projectionRes.error) {
@@ -181,15 +185,37 @@ const StudentGrades = () => {
         log.error("Failed to fetch student grades", err, {
           userId: user.id,
         });
+        setLoadError("Your results could not be loaded right now.");
       }
       setLoading(false);
     };
 
     void fetchGrades();
-  }, [user, isDemo]);
+  }, [user, isDemo, reloadKey]);
 
   if (loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (loadError) {
+    return (
+      <DashboardErrorState
+        title="Results unavailable"
+        description={loadError}
+        action={
+          <Button
+            variant="outline"
+            onClick={() => {
+              setLoading(true);
+              setLoadError(null);
+              setReloadKey((current) => current + 1);
+            }}
+          >
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   const releasedGrades = grades.filter((grade) => grade.score != null);

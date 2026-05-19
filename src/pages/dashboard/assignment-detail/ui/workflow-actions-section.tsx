@@ -98,6 +98,7 @@ export const WorkflowActionsSection = ({
   integrityRuntimeWarning,
   submissionsCount,
   handleAIGrade,
+  handleRetryFailedOnly,
   workflowLaneSummary,
   workflowReadiness,
   selectedWorkflowGuidance,
@@ -115,6 +116,7 @@ export const WorkflowActionsSection = ({
   exportReviewedReports,
   gradingElapsed,
   gradingCount,
+  handleStartManualReviewForFailed,
   lastGradingRunSummary,
 }: {
   isDemo: boolean;
@@ -133,6 +135,7 @@ export const WorkflowActionsSection = ({
   integrityRuntimeWarning: string | null;
   submissionsCount: number;
   handleAIGrade: () => void;
+  handleRetryFailedOnly: () => void;
   workflowLaneSummary: LecturerWorkflowLaneSummary;
   workflowReadiness: WorkflowReadinessState;
   selectedWorkflowGuidance: LecturerSelectionGuidance;
@@ -150,6 +153,7 @@ export const WorkflowActionsSection = ({
   exportReviewedReports: () => void;
   gradingElapsed: number;
   gradingCount: number;
+  handleStartManualReviewForFailed: () => void;
   lastGradingRunSummary: {
     attemptedCount: number;
     detail: string;
@@ -164,6 +168,12 @@ export const WorkflowActionsSection = ({
   } | null;
 }) => {
   const studentJourney = !isLecturer ? getStudentWorkflowJourney(currentStudentSubmission?.status ?? null) : null;
+  const recoverySummary = lastGradingRunSummary;
+  const hasRetryableFailures = (recoverySummary?.failedCount ?? 0) > 0 || (recoverySummary?.invalidResultCount ?? 0) > 0;
+  const hasManualReviewRecovery =
+    (recoverySummary?.failedCount ?? 0) > 0 ||
+    (recoverySummary?.invalidResultCount ?? 0) > 0 ||
+    (recoverySummary?.extractionFailureCount ?? 0) > 0;
 
   return (
     <Card className="shadow-sm">
@@ -287,6 +297,20 @@ export const WorkflowActionsSection = ({
                     <p key={action}>{action}</p>
                   ))}
                 </div>
+                {(hasRetryableFailures || hasManualReviewRecovery) && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {hasRetryableFailures ? (
+                      <Button size="sm" variant="outline" onClick={handleRetryFailedOnly} disabled={grading}>
+                        Retry failed only
+                      </Button>
+                    ) : null}
+                    {hasManualReviewRecovery ? (
+                      <Button size="sm" variant="secondary" onClick={handleStartManualReviewForFailed} disabled={grading}>
+                        Start manual review
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
               </div>
             ) : null}
 

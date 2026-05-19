@@ -598,8 +598,10 @@ describe("StudentProfile", () => {
     renderStudentProfile();
 
     await waitFor(() => {
-      expect(screen.getByText("Student not found for this lecturer view.")).toBeInTheDocument();
+      expect(screen.getByText("Student support profile unavailable")).toBeInTheDocument();
     });
+    expect(screen.getByText("Student support profile could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("Intervention History")).not.toBeInTheDocument();
 
     consoleError.mockRestore();

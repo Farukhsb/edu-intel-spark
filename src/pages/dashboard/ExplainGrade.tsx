@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
+  DashboardErrorState,
   DashboardLoadingState,
   DashboardPageIntro,
 } from "@/components/dashboard/PageStates";
@@ -40,7 +41,7 @@ const INITIAL_ASSISTANT_MESSAGE: ChatMsg = {
 
 const ExplainGrade = () => {
   const { isDemo, user } = useAuth();
-  const { submissions, selectedId, setSelectedId, loading } = useExplainGradeData({
+  const { submissions, selectedId, setSelectedId, loading, error, refreshGrades } = useExplainGradeData({
     isDemo,
     userId: user?.id,
   });
@@ -244,6 +245,20 @@ const ExplainGrade = () => {
 
   if (loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (error) {
+    return (
+      <DashboardErrorState
+        title="Released grades unavailable"
+        description={error}
+        action={
+          <Button variant="outline" onClick={() => void refreshGrades()}>
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   if (!gradeBreakdown) {

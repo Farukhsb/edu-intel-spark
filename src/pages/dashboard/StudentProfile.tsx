@@ -29,7 +29,7 @@ import {
   type StudentInsightData,
   type StudentSubmission,
 } from "@/lib/studentProfile";
-import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
+import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   StudentInterventionFormCard,
   StudentInterventionHistoryCard,
@@ -39,6 +39,7 @@ import {
   StudentProfileSummaryCards,
   StudentRiskReasonsCard,
 } from "@/pages/dashboard/student-profile/sections";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const StudentGradesTrendCard = lazy(() =>
@@ -98,6 +99,8 @@ const StudentProfile = () => {
 
   const decodedStudentId = decodeURIComponent(studentId || "");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [student, setStudent] = useState<StudentInsightData | null>(null);
   const [interventions, setInterventions] = useState<InterventionEntry[]>([]);
   const [interventionType, setInterventionType] = useState<ManualInterventionType>("email");
@@ -112,6 +115,7 @@ const StudentProfile = () => {
 
     const loadStudent = async () => {
       setLoading(true);
+      setLoadError(null);
 
       if (isDemo) {
         setStudent({
@@ -204,6 +208,7 @@ const StudentProfile = () => {
         log.error("Failed to load student profile", error, {
           studentId: decodedStudentId,
         });
+        setLoadError("Student support profile could not be loaded right now.");
         setStudent(null);
       }
 
@@ -211,7 +216,7 @@ const StudentProfile = () => {
     };
 
     void loadStudent();
-  }, [decodedStudentId, isDemo, user]);
+  }, [decodedStudentId, isDemo, reloadKey, user]);
 
   const riskBadgeVariant = useMemo(() => {
     if (!student) return "outline";
@@ -438,6 +443,20 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
 
   if (loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (loadError) {
+    return (
+      <DashboardErrorState
+        title="Student support profile unavailable"
+        description={loadError}
+        action={
+          <Button variant="outline" onClick={() => setReloadKey((current) => current + 1)}>
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   if (!student) {

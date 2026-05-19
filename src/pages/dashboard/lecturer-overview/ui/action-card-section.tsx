@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,18 +22,18 @@ const getAttentionNowLabel = (stats: LecturerOverviewStats, readiness: LecturerO
 
 const getAttentionNowDetail = (stats: LecturerOverviewStats) => {
   if (stats.pendingCount > 0) {
-    return "Clearing the live review queue keeps feedback moving and stops routine work becoming backlog.";
+    return "Clear the live review queue before routine marking turns into backlog.";
   }
 
   if (stats.atRisk > 0) {
-    return "Early intervention matters because the students below target are the ones most likely to keep slipping.";
+    return "Check below-target students early before performance pressure builds further.";
   }
 
   if (stats.assignmentCount > 0) {
-    return "Nothing urgent is blocked, but active modules still need a quick scan so release-ready work keeps flowing.";
+    return "No urgent blocker is active, but release-ready work still needs a quick scan to keep moving.";
   }
 
-  return "Once assignments go live, this card will surface the next issue that needs action rather than broad dashboard noise.";
+  return "Once assignments go live, this card will surface the next issue that needs action.";
 };
 
 export const LecturerOverviewActionCardSection = ({
@@ -68,7 +68,7 @@ export const LecturerOverviewActionCardSection = ({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="border-primary/20 bg-background/80">
-                What needs attention now
+                Priority today
               </Badge>
               {stats.pendingCount > 0 ? (
                 <Badge variant="outline" className="border-warning/30 bg-warning/5 text-warning">
@@ -95,9 +95,6 @@ export const LecturerOverviewActionCardSection = ({
               {actionLabel}
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/performance?risk=high-plus")}>
-              View risk insights
-            </Button>
           </div>
         </div>
 
@@ -105,11 +102,16 @@ export const LecturerOverviewActionCardSection = ({
           <div className="rounded-xl border bg-background/80 p-4">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 rounded-full bg-primary/10 p-2 text-primary">
-                <Sparkles className="h-4 w-4" />
+                <Clock3 className="h-4 w-4" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Operational focus</p>
-                <p className="text-sm font-semibold">{queueFocus.label}</p>
+                <p className="text-sm font-semibold">
+                  {stats.pendingCount > 0
+                    ? `${stats.pendingCount} submission${stats.pendingCount === 1 ? "" : "s"} need review`
+                    : stats.atRisk > 0
+                      ? `${stats.atRisk} student${stats.atRisk === 1 ? "" : "s"} need support`
+                      : readiness.postureLabel}
+                </p>
                 <p className="text-xs text-muted-foreground">{queueFocus.detail}</p>
               </div>
             </div>
@@ -121,9 +123,12 @@ export const LecturerOverviewActionCardSection = ({
                 {stats.atRisk > 0 ? <AlertTriangle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Why it matters</p>
-                <p className="text-sm font-semibold">{readiness.likelyChallenge}</p>
-                <p className="text-xs text-muted-foreground">{getAttentionNowDetail(stats)}</p>
+                <p className="text-sm font-semibold">{queueFocus.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {stats.pendingCount > 0
+                    ? "This is where the largest current backlog is building."
+                    : readiness.likelyChallenge}
+                </p>
               </div>
             </div>
           </div>
@@ -134,11 +139,8 @@ export const LecturerOverviewActionCardSection = ({
                 <CheckCircle2 className="h-4 w-4" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next action</p>
                 <p className="text-sm font-semibold">{readiness.bestNextAction}</p>
-                <p className="text-xs text-muted-foreground">
-                  Move straight into the workflow that resolves the current pressure point first.
-                </p>
+                <p className="text-xs text-muted-foreground">Use the primary action above to jump straight into this workflow.</p>
               </div>
             </div>
           </div>

@@ -38,3 +38,19 @@ export interface LecturerOverviewPipelineStage {
   count: number;
   detail: string;
 }
+
+export interface LecturerOverviewState {
+  loading: boolean;
+  error: string | null;
+  stats: LecturerOverviewStats;
+  recent: LecturerOverviewRecentSubmission[];
+  pipeline: LecturerOverviewPipelineStage[];
+  readiness: {
+    postureLabel: string;
+    likelyChallenge: string;
+    bestNextAction: string;
+  };
+  heroSummary: string;
+  primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
+  queueFocus: LecturerOverviewQueueFocus;
+}

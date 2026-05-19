@@ -561,6 +561,33 @@ describe("AdminDashboard", () => {
     expect(screen.getByRole("button", { name: "Bulk Upload Students" })).toBeInTheDocument();
   });
 
+  it("shows a page-level error state when the admin dashboard cannot be loaded", async () => {
+    mocks.from.mockImplementation((table: string) => {
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            order: vi.fn().mockRejectedValue(new Error("profiles unavailable")),
+          }),
+        };
+      }
+
+      return buildQueryResponse(table);
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Admin dashboard unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Admin dashboard data could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
   it("shows bulk student upload in user management but not in academic oversight views", async () => {
     let view = render(
       <MemoryRouter

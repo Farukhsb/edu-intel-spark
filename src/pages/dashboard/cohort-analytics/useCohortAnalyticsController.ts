@@ -148,6 +148,8 @@ export const useCohortAnalyticsController = () => {
   );
   const [studentDirectory, setStudentDirectory] = useState<Record<string, StudentDirectoryEntry>>({});
   const [loading, setLoading] = useState(!isDemo);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [actingId, setActingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -155,6 +157,7 @@ export const useCohortAnalyticsController = () => {
 
     const fetchData = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const [{ assignments, submissions, grades, integrityReviews }, persistedRows] = await Promise.all([
           fetchCohortAnalyticsDataset(user.id),
@@ -336,6 +339,7 @@ export const useCohortAnalyticsController = () => {
         setStudentDirectory(directory);
       } catch (error) {
         log.error("Failed to fetch cohort analytics", error);
+        setLoadError("Cohort analytics could not be loaded right now.");
         toast.error("Could not load cohort analytics.");
       }
 
@@ -343,7 +347,7 @@ export const useCohortAnalyticsController = () => {
     };
 
     void fetchData();
-  }, [isDemo, user]);
+  }, [isDemo, reloadKey, user]);
 
   const gradeDistChart = useMemo(() => {
     if (isDemo) {
@@ -533,6 +537,7 @@ export const useCohortAnalyticsController = () => {
 
   return {
     loading,
+    loadError,
     modules,
     moduleFilter,
     setModuleFilter,
@@ -545,5 +550,6 @@ export const useCohortAnalyticsController = () => {
     handleDismiss,
     handleCreateIntervention,
     handleCopyWorkflowLink,
+    reload: () => setReloadKey((current) => current + 1),
   };
 };

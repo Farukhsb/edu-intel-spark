@@ -17,9 +17,11 @@ export const useExplainGradeData = ({
   const [submissions, setSubmissions] = useState<SubmissionOption[]>(isDemo ? DEMO_SUBMISSIONS : []);
   const [selectedId, setSelectedId] = useState<string>(isDemo ? (DEMO_SUBMISSIONS[0]?.gradeId ?? "") : "");
   const [loading, setLoading] = useState(!isDemo);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchGrades = async () => {
     if (isDemo) {
+      setError(null);
       setSubmissions(DEMO_SUBMISSIONS);
       setSelectedId(DEMO_SUBMISSIONS[0]?.gradeId ?? "");
       setLoading(false);
@@ -27,6 +29,7 @@ export const useExplainGradeData = ({
     }
 
     setLoading(true);
+    setError(null);
 
     try {
       const projectionRes = await fetchStudentGradeProjection(userId);
@@ -51,6 +54,7 @@ export const useExplainGradeData = ({
       log.error("Failed to fetch grades", error);
       setSubmissions([]);
       setSelectedId("");
+      setError("Released grades could not be loaded right now.");
     }
 
     setLoading(false);
@@ -65,6 +69,7 @@ export const useExplainGradeData = ({
     selectedId,
     setSelectedId,
     loading,
+    error,
     refreshGrades: fetchGrades,
   };
 };

@@ -76,6 +76,7 @@ vi.mock("lucide-react", () => {
   const Icon = () => <svg data-testid="icon" />;
 
   return {
+    AlertTriangle: Icon,
     Bell: Icon,
     BookOpen: Icon,
     Check: Icon,
@@ -288,6 +289,31 @@ describe("ImprovementPlan explanation validation", () => {
     expect(screen.getByText(/For future assignments, add operation outputs or screenshots that show bst deletion and traversal logic working/i)).toBeInTheDocument();
     expect(screen.getByText(/The marker can verify correctness directly from visible outputs/i)).toBeInTheDocument();
     expect(screen.getAllByText("CS101 - Algorithms Coursework").length).toBeGreaterThan(0);
+  });
+
+  it("shows a page-level error state when the improvement plan cannot be loaded", async () => {
+    mocks.authState.isDemo = false;
+    mocks.supabase.rpc.mockRejectedValueOnce(new Error("projection unavailable"));
+    mocks.supabase.from.mockImplementation((table: string) => {
+      if (table === "improvement_plan_progress") {
+        return {
+          select: () => ({
+            eq: () =>
+              Promise.resolve({
+                data: [],
+              }),
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    renderWithRouter(<ImprovementPlan />);
+
+    expect(await screen.findByText("Improvement plan unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Your improvement plan could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("falls back to direct student grade queries when the projection RPC is unavailable", async () => {

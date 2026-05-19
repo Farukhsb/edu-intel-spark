@@ -60,7 +60,9 @@ export const buildSubmissionListProps = ({
   openSubmissionFile: fileActions.openSubmissionFile,
   openModeration: () => navigate("/dashboard/moderation"),
   openReview: lecturerActions.openReview,
-  startManualReview: lecturerActions.startManualReview,
+  startManualReview: async (submission) => {
+    await lecturerActions.startManualReview(submission);
+  },
   approveSubmission: lecturerActions.approveSubmission,
   releaseSubmission: lecturerActions.handleSingleRelease,
   loadSubmissions: reloadSubmissions,

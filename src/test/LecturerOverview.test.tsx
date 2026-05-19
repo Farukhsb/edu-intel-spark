@@ -67,6 +67,7 @@ type DashboardData = {
   submissions?: Array<Record<string, unknown>>;
   grades?: Array<Record<string, unknown>>;
   keepAssignmentsPending?: boolean;
+  assignmentsError?: Error | null;
 };
 
 const setupSupabase = ({
@@ -74,12 +75,16 @@ const setupSupabase = ({
   submissions = [],
   grades = [],
   keepAssignmentsPending = false,
+  assignmentsError = null,
 }: DashboardData) => {
   mocks.supabase.from.mockImplementation((table: string) => ({
     select: vi.fn(() => {
       if (table === "assignments") {
         return {
           eq: vi.fn(() =>
+            assignmentsError
+              ? Promise.reject(assignmentsError)
+              :
             keepAssignmentsPending
               ? new Promise(() => {})
               : Promise.resolve({ data: assignments, error: null })
@@ -143,7 +148,7 @@ describe("LecturerOverview", () => {
     expect(await screen.findByText("Welcome back, Dr")).toBeInTheDocument();
     expect(screen.getByText("Sam Student")).toBeInTheDocument();
     expect(screen.getByText("Algorithms")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open released results" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue workflow" })).toBeInTheDocument();
   });
 
   it("shows a loading state while dashboard data is loading", () => {
@@ -152,6 +157,16 @@ describe("LecturerOverview", () => {
     renderLecturerOverview();
 
     expect(screen.getByTestId("loading-spinner")).toBeInTheDocument();
+  });
+
+  it("shows a page-level error state when the overview cannot be loaded", async () => {
+    setupSupabase({ assignmentsError: new Error("overview unavailable") });
+
+    renderLecturerOverview();
+
+    expect(await screen.findByText("Lecturer overview unavailable")).toBeInTheDocument();
+    expect(screen.getByText("The lecturer overview could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("shows empty states when no dashboard data is returned", async () => {
@@ -165,8 +180,8 @@ describe("LecturerOverview", () => {
         "Publish an assignment or check the due dates on your active briefs. Student submissions will start appearing here as soon as work is uploaded.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("0 active assignments")).toBeInTheDocument();
-    expect(screen.getByText("0 active students")).toBeInTheDocument();
+    expect(screen.getByText("Priority today")).toBeInTheDocument();
+    expect(screen.getByText("0 active assignments and 0 active students are in view.")).toBeInTheDocument();
   });
 
   it("renders basic overview UI elements", async () => {
@@ -192,8 +207,7 @@ describe("LecturerOverview", () => {
     await waitFor(() => {
       expect(screen.getByText("Active Students")).toBeInTheDocument();
     });
-    expect(screen.getByText("What needs attention now")).toBeInTheDocument();
-    expect(screen.getByText("Operational focus")).toBeInTheDocument();
+    expect(screen.getByText("Priority today")).toBeInTheDocument();
     expect(screen.getByText("Live teaching scope")).toBeInTheDocument();
     expect(screen.getByText("No immediate blocker")).toBeInTheDocument();
     expect(screen.getByText("1 active assignment still need routine monitoring")).toBeInTheDocument();
@@ -232,14 +246,14 @@ describe("LecturerOverview", () => {
 
     renderLecturerOverview();
 
-    expect(await screen.findByRole("button", { name: "Open manual review" })).toBeInTheDocument();
+    const reviewButtons = await screen.findAllByRole("button", { name: "Review submission" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open manual review" }));
+    fireEvent.click(reviewButtons[0]);
     expect(mocks.navigate).toHaveBeenCalledWith(
       "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open manual review queue" }));
+    fireEvent.click(reviewButtons[1]);
     expect(mocks.navigate).toHaveBeenCalledWith(
       "/dashboard/assignments/assignment-1?source=queue&focus=manual-review",
     );

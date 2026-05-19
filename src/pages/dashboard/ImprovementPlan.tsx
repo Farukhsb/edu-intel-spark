@@ -7,6 +7,7 @@ import { Bell, Circle } from "lucide-react";
 import {
   DashboardDemoBanner,
   DashboardEmptyState,
+  DashboardErrorState,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,7 +29,7 @@ const ImprovementPlan = () => {
   const [expandedCompletedCards, setExpandedCompletedCards] = useState<Record<string, boolean>>({});
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<"modules" | "completed" | "open">("modules");
   const notification = (location.state as { notification?: CommunicationMessage } | null)?.notification;
-  const { plan, resources, loading, overallTasks, toggleTask } = useImprovementPlanData({
+  const { plan, resources, loading, error, overallTasks, toggleTask, refreshPlan } = useImprovementPlanData({
     userId: user?.id,
     isDemo,
   });
@@ -117,6 +118,20 @@ const ImprovementPlan = () => {
 
   if (loading) {
     return <DashboardLoadingState />;
+  }
+
+  if (error) {
+    return (
+      <DashboardErrorState
+        title="Improvement plan unavailable"
+        description={error}
+        action={
+          <Button variant="outline" onClick={() => void refreshPlan()}>
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   if (plan.length === 0) {

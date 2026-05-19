@@ -21,8 +21,10 @@ type AssignmentDetailControllerArgs = {
 
 type AssignmentDetailControllerResult = {
   assignment: ReturnType<typeof useAssignmentDetailData>["assignment"];
+  loadError: string | null;
   loading: boolean;
   navigate: ReturnType<typeof useNavigate>;
+  refreshData: () => Promise<void>;
   screenProps: AssignmentDetailScreenProps | null;
 };
 
@@ -44,9 +46,11 @@ export const useAssignmentDetailController = ({
     grades,
     integrityReviews,
     moderationCases,
+    loadError,
     loading,
     plagiarismFlags,
     plagiarismSummary,
+    refreshData,
     reloadSubmissions,
     setModerationCases,
     setPlagiarismFlags,
@@ -105,16 +109,20 @@ export const useAssignmentDetailController = ({
   if (!assignment) {
     return {
       assignment,
+      loadError,
       loading,
       navigate,
+      refreshData,
       screenProps: null,
     };
   }
 
   return {
     assignment,
+    loadError,
     loading,
     navigate,
+    refreshData,
     screenProps: buildAssignmentDetailScreenProps({
       assignment,
       automatedActions,
