@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
       full_name: "Dr Ada Lovelace",
       email: "ada@example.com",
       role: "lecturer",
+      cohort_id: "200",
       department_name: "Computer Science",
       department_id: "Computer Science",
     },
@@ -54,6 +55,7 @@ describe("Settings", () => {
     expect(screen.getByText("Dr Ada Lovelace")).toBeInTheDocument();
     expect(screen.getByText("ada@example.com")).toBeInTheDocument();
     expect(screen.getByText("Computer Science")).toBeInTheDocument();
+    expect(screen.getByText("Year 2")).toBeInTheDocument();
   });
 
   it("calls signOut from the account action", () => {

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { User, Shield } from "lucide-react";
 import { getDepartmentName } from "@/lib/department";
+import { formatCohortLevel } from "@/lib/formatters";
 import { isLecturerEquivalentRole } from "@/lib/roles";
 import { getSettingsReadiness } from "@/lib/settingsReadiness";
 
@@ -81,6 +82,10 @@ const Settings = () => {
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Department</span>
             <span className="text-sm font-medium">{getDepartmentName(profile) || "-"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Level / Cohort</span>
+            <span className="text-sm font-medium">{formatCohortLevel(profile?.cohort_id)}</span>
           </div>
         </CardContent>
       </Card>

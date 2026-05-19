@@ -12,13 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { getAuthReadiness } from "@/lib/authReadiness";
 import { DEPARTMENT_OPTIONS } from "@/lib/departmentOptions";
-
-const COHORTS = [
-  { value: "100", label: "Level 100 (Year 1)" },
-  { value: "200", label: "Level 200 (Year 2)" },
-  { value: "300", label: "Level 300 (Year 3)" },
-  { value: "400", label: "Level 400 (Year 4)" },
-];
+import { COHORT_LEVELS } from "@/lib/formatters";
 
 const getErrorMessage = (message: string): string => {
   if (message.includes("already registered") || message.includes("already been registered")) return "This email is already registered. Try signing in instead.";
@@ -353,7 +347,7 @@ const Auth = () => {
                       <Select value={signupCohort} onValueChange={setSignupCohort}>
                         <SelectTrigger><SelectValue placeholder="Select level" /></SelectTrigger>
                         <SelectContent>
-                          {COHORTS.map((c) => (
+                          {COHORT_LEVELS.map((c) => (
                             <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                           ))}
                         </SelectContent>
