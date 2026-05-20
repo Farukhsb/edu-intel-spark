@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { User, Shield } from "lucide-react";
 import { getDepartmentName } from "@/lib/department";
 import { formatCohortLevel } from "@/lib/formatters";
-import { isLecturerEquivalentRole } from "@/lib/roles";
+import { isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
 import { getSettingsReadiness } from "@/lib/settingsReadiness";
 
 const Settings = () => {
   const { profile, signOut } = useAuth();
   const departmentName = getDepartmentName(profile);
+  const isStudent = isStudentRole(profile?.role);
+  const isLecturerEquivalent = isLecturerEquivalentRole(profile?.role);
   const readiness = getSettingsReadiness({
     role: profile?.role,
     fullName: profile?.full_name,
@@ -76,22 +78,44 @@ const Settings = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Role</span>
-            <Badge variant={isLecturerEquivalentRole(profile?.role) ? "default" : "secondary"}>
+            <Badge variant={isLecturerEquivalent ? "default" : "secondary"}>
               {profile?.role || "-"}
             </Badge>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Department</span>
-            <span className="text-sm font-medium">{departmentName || "-"}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Level / Cohort</span>
-            <span className="text-sm font-medium">{formatCohortLevel(profile?.cohort_id)}</span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            These details are managed by your institution or platform administrator. If your name, department, role, or
-            level is incorrect, contact an administrator to request a correction.
-          </p>
+          {isStudent ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Department</span>
+                <span className="text-sm font-medium">{departmentName || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Level / Cohort</span>
+                <span className="text-sm font-medium">{formatCohortLevel(profile?.cohort_id)}</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                These details are managed by your institution or platform administrator. If your name, department, role,
+                or level is incorrect, contact an administrator to request a correction.
+              </p>
+            </>
+          ) : (
+            <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <div>
+                <p className="text-sm font-medium">Academic Profile</p>
+                <p className="text-sm text-muted-foreground">
+                  These details are managed by your institution or platform administrator. If your name, department,
+                  role, or level is incorrect, contact an administrator to request a correction.
+                </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Department</span>
+                <span className="text-sm font-medium">{departmentName || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Role</span>
+                <Badge variant={isLecturerEquivalent ? "default" : "secondary"}>{profile?.role || "-"}</Badge>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -11,7 +11,7 @@ import { log } from "@/lib/logger";
 import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
 import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
 import { getFirstName } from "@/lib/formatters";
-import { clampPercentage, getGradeBadgeVariant, getGradeTone } from "@/lib/gradePresentation";
+import { clampPercentage, getGradeBadgeVariant, getGradeTone, normalizeMaxScore } from "@/lib/gradePresentation";
 import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
@@ -319,6 +319,7 @@ const StudentGrades = () => {
               <CardContent className="space-y-3 p-4">
                 {(() => {
                   const gradePercent = grade.score != null ? clampPercentage(grade.score, grade.maxScore) : 0;
+                  const normalizedMaxScore = normalizeMaxScore(grade.maxScore);
 
                   return (
                     <>
@@ -334,10 +335,10 @@ const StudentGrades = () => {
                           {grade.score != null ? (
                             <>
                               <span className="text-xl font-bold font-display">
-                                {grade.score}/{grade.maxScore}
+                                {grade.score}/{normalizedMaxScore}
                               </span>
                               <Badge
-                                variant={getGradeBadgeVariant(grade.score, grade.maxScore)}
+                                variant={getGradeBadgeVariant(grade.score, normalizedMaxScore)}
                               >
                                 {gradePercent}%
                               </Badge>
@@ -353,19 +354,21 @@ const StudentGrades = () => {
                       {grade.score != null && (
                         <>
                           <div className="rounded-xl border bg-background p-4">
-                            <p className="text-base font-semibold">{getScoreSummary(grade.score, grade.maxScore).headline}</p>
+                            <p className="text-base font-semibold">
+                              {getScoreSummary(grade.score, normalizedMaxScore).headline}
+                            </p>
                             <p className="mt-1 text-sm text-muted-foreground">
-                              {getScoreSummary(grade.score, grade.maxScore).context}
+                              {getScoreSummary(grade.score, normalizedMaxScore).context}
                             </p>
                             <p className="mt-2 text-sm font-medium text-foreground">
-                              {getScoreFollowUp(grade.score, grade.maxScore)}
+                              {getScoreFollowUp(grade.score, normalizedMaxScore)}
                             </p>
                             <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
                               <div
                                 className={`h-full rounded-full ${
-                                  getGradeTone(grade.score, grade.maxScore) === "success"
+                                  getGradeTone(grade.score, normalizedMaxScore) === "success"
                                     ? "bg-success"
-                                    : getGradeTone(grade.score, grade.maxScore) === "primary"
+                                    : getGradeTone(grade.score, normalizedMaxScore) === "primary"
                                       ? "bg-primary"
                                       : "bg-destructive"
                                 }`}
@@ -391,13 +394,14 @@ const StudentGrades = () => {
                       <div className="space-y-2">
                         {grade.breakdown.map((breakdownItem, index) => {
                           const percent = clampPercentage(breakdownItem.score, breakdownItem.max_score);
+                          const normalizedBreakdownMaxScore = normalizeMaxScore(breakdownItem.max_score);
                           const commentary = getCriterionCommentary(breakdownItem);
                           return (
                             <div key={index} className="space-y-2 rounded-lg border bg-background p-3">
                               <div className="flex items-center justify-between gap-3 text-xs">
                                 <span className="font-medium text-foreground">{breakdownItem.criterion}</span>
                                 <span className="font-medium">
-                                  {breakdownItem.score}/{breakdownItem.max_score} ({percent}%)
+                                  {breakdownItem.score}/{normalizedBreakdownMaxScore} ({percent}%)
                                 </span>
                               </div>
                               <div className="h-1.5 overflow-hidden rounded-full bg-muted">

@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+const renderSettings = () =>
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Settings />
+    </MemoryRouter>,
+  );
+
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mocks.authState,
 }));
@@ -48,11 +55,7 @@ describe("Settings", () => {
   });
 
   it("renders institution-managed account details and readiness information", () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
+    renderSettings();
 
     expect(screen.getByText("Account Setup")).toBeInTheDocument();
     expect(screen.getByText("Teaching workflow position")).toBeInTheDocument();
@@ -63,15 +66,11 @@ describe("Settings", () => {
     expect(screen.getByText("Dr Ada Lovelace")).toBeInTheDocument();
     expect(screen.getByText("ada@example.com")).toBeInTheDocument();
     expect(screen.getAllByText("Computer Science").length).toBeGreaterThan(0);
-    expect(screen.getByText("Year 2")).toBeInTheDocument();
+    expect(screen.getByText("Academic Profile")).toBeInTheDocument();
   });
 
   it("displays the admin correction and role-governance messaging", () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
+    renderSettings();
 
     expect(
       screen.getByText(
@@ -86,11 +85,7 @@ describe("Settings", () => {
   });
 
   it("does not render self-service profile editing controls", () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
+    renderSettings();
 
     expect(screen.queryByRole("button", { name: "Save Profile" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
@@ -100,27 +95,47 @@ describe("Settings", () => {
     expect(screen.queryByLabelText("Please specify your department")).not.toBeInTheDocument();
   });
 
-  it("shows role, department, and cohort as read-only display values", () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
+  it("shows level / cohort for student profiles", () => {
+    mocks.authState.profile = {
+      id: "student-1",
+      full_name: "Sam Student",
+      email: "sam@example.com",
+      role: "student",
+      cohort_id: "200",
+      department_name: "Computer Science",
+      department_id: "Computer Science",
+    };
+    renderSettings();
 
     expect(screen.getByText("Role")).toBeInTheDocument();
     expect(screen.getByText("Department")).toBeInTheDocument();
     expect(screen.getByText("Level / Cohort")).toBeInTheDocument();
-    expect(screen.getByText("lecturer")).toBeInTheDocument();
+    expect(screen.getByText("student")).toBeInTheDocument();
     expect(screen.getAllByText("Computer Science").length).toBeGreaterThan(0);
     expect(screen.getByText("Year 2")).toBeInTheDocument();
   });
 
+  it("does not show level / cohort for lecturer profiles", () => {
+    mocks.authState.profile = {
+      id: "lecturer-1",
+      full_name: "Dr Ada Lovelace",
+      email: "ada@example.com",
+      role: "lecturer",
+      cohort_id: "200",
+      department_name: "Computer Science",
+      department_id: "Computer Science",
+    };
+    renderSettings();
+
+    expect(screen.queryByText("Level / Cohort")).not.toBeInTheDocument();
+    expect(screen.getByText("Academic Profile")).toBeInTheDocument();
+    expect(screen.getAllByText("Role").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Computer Science").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("lecturer").length).toBeGreaterThan(0);
+  });
+
   it("calls signOut from the account action", () => {
-    render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Settings />
-      </MemoryRouter>,
-    );
+    renderSettings();
 
     fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
     expect(mocks.authState.signOut).toHaveBeenCalledTimes(1);
