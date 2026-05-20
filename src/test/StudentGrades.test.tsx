@@ -412,6 +412,10 @@ describe("StudentGrades", () => {
       expect(screen.getByText("0%")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("12/100")).toBeInTheDocument();
+    expect(screen.getByText("You scored 12 out of 100.")).toBeInTheDocument();
+    expect(screen.getByText("That is 28 marks below the pass mark of 40.")).toBeInTheDocument();
+    expect(screen.getByText("12/100 (0%)")).toBeInTheDocument();
     expect(container.textContent).not.toContain("NaN");
     expect(container.textContent).not.toContain("Infinity");
   });

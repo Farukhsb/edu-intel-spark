@@ -287,9 +287,11 @@ Current safeguards include:
 
 ## Current State
 
-GradeAI is a working full-stack prototype with hardened core workflows. It is no longer just a UI demo, but it is not presented as a finished institution-wide platform. The current focus is making the assessment, review, moderation, analytics, and support workflows reliable enough for controlled testing and further development.
+GradeAI is now a serious working prototype with a much stronger governance and workflow foundation than it had earlier in the project. It is no longer just a wide feature demo, but it is also not presented here as a finished platform for institution-wide rollout. The current focus is to make the assessment, review, moderation, analytics, and support workflows reliable enough for controlled pilots, evidence-led review, and further product hardening.
 
-The backend is now running against a clean Supabase project with RLS, API grants, storage, Edge Functions, and AI secrets reconfigured under the controlled project setup.
+The backend runs against a clean Supabase project with RLS, API grants, storage, Edge Functions, and AI secrets configured under a controlled project setup.
+
+What feels materially better now is not just feature breadth. The product is starting to reflect the realities of an academic environment: students should not see unreleased grades, users should not self-change institutional identity, admins need audit trails, AI should support rather than replace academic judgement, privacy and retention need to be explained clearly, and operational signals need to be labelled honestly.
 
 ### Implemented and working in core workflow
 
@@ -300,17 +302,19 @@ The backend is now running against a clean Supabase project with RLS, API grants
 - student view of released feedback
 - role-based dashboard routing
 - cohort analytics and early support signals
+- admin-controlled profile correction and user management
+- audit-backed admin oversight and role-boundary enforcement
 - GitHub Actions CI, tests, and build checks
 - backend hardening around CORS, lint, service-role usage, and secrets handling
 
 ### Implemented but configuration-dependent
 
-- email workflow notifications
-- PostHog analytics
-- Sentry monitoring
-- provider-abstracted integrity pipeline with internal text similarity and private-runner MOSS support
-- external AI provider behaviour
-- deployment-facing security, testing, rollout, monitoring, and education data governance documentation
+- workflow email delivery, once sender identity and provider setup are intentionally enabled
+- PostHog analytics, if explicitly enabled for a controlled and privacy-minimised deployment
+- Sentry monitoring, if a DSN is configured in the target environment
+- private-runner MOSS support for code similarity, if the separate runner and shared secrets are deployed
+- external AI provider behaviour, which depends on live provider configuration and policy choices in the target environment
+- deployment-facing rollout, monitoring, and governance documentation that still depends on real institutional setup and operating decisions
 
 ### Demo/synthetic evidence
 
@@ -322,7 +326,6 @@ The backend is now running against a clean Supabase project with RLS, API grants
 
 ### Still improving
 
-- admin-controlled profile correction and user management workflows
 - moderation workflow breadth and less common live scenario coverage
 - deeper grading error telemetry and longer-window operational monitoring
 - wider live role-boundary and RLS edge-case testing

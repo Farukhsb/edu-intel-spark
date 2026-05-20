@@ -58,6 +58,28 @@ function classifyGradingError(reason: string) {
   return { errorCode: "grading_failed", safeErrorCategory: "grading_failure" };
 }
 
+function toSafeGradingErrorMessage(reason: string) {
+  const normalizedReason = reason.toLowerCase();
+
+  if (normalizedReason.includes("parse ai response")) {
+    return "AI grading response could not be parsed.";
+  }
+  if (normalizedReason.includes("download")) {
+    return "Submission file could not be downloaded.";
+  }
+  if (normalizedReason.includes("missing") && normalizedReason.includes("file url")) {
+    return "Submission file URL is missing.";
+  }
+  if (normalizedReason.includes("supported")) {
+    return "Submission file type is not supported.";
+  }
+  if (normalizedReason.includes("extract")) {
+    return "Submission document extraction failed.";
+  }
+
+  return "AI grading failed for this submission.";
+}
+
 async function recordGradingFailureAudit({
   supabaseAdmin,
   submissionId,
@@ -115,12 +137,16 @@ async function recordGradingErrorEvent({
   reason: string;
 }) {
   const classification = classifyGradingError(reason);
+  const safeErrorMessage = toSafeGradingErrorMessage(reason);
   const { error } = await supabaseAdmin.from("grading_error_events").insert({
     submission_id: submissionId,
     assignment_id: assignmentId,
     user_id: userId,
     provider,
     error_code: classification.errorCode,
+    // Keep telemetry messages short and safe. Do not store raw student text, prompts,
+    // provider payloads, or secrets in grading_error_events.error_message.
+    error_message: safeErrorMessage,
     safe_error_category: classification.safeErrorCategory,
   });
 

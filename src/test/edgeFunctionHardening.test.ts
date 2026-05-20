@@ -295,4 +295,13 @@ describe("edge function hardening", () => {
     expect(gradingSource).toContain('await recordGradingFailureAudit({');
     expect(gradingSource).toContain('logWarn("grade-submission failure audit insert failed"');
   });
+
+  it("stores only short safe grading error telemetry messages", () => {
+    const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+
+    expect(gradingSource).toContain("function toSafeGradingErrorMessage");
+    expect(gradingSource).toContain("error_message: safeErrorMessage");
+    expect(gradingSource).toContain("Do not store raw student text, prompts,");
+    expect(gradingSource).not.toContain("error_message: reason");
+  });
 });

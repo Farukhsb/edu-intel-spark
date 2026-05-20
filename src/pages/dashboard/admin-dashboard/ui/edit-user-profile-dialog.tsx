@@ -15,11 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { DEPARTMENT_OPTIONS } from "@/lib/departmentOptions";
 import { COHORT_LEVELS } from "@/lib/formatters";
-import type { AppRole } from "@/lib/roles";
+import { MANAGED_APP_ROLES, type AppRole } from "@/lib/roles";
 
 import type { AdminManagedProfileInput, AdminUserRow } from "../types";
-
-const MANAGED_ROLE_OPTIONS: AppRole[] = ["student", "lecturer", "admin"];
 
 export const EditUserProfileDialog = ({
   user,
@@ -80,7 +78,7 @@ export const EditUserProfileDialog = ({
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {MANAGED_ROLE_OPTIONS.map((option) => (
+                  {MANAGED_APP_ROLES.map((option) => (
                     <SelectItem key={option} value={option}>
                       {option}
                     </SelectItem>

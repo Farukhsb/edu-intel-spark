@@ -512,6 +512,13 @@ describe("AdminDashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
 
     expect(await screen.findByRole("heading", { name: "Edit profile" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "Role" }));
+    expect(await screen.findByRole("option", { name: "student" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "lecturer" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "admin" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "moderator" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "external_examiner" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "student" }));
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "Samuel Student" },
     });
