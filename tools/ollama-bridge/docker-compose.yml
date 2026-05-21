@@ -1,0 +1,13 @@
+services:
+  ollama-bridge:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    ports:
+      - "8790:8790"
+    env_file:
+      - .env
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    volumes:
+      - ./:/app
