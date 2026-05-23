@@ -362,6 +362,7 @@ Supporting documentation:
 - [Technical Summary](TECHNICAL_SUMMARY.md)
 - [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
 - [Security Model](docs/SECURITY_MODEL.md)
+- [AI Provider And Deployment Strategy](docs/AI_PROVIDER_AND_DEPLOYMENT_STRATEGY.md)
 - [Test Coverage Strategy](docs/support/TEST_COVERAGE_STRATEGY.md)
 - [Release Readiness Checklist](docs/support/RELEASE_READINESS_CHECKLIST.md)
 - [Live Role-Boundary Smoke Checklist](docs/support/LIVE_ROLE_BOUNDARY_SMOKE.md)
