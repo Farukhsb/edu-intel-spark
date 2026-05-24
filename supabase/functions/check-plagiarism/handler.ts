@@ -1102,7 +1102,7 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
 
     const integrityModel = readEnv("OPENAI_INTEGRITY_MODEL") || "gpt-4o-mini";
     const providerMode = resolveIntegrityProviderMode(rawBody);
-    const shouldRunLegacy = providerMode === "llm_legacy" || providerMode === "both";
+    const shouldRunLegacy = providerMode === "llm_legacy";
     const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";
     const mossRunnerConfig = resolveMossRunnerConfig();
     const shouldRunMossProvider = Boolean(mossRunnerConfig);

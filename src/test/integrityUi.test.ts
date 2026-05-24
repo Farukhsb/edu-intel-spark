@@ -7,6 +7,7 @@ import {
   buildIntegritySeverityLabel,
   buildIntegrityClientOutcome,
   deriveIntegrityCardPresentation,
+  resolveIntegrityDisplayDisposition,
 } from "@/pages/dashboard/assignment-detail/domain";
 import type { PlagiarismFlag } from "@/pages/dashboard/assignment-detail/types";
 
@@ -115,6 +116,7 @@ describe("integrity UI helpers", () => {
       integrity_type: "mixed",
     });
     expect(flags[0].reason).toBe("Combined AI-writing signals and substantive uncited overlap warrant lecturer review.");
+    expect(resolveIntegrityDisplayDisposition(flags[0])).toBe("review");
   });
 
   it("builds a pair-level summary from the displayed integrity flags", () => {
@@ -124,7 +126,7 @@ describe("integrity UI helpers", () => {
     );
 
     expect(summary).toBe(
-      "2 submission pair(s) were flagged because one or more integrity signals crossed the current review thresholds.",
+      "2 submission pair(s) were flagged. 2 pair(s) need urgent lecturer investigation because high-priority integrity signals were detected.",
     );
   });
 
@@ -144,12 +146,20 @@ describe("integrity UI helpers", () => {
     });
 
     expect(metrics).toEqual([
-      { label: "Overall risk", value: "23%" },
+      { label: "Combined score", value: "23%" },
       { label: "Similarity", value: "45%" },
       { label: "Cited overlap", value: "12%" },
       { label: "AI-writing signal", value: "75%" },
     ]);
-    expect(buildIntegritySeverityLabel({ ...SAMPLE_FLAG, recommended_action: "review", severity: "medium" })).toBe(
+    expect(
+      buildIntegritySeverityLabel({
+        ...SAMPLE_FLAG,
+        similarity_score: 45,
+        total_risk_score: 23,
+        recommended_action: "review",
+        severity: "medium",
+      }),
+    ).toBe(
       "Needs review",
     );
   });

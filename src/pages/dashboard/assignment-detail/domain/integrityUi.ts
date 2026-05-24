@@ -43,6 +43,8 @@ export type IntegrityDisplayMetric = {
   value: string;
 };
 
+export type IntegrityDisplayDisposition = "monitor" | "review" | "investigate";
+
 const ACTION_RANK: Record<NonNullable<PlagiarismFlag["recommended_action"]>, number> = {
   clear: 0,
   review: 1,
@@ -61,7 +63,32 @@ const normalizePairKey = (flag: PlagiarismFlag) =>
 const dedupeText = (values: Array<string | null | undefined>) =>
   Array.from(new Set(values.map((value) => value?.trim() || "").filter(Boolean)));
 
+const exceedsInvestigateThreshold = (flag: PlagiarismFlag) =>
+  (flag.similarity_score || 0) >= 80 ||
+  (flag.ai_suspicion_score || 0) >= 80 ||
+  (flag.baseline_deviation_score || 0) >= 80 ||
+  (flag.total_risk_score || 0) >= 80;
+
+const exceedsReviewThreshold = (flag: PlagiarismFlag) =>
+  (flag.similarity_score || 0) >= 45 ||
+  (flag.ai_suspicion_score || 0) >= 45 ||
+  (flag.baseline_deviation_score || 0) >= 45 ||
+  (flag.total_risk_score || 0) >= 45;
+
+export function resolveIntegrityDisplayDisposition(flag: PlagiarismFlag): IntegrityDisplayDisposition {
+  if (flag.recommended_action === "investigate" || exceedsInvestigateThreshold(flag)) {
+    return "investigate";
+  }
+
+  if (flag.recommended_action === "review" || exceedsReviewThreshold(flag)) {
+    return "review";
+  }
+
+  return "monitor";
+}
+
 const buildIntegrityReason = (flag: PlagiarismFlag) => {
+  const disposition = resolveIntegrityDisplayDisposition(flag);
   const similarity = flag.similarity_score || 0;
   const ai = flag.ai_suspicion_score || 0;
   const baseline = flag.baseline_deviation_score || 0;
@@ -70,28 +97,42 @@ const buildIntegrityReason = (flag: PlagiarismFlag) => {
 
   if (ai >= 45 && similarity >= 45) {
     return uncited >= 25
-      ? "Combined AI-writing signals and substantive uncited overlap warrant lecturer review."
-      : "Combined AI-writing signals and similarity indicators warrant lecturer review.";
+      ? disposition === "investigate"
+        ? "Combined AI-writing signals and substantive uncited overlap need urgent lecturer investigation."
+        : "Combined AI-writing signals and substantive uncited overlap warrant lecturer review."
+      : disposition === "investigate"
+        ? "Combined AI-writing signals and similarity indicators need urgent lecturer investigation."
+        : "Combined AI-writing signals and similarity indicators warrant lecturer review.";
   }
 
   if (ai >= 45) {
-    return "AI-writing indicators are the primary concern and should be reviewed by a lecturer.";
+    return disposition === "investigate"
+      ? "AI-writing indicators are the primary concern and need urgent lecturer investigation."
+      : "AI-writing indicators are the primary concern and should be reviewed by a lecturer.";
   }
 
   if (baseline >= 45 && similarity < 25) {
-    return "The submission departs materially from the student's prior writing profile and should be reviewed.";
+    return disposition === "investigate"
+      ? "The submission departs materially from the student's prior writing profile and needs urgent lecturer investigation."
+      : "The submission departs materially from the student's prior writing profile and should be reviewed.";
   }
 
   if (similarity >= 45) {
     if (uncited >= 25) {
-      return "Substantive uncited overlap was detected within this assignment cohort and should be reviewed.";
+      return disposition === "investigate"
+        ? "Substantive uncited overlap was detected within this assignment cohort and needs urgent lecturer investigation."
+        : "Substantive uncited overlap was detected within this assignment cohort and should be reviewed.";
     }
 
     if (cited >= uncited && cited >= 10) {
-      return "Most of the detected overlap appears in cited material, but the similarity level still warrants lecturer review.";
+      return disposition === "investigate"
+        ? "Most of the detected overlap appears in cited material, but the overall signal still needs urgent lecturer investigation."
+        : "Most of the detected overlap appears in cited material, but the similarity level still warrants lecturer review.";
     }
 
-    return "Similarity in language or structure within this assignment cohort warrants lecturer review.";
+    return disposition === "investigate"
+      ? "Similarity in language or structure within this assignment cohort needs urgent lecturer investigation."
+      : "Similarity in language or structure within this assignment cohort warrants lecturer review.";
   }
 
   if ((flag.total_risk_score || 0) >= 25) {
@@ -166,17 +207,31 @@ export function buildIntegrityDisplayFlags(flags: PlagiarismFlag[]) {
 export function buildIntegrityDisplaySummary(flags: PlagiarismFlag[], summary: string) {
   const normalizedSummary = normalizeMessage(summary);
   if (flags.length === 0) return normalizedSummary;
+  const reviewCount = flags.filter((flag) => resolveIntegrityDisplayDisposition(flag) === "review").length;
+  const investigateCount = flags.filter((flag) => resolveIntegrityDisplayDisposition(flag) === "investigate").length;
+
+  if (investigateCount > 0) {
+    return flags.length === 1
+      ? "One submission pair needs urgent lecturer investigation because a high-priority integrity signal was detected."
+      : `${flags.length} submission pair(s) were flagged. ${investigateCount} pair(s) need urgent lecturer investigation because high-priority integrity signals were detected.`;
+  }
+
+  if (reviewCount > 0) {
+    return flags.length === 1
+      ? "One submission pair was flagged because one or more integrity signals reached the lecturer review threshold."
+      : `${flags.length} submission pair(s) were flagged because one or more integrity signals reached the lecturer review threshold.`;
+  }
 
   return flags.length === 1
-    ? "One submission pair was flagged because one or more integrity signals crossed the current review thresholds."
-    : `${flags.length} submission pair(s) were flagged because one or more integrity signals crossed the current review thresholds.`;
+    ? "One submission pair was flagged because one or more integrity signals crossed the monitoring threshold."
+    : `${flags.length} submission pair(s) were flagged because one or more integrity signals crossed the monitoring threshold.`;
 }
 
 export function buildIntegrityDisplayMetrics(flag: PlagiarismFlag): IntegrityDisplayMetric[] {
   const metrics: IntegrityDisplayMetric[] = [];
 
   metrics.push({
-    label: "Overall risk",
+    label: "Combined score",
     value: `${flag.total_risk_score || flag.similarity_score || 0}%`,
   });
 
@@ -217,8 +272,9 @@ export function buildIntegrityDisplayMetrics(flag: PlagiarismFlag): IntegrityDis
 }
 
 export function buildIntegritySeverityLabel(flag: PlagiarismFlag) {
-  if (flag.recommended_action === "investigate" || flag.severity === "high") return "High priority";
-  if (flag.recommended_action === "review" || flag.severity === "medium") return "Needs review";
+  const disposition = resolveIntegrityDisplayDisposition(flag);
+  if (disposition === "investigate") return "High priority";
+  if (disposition === "review") return "Needs review";
   return "Monitor";
 }
 
