@@ -12,6 +12,7 @@ without having to guess which older notes are still relevant.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): current frontend, Supabase, and Edge Function structure
 - [`SECURITY_MODEL.md`](SECURITY_MODEL.md): plain-English security model and boundaries
 - [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md): current workflow-to-table/RLS/function map
+- [`MIGRATION_RISK_INDEX.md`](MIGRATION_RISK_INDEX.md): high-risk migration categories and what to re-check
 - [`TESTING.md`](TESTING.md): current automated testing and security-check baseline
 - [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md): release, deployment, migration, and incident steps
 

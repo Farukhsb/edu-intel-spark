@@ -4,6 +4,13 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
@@ -30,6 +37,12 @@ jobs:
 
       - name: Run lint
         run: npm run lint
+
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run permission contract tests
+        run: npm run test:access
 
       - name: Run tests
         run: npm run test

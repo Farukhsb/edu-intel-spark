@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Json } from "@/integrations/supabase/types";
 import {
   buildAIGradingReadyNotification,
   buildIntegrityCheckReadyNotification,
@@ -17,239 +16,32 @@ import type {
   AssignmentDetailAssignment,
   AssignmentDetailSubmission,
   Grade,
-  SubmissionStatus,
 } from "@/pages/dashboard/assignment-detail/types";
-import type { AIResponse, GradeBreakdown, Submission } from "@/types";
+import type { Submission } from "@/types";
 import type { AcademicIntegrityFlag } from "@/types/academic";
+import {
+  buildExtractionFailureRecoveryIssue,
+  buildInvalidResultRecoveryIssue,
+  buildLastGradingRunSummary,
+  buildMissingFileRecoveryIssue,
+  buildMissingResultRecoveryIssue,
+  buildServiceFailureRecoveryIssue,
+  getErrorMessage,
+  GRADABLE_FILE_LABEL,
+  hasGradableSubmissionFile,
+  INTEGRITY_RUNTIME_WARNING_THRESHOLD,
+  isExtractionFailure,
+  isRetryableRecoveryType,
+  LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD,
+  LEGACY_INTEGRITY_REQUEST_COMPAT_LIMIT,
+  persistGradedSubmissionResult,
+  type GradeSubmissionInvokeData,
+  type LastGradingRunSummary,
+  type SubmissionGradingRecoveryIssue,
+} from "./automatedAssessmentShared";
 
-interface GradeSubmissionResult {
-  submissionId: string;
-  success: boolean;
-  score?: number | null;
-  feedback?: string | null;
-  breakdown?: GradeBreakdown[] | null;
-  assignmentType?: string | null;
-  gradingConfidence?: number | null;
-  gradingMetadata?: Record<string, unknown> | null;
-  requiresLecturerReview?: boolean;
-  error?: string | null;
-  aiResponse?: AIResponse | null;
-}
-
-interface GradeSubmissionInvokeData {
-  results?: GradeSubmissionResult[];
-}
-
-const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;
-const LEGACY_INTEGRITY_REQUEST_COMPAT_LIMIT = 80;
-const INTEGRITY_RUNTIME_WARNING_THRESHOLD = 30;
-const GRADABLE_TEXT_EXTENSIONS = [
-  ".pdf",
-  ".docx",
-  ".txt",
-  ".py",
-  ".js",
-  ".ts",
-  ".tsx",
-  ".jsx",
-  ".java",
-  ".c",
-  ".cpp",
-  ".cc",
-  ".cs",
-  ".go",
-  ".php",
-  ".rb",
-  ".rs",
-  ".swift",
-  ".kt",
-  ".kts",
-  ".scala",
-  ".sql",
-  ".html",
-  ".css",
-  ".json",
-  ".xml",
-  ".yaml",
-  ".yml",
-  ".sh",
-  ".md",
-] as const;
-const GRADABLE_FILE_LABEL = "PDF, DOCX, TXT, or supported code file";
-const EXTRACTION_FAILURE_MESSAGE =
-  "We could not read this document. Please upload a readable PDF, DOCX, TXT, or supported code file.";
-
-const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
-const asJson = (value: unknown): Json => value as Json;
-
-const hasGradableSubmissionFile = (submission: AssignmentDetailSubmission) => {
-  const candidate = `${submission.file_name ?? ""} ${submission.file_url ?? ""}`.toLowerCase();
-  return (
-    Boolean(submission.file_url?.trim()) &&
-    GRADABLE_TEXT_EXTENSIONS.some((extension) => candidate.includes(extension))
-  );
-};
-
-const isExtractionFailure = (message: string | null | undefined) =>
-  typeof message === "string" && message.includes(EXTRACTION_FAILURE_MESSAGE);
-
-type LastGradingRunSummary = {
-  attemptedCount: number;
-  detail: string;
-  extractionFailureCount: number;
-  failedCount: number;
-  headline: string;
-  invalidResultCount: number;
-  recoveryActions: string[];
-  serviceFailureCount: number;
-  skippedCount: number;
-  successCount: number;
-};
-
-export type SubmissionGradingRecoveryIssue = {
-  detail: string;
-  headline: string;
-  recoveryLabel: string;
-  type: "missing_file" | "extraction_failure" | "invalid_result" | "service_failure";
-};
-
-const isRetryableRecoveryType = (type: SubmissionGradingRecoveryIssue["type"]) => type !== "missing_file";
-
-type GradePersistenceClient = {
-  from: (table: "grades" | "submissions") => {
-    upsert?: (
-      values: {
-        submission_id: string;
-        ai_score: number | null;
-        ai_feedback: string | null;
-        ai_breakdown: Json;
-        assignment_type: string | null;
-        grading_confidence: number | null;
-        grading_metadata: Json;
-      },
-      options: { onConflict: string },
-    ) => Promise<{ error: { message?: string } | null }>;
-    update?: (values: { status: SubmissionStatus }) => {
-      eq: (column: string, value: string) => Promise<{ error: { message?: string } | null }>;
-    };
-  };
-};
-
-type PersistGradedSubmissionResultArgs = {
-  gradingResult: GradeSubmissionResult;
-  submissionId: string;
-  supabaseClient?: GradePersistenceClient;
-  validatedGrade: {
-    ai_score: number | null;
-    ai_feedback: string | null;
-    ai_breakdown: GradeBreakdown[] | null;
-    grading_confidence: number | null;
-  };
-};
-
-export const persistGradedSubmissionResult = async ({
-  gradingResult,
-  submissionId,
-  supabaseClient = supabase as unknown as GradePersistenceClient,
-  validatedGrade,
-}: PersistGradedSubmissionResultArgs) => {
-  const gradesTable = supabaseClient.from("grades");
-  const submissionsTable = supabaseClient.from("submissions");
-
-  if (!gradesTable.upsert || !submissionsTable.update) {
-    throw new Error("The grading persistence client is not configured correctly.");
-  }
-
-  const { error: gradeWriteError } = await gradesTable.upsert(
-    {
-      submission_id: submissionId,
-      ai_score: validatedGrade.ai_score,
-      ai_feedback: validatedGrade.ai_feedback,
-      ai_breakdown: asJson(validatedGrade.ai_breakdown),
-      assignment_type: gradingResult.assignmentType ?? null,
-      grading_confidence: validatedGrade.grading_confidence ?? null,
-      grading_metadata: asJson(gradingResult.gradingMetadata ?? {}),
-    },
-    { onConflict: "submission_id" },
-  );
-
-  if (gradeWriteError) {
-    throw new Error(gradeWriteError.message || "The AI grade could not be saved.");
-  }
-
-  const nextStatus = gradingResult.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
-  const { error: submissionWriteError } = await submissionsTable.update({ status: nextStatus }).eq("id", submissionId);
-
-  if (submissionWriteError) {
-    throw new Error(submissionWriteError.message || "The submission workflow status could not be updated.");
-  }
-};
-
-const buildLastGradingRunSummary = ({
-  attemptedCount,
-  extractionFailureCount,
-  failedCount,
-  invalidResultCount,
-  serviceFailureCount,
-  skippedCount,
-  successCount,
-}: Omit<LastGradingRunSummary, "headline" | "detail" | "recoveryActions">): LastGradingRunSummary | null => {
-  if (failedCount === 0 && skippedCount === 0) {
-    return null;
-  }
-
-  const recoveryActions: string[] = [];
-  const detailParts: string[] = [];
-
-  if (skippedCount > 0) {
-    detailParts.push(
-      `${skippedCount} selected submission${skippedCount === 1 ? " was" : "s were"} skipped before grading because no readable ${GRADABLE_FILE_LABEL} was attached.`,
-    );
-    recoveryActions.push(`Ask the student to upload a readable ${GRADABLE_FILE_LABEL}.`);
-  }
-
-  if (extractionFailureCount > 0) {
-    detailParts.push(
-      `${extractionFailureCount} submission${extractionFailureCount === 1 ? "" : "s"} could not be read by the grading service.`,
-    );
-    recoveryActions.push("Retry AI grading after confirming the uploaded files open correctly.");
-  }
-
-  if (invalidResultCount > 0) {
-    detailParts.push(
-      `${invalidResultCount} grading result${invalidResultCount === 1 ? " was" : "s were"} incomplete and need manual follow-up.`,
-    );
-  }
-
-  if (serviceFailureCount > 0) {
-    detailParts.push(
-      `${serviceFailureCount} submission${serviceFailureCount === 1 ? "" : "s"} failed because the grading service did not complete cleanly.`,
-    );
-    if (!recoveryActions.includes("Retry AI grading after confirming the uploaded files open correctly.")) {
-      recoveryActions.push("Retry AI grading once the service is available again.");
-    }
-  }
-
-  if (!recoveryActions.includes("Continue with manual review if the retry still fails so release work does not stall.")) {
-    recoveryActions.push("Continue with manual review if the retry still fails so release work does not stall.");
-  }
-
-  return {
-    attemptedCount,
-    detail: detailParts.join(" "),
-    extractionFailureCount,
-    failedCount,
-    headline:
-      successCount > 0
-        ? `${failedCount + skippedCount} of ${attemptedCount + skippedCount} selected submissions still need attention`
-        : "Last grading run needs attention before the workflow can move on",
-    invalidResultCount,
-    recoveryActions,
-    serviceFailureCount,
-    skippedCount,
-    successCount,
-  };
-};
+export type { SubmissionGradingRecoveryIssue } from "./automatedAssessmentShared";
+export { persistGradedSubmissionResult } from "./automatedAssessmentShared";
 
 interface UseAutomatedAssessmentActionsArgs {
   assignment: AssignmentDetailAssignment | null;
@@ -395,12 +187,7 @@ export const useAutomatedAssessmentActions = ({
           failCount++;
           invalidResultCount++;
           failureMessages.add("A grading result was missing for one submission.");
-          nextRecoveryIssues[submission.id] = {
-            headline: "Incomplete grading result",
-            detail: "The grading service returned no usable result for this submission. Retry the batch or continue with manual follow-up.",
-            recoveryLabel: "Select for retry",
-            type: "invalid_result",
-          };
+          nextRecoveryIssues[submission.id] = buildMissingResultRecoveryIssue();
           continue;
         }
 
@@ -420,12 +207,7 @@ export const useAutomatedAssessmentActions = ({
             failCount++;
             invalidResultCount++;
             failureMessages.add("A grading result could not be validated.");
-            nextRecoveryIssues[submission.id] = {
-              headline: "Incomplete grading result",
-              detail: "The grading output could not be validated, so this submission stayed in its previous workflow state.",
-              recoveryLabel: "Select for retry",
-              type: "invalid_result",
-            };
+            nextRecoveryIssues[submission.id] = buildInvalidResultRecoveryIssue();
             continue;
           }
 
@@ -451,42 +233,23 @@ export const useAutomatedAssessmentActions = ({
             failCount++;
             serviceFailureCount++;
             failureMessages.add("The grading result was returned, but it could not be saved.");
-            nextRecoveryIssues[submission.id] = {
-              headline: "Retry AI grading",
-              detail:
-                "The grading service returned an answer, but the grade could not be saved cleanly. Retry the submission or continue with manual follow-up.",
-              recoveryLabel: "Select for retry",
-              type: "service_failure",
-            };
+            nextRecoveryIssues[submission.id] = buildServiceFailureRecoveryIssue(
+              "The grading service returned an answer, but the grade could not be saved cleanly. Retry the submission or continue with manual follow-up.",
+            );
           }
         } else {
           if (typeof result.error === "string" && result.error.trim()) {
             failureMessages.add(result.error.trim());
             if (isExtractionFailure(result.error)) {
               extractionFailureCount++;
-              nextRecoveryIssues[submission.id] = {
-                headline: "Readable file needed",
-                detail: "The grading service could not read this document. Check that the file opens correctly and ask for a clearer upload if needed.",
-                recoveryLabel: "Needs re-upload",
-                type: "extraction_failure",
-              };
+              nextRecoveryIssues[submission.id] = buildExtractionFailureRecoveryIssue();
             } else {
               serviceFailureCount++;
-              nextRecoveryIssues[submission.id] = {
-                headline: "Retry AI grading",
-                detail: result.error.trim(),
-                recoveryLabel: "Select for retry",
-                type: "service_failure",
-              };
+              nextRecoveryIssues[submission.id] = buildServiceFailureRecoveryIssue(result.error.trim());
             }
           } else {
             serviceFailureCount++;
-            nextRecoveryIssues[submission.id] = {
-              headline: "Retry AI grading",
-              detail: "The grading service did not complete cleanly for this submission.",
-              recoveryLabel: "Select for retry",
-              type: "service_failure",
-            };
+            nextRecoveryIssues[submission.id] = buildServiceFailureRecoveryIssue();
           }
           try {
             await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
@@ -510,12 +273,7 @@ export const useAutomatedAssessmentActions = ({
         toast.success(`${successCount} submission(s) graded successfully`);
       }
       for (const submission of preflightFailures) {
-        nextRecoveryIssues[submission.id] = {
-          headline: "Readable file needed",
-          detail: `No readable ${GRADABLE_FILE_LABEL} was attached, so this submission was skipped before grading.`,
-          recoveryLabel: "Needs re-upload",
-          type: "missing_file",
-        };
+        nextRecoveryIssues[submission.id] = buildMissingFileRecoveryIssue();
       }
       setLastSubmissionRecoveryIssues(nextRecoveryIssues);
       setLastGradingRunSummary(
@@ -540,23 +298,12 @@ export const useAutomatedAssessmentActions = ({
       toast.error(getErrorMessage(error));
       const nextRecoveryIssues = Object.fromEntries(
         [
-          ...preflightFailures.map((submission) => [
-            submission.id,
-            {
-              headline: "Readable file needed",
-              detail: `No readable ${GRADABLE_FILE_LABEL} was attached, so this submission was skipped before grading.`,
-              recoveryLabel: "Needs re-upload",
-              type: "missing_file" as const,
-            },
-          ]),
+          ...preflightFailures.map((submission) => [submission.id, buildMissingFileRecoveryIssue()]),
           ...gradableSubmissions.map((submission) => [
             submission.id,
-            {
-              headline: "Retry AI grading",
-              detail: "The grading request failed before a usable result was returned. Retry the batch or continue with manual follow-up.",
-              recoveryLabel: "Select for retry",
-              type: "service_failure" as const,
-            },
+            buildServiceFailureRecoveryIssue(
+              "The grading request failed before a usable result was returned. Retry the batch or continue with manual follow-up.",
+            ),
           ]),
         ],
       );

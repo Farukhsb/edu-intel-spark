@@ -12,6 +12,7 @@
     "moss:runner": "node tools/moss-runner/server.js",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:access": "vitest run src/test/accessPolicyContracts.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:load": "node tools/load-test/run.mjs",
     "test:perf": "vitest run src/test/workflowPerformance.test.ts",

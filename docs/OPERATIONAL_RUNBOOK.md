@@ -161,6 +161,7 @@ Before applying migrations:
 - Confirm the migration file names use the expected timestamp format.
 - Review the migration diff before applying.
 - Check whether the migration affects RLS policies, role helpers, auth-sensitive tables, or production data.
+- If the migration touches a high-risk auth/RLS/admin area, review [`MIGRATION_RISK_INDEX.md`](MIGRATION_RISK_INDEX.md) as part of sign-off.
 - Do not rename historical migrations casually.
 - Do not manually edit hosted migration ledger entries unless there is a deliberate recovery plan.
 
@@ -183,6 +184,7 @@ After applying migrations:
 
 - Regenerate Supabase types if schema changes affect frontend/types.
 - Re-run tests/build.
+- Re-run `npm run test:access` for permission-sensitive changes.
 - Verify RLS-sensitive workflows with test users.
 - Confirm no unrelated user role gained access to private records.
 

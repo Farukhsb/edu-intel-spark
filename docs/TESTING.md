@@ -46,6 +46,10 @@ The normal baseline for dependency/security review is:
 - `npm audit --omit=dev`
 - GitHub Dependabot alerts and pull request security signals
 
+For permission-sensitive SQL or auth changes, also run:
+
+- `npm run test:access`
+
 In some environments, `npm audit` will fail with a `403 Forbidden` response from
 the npm advisory endpoint. That is a tooling/network limitation, not proof that
 the dependency tree is clean.
