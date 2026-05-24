@@ -38,6 +38,135 @@ export type IntegrityCardPresentation = {
   shouldShowCard: boolean;
 };
 
+const ACTION_RANK: Record<NonNullable<PlagiarismFlag["recommended_action"]>, number> = {
+  clear: 0,
+  review: 1,
+  investigate: 2,
+};
+
+const SEVERITY_RANK: Record<string, number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+};
+
+const normalizePairKey = (flag: PlagiarismFlag) =>
+  [flag.submission_a_id || "", flag.submission_b_id || ""].sort().join("::");
+
+const dedupeText = (values: Array<string | null | undefined>) =>
+  Array.from(new Set(values.map((value) => value?.trim() || "").filter(Boolean)));
+
+const buildIntegrityReason = (flag: PlagiarismFlag) => {
+  const similarity = flag.similarity_score || 0;
+  const ai = flag.ai_suspicion_score || 0;
+  const baseline = flag.baseline_deviation_score || 0;
+  const uncited = flag.overlap_analysis?.uncited_overlap || 0;
+  const cited = flag.overlap_analysis?.cited_overlap || 0;
+
+  if (ai >= 45 && similarity >= 45) {
+    return uncited >= 25
+      ? "Combined AI-writing signals and substantive uncited overlap warrant lecturer review."
+      : "Combined AI-writing signals and similarity indicators warrant lecturer review.";
+  }
+
+  if (ai >= 45) {
+    return "AI-writing indicators are the primary concern and should be reviewed by a lecturer.";
+  }
+
+  if (baseline >= 45 && similarity < 25) {
+    return "The submission departs materially from the student's prior writing profile and should be reviewed.";
+  }
+
+  if (similarity >= 45) {
+    if (uncited >= 25) {
+      return "Substantive uncited overlap was detected within this assignment cohort and should be reviewed.";
+    }
+
+    if (cited >= uncited && cited >= 10) {
+      return "Most of the detected overlap appears in cited material, but the similarity level still warrants lecturer review.";
+    }
+
+    return "Similarity in language or structure within this assignment cohort warrants lecturer review.";
+  }
+
+  if ((flag.total_risk_score || 0) >= 25) {
+    return "One or more integrity signals crossed the monitoring threshold and should be checked.";
+  }
+
+  return "Signals were recorded, but they remain below the current review threshold.";
+};
+
+export function buildIntegrityDisplayFlags(flags: PlagiarismFlag[]) {
+  const grouped = new Map<string, PlagiarismFlag>();
+
+  for (const flag of flags) {
+    const key = normalizePairKey(flag);
+    const existing = grouped.get(key);
+
+    if (!existing) {
+      grouped.set(key, {
+        ...flag,
+        reason: buildIntegrityReason(flag),
+      });
+      continue;
+    }
+
+    const merged: PlagiarismFlag = {
+      ...existing,
+      similarity_score: Math.max(existing.similarity_score || 0, flag.similarity_score || 0),
+      ai_suspicion_score: Math.max(existing.ai_suspicion_score || 0, flag.ai_suspicion_score || 0),
+      baseline_deviation_score: Math.max(existing.baseline_deviation_score || 0, flag.baseline_deviation_score || 0),
+      total_risk_score: Math.max(existing.total_risk_score || 0, flag.total_risk_score || 0),
+      matched_excerpt: existing.matched_excerpt || flag.matched_excerpt,
+      evidence_summary: dedupeText([existing.evidence_summary, flag.evidence_summary]).join("\n\n") || undefined,
+      recommended_action:
+        ACTION_RANK[flag.recommended_action || "clear"] > ACTION_RANK[existing.recommended_action || "clear"]
+          ? flag.recommended_action
+          : existing.recommended_action,
+      severity:
+        (SEVERITY_RANK[flag.severity] || 0) > (SEVERITY_RANK[existing.severity] || 0)
+          ? flag.severity
+          : existing.severity,
+      integrity_type:
+        existing.integrity_type === flag.integrity_type
+          ? existing.integrity_type
+          : "mixed",
+      overlap_analysis: {
+        total_overlap: Math.max(existing.overlap_analysis?.total_overlap || 0, flag.overlap_analysis?.total_overlap || 0),
+        cited_overlap: Math.max(existing.overlap_analysis?.cited_overlap || 0, flag.overlap_analysis?.cited_overlap || 0),
+        uncited_overlap: Math.max(existing.overlap_analysis?.uncited_overlap || 0, flag.overlap_analysis?.uncited_overlap || 0),
+        internal_peer_overlap: Math.max(
+          existing.overlap_analysis?.internal_peer_overlap || 0,
+          flag.overlap_analysis?.internal_peer_overlap || 0,
+        ),
+        external_source_overlap: Math.max(
+          existing.overlap_analysis?.external_source_overlap || 0,
+          flag.overlap_analysis?.external_source_overlap || 0,
+        ),
+      },
+    };
+
+    merged.reason = buildIntegrityReason(merged);
+    grouped.set(key, merged);
+  }
+
+  return Array.from(grouped.values()).sort(
+    (left, right) =>
+      (right.total_risk_score || 0) - (left.total_risk_score || 0) ||
+      (right.similarity_score || 0) - (left.similarity_score || 0) ||
+      (right.ai_suspicion_score || 0) - (left.ai_suspicion_score || 0),
+  );
+}
+
+export function buildIntegrityDisplaySummary(flags: PlagiarismFlag[], summary: string) {
+  const normalizedSummary = normalizeMessage(summary);
+  if (flags.length === 0) return normalizedSummary;
+
+  return flags.length === 1
+    ? "One submission pair was flagged because one or more integrity signals crossed the current review thresholds."
+    : `${flags.length} submission pair(s) were flagged because one or more integrity signals crossed the current review thresholds.`;
+}
+
 export function buildIntegrityClientOutcome({
   flags,
   summaries,
