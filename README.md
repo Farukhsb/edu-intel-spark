@@ -390,7 +390,6 @@ tools/
   grading-benchmark/  Scripts and fixtures for grading benchmark work
   load-test/          Read-heavy load test runner used by `npm run test:load`
   moss-runner/        Private MOSS bridge used by `npm run moss:runner`
-  ollama-bridge/      Optional self-hosted Ollama bridge kept separate from Supabase functions
 
 supabase/
   functions/          Edge Functions for grading, integrity, email, and tutoring
@@ -489,7 +488,6 @@ The support scripts for those checks live under `tools/`:
 - `tools/load-test/` contains the deployed-stack load runner used by `npm run test:load`
 - `tools/grading-benchmark/` holds grading benchmark support files
 - `tools/moss-runner/` contains the private MOSS bridge used for the optional code-similarity runner
-- `tools/ollama-bridge/` contains an optional standalone Ollama adapter for self-hosted experiments without changing the default OpenAI workflow
 
 The `benchmarks/` directory is where saved benchmark snapshots live. At the moment it mainly holds the database normalisation benchmark output kept for reference.
 
