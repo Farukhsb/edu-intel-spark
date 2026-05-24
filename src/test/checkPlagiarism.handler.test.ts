@@ -56,6 +56,10 @@ const repeatedEssay =
   "failures to a controlled mitigation plan covering observability probes, reconciliation checkpoints, and post-incident " +
   "verification tasks so the remediation logic can be audited with precise technical evidence. ";
 
+const longCodeFixture = Array.from({ length: 900 }, (_, index) =>
+  `def reconcile_queue_${index}(items):\n    checksum = ${index}\n    return [item for item in items if item and checksum >= 0]\n`,
+).join("\n");
+
 const ids = {
   assignment: "11111111-1111-4111-8111-111111111111",
   lecturer: "22222222-2222-4222-8222-222222222222",
@@ -769,6 +773,15 @@ describe("check-plagiarism handler", () => {
     process.env.MOSS_RUNNER_TIMEOUT_MS = "5000";
 
     const adminSupabase = createAdminSupabaseMock();
+    adminSupabase.storage = {
+      from: () => ({
+        download: async (path: string) => ({
+          data: new Blob([longCodeFixture], { type: "text/x-python" }),
+          error: null,
+          path,
+        }),
+      }),
+    };
     const openAiMock = vi.fn(async () => ({ flags: [], summary: "Legacy analysis completed." }));
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({
@@ -835,6 +848,9 @@ describe("check-plagiarism handler", () => {
         }),
       }),
     );
+    const mossRequestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    expect(mossRequestBody.submissions).toHaveLength(2);
+    expect(mossRequestBody.submissions[0].source_text).toBe(longCodeFixture);
     expect(payload.flags).toHaveLength(1);
     expect(payload.flags[0]).toMatchObject({
       submission_a_id: ids.submissionC,
@@ -842,6 +858,10 @@ describe("check-plagiarism handler", () => {
       integrity_type: "similarity",
     });
     expect(adminSupabase.integrityFindingUpsert).toHaveBeenCalled();
+    expect(adminSupabase.integrityFindingUpsert.mock.calls.flat().some((arg) =>
+      Array.isArray(arg) &&
+      arg.some((row) => row.provider === "internal_text_similarity")
+    )).toBe(false);
     expect(adminSupabase.integrityFindingUpsert.mock.calls.flat().some((arg) =>
       Array.isArray(arg) &&
       arg.some((row) => row.provider === "moss")

@@ -28,9 +28,32 @@ import { gradeSingleSubmission } from "./submission-stage.ts";
 import type { FetchSubmissionContentForGrading } from "./types.ts";
 
 const CONFIDENCE_THRESHOLD = 0.7;
-const GRADING_PASSES = 1;
+const DEFAULT_GRADING_PASSES = 3;
+const MAX_GRADING_PASSES = 5;
 const PASS_SPREAD_REVIEW_THRESHOLD_RATIO = 0.08;
 const PASS_SPREAD_REVIEW_THRESHOLD_MIN = 8;
+
+function readEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  if (typeof process !== "undefined" && process.env) {
+    return process.env[name];
+  }
+
+  return undefined;
+}
+
+function getConfiguredGradingPasses() {
+  const configured = Number(readEnv("OPENAI_GRADING_PASSES") || DEFAULT_GRADING_PASSES);
+  if (!Number.isFinite(configured)) return DEFAULT_GRADING_PASSES;
+
+  const normalized = Math.trunc(configured);
+  if (normalized < 1) return 1;
+
+  return Math.min(normalized, MAX_GRADING_PASSES);
+}
 
 function getPassSpreadThreshold(maxScore: number) {
   return Math.max(PASS_SPREAD_REVIEW_THRESHOLD_MIN, Math.round(maxScore * PASS_SPREAD_REVIEW_THRESHOLD_RATIO));
@@ -248,6 +271,7 @@ Deno.serve(async (req) => {
 
     const { assignmentId, submissionId, submissionIds, force_regenerate } = parsedRequest.data;
     const gradingModel = getModel("OPENAI_GRADING_MODEL", "gpt-4o-mini");
+    const gradingPasses = getConfiguredGradingPasses();
     const forceRegenerate = force_regenerate ?? false;
     const regradeReason =
       typeof rawBody?.regrade_reason === "string" && rawBody.regrade_reason.trim()
@@ -387,7 +411,7 @@ Deno.serve(async (req) => {
           forceRegenerate,
           regradeReason,
           confidenceThreshold: CONFIDENCE_THRESHOLD,
-          gradingPasses: GRADING_PASSES,
+          gradingPasses,
           getPassSpreadThreshold,
           fetchSubmissionContent: (submission) => fetchSubmissionContent(supabaseAdmin, submission),
         }));

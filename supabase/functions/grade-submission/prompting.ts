@@ -14,6 +14,49 @@ export type ExistingGradeRecord = {
   ai_breakdown: unknown;
 };
 
+export function buildAssignmentTypeStrategy(assignmentType: AssignmentType) {
+  switch (assignmentType) {
+    case "Code":
+      return `ASSIGNMENT-TYPE STRATEGY: CODE
+- Judge functional correctness, completeness against the stated task, and whether the implementation or explanation actually matches the requirement.
+- Prioritise algorithm choice, data handling, edge cases, and whether the submission would plausibly work as described.
+- Reward clean structure and justified design decisions only when the underlying solution is correct enough to deserve them.
+- Do not over-reward comments, formatting, or fluent explanation when the logic is weak or incomplete.
+- If the submission mixes prose and code, use the criterion-specific evidence packets to keep technical correctness separate from explanation quality.`;
+    case "Reflective":
+      return `ASSIGNMENT-TYPE STRATEGY: REFLECTIVE
+- Judge specificity, authenticity, self-awareness, and application of learning rather than polished generic prose.
+- Reward concrete examples, explicit reflection on decisions, and clear links between experience and learning outcomes.
+- Penalise generic reflection that sounds fluent but remains vague, unpersonalised, or unsupported by specific experience.
+- Do not confuse emotional tone or fluent style with depth of reflection.`;
+    case "Report":
+      return `ASSIGNMENT-TYPE STRATEGY: REPORT
+- Judge structure, methodology, evidence use, analysis, and recommendation quality.
+- Reward clear use of findings, comparison of options, and justified professional conclusions.
+- Distinguish description from analysis: a well-written summary without evaluation should not receive high analytical marks.
+- Give more weight to whether claims are supported by evidence than to surface polish alone.`;
+    case "Problem Solving":
+      return `ASSIGNMENT-TYPE STRATEGY: PROBLEM SOLVING
+- Judge whether the submission addresses the problem directly, applies the correct method, and shows enough working to justify the result.
+- Reward coherent stepwise reasoning and partial progress when it is genuinely relevant.
+- Distinguish a minor slip from a wrong method or missing reasoning.
+- Do not reward a correct-looking final answer if the working is absent, contradictory, or unsupported.`;
+    case "Mathematics":
+      return `ASSIGNMENT-TYPE STRATEGY: MATHEMATICS
+- Judge derivation validity, symbolic correctness, carry-forward logic, and whether each step follows from the previous one.
+- Reward mathematically valid progress even when arithmetic slips occur later.
+- Distinguish arithmetic slips from conceptual flaws.
+- Do not judge mathematical quality mainly by prose fluency.`;
+    case "Essay":
+    default:
+      return `ASSIGNMENT-TYPE STRATEGY: ESSAY
+- Judge argument quality, relevance, evidence use, conceptual understanding, and whether claims are defended rather than merely stated.
+- Reward clear thesis development, engagement with competing ideas where relevant, and supported interpretation.
+- Distinguish descriptive summary from analysis: descriptive but accurate prose should not receive high analytical marks.
+- Do not over-reward style if the argument, evidence, or conceptual depth is weak.`;
+  }
+}
+
 export function buildRegradeAnchorText(existingGrade: ExistingGradeRecord | null | undefined) {
   if (!existingGrade || existingGrade.ai_score == null) return "";
   const previousBreakdown = Array.isArray(existingGrade.ai_breakdown) ? existingGrade.ai_breakdown : [];
@@ -58,6 +101,7 @@ export function buildGradingPrompt({
   rubricCalibrationGuide,
   regradeAnchorText,
   textPreview,
+  criterionEvidenceText,
 }: {
   assignmentType: AssignmentType;
   assignmentTitle: string;
@@ -68,6 +112,7 @@ export function buildGradingPrompt({
   rubricCalibrationGuide: string;
   regradeAnchorText: string;
   textPreview: string;
+  criterionEvidenceText?: string;
 }) {
   return `AssignmentType: ${assignmentType}
 
@@ -81,6 +126,8 @@ ${rubricText}
 
 ${rubricCalibrationGuide}
 
+${buildAssignmentTypeStrategy(assignmentType)}
+
 Evaluate criterion-by-criterion. Do not award a score unless supported by the submission evidence.
 If evidence is weak or ambiguous, reduce confidence and require lecturer review.
 For a single broad 100-mark criterion, use UK university bands:
@@ -93,6 +140,11 @@ Do not assign the 40s to competent work that addresses the task and meets the ma
 ${regradeAnchorText}
 Submission text:
 ${textPreview}
+
+${criterionEvidenceText ? `Criterion-specific evidence packets:
+${criterionEvidenceText}
+
+Use the criterion-specific packets as your primary evidence map. If a criterion packet contains weak or limited evidence, lower confidence for that criterion rather than borrowing evidence from another criterion.` : ""}
 
 Return valid JSON only.`;
 }
@@ -304,19 +356,9 @@ Maths-specific rules:
 - Final score is out of ${maxScore}.`;
   }
 
-  const specialization =
-    assignmentType === "Code"
-      ? "Focus on correctness, completeness, structure, and whether the code or explanation matches the requirement."
-      : assignmentType === "Reflective"
-        ? "Focus on authentic reflection, specificity, self-awareness, and application of learning."
-        : assignmentType === "Report"
-          ? "Focus on structure, evidence, analysis, and professional communication."
-          : "Focus on argument quality, evidence, relevance, and conceptual understanding.";
-
   return `${baseRules}
 
 You are in ${assignmentType.toUpperCase()} mode.
-${specialization}
 - Final score is out of ${maxScore}.`;
 }
 

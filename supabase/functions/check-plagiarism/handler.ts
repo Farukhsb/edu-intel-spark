@@ -617,6 +617,7 @@ async function fetchFileContent(
   sub: { file_url?: string; file_name?: string | null },
 ): Promise<{
   plainText: string;
+  fullText: string | null;
   fileType: string;
   mimeType: string;
   success: boolean;
@@ -627,6 +628,7 @@ async function fetchFileContent(
   if (!sub.file_url) {
     return {
       plainText: "",
+      fullText: null,
       fileType: "unsupported",
       mimeType: "application/octet-stream",
       success: false,
@@ -640,6 +642,7 @@ async function fetchFileContent(
     if (error || !data) {
       return {
         plainText: "",
+        fullText: null,
         fileType: "unsupported",
         mimeType: "application/octet-stream",
         success: false,
@@ -651,10 +654,12 @@ async function fetchFileContent(
 
     const mossLanguage = detectMossLanguage(sub.file_name || sub.file_url || null);
     if (mossLanguage) {
-      const codeText = truncateText(await data.text(), MAX_SINGLE_TEXT_CHARS);
+      const fullCodeText = await data.text();
+      const codeText = truncateText(fullCodeText, MAX_SINGLE_TEXT_CHARS);
       return {
         plainText: codeText,
-        fileType: "txt",
+        fullText: fullCodeText,
+        fileType: "code",
         mimeType: data.type || "text/plain",
         success: Boolean(codeText.trim()),
         extractionWarning: null,
@@ -674,6 +679,7 @@ async function fetchFileContent(
     const cleaned = truncateText(extraction.extractedText, MAX_SINGLE_TEXT_CHARS);
     return {
       plainText: cleaned,
+      fullText: extraction.extractedText,
       fileType: extraction.fileType,
       mimeType: extraction.mimeType,
       success: extraction.success,
@@ -684,6 +690,7 @@ async function fetchFileContent(
   } catch {
     return {
       plainText: "",
+      fullText: null,
       fileType: "unsupported",
       mimeType: "application/octet-stream",
       success: false,
@@ -824,6 +831,7 @@ function normalizeFlags(
       const severity = normalizeSeverity(candidate.severity);
       const recommendedAction = normalizeAction(candidate.recommended_action);
       const integrityType = normalizeType(candidate.integrity_type);
+      const provider = candidate.provider === "moss" ? "moss" : "other";
       const normalizedScores = normalizeScoresByContext(
         clampScore(candidate.similarity_score),
         clampScore(candidate.ai_suspicion_score),
@@ -831,16 +839,30 @@ function normalizeFlags(
         integrityType,
         recommendedAction,
       );
-      const overlap = deriveCitationAwareOverlap({
-        baseSimilarity: normalizedScores.similarity,
-        excerpt: typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
-        submissionA: processedContent.get(submissionAId),
-        submissionB: processedContent.get(submissionBId),
-        provided: candidate.overlap_analysis && typeof candidate.overlap_analysis === "object"
-          ? (candidate.overlap_analysis as Record<string, unknown>)
-          : undefined,
-        isPeerMatch: submissionAId !== submissionBId,
-      });
+      const overlap = provider === "moss"
+        ? {
+          classification: "uncited" as const,
+          effectiveSimilarity: normalizedScores.similarity,
+          overlap: {
+            total_overlap: normalizedScores.similarity,
+            cited_overlap: 0,
+            uncited_overlap: normalizedScores.similarity,
+            internal_peer_overlap: submissionAId !== submissionBId ? normalizedScores.similarity : 0,
+            external_source_overlap: 0,
+            reference_section_overlap: 0,
+            heavy_source_reliance: false,
+          },
+        }
+        : deriveCitationAwareOverlap({
+          baseSimilarity: normalizedScores.similarity,
+          excerpt: typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "",
+          submissionA: processedContent.get(submissionAId),
+          submissionB: processedContent.get(submissionBId),
+          provided: candidate.overlap_analysis && typeof candidate.overlap_analysis === "object"
+            ? (candidate.overlap_analysis as Record<string, unknown>)
+            : undefined,
+          isPeerMatch: submissionAId !== submissionBId,
+        });
       const baselineDeviationScore = clampScore(candidate.baseline_deviation_score);
       const totalRisk = computeRisk(overlap.effectiveSimilarity, normalizedScores.ai, baselineDeviationScore);
       const matchedExcerpt = typeof candidate.matched_excerpt === "string" ? candidate.matched_excerpt.trim() : "";
@@ -1321,6 +1343,7 @@ Rules:
       const sub = submissions[0];
       const content = contentMap.get(sub.id) || {
         plainText: "",
+        fullText: null,
         fileType: "unsupported",
         mimeType: "application/octet-stream",
         success: false,
@@ -1353,6 +1376,7 @@ Return a structured flag only if there is a genuine concern. Otherwise return no
       const summaries = submissions.map((submission) => {
         const content = contentMap.get(submission.id) || {
           plainText: "",
+          fullText: null,
           fileType: "unsupported",
           mimeType: "application/octet-stream",
           success: false,
@@ -1643,8 +1667,9 @@ Only flag real concerns. Return valid JSON only.`,
 
         const cachedContent = contentMap.get(submission.id);
         if (cachedContent?.success && !cachedContent.extractionError && cachedContent.plainText.trim()) {
-          codeSourceCache.set(submission.id, cachedContent.plainText);
-          return cachedContent.plainText;
+          const sourceText = cachedContent.fullText?.trim() ? cachedContent.fullText : cachedContent.plainText;
+          codeSourceCache.set(submission.id, sourceText);
+          return sourceText;
         }
 
         const content = await fetchFileContent(supabaseAdmin, submission);
@@ -1653,8 +1678,9 @@ Only flag real concerns. Return valid JSON only.`,
           return null;
         }
 
-        codeSourceCache.set(submission.id, content.plainText);
-        return content.plainText;
+        const sourceText = content.fullText?.trim() ? content.fullText : content.plainText;
+        codeSourceCache.set(submission.id, sourceText);
+        return sourceText;
       };
 
       const providerSubmissions = comparisonSubmissions.map(toProviderSubmission);
