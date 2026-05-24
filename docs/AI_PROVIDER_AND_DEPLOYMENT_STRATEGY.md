@@ -1,29 +1,28 @@
-# AI Provider And Deployment Strategy
+# AI Infrastructure and Data Governance Approach
 
-GradeAI is designed as an educator-led academic workflow platform. AI supports the preparation of grading evidence, feedback explanation, integrity review and related workflow assistance, but it does not replace academic judgement. Lecturers remain responsible for reviewing evidence, approving marks, making moderation and integrity decisions, and releasing feedback to students.
+GradeAI is an educator-led academic workflow platform. AI can support assessment assistance, feedback explanation, integrity review and related workflow activities, but it does not replace academic judgement. Lecturers remain responsible for reviewing evidence, approving marks, making moderation and integrity decisions, and releasing feedback to students.
 
 ## Controlled Pilot Approach
 
-During controlled pilot development, GradeAI uses hosted AI providers to support reliable testing of AI-assisted workflows. This approach allows the platform to be evaluated quickly while the assessment, review, moderation, release and audit controls are being tested in realistic scenarios.
+For pilot and early-stage deployments, GradeAI primarily uses OpenAI for assessment support. At this stage, this enables rapid iteration, high-quality feedback generation and operational reliability while maintaining human oversight of all academic decisions.
 
-Hosted-provider use during a pilot remains subject to appropriate data-handling decisions. Pilot testing should use synthetic or otherwise approved data unless the relevant institutional governance, privacy and provider-review requirements have been completed.
+Use of an external provider during a pilot remains subject to appropriate data-handling decisions. Pilot activity should use synthetic or otherwise approved data unless the relevant institutional governance, privacy and provider-review requirements have been completed.
 
 ## Institutional Adoption Path
 
-For department-level or institution-wide adoption, GradeAI is intended to support a private or self-hosted inference deployment model where required by institutional policy.
+For department-level or institution-wide adoption, GradeAI's longer-term architecture is intended to support self-hosted AI infrastructure where required by institutional policy. This would allow universities to retain greater control over student data, institutional policies, model governance and infrastructure configuration.
 
-Under such a deployment, an institution could retain greater control over:
+The planned transition path includes optional private inference environments using local or open models, enabling institutions to:
 
-- where student submissions, marks and feedback are processed
-- which AI models and infrastructure are approved for academic workflows
-- data residency, retention and access-control requirements
-- monitoring, audit and model-governance procedures
-- dependency on external AI providers
+- maintain stronger control over sensitive academic data
+- reduce dependency on external third-party providers
+- align with institutional data protection, data residency and governance requirements
+- configure models according to institution-specific academic policies
 
 A private or self-hosted deployment is not automatically compliant or risk-free. It would still require security testing, operational monitoring, model-quality evaluation, infrastructure maintenance and an institutional data protection review.
 
 ## Governance Principle
 
-The appropriate AI deployment model is an institutional governance decision. A hosted-provider deployment would require review of external processing and any relevant data-transfer arrangements. A private or self-hosted deployment would require review of the institution's own infrastructure, model controls and operational assurance.
+The appropriate AI deployment model is an institutional governance decision. An external-provider deployment would require review of external processing and any relevant data-transfer arrangements. A private or self-hosted deployment would require review of the institution's own infrastructure, model controls and operational assurance.
 
-In either model, GradeAI remains a decision-support system. Educators retain final responsibility for grading, moderation, academic integrity decisions and feedback release.
+Under either model, AI remains a decision-support tool. Lecturers retain final academic judgement over grading, moderation, integrity decisions and feedback release.
