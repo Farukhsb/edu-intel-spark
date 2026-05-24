@@ -11,8 +11,13 @@ describe("role helpers", () => {
     expect(parseAppRole("lecturer")).toBe("lecturer");
     expect(parseAppRole("student")).toBe("student");
     expect(parseAppRole("admin")).toBe("admin");
+  });
+
+  it("rejects missing or unsupported roles", () => {
     expect(parseAppRole("owner")).toBeNull();
+    expect(parseAppRole("")).toBeNull();
     expect(parseAppRole(null)).toBeNull();
+    expect(parseAppRole(undefined)).toBeNull();
   });
 
   it("treats admin as lecturer-equivalent without treating students as staff", () => {
