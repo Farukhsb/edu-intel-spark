@@ -45,6 +45,68 @@ describe("internal similarity flag candidates", () => {
     expect(flags[0].matched_excerpt.length).toBeGreaterThan(0);
   });
 
+  it("keeps low-similarity internal findings below review by default", () => {
+    const flags = buildInternalSimilarityFlagCandidates({
+      findings: [{
+        provider: "internal_text_similarity",
+        assignment_id: "assignment-1",
+        submission_id: "submission-b",
+        compared_submission_id: "submission-c",
+        similarity_score: 32,
+        severity: "low",
+        evidence_summary: "Low overlap across repeated terms only.",
+        matched_phrases: ["repeated terms only"],
+        raw_metadata: {},
+        analysis_limited: false,
+      }],
+      requestedSubmissionIds: new Set(["submission-c"]),
+      submissions: [
+        { id: "submission-b", student_name: "Student B", student_email: "b@example.com" },
+        { id: "submission-c", student_name: "Student C", student_email: "c@example.com" },
+      ],
+    });
+
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toMatchObject({
+      submission_a_id: "submission-c",
+      submission_b_id: "submission-b",
+      similarity_score: 32,
+      recommended_action: "clear",
+      severity: "low",
+    });
+  });
+
+  it("routes medium internal similarity findings to lecturer review", () => {
+    const flags = buildInternalSimilarityFlagCandidates({
+      findings: [{
+        provider: "internal_text_similarity",
+        assignment_id: "assignment-1",
+        submission_id: "submission-b",
+        compared_submission_id: "submission-c",
+        similarity_score: 57,
+        severity: "medium",
+        evidence_summary: "Material phrase overlap across substantive sections.",
+        matched_phrases: ["material phrase overlap"],
+        raw_metadata: {},
+        analysis_limited: false,
+      }],
+      requestedSubmissionIds: new Set(["submission-c"]),
+      submissions: [
+        { id: "submission-b", student_name: "Student B", student_email: "b@example.com" },
+        { id: "submission-c", student_name: "Student C", student_email: "c@example.com" },
+      ],
+    });
+
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toMatchObject({
+      submission_a_id: "submission-c",
+      submission_b_id: "submission-b",
+      similarity_score: 57,
+      recommended_action: "review",
+      severity: "medium",
+    });
+  });
+
   it("drops findings that do not involve the requested submission set", () => {
     const finding = analyzeTextSimilarity(
       repeatedEssay,

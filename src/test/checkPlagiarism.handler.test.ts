@@ -1237,6 +1237,7 @@ describe("check-plagiarism handler", () => {
     expect(payload.warnings).toEqual([]);
     expect(payload.summary).toContain("No submissions crossed the current integrity thresholds.");
     expect(adminSupabase.integrityFindingUpsert).not.toHaveBeenCalled();
+    expect(adminSupabase.reviewUpsert).not.toHaveBeenCalled();
   });
 
   it("fails explicitly when the assignment-wide cohort query errors", async () => {

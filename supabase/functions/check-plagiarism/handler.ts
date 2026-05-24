@@ -591,6 +591,20 @@ function actionFromRisk(score: number): IntegrityFlag["recommended_action"] {
   return "clear";
 }
 
+function crossesIntegrityThreshold(snapshot: {
+  totalScore: number;
+  aiWritingScore: number;
+  similarityScore: number;
+  baselineDeviationScore: number;
+}) {
+  return (
+    snapshot.similarityScore >= MIN_INTEGRITY_FLAG_SCORE ||
+    snapshot.aiWritingScore >= MIN_INTEGRITY_FLAG_SCORE ||
+    snapshot.baselineDeviationScore >= MIN_INTEGRITY_FLAG_SCORE ||
+    snapshot.totalScore >= MIN_INTEGRITY_FLAG_SCORE
+  );
+}
+
 function truncateText(text: string, maxChars: number) {
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}\n\n[truncated]`;
@@ -2050,6 +2064,7 @@ Only flag real concerns. Return valid JSON only.`,
         const snapshot = snapshots.get(submission.id) || null;
         const existingReview = existingReviewMap.get(submission.id);
         if (!snapshot && !existingReview) return null;
+        if (snapshot && !crossesIntegrityThreshold(snapshot) && !existingReview) return null;
 
         const notePayload = (() => {
           if (existingReview?.lecturer_note && typeof existingReview.lecturer_note === "string") {

@@ -63,7 +63,11 @@ export function buildInternalSimilarityFlagCandidates({
       reason: evidenceSummary,
       evidence_summary: evidenceSummary,
       matched_excerpt: matchedExcerpt,
-      recommended_action: finding.similarity_score >= 80 ? "investigate" : "review",
+      recommended_action: finding.similarity_score >= 80
+        ? "investigate"
+        : finding.similarity_score >= 45
+          ? "review"
+          : "clear",
       integrity_type: "similarity" as const,
       severity: finding.severity,
     } satisfies InternalSimilarityFlagCandidate];
