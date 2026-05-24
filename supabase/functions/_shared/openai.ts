@@ -37,7 +37,7 @@ const AIResponseSchema: z.ZodType<AIResponse> = z
   .passthrough();
 
 function getOpenAIApiKey() {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = getEnv("OPENAI_API_KEY");
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
@@ -53,7 +53,7 @@ function getHeaders() {
 }
 
 function getOpenAITimeoutMs() {
-  const configured = Number(Deno.env.get("OPENAI_REQUEST_TIMEOUT_MS") || DEFAULT_OPENAI_TIMEOUT_MS);
+  const configured = Number(getEnv("OPENAI_REQUEST_TIMEOUT_MS") || DEFAULT_OPENAI_TIMEOUT_MS);
   if (!Number.isFinite(configured) || configured <= 0) {
     return DEFAULT_OPENAI_TIMEOUT_MS;
   }
@@ -61,6 +61,17 @@ function getOpenAITimeoutMs() {
   return configured;
 }
 
+function getEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  if (typeof process !== "undefined" && process.env) {
+    return process.env[name];
+  }
+
+  return undefined;
+}
 async function openAiFetch(path: string, body: Record<string, unknown>) {
   const timeoutMs = getOpenAITimeoutMs();
   const controller = new AbortController();
@@ -85,7 +96,7 @@ async function openAiFetch(path: string, body: Record<string, unknown>) {
 }
 
 export function getModel(envName: string, fallback: string) {
-  return Deno.env.get(envName) || fallback;
+  return getEnv(envName) || fallback;
 }
 
 export async function createResponse(body: Record<string, unknown>) {
@@ -100,9 +111,7 @@ export async function createResponse(body: Record<string, unknown>) {
 }
 
 export async function createChatCompletion(body: Record<string, unknown>) {
-  const response = await openAiFetch("/chat/completions", body);
-
-  return response;
+  return await openAiFetch("/chat/completions", body);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
