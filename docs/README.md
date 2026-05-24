@@ -10,6 +10,14 @@ The docs are organised for three kinds of readers:
 
 ## Start Here
 
+### 0. Current State Index
+
+**File:** [`CURRENT_STATE_INDEX.md`](CURRENT_STATE_INDEX.md)
+
+Use this first if you want the shortest route to the active technical,
+operational, security, and testing documents without sorting through older
+material.
+
 ### 1. Assessor Evidence Summary
 
 **File:** [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
@@ -36,7 +44,12 @@ Use this to understand authentication, role boundaries, data access, row-level s
 
 ### 5. Academic Compliance and AI Governance
 
-### 5. Authorization Reference
+**File:** [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
+
+Use this for the project's governance position on student data, lecturer control,
+AI-assisted assessment, and responsible pilot-stage rollout.
+
+### 6. Authorization Reference
 
 **File:** [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
 
@@ -44,9 +57,12 @@ Use this when you need the fastest route from a critical workflow to the exact t
 
 This is the most audit-friendly map of the current authorization surface.
 
-### 6. Production Hardening Summary
+### 7. Operational Runbook
 
-Use this to understand the main adoption concerns around student data, lecturer control, academic integrity, AI use, and institutional review.
+**File:** [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
+
+Use this for the practical deployment, migration, release, incident, and
+troubleshooting baseline.
 
 ## User and Workflow Documentation
 
@@ -129,9 +145,9 @@ For a technical reviewer, read the documents in this order:
 3. [`TRUST_MODEL.md`](TRUST_MODEL.md)
 4. [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
 5. [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
-6. [`GRADEAI_PRODUCTION_HARDENING_SUMMARY.md`](GRADEAI_PRODUCTION_HARDENING_SUMMARY.md)
-7. [`TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
-8. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
+6. [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
+7. [`TESTING.md`](TESTING.md)
+8. [`support/TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
 
 For a non-technical reviewer or assessor, start with:
 

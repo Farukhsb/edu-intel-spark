@@ -70,6 +70,11 @@ After deployment:
 - Check no browser console errors expose sensitive data.
 - Check key routes are not blank or stuck in loading state.
 
+For a normal release candidate, also confirm:
+
+- `npm run typecheck` passes
+- dependency review has been completed through `npm audit --omit=dev` or GitHub security tooling
+
 ---
 
 ## 3. Supabase Edge Function deployment checklist
@@ -332,6 +337,22 @@ The admin dashboard now includes a failure-oriented operational section that sur
 - escalated or high-risk integrity cases
 
 Treat those cards as triage signals. They are derived from observable application state, not from a dedicated monitoring backend.
+
+## 10.1 Dependency audit fallback
+
+If `npm audit --omit=dev` fails with a `403 Forbidden` response from the npm
+advisory endpoint, treat that as an environment problem, not as a successful
+security check.
+
+In that case:
+
+1. Capture the failed command output in the PR notes or release notes.
+2. Check GitHub Dependabot alerts and any security warnings on the branch.
+3. Review whether the release changed runtime dependencies.
+4. Re-run the audit from CI or another environment with working npm advisory access.
+
+Do not sign off a dependency-sensitive release by saying "audit passed locally"
+if the local audit endpoint was unreachable.
 
 ---
 
