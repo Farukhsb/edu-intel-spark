@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type { IntegrityCardPresentation } from "@/pages/dashboard/assignment-detail/domain";
+import { buildIntegrityDisplayMetrics, buildIntegritySeverityLabel } from "@/pages/dashboard/assignment-detail/domain";
 import type { AssignmentDetailAssignment } from "@/pages/dashboard/assignment-detail/types";
 import type { WorkflowReadinessState } from "@/pages/dashboard/assignment-detail/domain";
 import type { AcademicIntegrityFlag, WorkflowRubricCriterion } from "@/types/academic";
@@ -330,9 +331,16 @@ export const AssignmentIntegrityCard = ({
             </AccordionTrigger>
             <AccordionContent className="pb-3 pt-0">
               <p className="text-xs text-muted-foreground">{flag.reason}</p>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Raw overlap {flag.overlap_analysis?.total_overlap || 0}% | Similarity risk {flag.similarity_score}% | Uncited {flag.overlap_analysis?.uncited_overlap || 0}% | Cited {flag.overlap_analysis?.cited_overlap || 0}% | AI {flag.ai_suspicion_score || 0}% | Baseline {flag.baseline_deviation_score || 0}% | Total risk {flag.total_risk_score || 0}%
-              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge variant="outline" className="text-[11px]">
+                  {buildIntegritySeverityLabel(flag)}
+                </Badge>
+                {buildIntegrityDisplayMetrics(flag).map((metric) => (
+                  <Badge key={`${metric.label}-${metric.value}`} variant="secondary" className="text-[11px]">
+                    {metric.label}: {metric.value}
+                  </Badge>
+                ))}
+              </div>
             </AccordionContent>
           </AccordionItem>
         ))}

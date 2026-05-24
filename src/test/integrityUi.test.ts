@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildIntegrityDisplayFlags,
+  buildIntegrityDisplayMetrics,
   buildIntegrityDisplaySummary,
+  buildIntegritySeverityLabel,
   buildIntegrityClientOutcome,
   deriveIntegrityCardPresentation,
 } from "@/pages/dashboard/assignment-detail/domain";
@@ -123,6 +125,32 @@ describe("integrity UI helpers", () => {
 
     expect(summary).toBe(
       "2 submission pair(s) were flagged because one or more integrity signals crossed the current review thresholds.",
+    );
+  });
+
+  it("builds plain-language display metrics for reviewer cards", () => {
+    const metrics = buildIntegrityDisplayMetrics({
+      ...SAMPLE_FLAG,
+      similarity_score: 45,
+      ai_suspicion_score: 75,
+      total_risk_score: 23,
+      overlap_analysis: {
+        total_overlap: 45,
+        cited_overlap: 12,
+        uncited_overlap: 0,
+        internal_peer_overlap: 45,
+        external_source_overlap: 0,
+      },
+    });
+
+    expect(metrics).toEqual([
+      { label: "Overall risk", value: "23%" },
+      { label: "Similarity", value: "45%" },
+      { label: "Cited overlap", value: "12%" },
+      { label: "AI-writing signal", value: "75%" },
+    ]);
+    expect(buildIntegritySeverityLabel({ ...SAMPLE_FLAG, recommended_action: "review", severity: "medium" })).toBe(
+      "Needs review",
     );
   });
 });

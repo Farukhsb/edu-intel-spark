@@ -38,6 +38,11 @@ export type IntegrityCardPresentation = {
   shouldShowCard: boolean;
 };
 
+export type IntegrityDisplayMetric = {
+  label: string;
+  value: string;
+};
+
 const ACTION_RANK: Record<NonNullable<PlagiarismFlag["recommended_action"]>, number> = {
   clear: 0,
   review: 1,
@@ -165,6 +170,56 @@ export function buildIntegrityDisplaySummary(flags: PlagiarismFlag[], summary: s
   return flags.length === 1
     ? "One submission pair was flagged because one or more integrity signals crossed the current review thresholds."
     : `${flags.length} submission pair(s) were flagged because one or more integrity signals crossed the current review thresholds.`;
+}
+
+export function buildIntegrityDisplayMetrics(flag: PlagiarismFlag): IntegrityDisplayMetric[] {
+  const metrics: IntegrityDisplayMetric[] = [];
+
+  metrics.push({
+    label: "Overall risk",
+    value: `${flag.total_risk_score || flag.similarity_score || 0}%`,
+  });
+
+  if ((flag.similarity_score || 0) > 0) {
+    metrics.push({
+      label: "Similarity",
+      value: `${flag.similarity_score || 0}%`,
+    });
+  }
+
+  if ((flag.overlap_analysis?.uncited_overlap || 0) > 0) {
+    metrics.push({
+      label: "Uncited overlap",
+      value: `${flag.overlap_analysis?.uncited_overlap || 0}%`,
+    });
+  } else if ((flag.overlap_analysis?.cited_overlap || 0) > 0) {
+    metrics.push({
+      label: "Cited overlap",
+      value: `${flag.overlap_analysis?.cited_overlap || 0}%`,
+    });
+  }
+
+  if ((flag.ai_suspicion_score || 0) > 0) {
+    metrics.push({
+      label: "AI-writing signal",
+      value: `${flag.ai_suspicion_score || 0}%`,
+    });
+  }
+
+  if ((flag.baseline_deviation_score || 0) > 0) {
+    metrics.push({
+      label: "Writing profile shift",
+      value: `${flag.baseline_deviation_score || 0}%`,
+    });
+  }
+
+  return metrics;
+}
+
+export function buildIntegritySeverityLabel(flag: PlagiarismFlag) {
+  if (flag.recommended_action === "investigate" || flag.severity === "high") return "High priority";
+  if (flag.recommended_action === "review" || flag.severity === "medium") return "Needs review";
+  return "Monitor";
 }
 
 export function buildIntegrityClientOutcome({

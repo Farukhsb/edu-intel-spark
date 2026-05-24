@@ -1,6 +1,8 @@
 export {
+  buildIntegrityDisplayMetrics,
   buildIntegrityDisplayFlags,
   buildIntegrityDisplaySummary,
+  buildIntegritySeverityLabel,
   buildIntegrityClientOutcome,
   deriveIntegrityCardPresentation,
 } from "./integrityUi";
