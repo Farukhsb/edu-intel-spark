@@ -199,6 +199,9 @@ describe("edge function hardening", () => {
     const bootstrapSource = readRepoFile("supabase/functions/check-plagiarism/bootstrap.ts");
     const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
     const automationHookSource = readRepoFile("src/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions.ts");
+    const automationSharedSource = readRepoFile(
+      "src/pages/dashboard/assignment-detail/workflows/automatedAssessmentShared.ts",
+    );
     const configSource = readRepoFile("supabase/config.toml");
 
     expect(entrySource).toContain("registerCheckPlagiarismEntrypoint");
@@ -248,7 +251,8 @@ describe("edge function hardening", () => {
       "src/pages/dashboard/assignment-detail/state/useAssignmentDetailReadinessState.ts",
     );
     expect(readinessStateSource).toContain("const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;");
-    expect(automationHookSource).toContain("const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;");
+    expect(automationSharedSource).toContain("export const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;");
+    expect(automationSharedSource).toContain("export const LEGACY_INTEGRITY_REQUEST_COMPAT_LIMIT = 80;");
     expect(automationHookSource).toContain("body: JSON.stringify({");
     expect(automationHookSource).toContain("assignmentId: assignment.id,");
     expect(configSource).toContain("[functions.check-plagiarism]");
