@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { User, Shield } from "lucide-react";
+import { Link } from "react-router-dom";
 import { getDepartmentName } from "@/lib/department";
 import { formatCohortLevel } from "@/lib/formatters";
 import { isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
@@ -131,6 +132,23 @@ const Settings = () => {
             Your role controls which academic records and workflows you can access. For governance and security reasons,
             role changes are handled by an administrator.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Legal and pilot guidance</CardTitle>
+          <CardDescription>
+            Read the current pilot terms, privacy position, and data-handling expectations for this platform.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Button asChild variant="outline">
+            <Link to="/privacy">Privacy Notice</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/terms">Terms of Service</Link>
+          </Button>
         </CardContent>
       </Card>
 

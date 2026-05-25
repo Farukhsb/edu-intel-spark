@@ -84,6 +84,13 @@ describe("Settings", () => {
     ).toBeInTheDocument();
   });
 
+  it("includes legal links for privacy and terms guidance", () => {
+    renderSettings();
+
+    expect(screen.getByRole("link", { name: "Privacy Notice" })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
+  });
+
   it("does not render self-service profile editing controls", () => {
     renderSettings();
 

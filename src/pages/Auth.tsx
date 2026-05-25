@@ -395,14 +395,18 @@ const Auth = () => {
           </TabsContent>
         </Tabs>
 
-        <p className="text-center text-xs text-muted-foreground">
-          By continuing, you are using a pilot academic platform.
-          {" "}
-          <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
-            Read the privacy notice
-          </Link>
-          .
-        </p>
+          <p className="text-center text-xs text-muted-foreground">
+            By continuing, you are using a pilot academic platform.
+            {" "}
+            <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
+              Read the privacy notice
+            </Link>
+            {" "}and{" "}
+            <Link to="/terms" className="underline underline-offset-4 hover:text-foreground">
+              terms of service
+            </Link>
+            .
+          </p>
       </div>
     </div>
   );

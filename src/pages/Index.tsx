@@ -229,9 +229,14 @@ const Index = () => {
           </div>
           <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground sm:items-end">
             <p>(c) 2025 GradeAI. AI-Powered Academic Intelligence.</p>
-            <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
-              Privacy notice
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
+                Privacy notice
+              </Link>
+              <Link to="/terms" className="underline underline-offset-4 hover:text-foreground">
+                Terms of service
+              </Link>
+            </div>
           </div>
         </div>
       </footer>
