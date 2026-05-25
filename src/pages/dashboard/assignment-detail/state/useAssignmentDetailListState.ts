@@ -46,7 +46,7 @@ interface UseAssignmentDetailListStateResult {
   selectedWorkflowState: ReturnType<typeof getSelectedWorkflowActionState>;
   setSearchQuery: Dispatch<SetStateAction<string>>;
   setSelected: Dispatch<SetStateAction<Set<string>>>;
-  setStatusFilter: Dispatch<SetStateAction<"all" | SubmissionStatus>>;
+  setStatusFilter: (value: "all" | SubmissionStatus) => void;
   statusFilter: "all" | SubmissionStatus;
   toggleAll: () => void;
   toggleSelect: (submissionId: string) => void;
@@ -127,7 +127,7 @@ export const useAssignmentDetailListState = ({
     () =>
       submissions.filter((submission) => {
         const matchesNotificationFocus =
-          !shouldApplyHiddenNotificationFocus ||
+          manualStatusFilterOverride ||
           !notificationFocusedSubmissionIds ||
           notificationFocusedSubmissionIds.includes(submission.id);
         const matchesSearch =
@@ -138,13 +138,7 @@ export const useAssignmentDetailListState = ({
         const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
         return matchesNotificationFocus && matchesSearch && matchesStatus;
       }),
-    [
-      notificationFocusedSubmissionIds,
-      searchQuery,
-      shouldApplyHiddenNotificationFocus,
-      statusFilter,
-      submissions,
-    ],
+    [manualStatusFilterOverride, notificationFocusedSubmissionIds, searchQuery, statusFilter, submissions],
   );
 
   useEffect(() => {
@@ -170,6 +164,11 @@ export const useAssignmentDetailListState = ({
     setStatusFilter(assignmentNotificationFocusState.statusFilter);
     setSelected(new Set(assignmentNotificationFocusState.selectedSubmissionIds));
   }, [assignmentNotificationFocusState, isLecturer]);
+
+  const handleSetStatusFilter = (value: "all" | SubmissionStatus) => {
+    setManualStatusFilterOverride(true);
+    setStatusFilter(value);
+  };
 
   const selectedWorkflowState = useMemo(() => {
     const selectedStatuses = submissions
