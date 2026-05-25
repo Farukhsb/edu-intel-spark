@@ -31,7 +31,12 @@ export interface ExtractionQualityResult {
   artifactRatio: number;
   qualityScore: number;
   reasons: string[];
+  readableSentenceCount: number;
+  suspiciousTokenRatio: number;
+  suspiciousPdfArtifactCount: number;
 }
+
+export type PdfExtractionMethod = "pdf_text_operators" | "pdf_printable_fallback";
 
 const STOPWORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "has", "have", "if", "in",
@@ -55,6 +60,8 @@ export function normalizeReadableText(input: string) {
 
 const PDF_ARTIFACT_PATTERN =
   /\b(?:obj|endobj|xref|endxref|stream|endstream|trailer|startxref|\/Type|\/Length|\/Filter|\/Root|\/Info|\/Page|\/Pages|\/Catalog)\b/g;
+const PDF_INTERNAL_SYNTAX_PATTERN =
+  /(?:%PDF-\d\.\d|ReportLab Generated PDF|www\.reportlab\.com|\b\d+\s+\d+\s+obj\b|\bendobj\b|\bxref\b|\btrailer\b|\bstartxref\b|\bstream\b|\bendstream\b)/gi;
 
 function decodePdfLiteralString(value: string) {
   let decoded = "";
@@ -129,28 +136,64 @@ export function cleanExtractedDocumentText(input: string) {
   );
 }
 
-export function extractReadablePdfTextFromBase64(base64: string) {
+export function extractReadablePdfTextFromBase64(base64: string): {
+  text: string;
+  method: PdfExtractionMethod;
+} {
   const binary = atob(base64);
-  const operatorText = extractPdfTextFromOperators(binary);
-  const printableFallback = (binary.match(/[\x20-\x7E]{4,}/g) || []).join(" ");
-  const combined = [operatorText, printableFallback].filter(Boolean).join("\n");
-  return cleanExtractedDocumentText(combined);
+  const operatorText = cleanExtractedDocumentText(extractPdfTextFromOperators(binary));
+  if (operatorText.trim().length >= 200) {
+    return {
+      text: operatorText,
+      method: "pdf_text_operators",
+    };
+  }
+
+  const printableFallback = cleanExtractedDocumentText((binary.match(/[\x20-\x7E]{4,}/g) || []).join(" "));
+  return {
+    text: [operatorText, printableFallback].filter(Boolean).join("\n"),
+    method: "pdf_printable_fallback",
+  };
 }
 
-export function assessExtractionQuality(text: string): ExtractionQualityResult {
+export function assessExtractionQuality(
+  text: string,
+  options?: { fileType?: string | null; rawText?: string | null },
+): ExtractionQualityResult {
+  const rawText = options?.rawText ?? text;
+  const fileType = options?.fileType ?? null;
   const normalized = cleanExtractedDocumentText(text);
   const words = normalized.match(/\b[\p{L}\p{N}']+\b/gu) || [];
-  const artifactMatches = normalized.match(PDF_ARTIFACT_PATTERN) || [];
+  const artifactMatches = rawText.match(PDF_ARTIFACT_PATTERN) || [];
+  const suspiciousPdfArtifactMatches = rawText.match(PDF_INTERNAL_SYNTAX_PATTERN) || [];
   const artifactRatio = words.length > 0 ? artifactMatches.length / words.length : 1;
   const averageWordLength =
     words.length > 0 ? words.reduce((sum, word) => sum + word.length, 0) / words.length : 0;
+  const readableSentenceCount = normalized
+    .split(/(?<=[.?!])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 20 && /\s/.test(sentence)).length;
+  const suspiciousTokenCount = words.filter((word) => {
+    const hasDigit = /\d/.test(word);
+    const hasLetter = /[\p{L}]/u.test(word);
+    return word.length >= 24 || (hasDigit && hasLetter);
+  }).length;
+  const suspiciousTokenRatio = words.length > 0 ? suspiciousTokenCount / words.length : 1;
+  const nonEmptyLineCount = normalized
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
 
   const reasons: string[] = [];
   let qualityScore = 100;
 
-  if (words.length < 120) {
-    qualityScore -= 35;
+  if (words.length < 80) {
+    qualityScore -= 25;
     reasons.push("Very little readable body text was extracted.");
+  }
+
+  if (words.length < 50) {
+    qualityScore -= 15;
   }
 
   if (artifactRatio > 0.08) {
@@ -168,12 +211,47 @@ export function assessExtractionQuality(text: string): ExtractionQualityResult {
     reasons.push("Extracted text contains few recognisable sentence boundaries.");
   }
 
+  if (fileType !== "code" && suspiciousTokenRatio > 0.12) {
+    qualityScore -= 20;
+    reasons.push("Extracted text appears dominated by token noise rather than readable prose.");
+  }
+
+  if (fileType !== "code" && readableSentenceCount < 1) {
+    qualityScore -= 20;
+    reasons.push("Extracted text does not contain enough readable academic sentences.");
+  }
+
+  if (fileType === "pdf") {
+    if (suspiciousPdfArtifactMatches.length >= 3) {
+      qualityScore -= 45;
+      reasons.push("Extracted PDF text still contains internal PDF artefacts and object syntax.");
+    }
+
+    if (
+      (/%PDF-\d\.\d/i.test(rawText) || /ReportLab Generated PDF|www\.reportlab\.com/i.test(rawText)) &&
+      readableSentenceCount < 3
+    ) {
+      qualityScore -= 45;
+      reasons.push("Extracted PDF content appears to be document internals rather than readable submission text.");
+    }
+  }
+
   return {
-    isUsable: qualityScore >= 45 && words.length >= 80,
+    isUsable:
+      fileType === "code"
+        ? qualityScore >= 35 && normalized.length >= 200 && nonEmptyLineCount >= 8
+        : qualityScore >= 45 &&
+          words.length >= 50 &&
+          readableSentenceCount >= 1 &&
+          suspiciousTokenRatio <= 0.2 &&
+          !(fileType === "pdf" && suspiciousPdfArtifactMatches.length >= 3 && readableSentenceCount < 3),
     wordCount: words.length,
     artifactRatio: round(artifactRatio, 3),
     qualityScore: Math.max(0, qualityScore),
     reasons,
+    readableSentenceCount,
+    suspiciousTokenRatio: round(suspiciousTokenRatio, 3),
+    suspiciousPdfArtifactCount: suspiciousPdfArtifactMatches.length,
   };
 }
 

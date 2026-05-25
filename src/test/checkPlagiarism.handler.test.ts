@@ -35,6 +35,9 @@ vi.mock("../../supabase/functions/_shared/text-analysis", async (importOriginal)
           artifactRatio: 0.2,
           qualityScore: 15,
           reasons: ["Low-quality OCR text."],
+          readableSentenceCount: 0,
+          suspiciousTokenRatio: 0.35,
+          suspiciousPdfArtifactCount: 4,
         };
       }
 

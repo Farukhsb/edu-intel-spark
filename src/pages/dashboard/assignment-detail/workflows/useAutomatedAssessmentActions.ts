@@ -77,7 +77,7 @@ const GRADABLE_TEXT_EXTENSIONS = [
 ] as const;
 const GRADABLE_FILE_LABEL = "PDF, DOCX, TXT, or supported code file";
 const EXTRACTION_FAILURE_MESSAGE =
-  "We could not read this document. Please upload a readable PDF, DOCX, TXT, or supported code file.";
+  "We could not extract reliable readable content from this document.";
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "AI grading failed");
 const asJson = (value: unknown): Json => value as Json;
@@ -147,6 +147,51 @@ type PersistGradedSubmissionResultArgs = {
   };
 };
 
+export class GradePersistenceError extends Error {
+  step: "client_configuration" | "grade_write" | "submission_status_write";
+
+  constructor(step: "client_configuration" | "grade_write" | "submission_status_write", message: string) {
+    super(message);
+    this.name = "GradePersistenceError";
+    this.step = step;
+  }
+}
+
+export const formatGradePersistenceFailure = (error: unknown) => {
+  if (error instanceof GradePersistenceError) {
+    if (error.step === "submission_status_write") {
+      return {
+        detail:
+          "The AI grade was saved, but the submission workflow status could not be updated. Refresh the page and continue with manual review if the submission still appears in the wrong lane.",
+        headline: "Status update failed",
+        type: "service_failure" as const,
+      };
+    }
+
+    if (error.step === "grade_write") {
+      return {
+        detail:
+          "The grading service returned an answer, but saving the AI grade failed. Retry the submission or continue with manual follow-up.",
+        headline: "Retry AI grading",
+        type: "service_failure" as const,
+      };
+    }
+
+    return {
+      detail: "The grading client was not configured correctly, so the AI result could not be saved.",
+      headline: "Retry AI grading",
+      type: "service_failure" as const,
+    };
+  }
+
+  return {
+    detail:
+      "The grading service returned an answer, but the result could not be saved cleanly. Retry the submission or continue with manual follow-up.",
+    headline: "Retry AI grading",
+    type: "service_failure" as const,
+  };
+};
+
 export const persistGradedSubmissionResult = async ({
   gradingResult,
   submissionId,
@@ -157,7 +202,7 @@ export const persistGradedSubmissionResult = async ({
   const submissionsTable = supabaseClient.from("submissions");
 
   if (!gradesTable.upsert || !submissionsTable.update) {
-    throw new Error("The grading persistence client is not configured correctly.");
+    throw new GradePersistenceError("client_configuration", "The grading persistence client is not configured correctly.");
   }
 
   const { error: gradeWriteError } = await gradesTable.upsert(
@@ -174,14 +219,17 @@ export const persistGradedSubmissionResult = async ({
   );
 
   if (gradeWriteError) {
-    throw new Error(gradeWriteError.message || "The AI grade could not be saved.");
+    throw new GradePersistenceError("grade_write", gradeWriteError.message || "The AI grade could not be saved.");
   }
 
   const nextStatus = gradingResult.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
   const { error: submissionWriteError } = await submissionsTable.update({ status: nextStatus }).eq("id", submissionId);
 
   if (submissionWriteError) {
-    throw new Error(submissionWriteError.message || "The submission workflow status could not be updated.");
+    throw new GradePersistenceError(
+      "submission_status_write",
+      submissionWriteError.message || "The submission workflow status could not be updated.",
+    );
   }
 };
 
@@ -334,8 +382,22 @@ export const useAutomatedAssessmentActions = ({
 
     for (const submission of gradableSubmissions) {
       try {
-        await supabase.from("submissions").update({ status: "ai_grading" as const }).eq("id", submission.id);
-      } catch {}
+        const { error } = await supabase
+          .from("submissions")
+          .update({ status: "ai_grading" as const })
+          .eq("id", submission.id);
+        if (error) {
+          log.warn("Failed to mark submission as ai_grading", {
+            submissionId: submission.id,
+            error: error.message,
+          });
+        }
+      } catch (statusError) {
+        log.warn("Failed to mark submission as ai_grading", {
+          submissionId: submission.id,
+          error: statusError instanceof Error ? statusError.message : "Unknown error",
+        });
+      }
     }
     await reloadSubmissions();
 
@@ -416,7 +478,12 @@ export const useAutomatedAssessmentActions = ({
           if (!validatedGrade.success) {
             try {
               await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-            } catch {}
+            } catch (statusError) {
+              log.warn("Failed to restore submission status after invalid grading result", {
+                submissionId: submission.id,
+                error: statusError instanceof Error ? statusError.message : "Unknown error",
+              });
+            }
             failCount++;
             invalidResultCount++;
             failureMessages.add("A grading result could not be validated.");
@@ -445,18 +512,19 @@ export const useAutomatedAssessmentActions = ({
             log.error("Failed to persist graded submission", persistenceError, {
               submissionId: submission.id,
             });
-            try {
-              await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-            } catch {}
             failCount++;
             serviceFailureCount++;
-            failureMessages.add("The grading result was returned, but it could not be saved.");
+            failureMessages.add(
+              persistenceError instanceof Error
+                ? persistenceError.message
+                : "The grading result was returned, but it could not be saved.",
+            );
+            const persistenceFailure = formatGradePersistenceFailure(persistenceError);
             nextRecoveryIssues[submission.id] = {
-              headline: "Retry AI grading",
-              detail:
-                "The grading service returned an answer, but the grade could not be saved cleanly. Retry the submission or continue with manual follow-up.",
+              headline: persistenceFailure.headline,
+              detail: persistenceFailure.detail,
               recoveryLabel: "Select for retry",
-              type: "service_failure",
+              type: persistenceFailure.type,
             };
           }
         } else {
@@ -490,7 +558,12 @@ export const useAutomatedAssessmentActions = ({
           }
           try {
             await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-          } catch {}
+          } catch (statusError) {
+            log.warn("Failed to restore submission status after grading failure", {
+              submissionId: submission.id,
+              error: statusError instanceof Error ? statusError.message : "Unknown error",
+            });
+          }
           failCount++;
         }
       }
@@ -575,7 +648,12 @@ export const useAutomatedAssessmentActions = ({
       for (const submission of gradableSubmissions) {
         try {
           await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-        } catch {}
+        } catch (statusError) {
+          log.warn("Failed to restore submission status after grading request failure", {
+            submissionId: submission.id,
+            error: statusError instanceof Error ? statusError.message : "Unknown error",
+          });
+        }
       }
     }
 

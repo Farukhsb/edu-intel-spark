@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { persistGradedSubmissionResult } from "@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions";
+import {
+  formatGradePersistenceFailure,
+  GradePersistenceError,
+  persistGradedSubmissionResult,
+} from "@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions";
 
 describe("persistGradedSubmissionResult", () => {
   it("writes the grade row and advances the submission workflow status", async () => {
@@ -68,7 +72,11 @@ describe("persistGradedSubmissionResult", () => {
           grading_confidence: 0.84,
         },
       }),
-    ).rejects.toThrow("grade write failed");
+    ).rejects.toMatchObject({
+      message: "grade write failed",
+      name: "GradePersistenceError",
+      step: "grade_write",
+    } satisfies Partial<GradePersistenceError>);
   });
 
   it("throws when the submission workflow status cannot be updated", async () => {
@@ -100,6 +108,23 @@ describe("persistGradedSubmissionResult", () => {
           grading_confidence: 0.84,
         },
       }),
-    ).rejects.toThrow("status write failed");
+    ).rejects.toMatchObject({
+      message: "status write failed",
+      name: "GradePersistenceError",
+      step: "submission_status_write",
+    } satisfies Partial<GradePersistenceError>);
+  });
+
+  it("formats status transition failures as partial persistence issues", () => {
+    expect(
+      formatGradePersistenceFailure(
+        new GradePersistenceError("submission_status_write", "status write failed"),
+      ),
+    ).toEqual({
+      detail:
+        "The AI grade was saved, but the submission workflow status could not be updated. Refresh the page and continue with manual review if the submission still appears in the wrong lane.",
+      headline: "Status update failed",
+      type: "service_failure",
+    });
   });
 });

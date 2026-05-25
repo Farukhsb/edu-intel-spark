@@ -141,6 +141,7 @@ describe("document extraction", () => {
 
     expect(result.success).toBe(true);
     expect(result.fileType).toBe("docx");
+    expect(result.extractionMethod).toBe("docx_mammoth");
     expect(result.extractedText).toContain("GradeAI student report.");
     expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
   });
@@ -155,8 +156,51 @@ describe("document extraction", () => {
 
     expect(result.success).toBe(true);
     expect(result.fileType).toBe("pdf");
+    expect(result.extractionMethod).toBe("pdf_text_operators");
     expect(result.extractedText).toContain("This PDF report discusses");
     expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
+  });
+
+  it("rejects PDF extraction polluted by internal document artefacts", async () => {
+    const pollutedPdf = `%PDF-1.4
+ReportLab Generated PDF document http://www.reportlab.com
+1 0 obj << /Type /Catalog >> endobj
+2 0 obj << /Length 123 >> stream
+xref
+trailer
+startxref
+endstream
+3 0 obj << /Type /Page >> endobj
+${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref trailer startxref stream endstream ".repeat(8)}`;
+
+    const result = await extractDocumentText({
+      fileName: "polluted.pdf",
+      mimeType: "application/pdf",
+      bytes: new TextEncoder().encode(pollutedPdf),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+    expect(result.extractionMethod).toBe("pdf_printable_fallback");
+    expect(result.extractionFailureReason).toBe("unreadable_pdf");
+    expect(result.extractionWarning).toContain("internal PDF artefacts");
+  });
+
+  it("rejects large garbled PDF extraction even when the text-length minimum is exceeded", async () => {
+    const garbledPdf = `%PDF-1.4 ReportLab Generated PDF
+${"A12B34C56D78EFGHIJKLmnopqrstuv 1 0 obj endobj xref trailer startxref ".repeat(30)}`;
+
+    const result = await extractDocumentText({
+      fileName: "garbled.pdf",
+      mimeType: "application/pdf",
+      bytes: new TextEncoder().encode(garbledPdf),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+    expect(result.extractionMethod).toBe("pdf_printable_fallback");
+    expect(result.extractionFailureReason).toBe("unreadable_pdf");
+    expect(result.extractionWarning).toMatch(/token noise|document internals|internal PDF artefacts/i);
   });
 
   it("rejects a blank DOCX document", async () => {
@@ -169,7 +213,21 @@ describe("document extraction", () => {
 
     expect(result.success).toBe(false);
     expect(result.manualReviewRequired).toBe(true);
+    expect(result.extractionMethod).toBe("docx_mammoth");
     expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+  });
+
+  it("extracts readable text from a plain text submission", async () => {
+    const result = await extractDocumentText({
+      fileName: "student-report.txt",
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode("This is a readable plain text report discussing evidence, analysis, and conclusion. ".repeat(6)),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.fileType).toBe("txt");
+    expect(result.extractionMethod).toBe("plain_text_decoder");
+    expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
   });
 
   it("extracts readable text from a Python source file", async () => {
@@ -183,6 +241,7 @@ describe("document extraction", () => {
 
     expect(result.success).toBe(true);
     expect(result.fileType).toBe("code");
+    expect(result.extractionMethod).toBe("code_text_decoder");
     expect(result.extractedText).toContain("print('line 0')");
   });
 

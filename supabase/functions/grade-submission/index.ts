@@ -120,10 +120,18 @@ async function fetchSubmissionContent(
       file_name: extraction.fileName,
       file_type: extraction.fileType,
       mime_type: extraction.mimeType,
+      extraction_method: extraction.extractionMethod,
+      extraction_failure_reason: extraction.extractionFailureReason,
       extracted_text_length: extraction.extractedTextLength,
       extraction_success: extraction.success,
       extraction_warning: extraction.extractionWarning,
       extraction_error: extraction.extractionError,
+      extraction_quality_score: extraction.extractionQuality?.qualityScore ?? null,
+      extraction_quality_word_count: extraction.extractionQuality?.wordCount ?? null,
+      extraction_quality_readable_sentence_count:
+        extraction.extractionQuality?.readableSentenceCount ?? null,
+      extraction_quality_suspicious_pdf_artifact_count:
+        extraction.extractionQuality?.suspiciousPdfArtifactCount ?? null,
     },
   };
 }

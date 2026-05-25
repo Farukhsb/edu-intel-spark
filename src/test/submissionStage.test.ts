@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { gradeSingleSubmission } from "../../supabase/functions/grade-submission/submission-stage";
 import { buildGradingInputHash } from "../../supabase/functions/grade-submission/grading-support";
 import { normalizeRubricForAssignment } from "../../supabase/functions/grade-submission/request-stage";
+import { DOCUMENT_EXTRACTION_ERROR_MESSAGE } from "../../supabase/functions/_shared/document-extraction-core";
+import * as promptingModule from "../../supabase/functions/grade-submission/prompting";
 import type {
   AssignmentForGrading,
   SubmissionForGrading,
@@ -97,5 +99,53 @@ describe("grade-submission submission stage", () => {
     expect(result.gradingMetadata.cached_result).toBe(true);
     expect(result.gradingMetadata.grading_input_hash).toBe(gradingInputHash);
     expect(result.cacheMessage).toContain("Using saved AI marking result");
+  });
+
+  it("stops before grading when extracted content is not reliable enough", async () => {
+    const assignment: AssignmentForGrading = {
+      id: "assignment-1",
+      lecturer_id: "lecturer-1",
+      title: "Evaluating AI in Higher Education",
+      description: "Write a structured essay evaluating benefits and risks.",
+      module_code: "EDU401",
+      max_score: 100,
+      rubric: [
+        { criterion: "Critical evaluation", weight: 100, description: "Address the assignment brief directly." },
+      ],
+    };
+    const { normalizedRubric, rubricText } = normalizeRubricForAssignment(assignment);
+    const submission: SubmissionForGrading = {
+      id: "submission-2",
+      assignment_id: assignment.id,
+      student_name: "Student C",
+      student_email: "studentc@example.com",
+      file_name: "essay.pdf",
+      file_url: "submissions/essay.pdf",
+    };
+
+    const requestStructuredGradeSpy = vi.spyOn(promptingModule, "requestStructuredGrade");
+
+    await expect(
+      gradeSingleSubmission({
+        sub: submission,
+        assignment,
+        existingGrade: null,
+        existingGradesByFingerprint: new Map(),
+        generatedResultsByFingerprint: new Map(),
+        normalizedRubric,
+        rubricText,
+        gradingModel: "gpt-test-model",
+        forceRegenerate: false,
+        regradeReason: "Initial grade generation.",
+        confidenceThreshold: 0.7,
+        gradingPasses: 1,
+        getPassSpreadThreshold: () => 8,
+        fetchSubmissionContent: async () => {
+          throw new Error(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+
+    expect(requestStructuredGradeSpy).not.toHaveBeenCalled();
   });
 });
