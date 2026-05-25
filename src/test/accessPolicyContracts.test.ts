@@ -7,6 +7,60 @@ import { describe, expect, it } from "vitest";
 const readRepoFile = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 describe("access policy contracts", () => {
+  it("keeps student submission inserts targeted, owned, and due-date aware", () => {
+    const source = readRepoFile("supabase/migrations/20260507123000_harden_submission_due_date_and_notification_updates.sql");
+
+    expect(source).toContain('create policy "Students can submit to targeted published assignments"');
+    expect(source).toContain("student_id = auth.uid()");
+    expect(source).toContain("uploaded_by = auth.uid()");
+    expect(source).toContain("a.status = 'published'");
+    expect(source).toContain("(a.due_date is null or a.due_date > now())");
+    expect(source).toContain("public.student_matches_assignment_target(a.id, auth.uid())");
+  });
+
+  it("keeps student grade reads released-only", () => {
+    const source = readRepoFile("supabase/migrations/20260507160000_harden_grade_visibility_moderation_and_profile_access.sql");
+
+    expect(source).toContain('create policy "Students can view own grades"');
+    expect(source).toContain("s.student_id = (select auth.uid())");
+    expect(source).toContain("s.status = 'released'");
+  });
+
+  it("keeps student grade projection released-only in the RPC", () => {
+    const source = readRepoFile("supabase/migrations/20260507160000_harden_grade_visibility_moderation_and_profile_access.sql");
+
+    expect(source).toContain("create or replace function public.get_student_submission_grade_projection()");
+    expect(source).toContain("case when s.status = 'released' then g.final_score else null end as final_score");
+    expect(source).toContain("case when s.status = 'released' then g.final_feedback else null end as final_feedback");
+    expect(source).toContain("where s.student_id = auth.uid()");
+  });
+
+  it("keeps lecturer profile reads narrowed to directory and linked students", () => {
+    const source = readRepoFile("supabase/migrations/20260507160000_harden_grade_visibility_moderation_and_profile_access.sql");
+
+    expect(source).toContain('drop policy if exists "Lecturers can view all profiles"');
+    expect(source).toContain('create policy "Lecturers can view lecturer directory"');
+    expect(source).toContain("private.is_lecturer()");
+    expect(source).toContain("role = 'lecturer'");
+    expect(source).toContain('create policy "Lecturers can view linked student profiles"');
+    expect(source).toContain("role = 'student'");
+    expect(source).toContain("where s.student_id = public.profiles.id");
+    expect(source).toContain("and a.lecturer_id = (select auth.uid())");
+  });
+
+  it("keeps communication message updates immutable outside read-state fields", () => {
+    const source = readRepoFile("supabase/migrations/20260507123000_harden_submission_due_date_and_notification_updates.sql");
+
+    expect(source).toContain('create policy "users can update relevant communication messages"');
+    expect(source).toContain("where original.id = id");
+    expect(source).toContain("and original.sender_id = sender_id");
+    expect(source).toContain("and original.recipient_id is not distinct from recipient_id");
+    expect(source).toContain("and original.category = category");
+    expect(source).toContain("and original.subject = subject");
+    expect(source).toContain("and original.body = body");
+    expect(source).toContain("and original.related_assignment_id is not distinct from related_assignment_id");
+  });
+
   it("locks submission file reads to student, uploader, assignment owner, assigned moderator, or admin", () => {
     const source = readRepoFile("supabase/migrations/20260510110000_harden_moderation_evidence_access.sql");
 
@@ -35,5 +89,29 @@ describe("access policy contracts", () => {
     expect(source).toContain("on public.submissions");
     expect(source).toContain("mc.submission_id = public.submissions.id");
     expect(source).toContain("mc.moderator_id = (select auth.uid())");
+  });
+
+  it("keeps admin dashboard metrics behind an explicit admin check", () => {
+    const source = readRepoFile("supabase/migrations/20260503120500_add_admin_dashboard_metrics_rpc.sql");
+
+    expect(source).toContain("security definer");
+    expect(source).toContain("if not private.is_admin() then");
+    expect(source).toContain("raise exception 'Admin access required'");
+    expect(source).toContain("grant execute on function public.get_admin_dashboard_metrics() to authenticated");
+  });
+
+  it("keeps admin oversight RPCs filtered by private.is_admin()", () => {
+    const assignmentOversight = readRepoFile("supabase/migrations/20260503122000_add_admin_assignment_oversight_rpc.sql");
+    const moderationOverview = readRepoFile("supabase/migrations/20260503123500_add_admin_moderation_overview_rpc.sql");
+    const recentActivity = readRepoFile("supabase/migrations/20260503125000_add_admin_recent_activity_rpc.sql");
+
+    expect(assignmentOversight).toContain("where private.is_admin()");
+    expect(assignmentOversight).toContain("grant execute on function public.get_admin_assignment_oversight() to authenticated");
+
+    expect(moderationOverview).toContain("where private.is_admin()");
+    expect(moderationOverview).toContain("grant execute on function public.get_admin_moderation_overview() to authenticated");
+
+    expect(recentActivity).toContain("where private.is_admin()");
+    expect(recentActivity).toContain("grant execute on function public.get_admin_recent_activity() to authenticated");
   });
 });

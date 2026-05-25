@@ -14,6 +14,7 @@ type GradeAccessRow = {
   ai_score?: number | null;
   final_score?: number | null;
   ai_feedback?: string | null;
+  final_feedback?: string | null;
   ai_breakdown?: unknown;
   grading_confidence?: number | null;
 };
@@ -192,7 +193,7 @@ export function buildReleasedGradeContext(
     throw createAccessError(404, "Released grade not found");
   }
   const criterionInsights = buildCriterionInsights(grade.ai_breakdown);
-  const feedback = grade.ai_feedback ?? "";
+  const feedback = grade.final_feedback ?? grade.ai_feedback ?? "";
   const evidenceSummary = buildExplainGradeEvidenceSummary({
     criterionInsights,
     feedback,

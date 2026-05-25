@@ -23,7 +23,9 @@ import {
 } from "./prompting.ts";
 import {
   blindSubmissionText,
+  buildCriterionEvidencePackets,
   buildGradingCandidate,
+  buildGradingEvidencePacket,
   buildGradingInputHash,
   clampConfidence,
   computeContentFingerprint,
@@ -40,6 +42,7 @@ import {
   type GradingCandidate,
 } from "./grading-support.ts";
 import {
+  applyCriterionBandFloorRecalibration,
   assessSubmissionRelevance,
   deriveUkBand,
   detectEvidenceCoverage,
@@ -221,7 +224,8 @@ export async function gradeSingleSubmission({
       title: assignment.title,
       description: assignment.description,
       rubricText,
-      text: blindedText.substring(0, 18000),
+      fileName: sub.file_name,
+      text: blindedText,
     });
     return buildFingerprintClusterReuseResult({
       submissionId: sub.id,
@@ -242,12 +246,30 @@ export async function gradeSingleSubmission({
     });
   }
 
-  const textPreview = blindedText.substring(0, 18000);
+  const gradingEvidencePacket = buildGradingEvidencePacket({
+    submissionText: blindedText,
+    rubric: normalizedRubric,
+    assignmentTitle: assignment.title,
+    assignmentDescription: assignment.description,
+    maxChars: 18_000,
+  });
+  const criterionEvidencePackets = buildCriterionEvidencePackets({
+    submissionText: blindedText,
+    rubric: normalizedRubric,
+    assignmentTitle: assignment.title,
+    assignmentDescription: assignment.description,
+    maxCharsPerCriterion: 2600,
+  });
+  const criterionEvidenceText = criterionEvidencePackets
+    .map((entry, index) =>
+      `Criterion ${index + 1}: ${entry.criterion}\n${entry.packet || "No focused evidence packet could be extracted."}`)
+    .join("\n\n---\n\n");
   const assignmentType = classifyAssignmentType({
     title: assignment.title,
     description: assignment.description,
     rubricText,
-    text: textPreview,
+    fileName: sub.file_name,
+    text: blindedText,
   });
   const isMathMode = assignmentType === "Mathematics" || assignmentType === "Problem Solving";
 
@@ -269,7 +291,8 @@ export async function gradeSingleSubmission({
     rubricText,
     rubricCalibrationGuide,
     regradeAnchorText: buildRegradeAnchorText(existingGrade),
-    textPreview,
+    textPreview: gradingEvidencePacket,
+    criterionEvidenceText,
   });
 
   const previousAiScore = existingGrade?.ai_score != null ? Number(existingGrade.ai_score) : null;
@@ -416,6 +439,7 @@ export async function gradeSingleSubmission({
     },
     {
       normalizeMathAnalysis,
+      applyCriterionBandFloorRecalibration,
       detectEvidenceCoverage,
       deriveUkBand,
       assessSubmissionRelevance,

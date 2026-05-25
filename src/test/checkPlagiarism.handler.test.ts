@@ -59,6 +59,10 @@ const repeatedEssay =
   "failures to a controlled mitigation plan covering observability probes, reconciliation checkpoints, and post-incident " +
   "verification tasks so the remediation logic can be audited with precise technical evidence. ";
 
+const longCodeFixture = Array.from({ length: 900 }, (_, index) =>
+  `def reconcile_queue_${index}(items):\n    checksum = ${index}\n    return [item for item in items if item and checksum >= 0]\n`,
+).join("\n");
+
 const ids = {
   assignment: "11111111-1111-4111-8111-111111111111",
   lecturer: "22222222-2222-4222-8222-222222222222",
@@ -764,7 +768,7 @@ describe("check-plagiarism handler", () => {
     expect(adminSupabase.reviewUpsert).toHaveBeenCalledTimes(1);
   });
 
-  it("runs the optional MOSS bridge for code submissions without breaking the existing flow", async () => {
+  it("routes code submissions to the optional MOSS bridge without calling legacy AI analysis", async () => {
     process.env.INTEGRITY_PROVIDER_MODE = "both";
     process.env.MOSS_PROVIDER_ENABLED = "true";
     process.env.MOSS_RUNNER_URL = "https://moss-runner.test/moss";
@@ -772,6 +776,15 @@ describe("check-plagiarism handler", () => {
     process.env.MOSS_RUNNER_TIMEOUT_MS = "5000";
 
     const adminSupabase = createAdminSupabaseMock();
+    adminSupabase.storage = {
+      from: () => ({
+        download: async (path: string) => ({
+          data: new Blob([longCodeFixture], { type: "text/x-python" }),
+          error: null,
+          path,
+        }),
+      }),
+    };
     const openAiMock = vi.fn(async () => ({ flags: [], summary: "Legacy analysis completed." }));
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({
@@ -827,7 +840,7 @@ describe("check-plagiarism handler", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
 
-    expect(openAiMock).toHaveBeenCalledTimes(1);
+    expect(openAiMock).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
       "https://moss-runner.test/moss",
       expect.objectContaining({
@@ -838,6 +851,9 @@ describe("check-plagiarism handler", () => {
         }),
       }),
     );
+    const mossRequestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    expect(mossRequestBody.submissions).toHaveLength(2);
+    expect(mossRequestBody.submissions[0].source_text).toBe(longCodeFixture);
     expect(payload.flags).toHaveLength(1);
     expect(payload.flags[0]).toMatchObject({
       submission_a_id: ids.submissionC,
@@ -847,49 +863,20 @@ describe("check-plagiarism handler", () => {
     expect(adminSupabase.integrityFindingUpsert).toHaveBeenCalled();
     expect(adminSupabase.integrityFindingUpsert.mock.calls.flat().some((arg) =>
       Array.isArray(arg) &&
+      arg.some((row) => row.provider === "internal_text_similarity")
+    )).toBe(false);
+    expect(adminSupabase.integrityFindingUpsert.mock.calls.flat().some((arg) =>
+      Array.isArray(arg) &&
       arg.some((row) => row.provider === "moss")
     )).toBe(true);
   });
 
-  it("merges internal and AI similarity signals in both mode without duplicate pair flags", async () => {
+  it("routes text submissions to internal similarity in both mode without calling legacy AI analysis", async () => {
     process.env.INTEGRITY_PROVIDER_MODE = "both";
 
     const adminSupabase = createAdminSupabaseMock();
     const openAiMock = vi.fn(async () => ({
-      output_text: JSON.stringify({
-        flags: [
-          {
-            submission_a_id: ids.submissionC,
-            submission_b_id: ids.submissionB,
-            student_a: "Student C",
-            student_b: "Student B",
-            similarity_score: 72,
-            ai_suspicion_score: 58,
-            baseline_deviation_score: 0,
-            total_risk_score: 65,
-            reason: "Shared technical phrasing suggests suspicious overlap.",
-            evidence_summary: "AI review found repeated technical phrasing and unusually aligned structure.",
-            matched_excerpt: "quaternion telemetry drift lattice calibration error asynchronous checksum recovery",
-            recommended_action: "review",
-            integrity_type: "similarity",
-            severity: "medium",
-            overlap_analysis: {
-              total_overlap: 72,
-              cited_overlap: 0,
-              uncited_overlap: 72,
-              internal_peer_overlap: 72,
-              external_source_overlap: 0,
-            },
-            evidence_groups: {
-              uncited_matches: [],
-              cited_matches: [],
-              peer_matches: [],
-              external_matches: [],
-            },
-          },
-        ],
-        summary: "AI integrity review identified one suspicious similarity pair.",
-      }),
+      output_text: JSON.stringify({ flags: [], summary: "Legacy analysis completed." }),
     }));
 
     const handler = createCheckPlagiarismHandler({
@@ -925,21 +912,20 @@ describe("check-plagiarism handler", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
 
-    expect(openAiMock).toHaveBeenCalledTimes(1);
+    expect(openAiMock).not.toHaveBeenCalled();
     expect(payload.flags).toHaveLength(1);
     expect(payload.flags[0]).toMatchObject({
       submission_a_id: ids.submissionC,
       submission_b_id: ids.submissionB,
       integrity_type: "similarity",
     });
-    expect(payload.flags[0].similarity_score).toBeGreaterThanOrEqual(72);
-    expect(payload.flags[0].ai_suspicion_score).toBe(58);
-    expect(payload.flags[0].reason).toContain("Shared technical phrasing suggests suspicious overlap.");
+    expect(payload.flags[0].similarity_score).toBeGreaterThanOrEqual(45);
+    expect(payload.flags[0].ai_suspicion_score).toBe(0);
     expect(payload.summary).toContain("1 submission(s) crossed");
   });
 
-  it("falls back to internal similarity when OpenAI fails in both mode", async () => {
-    process.env.INTEGRITY_PROVIDER_MODE = "both";
+  it("falls back cleanly when legacy AI analysis fails in llm_legacy mode", async () => {
+    process.env.INTEGRITY_PROVIDER_MODE = "llm_legacy";
 
     const adminSupabase = createAdminSupabaseMock();
     const openAiMock = vi.fn(async () => {
@@ -980,16 +966,11 @@ describe("check-plagiarism handler", () => {
     const payload = await response.json();
 
     expect(openAiMock).toHaveBeenCalledTimes(1);
-    expect(payload.flags).toHaveLength(1);
-    expect(payload.flags[0]).toMatchObject({
-      submission_a_id: ids.submissionC,
-      submission_b_id: ids.submissionB,
-      integrity_type: "similarity",
-    });
+    expect(payload.flags).toHaveLength(0);
     expect(payload.warnings).toContain(
       "AI similarity analysis was temporarily unavailable; returning baseline and persistence-safe results only.",
     );
-    expect(payload.summary).toContain("1 submission(s) crossed");
+    expect(payload.summary).toContain("No submissions crossed the current integrity thresholds.");
   });
 
   it("returns flags and warnings when internal finding persistence fails", async () => {
@@ -1220,6 +1201,7 @@ describe("check-plagiarism handler", () => {
     expect(payload.warnings).toEqual([]);
     expect(payload.summary).toContain("No submissions crossed the current integrity thresholds.");
     expect(adminSupabase.integrityFindingUpsert).not.toHaveBeenCalled();
+    expect(adminSupabase.reviewUpsert).not.toHaveBeenCalled();
   });
 
   it("fails explicitly when the assignment-wide cohort query errors", async () => {

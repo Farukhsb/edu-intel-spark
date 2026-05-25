@@ -14,6 +14,73 @@ export type ExistingGradeRecord = {
   ai_breakdown: unknown;
 };
 
+function buildDomainSpecificRubricExemplars(rubric: RubricCriterion[]) {
+  const rubricText = rubric
+    .map((criterion) => `${criterion.criterion} ${criterion.description ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+
+  const isNormalizationTask =
+    rubricText.includes("functional depend") ||
+    rubricText.includes("normalisation") ||
+    rubricText.includes("normalization") ||
+    rubricText.includes("integrity constraint") ||
+    rubricText.includes("trade-off") ||
+    rubricText.includes("trade off");
+
+  if (!isNormalizationTask) return "";
+
+  return `DATABASE NORMALISATION EXEMPLARS:
+- Strong concise functional dependency analysis can still deserve Good or better. Example: "student_id determines student_name and programme_id; module_id determines module_title and credits; delivery_id determines lecturer_id and semester." If those dependencies are correct and tied to the schema, treat that as strong evidence rather than penalising brevity.
+- Good key and integrity reasoning does not need long prose. Example: "Student uses student_id as the primary key, Enrolment uses a surrogate enrolment_id plus a unique constraint on student_id + delivery_id, and foreign keys from Enrolment to Student and Delivery preserve integrity." If that structure is correct, mark it in the Good band rather than capping it for brevity.
+- Brief but correct trade-off justification can still deserve strong marks. Example: "Delivery stays separate from Module because staffing changes by run, which avoids update anomalies but adds joins when reporting." If the trade-off is defensible and relevant, reward it even if only one or two sentences.
+- Do not require textbook wording. If the schema logic, keys, and trade-off rationale are correct in plain language, award the marks for correctness rather than penalising short wording.
+- Distinguish missing detail from wrong logic. A concise but correct normalization answer belongs in Good or Satisfactory depending on completeness; reserve Basic or Weak for incorrect, missing, or incoherent schema reasoning.`;
+}
+
+export function buildAssignmentTypeStrategy(assignmentType: AssignmentType) {
+  switch (assignmentType) {
+    case "Code":
+      return `ASSIGNMENT-TYPE STRATEGY: CODE
+- Judge functional correctness, completeness against the stated task, and whether the implementation or explanation actually matches the requirement.
+- Prioritise algorithm choice, data handling, edge cases, and whether the submission would plausibly work as described.
+- Reward clean structure and justified design decisions only when the underlying solution is correct enough to deserve them.
+- Do not over-reward comments, formatting, or fluent explanation when the logic is weak or incomplete.
+- If the submission mixes prose and code, use the criterion-specific evidence packets to keep technical correctness separate from explanation quality.`;
+    case "Reflective":
+      return `ASSIGNMENT-TYPE STRATEGY: REFLECTIVE
+- Judge specificity, authenticity, self-awareness, and application of learning rather than polished generic prose.
+- Reward concrete examples, explicit reflection on decisions, and clear links between experience and learning outcomes.
+- Penalise generic reflection that sounds fluent but remains vague, unpersonalised, or unsupported by specific experience.
+- Do not confuse emotional tone or fluent style with depth of reflection.`;
+    case "Report":
+      return `ASSIGNMENT-TYPE STRATEGY: REPORT
+- Judge structure, methodology, evidence use, analysis, and recommendation quality.
+- Reward clear use of findings, comparison of options, and justified professional conclusions.
+- Distinguish description from analysis: a well-written summary without evaluation should not receive high analytical marks.
+- Give more weight to whether claims are supported by evidence than to surface polish alone.`;
+    case "Problem Solving":
+      return `ASSIGNMENT-TYPE STRATEGY: PROBLEM SOLVING
+- Judge whether the submission addresses the problem directly, applies the correct method, and shows enough working to justify the result.
+- Reward coherent stepwise reasoning and partial progress when it is genuinely relevant.
+- Distinguish a minor slip from a wrong method or missing reasoning.
+- Do not reward a correct-looking final answer if the working is absent, contradictory, or unsupported.`;
+    case "Mathematics":
+      return `ASSIGNMENT-TYPE STRATEGY: MATHEMATICS
+- Judge derivation validity, symbolic correctness, carry-forward logic, and whether each step follows from the previous one.
+- Reward mathematically valid progress even when arithmetic slips occur later.
+- Distinguish arithmetic slips from conceptual flaws.
+- Do not judge mathematical quality mainly by prose fluency.`;
+    case "Essay":
+    default:
+      return `ASSIGNMENT-TYPE STRATEGY: ESSAY
+- Judge argument quality, relevance, evidence use, conceptual understanding, and whether claims are defended rather than merely stated.
+- Reward clear thesis development, engagement with competing ideas where relevant, and supported interpretation.
+- Distinguish descriptive summary from analysis: descriptive but accurate prose should not receive high analytical marks.
+- Do not over-reward style if the argument, evidence, or conceptual depth is weak.`;
+  }
+}
+
 export function buildRegradeAnchorText(existingGrade: ExistingGradeRecord | null | undefined) {
   if (!existingGrade || existingGrade.ai_score == null) return "";
   const previousBreakdown = Array.isArray(existingGrade.ai_breakdown) ? existingGrade.ai_breakdown : [];
@@ -33,18 +100,25 @@ export function buildRubricCalibrationGuide(rubric: RubricCriterion[], maxScore:
     `${index + 1}. ${criterion.criterion} (${criterion.weight}/${maxScore})` +
     `${criterion.description ? ` -> ${criterion.description}` : ""}`
   );
+  const domainSpecificExemplars = buildDomainSpecificRubricExemplars(rubric);
 
   return `RUBRIC-FIRST CALIBRATION GUIDE:
 - Use the rubric wording as the primary basis for marking. Do not introduce hidden expectations.
 - Award marks because the submission satisfies the stated rubric criterion, not because it resembles an ideal answer.
+- Concise but correct answers can still deserve high marks when they identify the right method, the right structure, and the right justification.
+- Do not require exhaustive textbook-style explanation before awarding upper-band marks if the core reasoning and evidence are already correct.
 - If the rubric is broad, mark according to the quality of the evidence actually shown.
 - Do not collapse competent work into the 40s just because it lacks distinction-level depth.
 - If work meets the main requirements of a broad criterion, it will normally sit in the 50s.
 - If work meets all core requirements with correct methods and reasonable interpretation, it will normally sit in the 60s.
 - 70+ requires strong depth, strong evidence, and clear analytical insight.
+- 70+ does not require long prose. If a submission is concise but clearly correct, well-structured, and explicitly justified, award strong marks rather than capping it for brevity alone.
+- For criteria like keys, integrity constraints, and design trade-offs, award high marks when the submission states the correct relationships or rationale clearly, even if every implication is not expanded at length.
 - If unsure between two adjacent bands, lower confidence and recommend lecturer review rather than forcing the lower band.
 
-Criterion guide:
+${domainSpecificExemplars ? `${domainSpecificExemplars}
+
+` : ""}Criterion guide:
 ${criterionLines.join("\n")}`;
 }
 
@@ -58,6 +132,7 @@ export function buildGradingPrompt({
   rubricCalibrationGuide,
   regradeAnchorText,
   textPreview,
+  criterionEvidenceText,
 }: {
   assignmentType: AssignmentType;
   assignmentTitle: string;
@@ -68,6 +143,7 @@ export function buildGradingPrompt({
   rubricCalibrationGuide: string;
   regradeAnchorText: string;
   textPreview: string;
+  criterionEvidenceText?: string;
 }) {
   return `AssignmentType: ${assignmentType}
 
@@ -81,6 +157,8 @@ ${rubricText}
 
 ${rubricCalibrationGuide}
 
+${buildAssignmentTypeStrategy(assignmentType)}
+
 Evaluate criterion-by-criterion. Do not award a score unless supported by the submission evidence.
 If evidence is weak or ambiguous, reduce confidence and require lecturer review.
 For a single broad 100-mark criterion, use UK university bands:
@@ -93,6 +171,11 @@ Do not assign the 40s to competent work that addresses the task and meets the ma
 ${regradeAnchorText}
 Submission text:
 ${textPreview}
+
+${criterionEvidenceText ? `Criterion-specific evidence packets:
+${criterionEvidenceText}
+
+Use the criterion-specific packets as your primary evidence map. If a criterion packet contains weak or limited evidence, lower confidence for that criterion rather than borrowing evidence from another criterion.` : ""}
 
 Return valid JSON only.`;
 }
@@ -189,6 +272,13 @@ Percentages refer to the proportion of the criterion's own max_score.
 - Weak (20â€“39%): very limited relevant evidence
 - No evidence (0â€“19%): little or no relevant evidence
 
+UPPER-BAND CALIBRATION:
+
+- A concise answer can still be Good or Excellent if it is correct, relevant, and directly satisfies the criterion.
+- Do not cap a strong answer at Satisfactory purely because it is brief.
+- If the student correctly identifies the right decomposition, the right keys or integrity relationships, or the right practical trade-off, reward that substance even when the explanation is compact.
+- Use lack of detail to separate Excellent from Good, or Good from Satisfactory. Do not use brevity alone to push clearly correct work into Basic.
+
 EMPTY OR OFF-TOPIC SUBMISSIONS:
 If a criterion has no addressable submission content, meaning blank, gibberish, unreadable, or entirely off-topic, set awarded_score to 0, performance_band to "No evidence", and explain clearly in reason_for_score.
 
@@ -196,6 +286,8 @@ CALIBRATION OVERRIDES:
 
 - Treat lack of depth alone as a Satisfactory-level limitation, not a Basic-level failure.
 - If work meets all core requirements, applies required techniques correctly, and provides a logical interpretation, default to at least the Satisfactory band.
+- If work is concise but clearly correct on the criterion, default to at least the Good band unless important rubric elements are genuinely missing.
+- When the submission names the correct keys, foreign-key structure, or trade-off rationale in a defensible way, do not mark it down simply for not elaborating every implication.
 - Reserve the Basic band for cases where multiple required elements are weak or missing, or understanding is clearly limited.
 
 FAIRNESS RULES (CRITICAL):
@@ -203,6 +295,7 @@ FAIRNESS RULES (CRITICAL):
 - If the student clearly addresses the criterion, DO NOT assign a near-zero or fail score.
 - If the student meets core requirements, the score must not fall below the Basic or Satisfactory band.
 - If the student meets all core requirements, applies required techniques correctly, and provides a logical interpretation, the score must not fall below the Satisfactory band.
+- If the student meets the criterion correctly and succinctly, the score should normally sit in the Good band unless there is a specific missing element required by the rubric.
 - Lack of depth alone should reduce a Good score to Satisfactory, not to Basic.
 - Use partial credit fairly when there is some correct or relevant work.
 - Do NOT over-penalise grammar, structure, or formatting unless the rubric explicitly assesses writing quality.
@@ -214,6 +307,7 @@ CONSISTENCY RULES:
 
 - Feedback must match the score.
 - If feedback is positive, for example "clear", "relevant", or "meets requirement", the score must not be in the fail range.
+- If feedback says the work is coherent, correct, clear, or shows a defensible design choice, the score should not remain in a low mid-band without a specific rubric-based reason.
 - If score is below 40%, you must clearly explain why the work fails to meet the criterion.
 - If unsure, reduce confidence instead of reducing score.
 - When describing off-topic or non-responsive work, prefer the phrase "assignment instruction" instead of "assignment prompt" or "assignment brief".
@@ -304,19 +398,9 @@ Maths-specific rules:
 - Final score is out of ${maxScore}.`;
   }
 
-  const specialization =
-    assignmentType === "Code"
-      ? "Focus on correctness, completeness, structure, and whether the code or explanation matches the requirement."
-      : assignmentType === "Reflective"
-        ? "Focus on authentic reflection, specificity, self-awareness, and application of learning."
-        : assignmentType === "Report"
-          ? "Focus on structure, evidence, analysis, and professional communication."
-          : "Focus on argument quality, evidence, relevance, and conceptual understanding.";
-
   return `${baseRules}
 
 You are in ${assignmentType.toUpperCase()} mode.
-${specialization}
 - Final score is out of ${maxScore}.`;
 }
 

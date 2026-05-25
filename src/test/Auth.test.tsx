@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Auth from "@/pages/Auth";
 
@@ -26,6 +26,16 @@ vi.mock("@/hooks/use-toast", () => ({
   }),
 }));
 
+vi.mock("@/lib/env", () => ({
+  getEnv: () => ({
+    VITE_SUPABASE_URL: "https://example.supabase.co",
+    VITE_SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
+    VITE_APP_ENV: "development",
+    VITE_ANALYTICS_ENABLED: false,
+    VITE_INSTITUTION_SLUG: "default",
+  }),
+}));
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
@@ -35,6 +45,13 @@ vi.mock("react-router-dom", async () => {
 });
 
 describe("Auth", () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -60,9 +77,18 @@ describe("Auth", () => {
         "Use your institutional account or create one so the platform can route you into the right workspace",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /read the privacy notice/i })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("tab", { name: "Sign In" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Sign Up" })).toBeInTheDocument();
+  });
+
+  it("includes a link to the privacy notice", () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Auth />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: /read the privacy notice/i })).toHaveAttribute("href", "/privacy");
   });
 
   it("switches to recovery readiness when forgot password is opened", async () => {
@@ -112,6 +138,66 @@ describe("Auth", () => {
 
     await waitFor(() => {
       expect(mocks.authState.resendVerification).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows the institution workspace cue on the signup form", async () => {
+    mocks.authState.pendingVerificationEmail = "student@example.com";
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Auth />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Create account" })).toBeInTheDocument();
+    expect(screen.getByText("default").closest("div")).toHaveTextContent(
+      "New accounts created here join the default institution workspace.",
+    );
+  });
+
+  it("shows a custom department input for Other and submits the specified value", async () => {
+    mocks.authState.pendingVerificationEmail = "student@example.com";
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Auth />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Create account")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Full Name *"), {
+      target: { value: "Student Ada" },
+    });
+    fireEvent.change(screen.getByLabelText("Email *"), {
+      target: { value: "student@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password * (min 8 characters)"), {
+      target: { value: "StrongPass123!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "student" }));
+    fireEvent.click(screen.getAllByRole("combobox")[0]);
+    fireEvent.click(await screen.findByRole("option", { name: "Other" }));
+    fireEvent.change(await screen.findByLabelText("Please specify your department"), {
+      target: { value: "Architecture" },
+    });
+    fireEvent.click(screen.getAllByRole("combobox")[1]);
+    fireEvent.click(await screen.findByRole("option", { name: "Year 1 (Level 4)" }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+    });
+
+    await waitFor(() => {
+      expect(mocks.authState.signUp).toHaveBeenCalledWith(
+        "student@example.com",
+        "StrongPass123!",
+        "Student Ada",
+        "student",
+        "year1",
+        "Architecture",
+      );
     });
   });
 });

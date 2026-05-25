@@ -13,6 +13,8 @@ describe("shared OpenAI helpers", () => {
         get: (name: string) => {
           if (name === "OPENAI_API_KEY") return "test-openai-key";
           if (name === "OPENAI_REQUEST_TIMEOUT_MS") return "30000";
+          if (name === "OPENAI_CHAT_MODEL") return "gpt-4o-mini";
+          if (name === "OPENAI_GRADING_MODEL") return "gpt-4.1-mini";
           return undefined;
         },
       },
@@ -128,5 +130,23 @@ describe("shared OpenAI helpers", () => {
     await vi.advanceTimersByTimeAsync(30_000);
 
     await request;
+  });
+
+  it("throws the provider error for non-success responses API calls", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response("bad request", {
+        status: 400,
+        headers: { "Content-Type": "text/plain" },
+      }),
+    ) as typeof fetch;
+
+    await expect(
+      createResponse({
+        model: "gpt-4o-mini",
+        input: "Explain this grade",
+      }),
+    ).rejects.toThrow("OpenAI responses error (400): bad request");
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });

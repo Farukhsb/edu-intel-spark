@@ -55,6 +55,34 @@ const PROFILE_FLAG_RETRY_DELAY_MS = 400;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function resolveActorInstitutionContext(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  actorId: string,
+) {
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("institution_id, institutions:institution_id (slug)")
+    .eq("id", actorId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const institutionRow =
+    data && typeof data === "object" && "institutions" in data
+      ? data.institutions as { slug?: string | null } | null
+      : null;
+
+  return {
+    institutionId:
+      data && typeof data === "object" && "institution_id" in data && typeof data.institution_id === "string"
+        ? data.institution_id
+        : null,
+    institutionSlug: institutionRow?.slug?.trim() || null,
+  };
+}
+
 async function markPasswordChangeRequired(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   options: { userId?: string; email: string },
@@ -193,6 +221,7 @@ Deno.serve(async (req) => {
     }
 
     const passwordSetupRedirectTo = getPasswordSetupRedirectUrl();
+    const actorInstitution = await resolveActorInstitutionContext(supabaseAdmin, user.id);
     const results = [];
 
     for (const student of students as StudentInput[]) {
@@ -216,6 +245,8 @@ Deno.serve(async (req) => {
           full_name: name,
           role: "student",
           cohort_id: cohortId,
+          institution_id: actorInstitution.institutionId,
+          institution_slug: actorInstitution.institutionSlug,
           ...buildDepartmentColumns(departmentName),
         },
         redirectTo: passwordSetupRedirectTo,

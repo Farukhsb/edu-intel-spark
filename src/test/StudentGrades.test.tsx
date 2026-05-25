@@ -1,28 +1,36 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import StudentGrades from "@/pages/dashboard/StudentGrades";
+import StudentGrades, { calculateGradeStats } from "@/pages/dashboard/StudentGrades";
 
-const mocks = vi.hoisted(() => ({
-  authState: {
-    isDemo: false,
-    user: { id: "student-1" },
-    profile: { full_name: "Ada Student" },
-  },
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-  supabase: {
-    from: vi.fn(),
-    rpc: vi.fn(),
-    storage: {
-      from: vi.fn(() => ({
-        createSignedUrl: vi.fn(),
-      })),
+const mocks = vi.hoisted(() => {
+  const createSignedUrl = vi.fn();
+
+  return {
+    authState: {
+      isDemo: false,
+      user: { id: "student-1" },
+      profile: { full_name: "Ada Student" },
     },
-  },
-}));
+    logger: {
+      warn: vi.fn(),
+      error: vi.fn(),
+    },
+    toast: {
+      error: vi.fn(),
+    },
+    createSignedUrl,
+    supabase: {
+      from: vi.fn(),
+      rpc: vi.fn(),
+      storage: {
+        from: vi.fn(() => ({
+          createSignedUrl,
+        })),
+      },
+    },
+  };
+});
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mocks.authState,
@@ -34,6 +42,10 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/lib/logger", () => ({
   log: mocks.logger,
+}));
+
+vi.mock("sonner", () => ({
+  toast: mocks.toast,
 }));
 
 vi.mock("lucide-react", () => {
@@ -171,6 +183,10 @@ describe("StudentGrades", () => {
     mocks.authState.isDemo = false;
     mocks.authState.user = { id: "student-1" };
     mocks.authState.profile = { full_name: "Ada Student" };
+    mocks.createSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://example.com/submission.pdf" },
+      error: null,
+    });
   });
 
   afterEach(() => {
@@ -369,5 +385,139 @@ describe("StudentGrades", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Lecturer Feedback")).not.toBeInTheDocument();
     expect(screen.queryByText("Strongest Areas")).not.toBeInTheDocument();
+  });
+
+  it("does not produce NaN percentages when maxScore is zero", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          max_score: 0,
+          final_score: 12,
+          ai_breakdown: [
+            {
+              criterion: "Argument",
+              score: 12,
+              max_score: 0,
+              feedback: "Still awaiting rubric normalization.",
+            },
+          ],
+        },
+      ],
+    });
+
+    const { container } = render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getByText("0%")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("12/100")).toBeInTheDocument();
+    expect(screen.getByText("You scored 12 out of 100.")).toBeInTheDocument();
+    expect(screen.getByText("That is 28 marks below the pass mark of 40.")).toBeInTheDocument();
+    expect(screen.getByText("12/100 (0%)")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("NaN");
+    expect(container.textContent).not.toContain("Infinity");
+  });
+
+  it("clamps percentages at 100% when score is above maxScore", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          final_score: 120,
+          ai_breakdown: [
+            {
+              criterion: "Argument",
+              score: 40,
+              max_score: 30,
+              feedback: "Exceeded the available points in the imported breakdown.",
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("clamps percentages at 0% when score is negative", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          final_score: -5,
+          ai_breakdown: [
+            {
+              criterion: "Argument",
+              score: -2,
+              max_score: 30,
+              feedback: "Imported negative score should not produce a negative width.",
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<StudentGrades />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("0%").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("shows a user-facing error when submission download URL creation fails", async () => {
+    setupSupabase({
+      projection: [
+        {
+          ...defaultProjection[0],
+          file_url: "student/submission-1.pdf",
+        },
+      ],
+    });
+    mocks.createSignedUrl.mockResolvedValueOnce({
+      data: null,
+      error: { message: "storage offline" },
+    });
+
+    render(<StudentGrades />);
+
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /download submission/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /download submission/i }));
+
+    await waitFor(() => {
+      expect(mocks.toast.error).toHaveBeenCalledWith("Download unavailable", {
+        description: "Your submission could not be opened right now. Please try again later.",
+      });
+    });
+
+    expect(mocks.logger.error).toHaveBeenCalledWith(
+      "Failed to create student submission download URL",
+      { message: "storage offline" },
+      { submissionId: "submission-1" },
+    );
+    expect(openSpy).not.toHaveBeenCalled();
+
+    openSpy.mockRestore();
+  });
+});
+
+describe("calculateGradeStats", () => {
+  it("returns zeroed stats when there are no released scores", () => {
+    expect(calculateGradeStats([])).toEqual({
+      avg: 0,
+      count: 0,
+      highest: 0,
+      lowest: 0,
+    });
   });
 });

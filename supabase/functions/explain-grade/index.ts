@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
 
     const { data: grade, error: gradeError } = await userSupabase
       .from("grades")
-      .select("id, submission_id, ai_score, final_score, ai_feedback, ai_breakdown, grading_confidence")
+      .select("id, submission_id, ai_score, final_score, ai_feedback, final_feedback, ai_breakdown, grading_confidence")
       .eq("submission_id", submissionId)
       .maybeSingle();
 

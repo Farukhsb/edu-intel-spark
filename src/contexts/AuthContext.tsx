@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     fullName: string,
     role: PublicSignupRole,
     cohortId?: string,
-    departmentId?: string
+    departmentName?: string
   ) => {
     const { requiresEmailConfirmation, initialProfile } = await signUpWithPassword({
       email,
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       fullName,
       role,
       cohortId,
-      departmentId,
+      departmentName,
     });
 
     if (initialProfile) {

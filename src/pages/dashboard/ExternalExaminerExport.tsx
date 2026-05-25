@@ -10,7 +10,12 @@ import { toast } from "sonner";
 import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
-import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
+import {
+  DashboardDemoBanner,
+  DashboardEmptyState,
+  DashboardLiveBanner,
+  DashboardLoadingState,
+} from "@/components/dashboard/PageStates";
 import {
   DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS,
   DEMO_EXTERNAL_EXAMINER_EXPORT_DATA,
@@ -253,13 +258,10 @@ const ExternalExaminerExport = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo && (
-        <Card className="border-warning bg-warning/5">
-          <CardContent className="flex items-center gap-2 p-3">
-            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo export data</span>
-          </CardContent>
-        </Card>
+      {isDemo ? (
+        <DashboardDemoBanner label="Viewing demo export data" />
+      ) : (
+        <DashboardLiveBanner label="Viewing live examiner export records assembled from assignments, submissions, and grading data." />
       )}
 
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">

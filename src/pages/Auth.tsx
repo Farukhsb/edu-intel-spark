@@ -11,7 +11,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthReadiness } from "@/lib/authReadiness";
-import { DEPARTMENT_OPTIONS } from "@/lib/departmentOptions";
+import { getEnv } from "@/lib/env";
+import {
+  DEPARTMENT_OPTIONS,
+  OTHER_DEPARTMENT_OPTION,
+  resolveDepartmentValue,
+} from "@/lib/departmentOptions";
 import { COHORT_LEVELS } from "@/lib/formatters";
 
 const getErrorMessage = (message: string): string => {
@@ -57,12 +62,15 @@ const Auth = () => {
   const [signupPassword, setSignupPassword] = useState("");
   const [signupRole, setSignupRole] = useState<"lecturer" | "student">("student");
   const [signupCohort, setSignupCohort] = useState("");
-  const [signupDepartment, setSignupDepartment] = useState("");
+  const [signupDepartmentName, setSignupDepartmentName] = useState("");
+  const [signupCustomDepartmentName, setSignupCustomDepartmentName] = useState("");
 
   const passwordStrength = getPasswordStrength(signupPassword);
   const readiness = getAuthReadiness({
     forgotPassword: showForgotPassword,
   });
+  const institutionSlug = getEnv().VITE_INSTITUTION_SLUG;
+  const resolvedSignupDepartmentName = resolveDepartmentValue(signupDepartmentName, signupCustomDepartmentName);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,7 +103,7 @@ const Auth = () => {
       toast({ title: "Missing level", description: "Please select your level/year.", variant: "destructive" });
       return;
     }
-    if (!signupDepartment) {
+    if (!resolvedSignupDepartmentName) {
       toast({ title: "Missing department", description: "Please select your department.", variant: "destructive" });
       return;
     }
@@ -107,7 +115,7 @@ const Auth = () => {
         signupName,
         signupRole,
         signupCohort,
-        signupDepartment
+        resolvedSignupDepartmentName
       );
 
       if (result.requiresEmailConfirmation) {
@@ -272,6 +280,11 @@ const Auth = () => {
                 <CardDescription>Join GradeAI as a lecturer or student</CardDescription>
               </CardHeader>
               <CardContent>
+                {institutionSlug ? (
+                  <div className="mb-4 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
+                    New accounts created here join the <span className="font-medium text-foreground">{institutionSlug}</span> institution workspace.
+                  </div>
+                ) : null}
                 {pendingVerificationEmail ? (
                   <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
                     <p className="text-sm font-semibold">Email confirmation pending</p>
@@ -332,7 +345,15 @@ const Auth = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Department *</Label>
-                    <Select value={signupDepartment} onValueChange={setSignupDepartment}>
+                    <Select
+                      value={signupDepartmentName}
+                      onValueChange={(value) => {
+                        setSignupDepartmentName(value);
+                        if (value !== OTHER_DEPARTMENT_OPTION) {
+                          setSignupCustomDepartmentName("");
+                        }
+                      }}
+                    >
                       <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
                       <SelectContent>
                         {DEPARTMENT_OPTIONS.map((d) => (
@@ -341,6 +362,17 @@ const Auth = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {signupDepartmentName === OTHER_DEPARTMENT_OPTION ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-custom-department">Please specify your department</Label>
+                      <Input
+                        id="signup-custom-department"
+                        value={signupCustomDepartmentName}
+                        onChange={(e) => setSignupCustomDepartmentName(e.target.value)}
+                        placeholder="Enter your department"
+                      />
+                    </div>
+                  ) : null}
                   {signupRole === "student" && (
                     <div className="space-y-2">
                       <Label>Level / Year *</Label>

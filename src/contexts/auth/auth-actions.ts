@@ -1,6 +1,7 @@
 import { clearE2EAuthState, readE2EAuthState } from "@/lib/e2eAuth";
 import { getPasswordResetRedirectUrl } from "@/lib/authUrls";
 import { toDepartmentColumns } from "@/lib/department";
+import { getEnv } from "@/lib/env";
 import { supabase } from "@/integrations/supabase/client";
 
 import type { AppRole, PublicSignupRole } from "@/lib/roles";
@@ -12,16 +13,18 @@ export const signUpWithPassword = async ({
   fullName,
   role,
   cohortId,
-  departmentId,
+  departmentName,
 }: {
   email: string;
   password: string;
   fullName: string;
   role: PublicSignupRole;
   cohortId?: string;
-  departmentId?: string;
+  departmentName?: string;
 }) => {
   if (password.length < 8) throw new Error("Password must be at least 8 characters");
+  const env = getEnv();
+  const institutionSlug = env.VITE_INSTITUTION_SLUG?.trim() || undefined;
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -31,7 +34,8 @@ export const signUpWithPassword = async ({
         full_name: fullName,
         role,
         cohort_id: role === "student" ? (cohortId || null) : null,
-        ...toDepartmentColumns(departmentId),
+        institution_slug: institutionSlug,
+        ...toDepartmentColumns(departmentName),
       },
     },
   });
@@ -47,7 +51,7 @@ export const signUpWithPassword = async ({
         role,
         avatar_url: null,
         cohort_id: role === "student" ? (cohortId || null) : null,
-        ...toDepartmentColumns(departmentId),
+        ...toDepartmentColumns(departmentName),
         must_change_password: false,
       }
     : null;

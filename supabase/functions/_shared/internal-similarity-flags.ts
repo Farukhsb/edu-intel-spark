@@ -7,6 +7,7 @@ export type InternalSimilaritySubmission = {
 };
 
 export type InternalSimilarityFlagCandidate = {
+  provider: IntegrityProviderFinding["provider"];
   submission_a_id: string;
   submission_b_id: string;
   student_a: string;
@@ -50,6 +51,7 @@ export function buildInternalSimilarityFlagCandidates({
     const evidenceSummary = finding.evidence_summary || "Internal cohort similarity detected.";
 
     return [{
+      provider: finding.provider,
       submission_a_id: primaryId,
       submission_b_id: secondaryId,
       student_a: primarySubmission?.student_name || primarySubmission?.student_email || "Student A",
@@ -61,7 +63,11 @@ export function buildInternalSimilarityFlagCandidates({
       reason: evidenceSummary,
       evidence_summary: evidenceSummary,
       matched_excerpt: matchedExcerpt,
-      recommended_action: finding.similarity_score >= 80 ? "investigate" : "review",
+      recommended_action: finding.similarity_score >= 80
+        ? "investigate"
+        : finding.similarity_score >= 45
+          ? "review"
+          : "clear",
       integrity_type: "similarity" as const,
       severity: finding.severity,
     } satisfies InternalSimilarityFlagCandidate];

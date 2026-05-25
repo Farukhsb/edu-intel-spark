@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { gradeSingleSubmission } from "../../supabase/functions/grade-submission/submission-stage";
-import { buildGradingInputHash } from "../../supabase/functions/grade-submission/grading-support";
+import {
+  buildGradingInputHash,
+  GRADING_PROMPT_VERSION,
+} from "../../supabase/functions/grade-submission/grading-support";
 import { normalizeRubricForAssignment } from "../../supabase/functions/grade-submission/request-stage";
 import { DOCUMENT_EXTRACTION_ERROR_MESSAGE } from "../../supabase/functions/_shared/document-extraction-core";
 import * as promptingModule from "../../supabase/functions/grade-submission/prompting";
@@ -69,7 +72,7 @@ describe("grade-submission submission stage", () => {
         grading_confidence: 0.82,
         grading_metadata: {
           grading_input_hash: gradingInputHash,
-          grading_prompt_version: "2026-04-24-v4",
+          grading_prompt_version: GRADING_PROMPT_VERSION,
           lecturer_review_required: false,
         },
         created_at: "2026-05-08T10:00:00.000Z",

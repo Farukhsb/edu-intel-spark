@@ -138,8 +138,8 @@ export const useAssignmentDetailController = ({
       lecturerActions,
       moderationCases,
       navigate,
-      plagiarismFlags,
-      plagiarismSummary,
+      plagiarismFlags: viewState.visiblePlagiarismFlags,
+      plagiarismSummary: viewState.visiblePlagiarismSummary,
       reloadSubmissions,
       submissions,
       viewState: {

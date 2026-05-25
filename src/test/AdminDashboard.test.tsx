@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 
@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   from: vi.fn(),
   useAuth: vi.fn(),
+  consoleError: vi.fn(),
+  consoleWarn: vi.fn(),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -40,6 +42,11 @@ const profiles = [
     full_name: "Admin Person",
     email: "admin@gradeai.test",
     role: "admin",
+    department_name: "Computer Science",
+    department_id: "Computer Science",
+    cohort_id: null,
+    institution_id: "institution-1",
+    must_change_password: false,
     created_at: "2026-04-28T10:00:00.000Z",
   },
   {
@@ -47,6 +54,11 @@ const profiles = [
     full_name: "Sam Student",
     email: "student@gradeai.test",
     role: "student",
+    department_name: "Economics",
+    department_id: "Economics",
+    cohort_id: "year1",
+    institution_id: "institution-1",
+    must_change_password: true,
     created_at: "2026-04-28T10:00:00.000Z",
   },
   {
@@ -54,9 +66,21 @@ const profiles = [
     full_name: "Dr Ada Lecturer",
     email: "lecturer@gradeai.test",
     role: "lecturer",
+    department_name: "Computer Science",
+    department_id: "Computer Science",
+    cohort_id: null,
+    institution_id: "institution-1",
+    must_change_password: false,
     created_at: "2026-04-28T10:00:00.000Z",
   },
 ];
+
+const institution = {
+  id: "institution-1",
+  name: "Default Institution",
+  slug: "default",
+  status: "active",
+};
 
 const assignments = [
   {
@@ -170,6 +194,11 @@ const largeProfiles = [
     full_name: `Student Extra ${index + 1}`,
     email: `extra${index + 1}@gradeai.test`,
     role: "student",
+    department_name: "Mathematics",
+    department_id: "Mathematics",
+    cohort_id: "year1",
+    institution_id: "institution-1",
+    must_change_password: false,
     created_at: `2026-04-${String((index % 9) + 10).padStart(2, "0")}T10:00:00.000Z`,
   })),
 ];
@@ -218,6 +247,19 @@ const buildQueryResponse = (
         order: vi.fn().mockResolvedValue({
           data: profilesData,
           error: null,
+        }),
+      }),
+    };
+  }
+
+  if (table === "institutions") {
+    return {
+      select: () => ({
+        limit: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: institution,
+            error: null,
+          }),
         }),
       }),
     };
@@ -364,6 +406,12 @@ const buildQueryResponse = (
 
 describe("AdminDashboard", () => {
   beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    vi.spyOn(console, "error").mockImplementation(mocks.consoleError);
+    vi.spyOn(console, "warn").mockImplementation(mocks.consoleWarn);
     mocks.toastError.mockReset();
     mocks.toastSuccess.mockReset();
     mocks.rpc.mockReset();
@@ -375,6 +423,10 @@ describe("AdminDashboard", () => {
     mocks.useAuth.mockReturnValue({
       profile: { id: "admin-1", role: "admin" },
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("limits role changes to student and lecturer, requires confirmation, and loads audit history", async () => {
@@ -390,6 +442,9 @@ describe("AdminDashboard", () => {
     expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Promote to Lecturer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Demote to Student" })).toBeInTheDocument();
+    expect(screen.getAllByText("Economics").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Year 1 (Level 4)").length).toBeGreaterThan(0);
+    expect(screen.getByText("Required")).toBeInTheDocument();
     expect(screen.queryByText(/Promote to Admin/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Promote to Lecturer" }));
@@ -426,7 +481,6 @@ describe("AdminDashboard", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
-    expect(screen.getByText("Profile record only")).toBeInTheDocument();
     expect(screen.getByText("Sam Student")).toBeInTheDocument();
     expect(screen.queryByText("Dr Ada Lecturer")).not.toBeInTheDocument();
 
@@ -436,6 +490,9 @@ describe("AdminDashboard", () => {
     expect(screen.getByText(/Admin-safe profile summary/i)).toBeInTheDocument();
     expect(screen.getAllByText("Sam Student").length).toBeGreaterThan(0);
     expect(screen.getAllByText("student@gradeai.test").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Economics").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Year 1 (Level 4)").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Required").length).toBeGreaterThan(0);
   });
 
   it("can sync auth metadata for an existing user without changing the database role", async () => {
@@ -464,6 +521,50 @@ describe("AdminDashboard", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Auth metadata synced for Sam Student.");
   });
 
+  it("lets admins edit institution-managed profile fields through the profile modal", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard?view=users&filter=student"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /User and role management/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+
+    expect(await screen.findByRole("heading", { name: "Edit profile" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "Role" }));
+    expect(await screen.findByRole("option", { name: "student" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "lecturer" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "admin" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "moderator" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "external_examiner" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "student" }));
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Samuel Student" },
+    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Department" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Mathematics" }));
+    fireEvent.click(screen.getByLabelText("Password reset required?"));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(mocks.rpc).toHaveBeenCalledWith("admin_update_user_profile", {
+        target_user_id: "student-1",
+        new_full_name: "Samuel Student",
+        new_role: "student",
+        new_department_name: "Mathematics",
+        new_cohort_id: "year1",
+        new_must_change_password: false,
+      });
+    });
+
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Profile updated for Samuel Student.");
+  });
+
   it("uses observational wording in system health instead of claiming definitive live service health", async () => {
     render(
       <MemoryRouter
@@ -478,7 +579,7 @@ describe("AdminDashboard", () => {
     expect(screen.getByText("Release backlog")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /System health/i })).toBeInTheDocument();
     expect(screen.getByText("Read snapshot succeeded")).toBeInTheDocument();
-    expect(screen.getAllByText("No direct signal").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No provider telemetry").length).toBeGreaterThan(0);
     expect(screen.getByText(/direct grading-run telemetry is not yet exposed here/i)).toBeInTheDocument();
     expect(screen.queryByText(/^Healthy$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Online$/)).not.toBeInTheDocument();
@@ -559,6 +660,8 @@ describe("AdminDashboard", () => {
 
     expect(await screen.findByRole("heading", { name: /GradeAI Admin Dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bulk Upload Students" })).toBeInTheDocument();
+    expect(screen.getByText("Default Institution")).toBeInTheDocument();
+    expect(screen.getByText(/Tenant scope:/i)).toHaveTextContent("Tenant scope: default · active");
   });
 
   it("shows a page-level error state when the admin dashboard cannot be loaded", async () => {

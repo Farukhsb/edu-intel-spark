@@ -1,3 +1,5 @@
+import type { Dispatch, SetStateAction } from "react";
+import type { AppRole } from "@/lib/roles";
 import type { LucideIcon } from "lucide-react";
 import type {
   OperationalFailureCard,
@@ -15,11 +17,21 @@ export type AdminMetrics = {
   highIntegrityRiskCases: number;
 };
 
+export type AdminInstitutionSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+};
+
 export type AdminUserRow = {
   id: string;
   fullName: string | null;
   email: string | null;
-  role: string;
+  role: AppRole;
+  departmentName: string | null;
+  cohortId: string | null;
+  mustChangePassword: boolean;
   createdAt: string | null;
 };
 
@@ -177,6 +189,17 @@ export type PendingRoleChange = {
 
 export type SelectedUserPreview = AdminUserRow | null;
 
+export type EditingUserProfile = AdminUserRow | null;
+
+export type AdminManagedProfileInput = {
+  targetUserId: string;
+  fullName: string;
+  role: AppRole;
+  departmentName: string | null;
+  cohortId: string | null;
+  mustChangePassword: boolean;
+};
+
 export type AssignmentSubmissionSummary = {
   submissionCount: number;
   gradedCount: number;
@@ -195,6 +218,7 @@ export type AdminDashboardState = {
   loading: boolean;
   refreshing: boolean;
   loadError: string | null;
+  institution: AdminInstitutionSummary | null;
   metrics: AdminMetrics;
   healthItems: OperationalHealthItem[];
   failureCards: OperationalFailureCard[];
@@ -218,4 +242,95 @@ export type AdminDashboardState = {
   changingUserId: string | null;
   syncingUserId: string | null;
   selectedUserPreview: SelectedUserPreview;
+  editingUserProfile: EditingUserProfile;
+  savingUserProfileId: string | null;
+};
+
+export type AdminDashboardStatus = Pick<AdminDashboardState, "loading" | "refreshing" | "loadError">;
+
+export type AdminDashboardViewModel = {
+  activeView: AdminView;
+  header: {
+    institution: AdminInstitutionSummary | null;
+    refreshing: boolean;
+    showBulkUpload: boolean;
+  };
+  overview: {
+    metrics: AdminMetrics;
+    healthItems: OperationalHealthItem[];
+    failureCards: OperationalFailureCard[];
+    users: AdminUserRow[];
+    assignments: AdminAssignmentRow[];
+    submissions: AdminSubmissionRow[];
+    moderationRows: AdminModerationRow[];
+    auditRows: AdminAuditRow[];
+    activityFeed: ActivityItem[];
+  };
+  users: {
+    users: AdminUserRow[];
+    changingUserId: string | null;
+    syncingUserId: string | null;
+  };
+  assignments: {
+    assignments: AdminAssignmentRow[];
+  };
+  submissions: {
+    submissions: AdminSubmissionRow[];
+  };
+  moderation: {
+    moderationRows: AdminModerationRow[];
+  };
+  audit: {
+    auditRows: AdminAuditRow[];
+    activityFeed: ActivityItem[];
+  };
+  dataAccessLog: {
+    rows: AdminDataAccessLogRow[];
+    status: AdminGovernanceStatus;
+  };
+  integrityOverview: {
+    overview: AdminIntegrityOverview;
+  };
+  moderationAudit: {
+    rows: AdminModerationAuditRow[];
+    status: AdminGovernanceStatus;
+  };
+  policyExceptions: {
+    rows: AdminPolicyExceptionRow[];
+    status: AdminGovernanceStatus;
+  };
+  system: {
+    failureCards: OperationalFailureCard[];
+    healthItems: OperationalHealthItem[];
+    moderationRows: AdminModerationRow[];
+    activityFeed: ActivityItem[];
+  };
+  dialogs: {
+    pendingRoleChange: PendingRoleChange;
+    changingUserId: string | null;
+    selectedUserPreview: SelectedUserPreview;
+    editingUserProfile: EditingUserProfile;
+    savingUserProfileId: string | null;
+  };
+};
+
+export type AdminDashboardActions = {
+  loadAdminDashboard: (options?: { silent?: boolean }) => Promise<void>;
+  requestRoleChange: (user: AdminUserRow, nextRole: "student" | "lecturer") => void;
+  confirmRoleChange: () => Promise<void>;
+  syncUserRoleMetadata: (targetUser: AdminUserRow) => Promise<void>;
+  saveUserProfile: (input: AdminManagedProfileInput) => Promise<void>;
+  setPendingRoleChange: Dispatch<SetStateAction<PendingRoleChange>>;
+  setSelectedUserPreview: Dispatch<SetStateAction<SelectedUserPreview>>;
+  setEditingUserProfile: Dispatch<SetStateAction<SelectedUserPreview>>;
+};
+
+export type AdminDashboardControllerResult = {
+  profile: {
+    id: string;
+    role: AppRole;
+  } | null;
+  status: AdminDashboardStatus;
+  viewModel: AdminDashboardViewModel;
+  actions: AdminDashboardActions;
 };

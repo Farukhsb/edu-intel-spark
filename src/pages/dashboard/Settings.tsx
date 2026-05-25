@@ -5,16 +5,19 @@ import { Badge } from "@/components/ui/badge";
 import { User, Shield } from "lucide-react";
 import { getDepartmentName } from "@/lib/department";
 import { formatCohortLevel } from "@/lib/formatters";
-import { isLecturerEquivalentRole } from "@/lib/roles";
+import { isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
 import { getSettingsReadiness } from "@/lib/settingsReadiness";
 
 const Settings = () => {
   const { profile, signOut } = useAuth();
+  const departmentName = getDepartmentName(profile);
+  const isStudent = isStudentRole(profile?.role);
+  const isLecturerEquivalent = isLecturerEquivalentRole(profile?.role);
   const readiness = getSettingsReadiness({
     role: profile?.role,
     fullName: profile?.full_name,
     email: profile?.email,
-    departmentName: getDepartmentName(profile),
+    departmentName,
   });
 
   return (
@@ -62,9 +65,9 @@ const Settings = () => {
             <User className="h-4 w-4" />
             Profile
           </CardTitle>
-          <CardDescription>Your account details</CardDescription>
+          <CardDescription>Your institution-managed account details</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Name</span>
             <span className="text-sm font-medium">{profile?.full_name || "-"}</span>
@@ -75,18 +78,44 @@ const Settings = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Role</span>
-            <Badge variant={isLecturerEquivalentRole(profile?.role) ? "default" : "secondary"}>
+            <Badge variant={isLecturerEquivalent ? "default" : "secondary"}>
               {profile?.role || "-"}
             </Badge>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Department</span>
-            <span className="text-sm font-medium">{getDepartmentName(profile) || "-"}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Level / Cohort</span>
-            <span className="text-sm font-medium">{formatCohortLevel(profile?.cohort_id)}</span>
-          </div>
+          {isStudent ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Department</span>
+                <span className="text-sm font-medium">{departmentName || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Level / Cohort</span>
+                <span className="text-sm font-medium">{formatCohortLevel(profile?.cohort_id)}</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                These details are managed by your institution or platform administrator. If your name, department, role,
+                or level is incorrect, contact an administrator to request a correction.
+              </p>
+            </>
+          ) : (
+            <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <div>
+                <p className="text-sm font-medium">Academic Profile</p>
+                <p className="text-sm text-muted-foreground">
+                  These details are managed by your institution or platform administrator. If your name, department,
+                  role, or level is incorrect, contact an administrator to request a correction.
+                </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Department</span>
+                <span className="text-sm font-medium">{departmentName || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Role</span>
+                <Badge variant={isLecturerEquivalent ? "default" : "secondary"}>{profile?.role || "-"}</Badge>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -99,7 +128,8 @@ const Settings = () => {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Your role was assigned when your account was created. If you need to change your role, please contact your institution's administrator.
+            Your role controls which academic records and workflows you can access. For governance and security reasons,
+            role changes are handled by an administrator.
           </p>
         </CardContent>
       </Card>

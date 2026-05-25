@@ -28,24 +28,88 @@ import { gradeSingleSubmission } from "./submission-stage.ts";
 import type { FetchSubmissionContentForGrading } from "./types.ts";
 
 const CONFIDENCE_THRESHOLD = 0.7;
-const GRADING_PASSES = 1;
+const DEFAULT_GRADING_PASSES = 3;
+const MAX_GRADING_PASSES = 5;
 const PASS_SPREAD_REVIEW_THRESHOLD_RATIO = 0.08;
 const PASS_SPREAD_REVIEW_THRESHOLD_MIN = 8;
 
-type SuccessfulGradeResult = {
-  submissionId: string;
-  success: true;
-  score?: number | null;
-  feedback?: string | null;
-  breakdown?: Array<Record<string, unknown>> | null;
-  assignmentType?: string | null;
-  gradingConfidence?: number | null;
-  gradingMetadata?: Record<string, unknown> | null;
-  requiresLecturerReview?: boolean;
-};
+function readEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  if (typeof process !== "undefined" && process.env) {
+    return process.env[name];
+  }
+
+  return undefined;
+}
+
+function getConfiguredGradingPasses() {
+  const configured = Number(readEnv("OPENAI_GRADING_PASSES") || DEFAULT_GRADING_PASSES);
+  if (!Number.isFinite(configured)) return DEFAULT_GRADING_PASSES;
+
+  const normalized = Math.trunc(configured);
+  if (normalized < 1) return 1;
+
+  return Math.min(normalized, MAX_GRADING_PASSES);
+}
+
+function resolveGradingPasses(override: number | undefined) {
+  const configuredPasses = getConfiguredGradingPasses();
+  if (override === undefined) {
+    return configuredPasses;
+  }
+
+  return Math.min(configuredPasses, override);
+}
 
 function getPassSpreadThreshold(maxScore: number) {
   return Math.max(PASS_SPREAD_REVIEW_THRESHOLD_MIN, Math.round(maxScore * PASS_SPREAD_REVIEW_THRESHOLD_RATIO));
+}
+
+function classifyGradingError(reason: string) {
+  const normalizedReason = reason.toLowerCase();
+
+  if (normalizedReason.includes("parse ai response")) {
+    return { errorCode: "response_parse_failed", safeErrorCategory: "grading_failure" };
+  }
+  if (normalizedReason.includes("download")) {
+    return { errorCode: "submission_download_failed", safeErrorCategory: "submission_access_failure" };
+  }
+  if (normalizedReason.includes("missing") && normalizedReason.includes("file url")) {
+    return { errorCode: "submission_file_missing", safeErrorCategory: "submission_access_failure" };
+  }
+  if (normalizedReason.includes("supported")) {
+    return { errorCode: "unsupported_submission_file", safeErrorCategory: "submission_validation_failure" };
+  }
+  if (normalizedReason.includes("extract")) {
+    return { errorCode: "document_extraction_failed", safeErrorCategory: "document_processing_failure" };
+  }
+
+  return { errorCode: "grading_failed", safeErrorCategory: "grading_failure" };
+}
+
+function toSafeGradingErrorMessage(reason: string) {
+  const normalizedReason = reason.toLowerCase();
+
+  if (normalizedReason.includes("parse ai response")) {
+    return "AI grading response could not be parsed.";
+  }
+  if (normalizedReason.includes("download")) {
+    return "Submission file could not be downloaded.";
+  }
+  if (normalizedReason.includes("missing") && normalizedReason.includes("file url")) {
+    return "Submission file URL is missing.";
+  }
+  if (normalizedReason.includes("supported")) {
+    return "Submission file type is not supported.";
+  }
+  if (normalizedReason.includes("extract")) {
+    return "Submission document extraction failed.";
+  }
+
+  return "AI grading failed for this submission.";
 }
 
 async function recordGradingFailureAudit({
@@ -89,43 +153,40 @@ async function recordGradingFailureAudit({
   }
 }
 
-async function persistGradedSubmissionResult({
+async function recordGradingErrorEvent({
   supabaseAdmin,
   submissionId,
-  gradingResult,
+  assignmentId,
+  userId,
+  provider,
+  reason,
 }: {
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   submissionId: string;
-  gradingResult: SuccessfulGradeResult;
+  assignmentId: string;
+  userId: string;
+  provider: string;
+  reason: string;
 }) {
-  const { error: gradeWriteError } = await supabaseAdmin.from("grades").upsert(
-    {
-      submission_id: submissionId,
-      ai_score: gradingResult.score ?? null,
-      ai_feedback: gradingResult.feedback ?? null,
-      ai_breakdown: gradingResult.breakdown ?? [],
-      assignment_type: gradingResult.assignmentType ?? null,
-      grading_confidence: gradingResult.gradingConfidence ?? null,
-      grading_metadata: gradingResult.gradingMetadata ?? {},
-    },
-    { onConflict: "submission_id" },
-  );
+  const classification = classifyGradingError(reason);
+  const safeErrorMessage = toSafeGradingErrorMessage(reason);
+  const { error } = await supabaseAdmin.from("grading_error_events").insert({
+    submission_id: submissionId,
+    assignment_id: assignmentId,
+    user_id: userId,
+    provider,
+    error_code: classification.errorCode,
+    // Keep telemetry messages short and safe. Do not store raw student text, prompts,
+    // provider payloads, or secrets in grading_error_events.error_message.
+    error_message: safeErrorMessage,
+    safe_error_category: classification.safeErrorCategory,
+  });
 
-  if (gradeWriteError) {
-    throw new Error(gradeWriteError.message || "The AI grade could not be saved.");
-  }
-
-  const nextStatus = gradingResult.requiresLecturerReview ? "first_review" : "ai_graded";
-  const { error: submissionWriteError } = await supabaseAdmin
-    .from("submissions")
-    .update({ status: nextStatus })
-    .eq("id", submissionId);
-
-  if (submissionWriteError) {
-    logWarn("grade-submission status update failed after grade save", {
+  if (error) {
+    logWarn("grade-submission grading error telemetry insert failed", {
       submissionId,
-      nextStatus,
-      error: submissionWriteError,
+      assignmentId,
+      error,
     });
   }
 }
@@ -225,8 +286,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { assignmentId, submissionId, submissionIds, force_regenerate } = parsedRequest.data;
+    const { assignmentId, submissionId, submissionIds, force_regenerate, grading_passes_override } = parsedRequest.data;
     const gradingModel = getModel("OPENAI_GRADING_MODEL", "gpt-4o-mini");
+    const gradingPasses = resolveGradingPasses(grading_passes_override);
     const forceRegenerate = force_regenerate ?? false;
     const regradeReason =
       typeof rawBody?.regrade_reason === "string" && rawBody.regrade_reason.trim()
@@ -337,6 +399,14 @@ Deno.serve(async (req) => {
         gradingModel,
         forceRegenerate,
       });
+      await recordGradingErrorEvent({
+        supabaseAdmin,
+        submissionId: sub.id,
+        assignmentId: requestedAssignmentId,
+        userId: user.id,
+        provider: "openai",
+        reason,
+      });
       results.push({
         submissionId: sub.id,
         error: reason,
@@ -358,7 +428,7 @@ Deno.serve(async (req) => {
           forceRegenerate,
           regradeReason,
           confidenceThreshold: CONFIDENCE_THRESHOLD,
-          gradingPasses: GRADING_PASSES,
+          gradingPasses,
           getPassSpreadThreshold,
           fetchSubmissionContent: (submission) => fetchSubmissionContent(supabaseAdmin, submission),
         });
@@ -382,6 +452,14 @@ Deno.serve(async (req) => {
           reason,
           gradingModel,
           forceRegenerate,
+        });
+        await recordGradingErrorEvent({
+          supabaseAdmin,
+          submissionId: sub.id,
+          assignmentId: requestedAssignmentId,
+          userId: user.id,
+          provider: "openai",
+          reason,
         });
         results.push({
           submissionId: sub.id,

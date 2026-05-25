@@ -22,9 +22,29 @@ const privacySections = [
       "AI is used to support grading, feedback explanation, and academic risk analysis. Academic outcomes remain subject to human review, moderation, approval, and release.",
   },
   {
+    title: "External services",
+    body:
+      "GradeAI may use approved external services for AI processing, email delivery, analytics, error monitoring, and optional code similarity checking. These services should be configured by the institution or platform administrator before live use.",
+  },
+  {
+    title: "Student work and AI processing",
+    body:
+      "Uploaded submissions may be processed by AI services to support grading, feedback drafting, explanation, and integrity review. AI output is advisory and should be reviewed by an educator before it is used in an academic decision.",
+  },
+  {
     title: "Who can see what",
     body:
       "Lecturers can view teaching and marking data relating to the work they manage. Students can view only released results and support content intended for them. Administrative users can view institution-level reporting and governance information.",
+  },
+  {
+    title: "Data rights",
+    body:
+      "Users may ask for correction, access, or deletion of personal data, subject to institutional academic record policies and legal retention requirements.",
+  },
+  {
+    title: "Automated decision-making",
+    body:
+      "GradeAI is designed as a decision-support tool. It should not be used to make fully automated final academic decisions about grades, misconduct, progression, or student support.",
   },
   {
     title: "Retention and pilot status",
@@ -44,7 +64,7 @@ const Privacy = () => {
     description:
       "Read how GradeAI handles academic workflow data, student submissions, AI-supported assessment, and pilot retention expectations.",
     path: "/privacy",
-    robots: "index,follow",
+    robots: "noindex,follow",
   });
 
   return (

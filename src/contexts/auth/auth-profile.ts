@@ -17,6 +17,7 @@ type ProfileRow = {
   cohort_id: string | null;
   department_name: string | null;
   department_id: string | null;
+  institution_id?: string | null;
   must_change_password: boolean | null;
 };
 
@@ -70,7 +71,9 @@ export const fetchAuthProfile = async ({
     avatar_url: data.avatar_url,
     cohort_id: data.cohort_id ?? null,
     department_name: departmentName,
+    // Keep the compatibility mirror populated until legacy reads are removed.
     department_id: departmentName,
+    institution_id: data.institution_id ?? null,
     must_change_password: data.must_change_password ?? false,
   };
 

@@ -1,10 +1,15 @@
 export type AppRole = "lecturer" | "student" | "admin";
 
 export type PublicSignupRole = Exclude<AppRole, "admin">;
+export const MANAGED_APP_ROLES: readonly AppRole[] = ["student", "lecturer", "admin"];
 
 export const parseAppRole = (role: string | null | undefined): AppRole | null => {
-  if (role === "lecturer" || role === "student" || role === "admin") {
-    return role;
+  if (typeof role !== "string") {
+    return null;
+  }
+
+  if (MANAGED_APP_ROLES.includes(role as AppRole)) {
+    return role as AppRole;
   }
 
   return null;

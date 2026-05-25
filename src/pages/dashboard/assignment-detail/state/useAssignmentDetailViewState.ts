@@ -3,6 +3,8 @@ import type { NavigateFunction } from "react-router-dom";
 
 import { getAssessmentSummary } from "@/lib/assessmentWorkflow";
 import {
+  buildIntegrityDisplayFlags,
+  buildIntegrityDisplaySummary,
   deriveIntegrityCardPresentation,
   type IntegrityCardPresentation,
   type WorkflowReadinessState,
@@ -52,6 +54,8 @@ interface UseAssignmentDetailViewStateResult {
   selected: Set<string>;
   selectedWorkflowGuidance: ReturnType<typeof useAssignmentDetailListState>["selectedWorkflowGuidance"];
   selectedWorkflowState: ReturnType<typeof useAssignmentDetailListState>["selectedWorkflowState"];
+  visiblePlagiarismFlags: AcademicIntegrityFlag[];
+  visiblePlagiarismSummary: string | null;
   setSearchQuery: ReturnType<typeof useAssignmentDetailListState>["setSearchQuery"];
   setSelected: ReturnType<typeof useAssignmentDetailListState>["setSelected"];
   setStatusFilter: ReturnType<typeof useAssignmentDetailListState>["setStatusFilter"];
@@ -103,18 +107,27 @@ export const useAssignmentDetailViewState = ({
     submissions,
   });
 
+  const visiblePlagiarismFlags = useMemo(
+    () => buildIntegrityDisplayFlags(plagiarismFlags),
+    [plagiarismFlags],
+  );
+  const visiblePlagiarismSummary = useMemo(
+    () => buildIntegrityDisplaySummary(visiblePlagiarismFlags, plagiarismSummary ?? ""),
+    [visiblePlagiarismFlags, plagiarismSummary],
+  );
+
   const integrityCardSignature = useMemo(
     () =>
       JSON.stringify({
-        flagKeys: plagiarismFlags.map((flag) => [
+        flagKeys: visiblePlagiarismFlags.map((flag) => [
           flag.submission_a_id,
           flag.submission_b_id,
           flag.reason,
           flag.total_risk_score ?? flag.similarity_score,
         ]),
-        summary: plagiarismSummary ?? "",
+        summary: visiblePlagiarismSummary ?? "",
       }),
-    [plagiarismFlags, plagiarismSummary],
+    [visiblePlagiarismFlags, visiblePlagiarismSummary],
   );
   const [dismissedIntegrityCardSignature, setDismissedIntegrityCardSignature] = useState<string | null>(null);
 
@@ -126,8 +139,8 @@ export const useAssignmentDetailViewState = ({
 
   const integrityCard = useMemo(() => {
     const basePresentation = deriveIntegrityCardPresentation({
-      flags: plagiarismFlags,
-      summary: plagiarismSummary ?? "",
+      flags: visiblePlagiarismFlags,
+      summary: visiblePlagiarismSummary ?? "",
     });
 
     return {
@@ -138,8 +151,8 @@ export const useAssignmentDetailViewState = ({
   }, [
     dismissedIntegrityCardSignature,
     integrityCardSignature,
-    plagiarismFlags,
-    plagiarismSummary,
+    visiblePlagiarismFlags,
+    visiblePlagiarismSummary,
   ]);
 
   const {
@@ -189,6 +202,8 @@ export const useAssignmentDetailViewState = ({
     selected,
     selectedWorkflowGuidance,
     selectedWorkflowState,
+    visiblePlagiarismFlags,
+    visiblePlagiarismSummary,
     setSearchQuery,
     setSelected,
     setStatusFilter,

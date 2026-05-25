@@ -150,6 +150,9 @@ describe("edge function hardening", () => {
     expect(source).toContain("department_name: z.string().trim().min(1).optional()");
     expect(source).toContain("department_id: z.string().trim().min(1).optional()");
     expect(source).toContain("inviteUserByEmail");
+    expect(source).toContain("resolveActorInstitutionContext");
+    expect(source).toContain("institution_id: actorInstitution.institutionId");
+    expect(source).toContain("institution_slug: actorInstitution.institutionSlug");
     expect(source).not.toContain("results.push({ name, email, password, success: true })");
   });
 
@@ -199,6 +202,9 @@ describe("edge function hardening", () => {
     const bootstrapSource = readRepoFile("supabase/functions/check-plagiarism/bootstrap.ts");
     const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
     const automationHookSource = readRepoFile("src/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions.ts");
+    const automationSharedSource = readRepoFile(
+      "src/pages/dashboard/assignment-detail/workflows/automatedAssessmentShared.ts",
+    );
     const configSource = readRepoFile("supabase/config.toml");
 
     expect(entrySource).toContain("registerCheckPlagiarismEntrypoint");
@@ -248,7 +254,8 @@ describe("edge function hardening", () => {
       "src/pages/dashboard/assignment-detail/state/useAssignmentDetailReadinessState.ts",
     );
     expect(readinessStateSource).toContain("const MAX_INTEGRITY_REQUEST_SUBMISSIONS = 80;");
-    expect(automationHookSource).toContain("const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;");
+    expect(automationSharedSource).toContain("export const LARGE_COHORT_INTEGRITY_WARNING_THRESHOLD = 80;");
+    expect(automationSharedSource).toContain("export const LEGACY_INTEGRITY_REQUEST_COMPAT_LIMIT = 80;");
     expect(automationHookSource).toContain("body: JSON.stringify({");
     expect(automationHookSource).toContain("assignmentId: assignment.id,");
     expect(configSource).toContain("[functions.check-plagiarism]");
@@ -280,12 +287,15 @@ describe("edge function hardening", () => {
   it("centralizes role resolution inside shared edge-function auth", () => {
     const authSource = readRepoFile("supabase/functions/_shared/auth.ts");
     const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+    const adminRoleSource = readRepoFile("supabase/functions/admin-set-user-role/index.ts");
 
     expect(authSource).toContain("export async function resolveUserRoles");
     expect(authSource).toContain("export async function requireAppRoles");
     expect(authSource).toContain("export async function requireAdmin");
     expect(gradingSource).not.toContain("async function resolveActorRoles");
     expect(gradingSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
+    expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? existingMetadata.institution_id ?? null");
+    expect(adminRoleSource).toContain("institution_slug: institutionSlug ?? existingMetadata.institution_slug ?? null");
   });
 
   it("persists grading failure audit events for admin operational monitoring", () => {
@@ -294,5 +304,14 @@ describe("edge function hardening", () => {
     expect(gradingSource).toContain('event_type: "grading_failed"');
     expect(gradingSource).toContain('await recordGradingFailureAudit({');
     expect(gradingSource).toContain('logWarn("grade-submission failure audit insert failed"');
+  });
+
+  it("stores only short safe grading error telemetry messages", () => {
+    const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+
+    expect(gradingSource).toContain("function toSafeGradingErrorMessage");
+    expect(gradingSource).toContain("error_message: safeErrorMessage");
+    expect(gradingSource).toContain("Do not store raw student text, prompts,");
+    expect(gradingSource).not.toContain("error_message: reason");
   });
 });

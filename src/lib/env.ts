@@ -17,6 +17,7 @@ const EnvSchema = z.object({
   VITE_POSTHOG_HOST: optionalUrl,
   VITE_ANALYTICS_ENABLED: optionalBooleanFlag,
   VITE_SUPABASE_PROJECT_ID: optionalString,
+  VITE_INSTITUTION_SLUG: optionalString,
 });
 
 type ParsedEnv = z.infer<typeof EnvSchema>;

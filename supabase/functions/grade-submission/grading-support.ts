@@ -4,7 +4,7 @@ import type { RubricCriterion } from "./prompting.ts";
 const CONFIDENCE_THRESHOLD = 0.7;
 const REGRADING_DRIFT_THRESHOLD_RATIO = 0.08;
 const REGRADING_DRIFT_THRESHOLD_MIN = 8;
-export const GRADING_PROMPT_VERSION = "2026-04-24-v4";
+export const GRADING_PROMPT_VERSION = "2026-05-25-v9";
 
 export type GradeBreakdownItem = {
   criterion: string;
@@ -247,6 +247,42 @@ function normalizeCriterionKey(value: unknown) {
     .trim();
 }
 
+function deriveNegativeEvidenceCap(params: {
+  performanceBand: string;
+  comment: string;
+  evidence: string;
+  reason: string;
+  maxScore: number;
+}) {
+  const combined = `${params.performanceBand} ${params.comment} ${params.evidence} ${params.reason}`.toLowerCase();
+
+  if (combined.includes("no evidence")) {
+    return Number((params.maxScore * 0.1).toFixed(2));
+  }
+
+  const severeNegativeSignals = [
+    "no supporting quote extracted",
+    "no justification",
+    "no discussion of design choices",
+    "no discussion of trade-offs",
+    "does not identify any functional dependencies",
+    "fails to identify any functional dependencies",
+    "no functional dependencies identified",
+    "does not define any primary or foreign keys",
+    "no primary or foreign keys",
+    "no keys or integrity constraints defined",
+    "no coherent 3nf structure",
+    "does not provide a coherent 3nf structure",
+    "lacks a coherent 3nf structure",
+  ];
+
+  if (severeNegativeSignals.some((signal) => combined.includes(signal))) {
+    return Number((params.maxScore * 0.25).toFixed(2));
+  }
+
+  return null;
+}
+
 export function normalizeBreakdown(raw: unknown, rubric: RubricCriterion[]): NormalizedBreakdown {
   const provided = Array.isArray(raw) ? raw : [];
   const normalizedProvided = provided.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
@@ -268,9 +304,23 @@ export function normalizeBreakdown(raw: unknown, rubric: RubricCriterion[]): Nor
     const maxScore = criterion.weight;
     const rawScoreValue = matched?.awarded_score ?? matched?.score;
     const rawScore = Number(rawScoreValue);
-    const score = clampScore(rawScoreValue, maxScore);
+    let score = clampScore(rawScoreValue, maxScore);
     const rawMaxScore = Number(matched?.max_score);
     const confidence = clampConfidence(matched?.confidence_score);
+    const performanceBand = normalizePerformanceBand(matched?.performance_band);
+    const comment = normalizeComment(matched?.reason_for_score ?? matched?.comment);
+    const evidence = normalizeEvidence(
+      Array.isArray(matched?.evidence_from_submission)
+        ? normalizeStringList(matched?.evidence_from_submission).join("; ")
+        : matched?.evidence_from_submission ?? matched?.evidence_snippet,
+    );
+    const negativeEvidenceCap = deriveNegativeEvidenceCap({
+      performanceBand,
+      comment,
+      evidence,
+      reason: comment,
+      maxScore,
+    });
     const reviewRequired =
       typeof matched?.review_required === "boolean"
         ? matched.review_required
@@ -286,25 +336,24 @@ export function normalizeBreakdown(raw: unknown, rubric: RubricCriterion[]): Nor
       recalibrated = true;
       fairnessNotes.push(`${criterion.criterion}: AI appeared to score this criterion out of 100 instead of ${maxScore}.`);
     }
+    if (negativeEvidenceCap != null && score > negativeEvidenceCap) {
+      recalibrated = true;
+      fairnessNotes.push(
+        `${criterion.criterion}: score was capped because the criterion rationale described missing or absent evidence.`,
+      );
+      score = negativeEvidenceCap;
+    }
 
     return {
       criterion: criterion.criterion,
       score,
       max_score: maxScore,
-      performance_band: normalizePerformanceBand(matched?.performance_band),
-      comment: normalizeComment(matched?.reason_for_score ?? matched?.comment),
-      evidence_snippet: normalizeEvidence(
-        Array.isArray(matched?.evidence_from_submission)
-          ? normalizeStringList(matched?.evidence_from_submission).join("; ")
-          : matched?.evidence_from_submission ?? matched?.evidence_snippet,
-      ),
+      performance_band: performanceBand,
+      comment,
+      evidence_snippet: evidence,
       rubric_expectation: normalizeComment(matched?.rubric_expectation ?? criterion.description ?? ""),
-      evidence_from_submission: normalizeEvidence(
-        Array.isArray(matched?.evidence_from_submission)
-          ? normalizeStringList(matched?.evidence_from_submission).join("; ")
-          : matched?.evidence_from_submission ?? matched?.evidence_snippet,
-      ),
-      reason_for_score: normalizeComment(matched?.reason_for_score ?? matched?.comment),
+      evidence_from_submission: evidence,
+      reason_for_score: comment,
       improvement_feedback: normalizeImprovementFeedback(matched?.improvement_feedback),
       strengths: normalizeStringList(matched?.strengths),
       weaknesses: normalizeStringList(matched?.weaknesses),
@@ -518,4 +567,230 @@ export function isSupportedSubmissionFile(fileName: string | null | undefined, f
     ".sh",
     ".md",
   ].some((extension) => candidate.includes(extension));
+}
+
+const EVIDENCE_PACKET_STOPWORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "has", "have", "how", "if", "in",
+  "into", "is", "it", "its", "of", "on", "or", "that", "the", "their", "there", "these", "this", "to", "was",
+  "were", "what", "which", "with", "within", "your",
+]);
+
+function normalizeEvidenceKeyword(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractEvidenceKeywords(input: string) {
+  return normalizeEvidenceKeyword(input)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4 && !EVIDENCE_PACKET_STOPWORDS.has(token));
+}
+
+function splitEvidenceSegments(text: string) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length >= 120);
+
+  if (paragraphs.length >= 3) {
+    return paragraphs;
+  }
+
+  const segments: string[] = [];
+  const chunkSize = 1400;
+  const overlap = 300;
+  let index = 0;
+  while (index < text.length) {
+    const chunk = text.slice(index, index + chunkSize).trim();
+    if (chunk.length >= 120) {
+      segments.push(chunk);
+    }
+    if (index + chunkSize >= text.length) break;
+    index += chunkSize - overlap;
+  }
+
+  return segments;
+}
+
+function scoreEvidenceSegment(
+  segment: string,
+  keywords: string[],
+  index: number,
+  total: number,
+) {
+  const normalizedSegment = normalizeEvidenceKeyword(segment);
+  const matchedKeywords = keywords.filter((keyword) => normalizedSegment.includes(keyword));
+  const uniqueMatches = new Set(matchedKeywords);
+  const lengthScore = Math.min(3, Math.round(segment.length / 500));
+  const edgeBonus = index === 0 || index === total - 1 ? 1 : 0;
+
+  return {
+    score: uniqueMatches.size * 2 + lengthScore + edgeBonus,
+    matchedKeywords: Array.from(uniqueMatches).slice(0, 8),
+  };
+}
+
+function truncateEvidenceSection(text: string, maxChars: number) {
+  if (text.length <= maxChars) return text.trim();
+  return `${text.slice(0, maxChars).trim()}\n[truncated]`;
+}
+
+export function buildGradingEvidencePacket(params: {
+  submissionText: string;
+  rubric: RubricCriterion[];
+  assignmentTitle: string;
+  assignmentDescription?: string | null;
+  maxChars?: number;
+}) {
+  const maxChars = params.maxChars ?? 18_000;
+  const normalizedText = params.submissionText.trim();
+  if (!normalizedText) return "";
+
+  const keywords = Array.from(
+    new Set([
+      ...extractEvidenceKeywords(params.assignmentTitle),
+      ...extractEvidenceKeywords(params.assignmentDescription || ""),
+      ...params.rubric.flatMap((criterion) =>
+        extractEvidenceKeywords(`${criterion.criterion} ${criterion.description || ""}`)),
+    ]),
+  ).slice(0, 28);
+
+  const introSection = truncateEvidenceSection(normalizedText.slice(0, 2800), 2800);
+  const closingStart = Math.max(0, normalizedText.length - 2200);
+  const closingSection = truncateEvidenceSection(normalizedText.slice(closingStart), 2200);
+  const segmentCandidates = splitEvidenceSegments(normalizedText)
+    .map((segment, index, array) => ({
+      segment,
+      index,
+      ...scoreEvidenceSegment(segment, keywords, index, array.length),
+    }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 6);
+
+  const packetSections: string[] = [];
+  const seenSegments = new Set<string>();
+  let remainingChars = maxChars;
+
+  const pushSection = (label: string, content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    const dedupeKey = normalizeEvidenceKeyword(trimmed).slice(0, 240);
+    if (!dedupeKey || seenSegments.has(dedupeKey)) return;
+
+    const sectionText = `${label}\n${trimmed}`;
+    if (sectionText.length > remainingChars) {
+      if (remainingChars < 240) return;
+      const allowedContent = Math.max(120, remainingChars - label.length - 2);
+      const truncated = `${label}\n${truncateEvidenceSection(trimmed, allowedContent)}`;
+      if (truncated.length > remainingChars) return;
+      packetSections.push(truncated);
+      remainingChars -= truncated.length + 2;
+      seenSegments.add(dedupeKey);
+      return;
+    }
+
+    packetSections.push(sectionText);
+    remainingChars -= sectionText.length + 2;
+    seenSegments.add(dedupeKey);
+  };
+
+  pushSection("OPENING SECTION:", introSection);
+
+  segmentCandidates.forEach((candidate, index) => {
+    const keywordNote =
+      candidate.matchedKeywords.length > 0 ? `Matched rubric cues: ${candidate.matchedKeywords.join(", ")}` : "Relevant mid-submission evidence";
+    pushSection(`RUBRIC-ALIGNED EXCERPT ${index + 1} (${keywordNote}):`, candidate.segment);
+  });
+
+  if (closingSection && normalizeEvidenceKeyword(closingSection) !== normalizeEvidenceKeyword(introSection)) {
+    pushSection("CLOSING SECTION:", closingSection);
+  }
+
+  return packetSections.join("\n\n").trim();
+}
+
+export type CriterionEvidencePacket = {
+  criterion: string;
+  packet: string;
+  matchedKeywords: string[];
+};
+
+export function buildCriterionEvidencePackets(params: {
+  submissionText: string;
+  rubric: RubricCriterion[];
+  assignmentTitle: string;
+  assignmentDescription?: string | null;
+  maxCharsPerCriterion?: number;
+}) {
+  const normalizedText = params.submissionText.trim();
+  if (!normalizedText) {
+    return params.rubric.map((criterion) => ({
+      criterion: criterion.criterion,
+      packet: "",
+      matchedKeywords: [],
+    }));
+  }
+
+  const assignmentKeywords = [
+    ...extractEvidenceKeywords(params.assignmentTitle),
+    ...extractEvidenceKeywords(params.assignmentDescription || ""),
+  ];
+  const segments = splitEvidenceSegments(normalizedText);
+  const introSection = truncateEvidenceSection(normalizedText.slice(0, 1800), 1800);
+  const closingStart = Math.max(0, normalizedText.length - 1400);
+  const closingSection = truncateEvidenceSection(normalizedText.slice(closingStart), 1400);
+  const maxCharsPerCriterion = params.maxCharsPerCriterion ?? 2600;
+
+  return params.rubric.map((criterion) => {
+    const criterionKeywords = Array.from(
+      new Set([
+        ...assignmentKeywords,
+        ...extractEvidenceKeywords(criterion.criterion),
+        ...extractEvidenceKeywords(criterion.description || ""),
+      ]),
+    ).slice(0, 18);
+
+    const rankedSegments = segments
+      .map((segment, index, array) => ({
+        segment,
+        index,
+        ...scoreEvidenceSegment(segment, criterionKeywords, index, array.length),
+      }))
+      .filter((candidate) => candidate.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 3);
+
+    const pieces: string[] = [];
+    let remainingChars = maxCharsPerCriterion;
+    const pushPiece = (label: string, content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed || remainingChars < 140) return;
+      const section = `${label}\n${truncateEvidenceSection(trimmed, Math.max(120, remainingChars - label.length - 2))}`;
+      if (section.length > remainingChars) return;
+      pieces.push(section);
+      remainingChars -= section.length + 2;
+    };
+
+    pushPiece("Criterion context:", `${criterion.criterion}${criterion.description ? ` -> ${criterion.description}` : ""}`);
+    pushPiece("Opening evidence:", introSection);
+    rankedSegments.forEach((candidate, index) => {
+      const keywordNote =
+        candidate.matchedKeywords.length > 0 ? candidate.matchedKeywords.join(", ") : "general relevance";
+      pushPiece(`Focused excerpt ${index + 1} (matched: ${keywordNote}):`, candidate.segment);
+    });
+    if (closingSection && normalizeEvidenceKeyword(closingSection) !== normalizeEvidenceKeyword(introSection)) {
+      pushPiece("Closing evidence:", closingSection);
+    }
+
+    const matchedKeywords = Array.from(
+      new Set(rankedSegments.flatMap((candidate) => candidate.matchedKeywords)),
+    ).slice(0, 8);
+
+    return {
+      criterion: criterion.criterion,
+      packet: pieces.join("\n\n").trim(),
+      matchedKeywords,
+    } satisfies CriterionEvidencePacket;
+  });
 }

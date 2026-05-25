@@ -33,6 +33,7 @@ describe("operationalMonitoring", () => {
           title: "Grading failures today",
           tone: "warning",
           value: "2",
+          signalType: "live",
         }),
         expect.objectContaining({
           title: "Release backlog",
@@ -55,14 +56,16 @@ describe("operationalMonitoring", () => {
     expect(snapshot.healthItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "AI grading service",
+          label: "AI grading workflow signal",
           tone: "warning",
           statusLabel: "Signal is stale",
+          signalType: "inferred",
         }),
         expect.objectContaining({
-          label: "Email notifications",
+          label: "Notification records",
           tone: "healthy",
           statusLabel: "Records visible",
+          signalType: "live",
         }),
       ]),
     );
@@ -81,14 +84,16 @@ describe("operationalMonitoring", () => {
     expect(snapshot.healthItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "AI grading service",
+          label: "AI grading workflow signal",
           tone: "placeholder",
-          statusLabel: "No direct signal",
+          statusLabel: "No provider telemetry",
+          signalType: "placeholder",
         }),
         expect.objectContaining({
-          label: "Failed grading attempts today",
+          label: "Visible grading failures today",
           tone: "placeholder",
-          statusLabel: "Pending",
+          statusLabel: "Pending telemetry",
+          signalType: "placeholder",
         }),
       ]),
     );
@@ -97,8 +102,77 @@ describe("operationalMonitoring", () => {
       expect.objectContaining({
         title: "Grading failures today",
         tone: "placeholder",
-        value: "Pending",
+        value: "Pending telemetry",
+        signalType: "placeholder",
       }),
+    );
+  });
+
+  it("shows healthy grading telemetry when real failures count is zero", () => {
+    const snapshot = buildOperationalMonitoringSnapshot({
+      latestGradeRun: "2026-05-04T08:00:00.000Z",
+      aiGradingFailures: 0,
+      moderationRows: [],
+      submissions: [],
+      emailNotificationsVisible: true,
+      emailNotificationsCount: 1,
+      now: new Date("2026-05-04T12:00:00.000Z").getTime(),
+    });
+
+    expect(snapshot.healthItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Visible grading failures today",
+          tone: "healthy",
+          statusLabel: "0",
+          signalType: "live",
+        }),
+      ]),
+    );
+
+    expect(snapshot.failureCards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Grading failures today",
+          tone: "healthy",
+          value: "0",
+          signalType: "live",
+        }),
+      ]),
+    );
+  });
+
+  it("shows warning grading telemetry when one or more failures are recorded", () => {
+    const snapshot = buildOperationalMonitoringSnapshot({
+      latestGradeRun: "2026-05-04T08:00:00.000Z",
+      aiGradingFailures: 3,
+      moderationRows: [],
+      submissions: [],
+      emailNotificationsVisible: true,
+      emailNotificationsCount: 1,
+      now: new Date("2026-05-04T12:00:00.000Z").getTime(),
+    });
+
+    expect(snapshot.healthItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Visible grading failures today",
+          tone: "warning",
+          statusLabel: "3",
+          signalType: "live",
+        }),
+      ]),
+    );
+
+    expect(snapshot.failureCards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Grading failures today",
+          tone: "warning",
+          value: "3",
+          signalType: "live",
+        }),
+      ]),
     );
   });
 });

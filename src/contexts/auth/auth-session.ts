@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { posthog } from "@/lib/posthog";
 import { createE2EUser, readE2EAuthState } from "@/lib/e2eAuth";
+import { log } from "@/lib/logger";
 
 import { fetchAuthProfile } from "./auth-profile";
 import type { Profile } from "./types";
@@ -20,6 +21,28 @@ interface UseAuthSessionSyncArgs {
   setLoading: (value: boolean) => void;
   setIsDemo: (value: boolean) => void;
 }
+
+type AuthErrorLike = {
+  code?: string | null;
+  name?: string | null;
+  message?: string | null;
+  status?: number | null;
+  __isAuthError?: boolean | null;
+};
+
+const toAuthErrorRecord = (error: unknown): AuthErrorLike | null =>
+  typeof error === "object" && error !== null ? (error as AuthErrorLike) : null;
+
+const isRefreshTokenNotFoundError = (error: unknown) => {
+  const record = toAuthErrorRecord(error);
+  if (!record) return false;
+
+  const message = String(record.message ?? "").toLowerCase();
+  return record.code === "refresh_token_not_found" || message.includes("refresh token not found");
+};
+
+const isPublicAuthRoute = (pathname: string) =>
+  pathname === "/auth" || pathname === "/reset-password";
 
 export const useAuthSessionSync = ({
   isDemo,
@@ -49,8 +72,29 @@ export const useAuthSessionSync = ({
       setUser(null);
       setProfile(null);
       setProfileError(null);
+      setPendingVerificationEmail(null);
       posthog.reset();
       setLoading(false);
+    };
+
+    const handleSessionFailure = (error: unknown, context: "getSession" | "applyAuthenticatedUser") => {
+      if (isRefreshTokenNotFoundError(error)) {
+        log.warn("Auth session refresh token was not found; clearing client session state", {
+          context,
+          locationPathname,
+        });
+        clearAuthenticatedState();
+        if (!isPublicAuthRoute(locationPathname)) {
+          navigate("/auth", { replace: true });
+        }
+        return;
+      }
+
+      log.error("Auth session synchronisation failed", error, {
+        context,
+        locationPathname,
+      });
+      clearAuthenticatedState();
     };
 
     const e2eAuthState = readE2EAuthState();
@@ -63,13 +107,20 @@ export const useAuthSessionSync = ({
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        void applyAuthenticatedUser(session.user);
-      } else {
-        setLoading(false);
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user) {
+          void applyAuthenticatedUser(session.user).catch((error) => {
+            handleSessionFailure(error, "applyAuthenticatedUser");
+          });
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch((error) => {
+        handleSessionFailure(error, "getSession");
+      });
 
     const {
       data: { subscription },
@@ -81,7 +132,9 @@ export const useAuthSessionSync = ({
       }
 
       if (session?.user) {
-        void applyAuthenticatedUser(session.user);
+        void applyAuthenticatedUser(session.user).catch((error) => {
+          handleSessionFailure(error, "applyAuthenticatedUser");
+        });
       } else {
         clearAuthenticatedState();
       }
@@ -99,4 +152,9 @@ export const useAuthSessionSync = ({
     setProfileError,
     setUser,
   ]);
+};
+
+export const authSessionInternals = {
+  isPublicAuthRoute,
+  isRefreshTokenNotFoundError,
 };

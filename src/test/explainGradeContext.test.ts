@@ -24,7 +24,8 @@ const releasedRows = {
     id: "grade-1",
     submission_id: "6f951f5c-2665-48c8-b404-3ef9b6288882",
     final_score: 74,
-    ai_feedback: "Released feedback",
+    final_feedback: "Released feedback",
+    ai_feedback: "Draft AI feedback",
     ai_breakdown: [{ criterion: "Argument", score: 18, max_score: 25 }],
     grading_confidence: 0.82,
   },
@@ -55,6 +56,23 @@ describe("released explain-grade context", () => {
       hasFeedback: true,
       gradingConfidence: 0.82,
     });
+  });
+
+  it("prefers final feedback over draft AI feedback for released explanations", () => {
+    const context = buildReleasedGradeContext(
+      {
+        ...releasedRows,
+        grade: {
+          ...releasedRows.grade,
+          final_feedback: "Lecturer-reviewed released feedback",
+          ai_feedback: "Older draft AI feedback",
+        },
+      },
+      "student-1",
+      makeError,
+    );
+
+    expect(context.feedback).toBe("Lecturer-reviewed released feedback");
   });
 
   it("orders criterion insights by percentage lost, not raw points lost", () => {
@@ -182,6 +200,7 @@ describe("released explain-grade context", () => {
         ...releasedRows,
         grade: {
           ...releasedRows.grade,
+          final_feedback: "",
           ai_feedback: "",
           ai_breakdown: [],
           grading_confidence: 0.55,

@@ -6,6 +6,7 @@ export interface SettingsReadiness {
   bestNextAction: string;
 }
 
+// Settings readiness should use the canonical department_name value resolved by getDepartmentName().
 export const getSettingsReadiness = ({
   role,
   fullName,

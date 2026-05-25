@@ -5,6 +5,7 @@ export interface GradeSubmissionRequestPayload {
   submissionId?: string;
   assignmentId?: string;
   force_regenerate?: boolean;
+  grading_passes_override?: number;
 }
 
 const GradeSubmissionRequestSchema = z
@@ -13,6 +14,7 @@ const GradeSubmissionRequestSchema = z
     submissionId: z.string().uuid().optional(),
     assignmentId: z.string().uuid().optional(),
     force_regenerate: z.boolean().optional(),
+    grading_passes_override: z.number().int().min(1).max(5).optional(),
   })
   .refine((value) => Boolean(value.submissionId) || Boolean(value.submissionIds?.length), {
     message: "At least one of submissionId or submissionIds is required",
@@ -79,5 +81,12 @@ export const parseGradeSubmissionRequestPayload = (body: unknown) =>
       "force_regenerate" in body &&
       typeof (body as { force_regenerate?: unknown }).force_regenerate === "boolean"
         ? (body as { force_regenerate: boolean }).force_regenerate
+        : undefined,
+    grading_passes_override:
+      body &&
+      typeof body === "object" &&
+      "grading_passes_override" in body &&
+      typeof (body as { grading_passes_override?: unknown }).grading_passes_override === "number"
+        ? (body as { grading_passes_override: number }).grading_passes_override
         : undefined,
   });
