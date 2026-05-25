@@ -16,6 +16,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/Privacy"),
     paths: ["/privacy"],
   },
+  terms: {
+    loader: () => import("@/pages/Terms"),
+    paths: ["/terms"],
+  },
   resetPassword: {
     loader: () => import("@/pages/ResetPassword"),
     paths: ["/reset-password"],

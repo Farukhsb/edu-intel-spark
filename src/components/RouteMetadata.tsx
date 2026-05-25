@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { usePageMetadata } from "@/lib/seo";
 
 const defaultMetadataByRoute = (pathname: string) => {
-  if (pathname === "/" || pathname === "/privacy") {
+  if (pathname === "/" || pathname === "/privacy" || pathname === "/terms") {
     return null;
   }
 

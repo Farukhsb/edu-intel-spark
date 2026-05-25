@@ -21,6 +21,7 @@ import { AppErrorBoundary } from "./components/AppErrorBoundary";
 const Auth = lazy(routeLoaders.auth);
 const NotFound = lazy(routeLoaders.notFound);
 const Privacy = lazy(routeLoaders.privacy);
+const Terms = lazy(routeLoaders.terms);
 const ResetPassword = lazy(routeLoaders.resetPassword);
 const ForcePasswordChange = lazy(routeLoaders.forcePasswordChange);
 const DashboardLayout = lazy(routeLoaders.dashboardLayout);
@@ -197,6 +198,14 @@ const App = () => (
                 element={
                   <Suspense fallback={<PageSkeleton />}>
                     <Privacy />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/terms"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <Terms />
                   </Suspense>
                 }
               />

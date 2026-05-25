@@ -36,7 +36,7 @@ vi.mock("react-router-dom", async () => {
 
 import App from "@/App";
 
-describe("App privacy route", () => {
+describe("App legal routes", () => {
   afterEach(() => {
     cleanup();
     routerState.initialEntries = ["/privacy"];
@@ -54,6 +54,20 @@ describe("App privacy route", () => {
     expect(screen.getByText("Pilot data retention note")).toBeInTheDocument();
     expect(
       screen.getByText(/Academic records, submissions, grades, workflow history, and audit data should not be kept indefinitely by default/i),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the terms of service on /terms with pilot-stage boundaries", async () => {
+    routerState.initialEntries = ["/terms"];
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Terms of service" })).toBeInTheDocument();
+    expect(screen.getByText("Controlled pilot use")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "AI grading, integrity signals, feedback drafting, and student-support insights are decision-support tools. They do not replace lecturer judgement, moderation, approval, release, or formal institutional decision-making.",
+      ),
     ).toBeInTheDocument();
   });
 });

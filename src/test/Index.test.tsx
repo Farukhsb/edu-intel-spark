@@ -51,6 +51,7 @@ describe("Index", () => {
     expect(screen.getByText("Lecturer Demo")).toBeInTheDocument();
     expect(screen.getByText("Student Demo")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /privacy notice/i })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: /terms of service/i })).toHaveAttribute("href", "/terms");
   });
 
   it("enters lecturer demo mode from the landing page", () => {

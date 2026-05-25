@@ -81,7 +81,7 @@ describe("Auth", () => {
     expect(screen.getByRole("tab", { name: "Sign Up" })).toBeInTheDocument();
   });
 
-  it("includes a link to the privacy notice", () => {
+  it("includes links to the privacy notice and terms of service", () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Auth />
@@ -89,6 +89,7 @@ describe("Auth", () => {
     );
 
     expect(screen.getByRole("link", { name: /read the privacy notice/i })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: /terms of service/i })).toHaveAttribute("href", "/terms");
   });
 
   it("switches to recovery readiness when forgot password is opened", async () => {
