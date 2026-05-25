@@ -65,63 +65,69 @@ $$;
 update public.analytics_recommendations ar
 set institution_id = coalesce(
   ar.institution_id,
-  a.institution_id,
-  p.institution_id,
+  (
+    select a.institution_id
+    from public.assignments a
+    where a.id = ar.assignment_id
+  ),
+  private.user_institution_id(ar.lecturer_id),
   private.default_institution_id()
 )
-from public.profiles p
-left join public.assignments a
-  on a.id = ar.assignment_id
-where p.id = ar.lecturer_id
-  and ar.institution_id is null;
+where ar.institution_id is null;
 
 update public.recommendation_actions ra
 set institution_id = coalesce(
   ra.institution_id,
-  ar.institution_id,
-  p.institution_id,
+  (
+    select ar.institution_id
+    from public.analytics_recommendations ar
+    where ar.id = ra.recommendation_id
+  ),
+  private.user_institution_id(ra.lecturer_id),
   private.default_institution_id()
 )
-from public.analytics_recommendations ar
-left join public.profiles p
-  on p.id = ra.lecturer_id
-where ar.id = ra.recommendation_id
-  and ra.institution_id is null;
+where ra.institution_id is null;
 
 update public.academic_access_events aae
 set institution_id = coalesce(
   aae.institution_id,
-  a.institution_id,
-  s.institution_id,
-  mc.institution_id,
-  p.institution_id,
+  (
+    select a.institution_id
+    from public.assignments a
+    where a.id = aae.assignment_id
+  ),
+  (
+    select s.institution_id
+    from public.submissions s
+    where s.id = aae.submission_id
+  ),
+  (
+    select mc.institution_id
+    from public.moderation_cases mc
+    where mc.id = aae.moderation_case_id
+  ),
+  private.user_institution_id(aae.actor_id),
   private.default_institution_id()
 )
-from public.profiles p
-left join public.assignments a
-  on a.id = aae.assignment_id
-left join public.submissions s
-  on s.id = aae.submission_id
-left join public.moderation_cases mc
-  on mc.id = aae.moderation_case_id
-where p.id = aae.actor_id
-  and aae.institution_id is null;
+where aae.institution_id is null;
 
 update public.grading_error_events gee
 set institution_id = coalesce(
   gee.institution_id,
-  a.institution_id,
-  s.institution_id,
-  p.institution_id,
+  (
+    select a.institution_id
+    from public.assignments a
+    where a.id = gee.assignment_id
+  ),
+  (
+    select s.institution_id
+    from public.submissions s
+    where s.id = gee.submission_id
+  ),
+  private.user_institution_id(gee.user_id),
   private.default_institution_id()
 )
-from public.profiles p
-left join public.assignments a
-  on a.id = gee.assignment_id
-left join public.submissions s
-  on s.id = gee.submission_id
-where p.id = gee.user_id
-  and gee.institution_id is null;
+where gee.institution_id is null;
 
 update public.analytics_recommendations
 set institution_id = private.default_institution_id()
