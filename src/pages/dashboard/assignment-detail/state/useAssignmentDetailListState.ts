@@ -121,6 +121,7 @@ export const useAssignmentDetailListState = ({
   }, [queueFocus, submissions]);
 
   const notificationFocusedSubmissionIds = assignmentNotificationFocusState?.visibleSubmissionIds;
+  const shouldApplyHiddenNotificationFocus = !manualStatusFilterOverride;
 
   const filteredSubmissions = useMemo(
     () =>
@@ -206,6 +207,11 @@ export const useAssignmentDetailListState = ({
       return;
     }
     setSelected(new Set(filteredSubmissions.map((submission) => submission.id)));
+  };
+
+  const handleSetStatusFilter: Dispatch<SetStateAction<"all" | SubmissionStatus>> = (value) => {
+    setManualStatusFilterOverride(true);
+    setStatusFilter(value);
   };
 
   return {
