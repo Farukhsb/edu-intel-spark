@@ -250,6 +250,55 @@ async function fetchSubmissionContent(
   };
 }
 
+async function persistGradedSubmissionResult({
+  supabaseAdmin,
+  submissionId,
+  gradingResult,
+}: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  submissionId: string;
+  gradingResult: {
+    score?: number | null;
+    feedback?: string | null;
+    breakdown?: unknown;
+    assignmentType?: string | null;
+    gradingConfidence?: number | null;
+    gradingMetadata?: Record<string, unknown> | null;
+    requiresLecturerReview?: boolean;
+  };
+}) {
+  const { error: gradeWriteError } = await supabaseAdmin.from("grades").upsert(
+    {
+      submission_id: submissionId,
+      ai_score: gradingResult.score ?? null,
+      ai_feedback: gradingResult.feedback ?? null,
+      ai_breakdown: gradingResult.breakdown ?? null,
+      assignment_type: gradingResult.assignmentType ?? null,
+      grading_confidence: gradingResult.gradingConfidence ?? null,
+      grading_metadata: gradingResult.gradingMetadata ?? {},
+    },
+    { onConflict: "submission_id" },
+  );
+
+  if (gradeWriteError) {
+    throw new Error(gradeWriteError.message || "The AI grade could not be saved.");
+  }
+
+  const nextStatus = gradingResult.requiresLecturerReview ? "first_review" : "ai_graded";
+  const { error: submissionWriteError } = await supabaseAdmin
+    .from("submissions")
+    .update({ status: nextStatus })
+    .eq("id", submissionId);
+
+  if (submissionWriteError) {
+    logWarn("grade-submission status update failed after grade save", {
+      submissionId,
+      nextStatus,
+      error: submissionWriteError,
+    });
+  }
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
