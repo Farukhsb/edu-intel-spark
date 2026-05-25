@@ -234,10 +234,18 @@ async function fetchSubmissionContent(
       file_name: extraction.fileName,
       file_type: extraction.fileType,
       mime_type: extraction.mimeType,
+      extraction_method: extraction.extractionMethod,
+      extraction_failure_reason: extraction.extractionFailureReason,
       extracted_text_length: extraction.extractedTextLength,
       extraction_success: extraction.success,
       extraction_warning: extraction.extractionWarning,
       extraction_error: extraction.extractionError,
+      extraction_quality_score: extraction.extractionQuality?.qualityScore ?? null,
+      extraction_quality_word_count: extraction.extractionQuality?.wordCount ?? null,
+      extraction_quality_readable_sentence_count:
+        extraction.extractionQuality?.readableSentenceCount ?? null,
+      extraction_quality_suspicious_pdf_artifact_count:
+        extraction.extractionQuality?.suspiciousPdfArtifactCount ?? null,
     },
   };
 }
@@ -408,7 +416,7 @@ Deno.serve(async (req) => {
 
     for (const sub of submissions.filter((item) => normalizeSubmissionStoragePath(item.file_url))) {
       try {
-        results.push(await gradeSingleSubmission({
+        const gradingResult = await gradeSingleSubmission({
           sub,
           assignment,
           existingGrade: existingGradesBySubmission.get(sub.id) ?? null,
@@ -423,7 +431,13 @@ Deno.serve(async (req) => {
           gradingPasses,
           getPassSpreadThreshold,
           fetchSubmissionContent: (submission) => fetchSubmissionContent(supabaseAdmin, submission),
-        }));
+        });
+        await persistGradedSubmissionResult({
+          supabaseAdmin,
+          submissionId: sub.id,
+          gradingResult,
+        });
+        results.push(gradingResult);
       } catch (gradeErr) {
         const reason = gradeErr instanceof Error ? gradeErr.message : String(gradeErr);
         logError("Grading error for submission", gradeErr, {

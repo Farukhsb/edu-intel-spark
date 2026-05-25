@@ -33,10 +33,16 @@ export function logDocumentExtractionResult(context: string, result: DocumentExt
     fileName: result.fileName,
     fileType: result.fileType,
     mimeType: result.mimeType,
+    extractionMethod: result.extractionMethod,
+    extractionFailureReason: result.extractionFailureReason,
     extractedTextLength: result.extractedTextLength,
     success: result.success,
     warning: result.extractionWarning,
     error: result.extractionError,
+    qualityScore: result.extractionQuality?.qualityScore ?? null,
+    qualityWordCount: result.extractionQuality?.wordCount ?? null,
+    qualityReadableSentenceCount: result.extractionQuality?.readableSentenceCount ?? null,
+    qualitySuspiciousPdfArtifactCount: result.extractionQuality?.suspiciousPdfArtifactCount ?? null,
   };
 
   if (result.success) {

@@ -120,6 +120,7 @@ describe("SubmissionListSection", () => {
     expect(screen.getByText("Recovery")).toBeInTheDocument();
     expect(screen.getByText("Retry AI grading")).toBeInTheDocument();
     expect(screen.getByText("The grading service did not complete cleanly for this submission.")).toBeInTheDocument();
+    expect(screen.getByText("Try re-uploading as DOCX or a text-based PDF.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Focus manual review queue" }));
     expect(focusQueue).toHaveBeenCalledWith("manual-review");

@@ -217,6 +217,9 @@ export const WorkflowActionsSection = ({
                   <p className="mt-1 text-sm text-muted-foreground">
                     {studentSubmissionAvailability.helperText}
                   </p>
+                  <p className="mt-2 text-xs text-amber-700">
+                    PDFs must contain selectable text. Scanned/image-only PDFs may not be readable by AI grading. If unsure, upload DOCX instead.
+                  </p>
                 </div>
                 <Button
                   onClick={() => fileInputRef.current?.click()}
@@ -277,6 +280,9 @@ export const WorkflowActionsSection = ({
                   ? `Release${selectedSize > 0 ? ` (${selectedSize})` : ""}`
                   : `Approve${selectedSize > 0 ? ` (${selectedSize})` : ""}`}
               </Button>
+            </div>
+            <div className="rounded-xl border border-amber-300/40 bg-amber-50/50 p-3 text-xs text-amber-800">
+              PDFs must contain selectable text. Scanned/image-only PDFs may not be readable by AI grading. If unsure, upload DOCX instead.
             </div>
             {integrityRuntimeWarning ? (
               <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">

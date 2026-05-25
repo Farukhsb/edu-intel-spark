@@ -3,14 +3,28 @@ import {
   assessExtractionQuality,
   cleanExtractedDocumentText,
   extractReadablePdfTextFromBase64,
+  type PdfExtractionMethod,
   normalizeReadableText,
 } from "./text-analysis.ts";
 
 export const DOCUMENT_EXTRACTION_ERROR_MESSAGE =
-  "We could not read this document. Please upload a readable PDF, DOCX, TXT, or supported code file.";
+  "We could not extract reliable readable content from this document. The PDF may be scanned, image-only, corrupted, or otherwise unreadable. Please review manually or request a readable re-upload.";
 export const MIN_EXTRACTED_TEXT_CHARS = 200;
 
 export type SupportedDocumentType = "code" | "docx" | "pdf" | "txt" | "unsupported";
+export type ExtractionMethod =
+  | "docx_mammoth"
+  | PdfExtractionMethod
+  | "plain_text_decoder"
+  | "code_text_decoder"
+  | "none";
+export type ExtractionFailureReason =
+  | "unsupported_submission_file"
+  | "extractor_error"
+  | "binary_like_content"
+  | "extracted_text_too_short"
+  | "unreadable_pdf"
+  | "extracted_text_unusable";
 
 const CODE_FILE_EXTENSIONS = [
   ".py",
@@ -51,6 +65,8 @@ export type DocumentExtractionResult = {
   fileName: string;
   fileType: string;
   mimeType: string;
+  extractionMethod: ExtractionMethod;
+  extractionFailureReason: ExtractionFailureReason | null;
   extractedText: string;
   extractedTextLength: number;
   success: boolean;
@@ -139,12 +155,22 @@ export async function extractDocumentText(params: {
   const mimeType = params.mimeType || "application/octet-stream";
   const fileType = detectDocumentType(fileName, mimeType);
 
-  const fail = (message: string, warning: string | null = null): DocumentExtractionResult => ({
+  const fail = (
+    message: string,
+    warning: string | null = null,
+    options?: {
+      extractionMethod?: ExtractionMethod;
+      extractionFailureReason?: ExtractionFailureReason;
+      extractedText?: string;
+    },
+  ): DocumentExtractionResult => ({
     fileName,
     fileType,
     mimeType,
-    extractedText: "",
-    extractedTextLength: 0,
+    extractionMethod: options?.extractionMethod ?? "none",
+    extractionFailureReason: options?.extractionFailureReason ?? "extractor_error",
+    extractedText: options?.extractedText ?? "",
+    extractedTextLength: (options?.extractedText ?? "").length,
     success: false,
     extractionWarning: warning,
     extractionError: message,
@@ -158,27 +184,37 @@ export async function extractDocumentText(params: {
 
   let extractedText = "";
   let warningMessage: string | null = null;
+  let extractionMethod: ExtractionMethod = "none";
 
   try {
     if (fileType === "docx") {
       if (!params.docxExtractor) {
-        return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, "DOCX extractor is not configured.");
+        return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, "DOCX extractor is not configured.", {
+          extractionFailureReason: "extractor_error",
+        });
       }
 
       const result = await params.docxExtractor(params.bytes);
 
+      extractionMethod = "docx_mammoth";
       extractedText = cleanExtractedDocumentText(result.value || "");
       if (result.messages && result.messages.length > 0) {
         warningMessage = result.messages.join(" ");
       }
     } else if (fileType === "pdf") {
-      extractedText = extractReadablePdfTextFromBase64(base64FromBytes(params.bytes));
+      const pdfExtraction = extractReadablePdfTextFromBase64(base64FromBytes(params.bytes));
+      extractionMethod = pdfExtraction.method;
+      extractedText = pdfExtraction.text;
     } else {
+      extractionMethod = fileType === "code" ? "code_text_decoder" : "plain_text_decoder";
       extractedText = cleanExtractedDocumentText(new TextDecoder().decode(params.bytes));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown extraction error";
-    return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, message);
+    return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, message, {
+      extractionMethod,
+      extractionFailureReason: "extractor_error",
+    });
   }
 
   const normalizedText = normalizeReadableText(extractedText);
@@ -186,25 +222,54 @@ export async function extractDocumentText(params: {
     binaryLooksLikeOfficeArchive(params.bytes, normalizedText) ||
     looksLikeBinaryText(normalizedText)
   ) {
-    return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, "Extracted content still looks binary.");
-  }
-
-  if (!normalizedText || normalizedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
     return fail(
       DOCUMENT_EXTRACTION_ERROR_MESSAGE,
-      `Readable text was too short after extraction (${normalizedText.trim().length} characters).`,
+      "Extracted content still looks binary or unreadable after document parsing.",
+      {
+        extractionMethod,
+        extractionFailureReason: "binary_like_content",
+      },
     );
   }
 
-  const extractionQuality = assessExtractionQuality(normalizedText);
+  if (!normalizedText || normalizedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
+    const shortTextMessage =
+      fileType === "pdf"
+        ? "Readable PDF text was too short after extraction. The PDF may be scanned, image-only, corrupted, or otherwise unreadable."
+        : `Readable text was too short after extraction (${normalizedText.trim().length} characters).`;
+    return fail(
+      DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+      shortTextMessage,
+      {
+        extractionMethod,
+        extractionFailureReason: fileType === "pdf" ? "unreadable_pdf" : "extracted_text_too_short",
+      },
+    );
+  }
+
+  const extractionQuality = assessExtractionQuality(normalizedText, {
+    fileType,
+    rawText: extractedText,
+  });
   if (!extractionQuality.isUsable) {
-    warningMessage = [warningMessage, ...extractionQuality.reasons].filter(Boolean).join(" ").trim() || null;
+    const extractionQualityWarning =
+      [warningMessage, ...extractionQuality.reasons].filter(Boolean).join(" ").trim() || null;
+    return fail(
+      DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+      extractionQualityWarning ?? "Extracted content was not reliable enough for grading.",
+      {
+        extractionMethod,
+        extractionFailureReason: fileType === "pdf" ? "unreadable_pdf" : "extracted_text_unusable",
+      },
+    );
   }
 
   return {
     fileName,
     fileType,
     mimeType,
+    extractionMethod,
+    extractionFailureReason: null,
     extractedText: normalizedText,
     extractedTextLength: normalizedText.length,
     success: true,

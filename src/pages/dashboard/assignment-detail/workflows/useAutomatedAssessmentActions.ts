@@ -126,8 +126,22 @@ export const useAutomatedAssessmentActions = ({
 
     for (const submission of gradableSubmissions) {
       try {
-        await supabase.from("submissions").update({ status: "ai_grading" as const }).eq("id", submission.id);
-      } catch {}
+        const { error } = await supabase
+          .from("submissions")
+          .update({ status: "ai_grading" as const })
+          .eq("id", submission.id);
+        if (error) {
+          log.warn("Failed to mark submission as ai_grading", {
+            submissionId: submission.id,
+            error: error.message,
+          });
+        }
+      } catch (statusError) {
+        log.warn("Failed to mark submission as ai_grading", {
+          submissionId: submission.id,
+          error: statusError instanceof Error ? statusError.message : "Unknown error",
+        });
+      }
     }
     await reloadSubmissions();
 
@@ -203,7 +217,12 @@ export const useAutomatedAssessmentActions = ({
           if (!validatedGrade.success) {
             try {
               await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-            } catch {}
+            } catch (statusError) {
+              log.warn("Failed to restore submission status after invalid grading result", {
+                submissionId: submission.id,
+                error: statusError instanceof Error ? statusError.message : "Unknown error",
+              });
+            }
             failCount++;
             invalidResultCount++;
             failureMessages.add("A grading result could not be validated.");
@@ -227,9 +246,6 @@ export const useAutomatedAssessmentActions = ({
             log.error("Failed to persist graded submission", persistenceError, {
               submissionId: submission.id,
             });
-            try {
-              await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-            } catch {}
             failCount++;
             serviceFailureCount++;
             failureMessages.add("The grading result was returned, but it could not be saved.");
@@ -253,7 +269,12 @@ export const useAutomatedAssessmentActions = ({
           }
           try {
             await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-          } catch {}
+          } catch (statusError) {
+            log.warn("Failed to restore submission status after grading failure", {
+              submissionId: submission.id,
+              error: statusError instanceof Error ? statusError.message : "Unknown error",
+            });
+          }
           failCount++;
         }
       }
@@ -322,7 +343,12 @@ export const useAutomatedAssessmentActions = ({
       for (const submission of gradableSubmissions) {
         try {
           await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
-        } catch {}
+        } catch (statusError) {
+          log.warn("Failed to restore submission status after grading request failure", {
+            submissionId: submission.id,
+            error: statusError instanceof Error ? statusError.message : "Unknown error",
+          });
+        }
       }
     }
 

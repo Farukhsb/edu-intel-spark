@@ -95,6 +95,11 @@ describe("WorkflowActionsSection", () => {
     );
 
     expect(screen.getByText("2 of 4 selected submissions still need attention")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "PDFs must contain selectable text. Scanned/image-only PDFs may not be readable by AI grading. If unsure, upload DOCX instead.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText(/skipped before grading/i)).toBeInTheDocument();
     expect(screen.getByText("2 graded")).toBeInTheDocument();
     expect(screen.getByText("1 failed")).toBeInTheDocument();
