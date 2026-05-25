@@ -46,7 +46,7 @@ interface UseAssignmentDetailListStateResult {
   selectedWorkflowState: ReturnType<typeof getSelectedWorkflowActionState>;
   setSearchQuery: Dispatch<SetStateAction<string>>;
   setSelected: Dispatch<SetStateAction<Set<string>>>;
-  setStatusFilter: Dispatch<SetStateAction<"all" | SubmissionStatus>>;
+  setStatusFilter: (value: "all" | SubmissionStatus) => void;
   statusFilter: "all" | SubmissionStatus;
   toggleAll: () => void;
   toggleSelect: (submissionId: string) => void;
@@ -60,6 +60,7 @@ export const useAssignmentDetailListState = ({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | SubmissionStatus>("all");
+  const [manualStatusFilterOverride, setManualStatusFilterOverride] = useState(false);
   const isLecturer = role === "lecturer";
 
   const {
@@ -125,6 +126,7 @@ export const useAssignmentDetailListState = ({
     () =>
       submissions.filter((submission) => {
         const matchesNotificationFocus =
+          manualStatusFilterOverride ||
           !notificationFocusedSubmissionIds ||
           notificationFocusedSubmissionIds.includes(submission.id);
         const matchesSearch =
@@ -135,12 +137,13 @@ export const useAssignmentDetailListState = ({
         const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
         return matchesNotificationFocus && matchesSearch && matchesStatus;
       }),
-    [notificationFocusedSubmissionIds, searchQuery, statusFilter, submissions],
+    [manualStatusFilterOverride, notificationFocusedSubmissionIds, searchQuery, statusFilter, submissions],
   );
 
   useEffect(() => {
     if (!moderationReleaseFocus || !isLecturer) return;
 
+    setManualStatusFilterOverride(false);
     setStatusFilter(moderationReleaseHandoffState.statusFilter);
     setSelected(new Set(moderationReleaseHandoffState.selectedSubmissionIds));
   }, [isLecturer, moderationReleaseFocus, moderationReleaseHandoffState]);
@@ -148,6 +151,7 @@ export const useAssignmentDetailListState = ({
   useEffect(() => {
     if (!queueFocusState || !isLecturer) return;
 
+    setManualStatusFilterOverride(false);
     setStatusFilter(queueFocusState.statusFilter);
     setSelected(new Set(queueFocusState.selectedSubmissionIds));
   }, [isLecturer, queueFocusState]);
@@ -155,9 +159,15 @@ export const useAssignmentDetailListState = ({
   useEffect(() => {
     if (!assignmentNotificationFocusState || !isLecturer) return;
 
+    setManualStatusFilterOverride(false);
     setStatusFilter(assignmentNotificationFocusState.statusFilter);
     setSelected(new Set(assignmentNotificationFocusState.selectedSubmissionIds));
   }, [assignmentNotificationFocusState, isLecturer]);
+
+  const handleSetStatusFilter = (value: "all" | SubmissionStatus) => {
+    setManualStatusFilterOverride(true);
+    setStatusFilter(value);
+  };
 
   const selectedWorkflowState = useMemo(() => {
     const selectedStatuses = submissions
@@ -214,7 +224,7 @@ export const useAssignmentDetailListState = ({
     selectedWorkflowState,
     setSearchQuery,
     setSelected,
-    setStatusFilter,
+    setStatusFilter: handleSetStatusFilter,
     statusFilter,
     toggleAll,
     toggleSelect,
