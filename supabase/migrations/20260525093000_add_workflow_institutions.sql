@@ -248,7 +248,6 @@ set institution_id = coalesce(
   wnl.institution_id,
   private.assignment_institution_id(wnl.assignment_id),
   private.submission_institution_id(wnl.submission_id),
-  private.user_institution_id(wnl.recipient_id),
   private.default_institution_id()
 )
 where wnl.institution_id is null;
@@ -522,7 +521,6 @@ begin
     new.institution_id,
     private.assignment_institution_id(new.assignment_id),
     private.submission_institution_id(new.submission_id),
-    private.user_institution_id(new.recipient_id),
     private.default_institution_id()
   );
   return new;
