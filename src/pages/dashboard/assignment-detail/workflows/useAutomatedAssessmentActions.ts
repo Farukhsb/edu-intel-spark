@@ -17,7 +17,6 @@ import type {
   AssignmentDetailAssignment,
   AssignmentDetailSubmission,
   Grade,
-  SubmissionStatus,
 } from "@/pages/dashboard/assignment-detail/types";
 import type { AIResponse, GradeBreakdown, Submission } from "@/types";
 import type { AcademicIntegrityFlag } from "@/types/academic";
@@ -116,7 +115,7 @@ export type SubmissionGradingRecoveryIssue = {
 const isRetryableRecoveryType = (type: SubmissionGradingRecoveryIssue["type"]) => type !== "missing_file";
 
 type GradePersistenceClient = {
-  from: (table: "grades" | "submissions") => {
+  from: (table: "grades") => {
     upsert?: (
       values: {
         submission_id: string;
@@ -129,9 +128,6 @@ type GradePersistenceClient = {
       },
       options: { onConflict: string },
     ) => Promise<{ error: { message?: string } | null }>;
-    update?: (values: { status: SubmissionStatus }) => {
-      eq: (column: string, value: string) => Promise<{ error: { message?: string } | null }>;
-    };
   };
 };
 
@@ -148,9 +144,9 @@ type PersistGradedSubmissionResultArgs = {
 };
 
 export class GradePersistenceError extends Error {
-  step: "client_configuration" | "grade_write" | "submission_status_write";
+  step: "client_configuration" | "grade_write";
 
-  constructor(step: "client_configuration" | "grade_write" | "submission_status_write", message: string) {
+  constructor(step: "client_configuration" | "grade_write", message: string) {
     super(message);
     this.name = "GradePersistenceError";
     this.step = step;
@@ -159,15 +155,6 @@ export class GradePersistenceError extends Error {
 
 export const formatGradePersistenceFailure = (error: unknown) => {
   if (error instanceof GradePersistenceError) {
-    if (error.step === "submission_status_write") {
-      return {
-        detail:
-          "The AI grade was saved, but the submission workflow status could not be updated. Refresh the page and continue with manual review if the submission still appears in the wrong lane.",
-        headline: "Status update failed",
-        type: "service_failure" as const,
-      };
-    }
-
     if (error.step === "grade_write") {
       return {
         detail:
@@ -199,9 +186,8 @@ export const persistGradedSubmissionResult = async ({
   validatedGrade,
 }: PersistGradedSubmissionResultArgs) => {
   const gradesTable = supabaseClient.from("grades");
-  const submissionsTable = supabaseClient.from("submissions");
 
-  if (!gradesTable.upsert || !submissionsTable.update) {
+  if (!gradesTable.upsert) {
     throw new GradePersistenceError("client_configuration", "The grading persistence client is not configured correctly.");
   }
 
@@ -220,16 +206,6 @@ export const persistGradedSubmissionResult = async ({
 
   if (gradeWriteError) {
     throw new GradePersistenceError("grade_write", gradeWriteError.message || "The AI grade could not be saved.");
-  }
-
-  const nextStatus = gradingResult.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
-  const { error: submissionWriteError } = await submissionsTable.update({ status: nextStatus }).eq("id", submissionId);
-
-  if (submissionWriteError) {
-    throw new GradePersistenceError(
-      "submission_status_write",
-      submissionWriteError.message || "The submission workflow status could not be updated.",
-    );
   }
 };
 

@@ -32,6 +32,18 @@ const GRADING_PASSES = 1;
 const PASS_SPREAD_REVIEW_THRESHOLD_RATIO = 0.08;
 const PASS_SPREAD_REVIEW_THRESHOLD_MIN = 8;
 
+type SuccessfulGradeResult = {
+  submissionId: string;
+  success: true;
+  score?: number | null;
+  feedback?: string | null;
+  breakdown?: Array<Record<string, unknown>> | null;
+  assignmentType?: string | null;
+  gradingConfidence?: number | null;
+  gradingMetadata?: Record<string, unknown> | null;
+  requiresLecturerReview?: boolean;
+};
+
 function getPassSpreadThreshold(maxScore: number) {
   return Math.max(PASS_SPREAD_REVIEW_THRESHOLD_MIN, Math.round(maxScore * PASS_SPREAD_REVIEW_THRESHOLD_RATIO));
 }
@@ -73,6 +85,47 @@ async function recordGradingFailureAudit({
       submissionId,
       assignmentId,
       error,
+    });
+  }
+}
+
+async function persistGradedSubmissionResult({
+  supabaseAdmin,
+  submissionId,
+  gradingResult,
+}: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  submissionId: string;
+  gradingResult: SuccessfulGradeResult;
+}) {
+  const { error: gradeWriteError } = await supabaseAdmin.from("grades").upsert(
+    {
+      submission_id: submissionId,
+      ai_score: gradingResult.score ?? null,
+      ai_feedback: gradingResult.feedback ?? null,
+      ai_breakdown: gradingResult.breakdown ?? [],
+      assignment_type: gradingResult.assignmentType ?? null,
+      grading_confidence: gradingResult.gradingConfidence ?? null,
+      grading_metadata: gradingResult.gradingMetadata ?? {},
+    },
+    { onConflict: "submission_id" },
+  );
+
+  if (gradeWriteError) {
+    throw new Error(gradeWriteError.message || "The AI grade could not be saved.");
+  }
+
+  const nextStatus = gradingResult.requiresLecturerReview ? "first_review" : "ai_graded";
+  const { error: submissionWriteError } = await supabaseAdmin
+    .from("submissions")
+    .update({ status: nextStatus })
+    .eq("id", submissionId);
+
+  if (submissionWriteError) {
+    logWarn("grade-submission status update failed after grade save", {
+      submissionId,
+      nextStatus,
+      error: submissionWriteError,
     });
   }
 }
@@ -293,7 +346,7 @@ Deno.serve(async (req) => {
 
     for (const sub of submissions.filter((item) => normalizeSubmissionStoragePath(item.file_url))) {
       try {
-        results.push(await gradeSingleSubmission({
+        const gradingResult = await gradeSingleSubmission({
           sub,
           assignment,
           existingGrade: existingGradesBySubmission.get(sub.id) ?? null,
@@ -308,7 +361,13 @@ Deno.serve(async (req) => {
           gradingPasses: GRADING_PASSES,
           getPassSpreadThreshold,
           fetchSubmissionContent: (submission) => fetchSubmissionContent(supabaseAdmin, submission),
-        }));
+        });
+        await persistGradedSubmissionResult({
+          supabaseAdmin,
+          submissionId: sub.id,
+          gradingResult,
+        });
+        results.push(gradingResult);
       } catch (gradeErr) {
         const reason = gradeErr instanceof Error ? gradeErr.message : String(gradeErr);
         logError("Grading error for submission", gradeErr, {
