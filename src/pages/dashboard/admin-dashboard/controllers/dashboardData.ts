@@ -155,6 +155,7 @@ export const buildAdminDashboardData = ({
     assignmentOversightRes,
     moderationOverviewRes,
     recentActivityRes,
+    institution,
     profiles,
     assignments,
     submissions,
@@ -501,6 +502,7 @@ export const buildAdminDashboardData = ({
   });
 
   return {
+    institution,
     users,
     assignments: assignmentRows,
     submissions: submissionRows,

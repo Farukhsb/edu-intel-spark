@@ -1,0 +1,118 @@
+// @vitest-environment node
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const readRepoFile = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+
+describe("multi-tenancy identity contracts", () => {
+  it("creates an institutions table and backfills a default institution", () => {
+    const source = readRepoFile("supabase/migrations/20260525090000_add_identity_institutions.sql");
+
+    expect(source).toContain("create table if not exists public.institutions");
+    expect(source).toContain("slug text not null unique");
+    expect(source).toContain("values ('Default Institution', 'default', 'active')");
+    expect(source).toContain("alter table public.profiles");
+    expect(source).toContain("add column if not exists institution_id uuid");
+    expect(source).toContain("alter table public.user_roles");
+    expect(source).toContain("alter column institution_id set not null");
+  });
+
+  it("adds shared institution helpers for later RLS scoping", () => {
+    const source = readRepoFile("supabase/migrations/20260525090000_add_identity_institutions.sql");
+
+    expect(source).toContain("create or replace function private.user_institution_id(_user_id uuid)");
+    expect(source).toContain("create or replace function private.current_institution_id()");
+    expect(source).toContain("create or replace function private.same_institution(_institution_id uuid)");
+  });
+
+  it("makes signup assign an institution through the central auth trigger", () => {
+    const source = readRepoFile("supabase/migrations/20260525090000_add_identity_institutions.sql");
+
+    expect(source).toContain("create or replace function public.resolve_signup_institution_id(_raw_user_meta_data jsonb)");
+    expect(source).toContain("_institution_id uuid := public.resolve_signup_institution_id(new.raw_user_meta_data);");
+    expect(source).toContain("institution_id");
+    expect(source).toContain("insert into public.user_roles (user_id, role, institution_id)");
+  });
+
+  it("adds institution scoping to core workflow tables with automatic derivation hooks", () => {
+    const source = readRepoFile("supabase/migrations/20260525093000_add_workflow_institutions.sql");
+
+    expect(source).toContain("alter table public.assignments add column if not exists institution_id uuid;");
+    expect(source).toContain("alter table public.submissions add column if not exists institution_id uuid;");
+    expect(source).toContain("alter table public.grades add column if not exists institution_id uuid;");
+    expect(source).toContain("alter table public.academic_integrity_reviews add column if not exists institution_id uuid;");
+    expect(source).toContain("alter table public.communication_messages add column if not exists institution_id uuid;");
+    expect(source).toContain("alter table public.workflow_notification_log add column if not exists institution_id uuid;");
+    expect(source).toContain("create or replace function public.sync_submission_institution_id()");
+    expect(source).toContain("create or replace function public.sync_grade_institution_id()");
+    expect(source).toContain("create or replace function public.sync_communication_message_institution_id()");
+    expect(source).toContain("create trigger sync_submission_institution_id");
+    expect(source).toContain("create trigger sync_grade_institution_id");
+  });
+
+  it("enforces institution-aware helpers and core RLS policies", () => {
+    const source = readRepoFile("supabase/migrations/20260525100000_enforce_multi_tenant_rls.sql");
+
+    expect(source).toContain("create or replace function private.has_role(_user_id uuid, _role public.app_role)");
+    expect(source).toContain("and private.same_institution(ur.institution_id)");
+    expect(source).toContain("drop policy if exists \"Admins can view all assignments\" on public.assignments;");
+    expect(source).toContain("and private.same_institution(institution_id)");
+    expect(source).toContain("create policy \"Students can view own grades\"");
+    expect(source).toContain("create policy \"Users can view authorized submission files\"");
+  });
+
+  it("scopes admin workflows to the current institution", () => {
+    const source = readRepoFile("supabase/migrations/20260525100000_enforce_multi_tenant_rls.sql");
+
+    expect(source).toContain("if _target_profile.institution_id <> private.current_institution_id() then");
+    expect(source).toContain("raise exception 'Admins can only update users in their institution'");
+    expect(source).toContain("create or replace function public.get_admin_recent_activity()");
+    expect(source).toContain("and a.institution_id = private.current_institution_id()");
+    expect(source).toContain("and gal.institution_id = private.current_institution_id()");
+  });
+
+  it("extends institution scoping to analytics, audit events, and student projection RPCs", () => {
+    const source = readRepoFile("supabase/migrations/20260525103000_scope_remaining_multi_tenant_surfaces.sql");
+
+    expect(source).toContain("alter table public.analytics_recommendations");
+    expect(source).toContain("alter table public.academic_access_events");
+    expect(source).toContain("alter table public.grading_error_events");
+    expect(source).toContain("create trigger sync_analytics_recommendation_institution_id");
+    expect(source).toContain("create policy \"Admins can view all academic access events\"");
+    expect(source).toContain("create policy \"Admins can read grading error events\"");
+    expect(source).toContain("create or replace function public.get_student_submission_grade_projection()");
+    expect(source).toContain("and s.institution_id = private.current_institution_id()");
+  });
+
+  it("lets authenticated users read only their own institution record", () => {
+    const source = readRepoFile("supabase/migrations/20260525110000_add_institution_read_policy.sql");
+
+    expect(source).toContain("create policy \"Users can view own institution\"");
+    expect(source).toContain("using (private.same_institution(id))");
+  });
+
+  it("adds a guarded institution provisioning function for bootstrap admins", () => {
+    const source = readRepoFile("supabase/migrations/20260525113000_add_institution_provisioning.sql");
+
+    expect(source).toContain("create or replace function private.current_institution_slug()");
+    expect(source).toContain("create or replace function public.admin_create_institution(");
+    expect(source).toContain("if _current_slug is distinct from 'default' then");
+    expect(source).toContain("raise exception 'Only default institution admins can provision new institutions'");
+    expect(source).toContain("insert into public.institutions (name, slug, status)");
+    expect(source).toContain("'institution_created'");
+  });
+
+  it("adds a guarded user-to-institution reassignment path for bootstrap admins only", () => {
+    const source = readRepoFile("supabase/migrations/20260525120000_add_user_institution_provisioning.sql");
+
+    expect(source).toContain("create or replace function public.admin_assign_user_to_institution(");
+    expect(source).toContain("raise exception 'Only default institution admins can reassign users across institutions'");
+    expect(source).toContain("raise exception 'Users with institution-linked activity cannot be reassigned automatically'");
+    expect(source).toContain("update public.profiles");
+    expect(source).toContain("set institution_id = _target_institution.id");
+    expect(source).toContain("update public.user_roles");
+    expect(source).toContain("'user_reassigned_institution'");
+  });
+});

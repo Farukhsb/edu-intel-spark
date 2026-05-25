@@ -11,6 +11,7 @@ export const buildAdminDashboardViewModel = (
 ): AdminDashboardViewModel => ({
   activeView: state.activeView,
   header: {
+    institution: state.institution,
     refreshing: state.refreshing,
     showBulkUpload: isBulkUploadView(state.activeView),
   },

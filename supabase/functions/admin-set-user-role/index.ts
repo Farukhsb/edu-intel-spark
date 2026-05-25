@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     const { targetUserId, nextRole, syncOnly = false } = parsed.data;
     const { data: actorProfile, error: actorProfileError } = await supabase
       .from("profiles")
-      .select("id, full_name, email, role, cohort_id, department_name, department_id")
+      .select("id, full_name, email, role, cohort_id, department_name, department_id, institution_id, institutions:institution_id (slug)")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
     const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, email, role, cohort_id, department_name, department_id")
+      .select("id, full_name, email, role, cohort_id, department_name, department_id, institution_id, institutions:institution_id (slug)")
       .eq("id", targetUserId)
       .maybeSingle();
 
@@ -155,6 +155,10 @@ Deno.serve(async (req) => {
         : {};
 
     const departmentName = resolveDepartmentName(targetProfile);
+    const institutionSlug =
+      targetProfile.institutions && typeof targetProfile.institutions === "object" && "slug" in targetProfile.institutions
+        ? targetProfile.institutions.slug ?? null
+        : null;
 
     const nextMetadata = {
       ...existingMetadata,
@@ -163,6 +167,8 @@ Deno.serve(async (req) => {
       cohort_id: targetProfile.cohort_id ?? existingMetadata.cohort_id ?? null,
       department_name: departmentName ?? existingMetadata.department_name ?? existingMetadata.department_id ?? null,
       department_id: departmentName ?? existingMetadata.department_id ?? existingMetadata.department_name ?? null,
+      institution_id: targetProfile.institution_id ?? existingMetadata.institution_id ?? null,
+      institution_slug: institutionSlug ?? existingMetadata.institution_slug ?? null,
     };
 
     const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {

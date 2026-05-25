@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthReadiness } from "@/lib/authReadiness";
+import { getEnv } from "@/lib/env";
 import {
   DEPARTMENT_OPTIONS,
   OTHER_DEPARTMENT_OPTION,
@@ -68,6 +69,7 @@ const Auth = () => {
   const readiness = getAuthReadiness({
     forgotPassword: showForgotPassword,
   });
+  const institutionSlug = getEnv().VITE_INSTITUTION_SLUG;
   const resolvedSignupDepartmentName = resolveDepartmentValue(signupDepartmentName, signupCustomDepartmentName);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -278,6 +280,11 @@ const Auth = () => {
                 <CardDescription>Join GradeAI as a lecturer or student</CardDescription>
               </CardHeader>
               <CardContent>
+                {institutionSlug ? (
+                  <div className="mb-4 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
+                    New accounts created here join the <span className="font-medium text-foreground">{institutionSlug}</span> institution workspace.
+                  </div>
+                ) : null}
                 {pendingVerificationEmail ? (
                   <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
                     <p className="text-sm font-semibold">Email confirmation pending</p>

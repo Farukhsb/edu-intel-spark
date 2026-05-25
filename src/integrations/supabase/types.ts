@@ -40,6 +40,7 @@ export type Database = {
           decision: string
           evidence_summary: string | null
           id: string
+          institution_id?: string | null
           lecturer_id: string
           lecturer_note: string | null
           review_type: string
@@ -51,6 +52,7 @@ export type Database = {
           decision: string
           evidence_summary?: string | null
           id?: string
+          institution_id?: string | null
           lecturer_id: string
           lecturer_note?: string | null
           review_type: string
@@ -62,6 +64,7 @@ export type Database = {
           decision?: string
           evidence_summary?: string | null
           id?: string
+          institution_id?: string | null
           lecturer_id?: string
           lecturer_note?: string | null
           review_type?: string
@@ -78,6 +81,7 @@ export type Database = {
           created_at: string
           event_type: string
           id: string
+          institution_id?: string | null
           metadata: Json
           moderation_case_id: string | null
           resource_id: string | null
@@ -91,6 +95,7 @@ export type Database = {
           created_at?: string
           event_type: string
           id?: string
+          institution_id?: string | null
           metadata?: Json
           moderation_case_id?: string | null
           resource_id?: string | null
@@ -104,6 +109,7 @@ export type Database = {
           created_at?: string
           event_type?: string
           id?: string
+          institution_id?: string | null
           metadata?: Json
           moderation_case_id?: string | null
           resource_id?: string | null
@@ -120,6 +126,7 @@ export type Database = {
           created_at: string
           details: Json
           id: string
+          institution_id?: string | null
           target_user_email: string | null
           target_user_id: string | null
           target_user_name: string | null
@@ -131,6 +138,7 @@ export type Database = {
           created_at?: string
           details?: Json
           id?: string
+          institution_id?: string | null
           target_user_email?: string | null
           target_user_id?: string | null
           target_user_name?: string | null
@@ -142,6 +150,7 @@ export type Database = {
           created_at?: string
           details?: Json
           id?: string
+          institution_id?: string | null
           target_user_email?: string | null
           target_user_id?: string | null
           target_user_name?: string | null
@@ -171,6 +180,7 @@ export type Database = {
           evidence: Json
           explanation: string
           id: string
+          institution_id?: string | null
           lecturer_id: string
           recommended_actions: Json
           rule_code: string
@@ -188,6 +198,7 @@ export type Database = {
           evidence?: Json
           explanation: string
           id: string
+          institution_id?: string | null
           lecturer_id: string
           recommended_actions?: Json
           rule_code: string
@@ -205,6 +216,7 @@ export type Database = {
           evidence?: Json
           explanation?: string
           id?: string
+          institution_id?: string | null
           lecturer_id?: string
           recommended_actions?: Json
           rule_code?: string
@@ -239,6 +251,7 @@ export type Database = {
           due_date: string | null
           file_url: string | null
           id: string
+          institution_id?: string | null
           lecturer_id: string
           max_score: number
           module_code: string | null
@@ -253,6 +266,7 @@ export type Database = {
           due_date?: string | null
           file_url?: string | null
           id?: string
+          institution_id?: string | null
           lecturer_id: string
           max_score?: number
           module_code?: string | null
@@ -267,6 +281,7 @@ export type Database = {
           due_date?: string | null
           file_url?: string | null
           id?: string
+          institution_id?: string | null
           lecturer_id?: string
           max_score?: number
           module_code?: string | null
@@ -282,16 +297,19 @@ export type Database = {
           assignment_id: string
           cohort_id: string
           created_at: string
+          institution_id?: string | null
         }
         Insert: {
           assignment_id: string
           cohort_id: string
           created_at?: string
+          institution_id?: string | null
         }
         Update: {
           assignment_id?: string
           cohort_id?: string
           created_at?: string
+          institution_id?: string | null
         }
         Relationships: [
           {
@@ -309,18 +327,21 @@ export type Database = {
           created_at: string
           department_name: string | null
           department_id: string
+          institution_id?: string | null
         }
         Insert: {
           assignment_id: string
           created_at?: string
           department_name?: string | null
           department_id: string
+          institution_id?: string | null
         }
         Update: {
           assignment_id?: string
           created_at?: string
           department_name?: string | null
           department_id?: string
+          institution_id?: string | null
         }
         Relationships: [
           {
@@ -339,6 +360,7 @@ export type Database = {
           cleared: boolean
           created_at: string
           id: string
+          institution_id?: string | null
           read: boolean
           recipient_email: string | null
           recipient_id: string | null
@@ -354,6 +376,7 @@ export type Database = {
           cleared?: boolean
           created_at?: string
           id?: string
+          institution_id?: string | null
           read?: boolean
           recipient_email?: string | null
           recipient_id?: string | null
@@ -369,6 +392,7 @@ export type Database = {
           cleared?: boolean
           created_at?: string
           id?: string
+          institution_id?: string | null
           read?: boolean
           recipient_email?: string | null
           recipient_id?: string | null
@@ -403,6 +427,7 @@ export type Database = {
           event_type: string
           grade_id: string | null
           id: string
+          institution_id?: string | null
           moderation_case_id: string | null
           new_values: Json
           previous_values: Json
@@ -416,6 +441,7 @@ export type Database = {
           event_type: string
           grade_id?: string | null
           id?: string
+          institution_id?: string | null
           moderation_case_id?: string | null
           new_values?: Json
           previous_values?: Json
@@ -429,6 +455,7 @@ export type Database = {
           event_type?: string
           grade_id?: string | null
           id?: string
+          institution_id?: string | null
           moderation_case_id?: string | null
           new_values?: Json
           previous_values?: Json
@@ -478,6 +505,7 @@ export type Database = {
           grading_confidence: number | null
           grading_metadata: Json
           id: string
+          institution_id?: string | null
           lecturer_feedback: string | null
           lecturer_score: number | null
           reviewed_at: string | null
@@ -495,6 +523,7 @@ export type Database = {
           grading_confidence?: number | null
           grading_metadata?: Json
           id?: string
+          institution_id?: string | null
           lecturer_feedback?: string | null
           lecturer_score?: number | null
           reviewed_at?: string | null
@@ -512,6 +541,7 @@ export type Database = {
           grading_confidence?: number | null
           grading_metadata?: Json
           id?: string
+          institution_id?: string | null
           lecturer_feedback?: string | null
           lecturer_score?: number | null
           reviewed_at?: string | null
@@ -535,6 +565,7 @@ export type Database = {
           error_code: string
           error_message: string | null
           id: string
+          institution_id?: string | null
           provider: string | null
           safe_error_category: string
           submission_id: string | null
@@ -546,6 +577,7 @@ export type Database = {
           error_code: string
           error_message?: string | null
           id?: string
+          institution_id?: string | null
           provider?: string | null
           safe_error_category?: string
           submission_id?: string | null
@@ -557,6 +589,7 @@ export type Database = {
           error_code?: string
           error_message?: string | null
           id?: string
+          institution_id?: string | null
           provider?: string | null
           safe_error_category?: string
           submission_id?: string | null
@@ -627,6 +660,7 @@ export type Database = {
           grade_id: string | null
           id: string
           integrity_risk_score: number | null
+          institution_id?: string | null
           lecturer_id: string
           moderated_at: string | null
           moderator_id: string | null
@@ -650,6 +684,7 @@ export type Database = {
           grade_id?: string | null
           id?: string
           integrity_risk_score?: number | null
+          institution_id?: string | null
           lecturer_id: string
           moderated_at?: string | null
           moderator_id?: string | null
@@ -673,6 +708,7 @@ export type Database = {
           grade_id?: string | null
           id?: string
           integrity_risk_score?: number | null
+          institution_id?: string | null
           lecturer_id?: string
           moderated_at?: string | null
           moderator_id?: string | null
@@ -733,6 +769,7 @@ export type Database = {
           action: string
           created_at: string
           id: string
+          institution_id?: string | null
           moderation_case_id: string
           notes: string | null
           proposed_feedback: string | null
@@ -746,6 +783,7 @@ export type Database = {
           action: string
           created_at?: string
           id?: string
+          institution_id?: string | null
           moderation_case_id: string
           notes?: string | null
           proposed_feedback?: string | null
@@ -759,6 +797,7 @@ export type Database = {
           action?: string
           created_at?: string
           id?: string
+          institution_id?: string | null
           moderation_case_id?: string
           notes?: string | null
           proposed_feedback?: string | null
@@ -804,6 +843,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          institution_id?: string | null
           must_change_password: boolean
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
@@ -819,6 +859,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          institution_id?: string | null
           must_change_password?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -834,8 +875,36 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          institution_id?: string | null
           must_change_password?: boolean
           role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      institutions: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -845,6 +914,7 @@ export type Database = {
           action_type: string
           created_at: string
           id: string
+          institution_id?: string | null
           lecturer_id: string
           payload: Json
           recommendation_id: string
@@ -853,6 +923,7 @@ export type Database = {
           action_type: string
           created_at?: string
           id?: string
+          institution_id?: string | null
           lecturer_id: string
           payload?: Json
           recommendation_id: string
@@ -861,6 +932,7 @@ export type Database = {
           action_type?: string
           created_at?: string
           id?: string
+          institution_id?: string | null
           lecturer_id?: string
           payload?: Json
           recommendation_id?: string
@@ -889,6 +961,7 @@ export type Database = {
           follow_up_date: string | null
           id: string
           intervention_type: string
+          institution_id?: string | null
           lecturer_id: string
           notes: string | null
           priority: string
@@ -905,6 +978,7 @@ export type Database = {
           follow_up_date?: string | null
           id?: string
           intervention_type: string
+          institution_id?: string | null
           lecturer_id: string
           notes?: string | null
           priority?: string
@@ -921,6 +995,7 @@ export type Database = {
           follow_up_date?: string | null
           id?: string
           intervention_type?: string
+          institution_id?: string | null
           lecturer_id?: string
           notes?: string | null
           priority?: string
@@ -940,6 +1015,7 @@ export type Database = {
           created_at: string
           error_fingerprint: Json
           id: string
+          institution_id?: string | null
           lexile_level: number
           sample_count: number
           student_id: string
@@ -952,6 +1028,7 @@ export type Database = {
           created_at?: string
           error_fingerprint?: Json
           id?: string
+          institution_id?: string | null
           lexile_level?: number
           sample_count?: number
           student_id: string
@@ -964,6 +1041,7 @@ export type Database = {
           created_at?: string
           error_fingerprint?: Json
           id?: string
+          institution_id?: string | null
           lexile_level?: number
           sample_count?: number
           student_id?: string
@@ -987,6 +1065,7 @@ export type Database = {
           file_type: string | null
           file_url: string
           id: string
+          institution_id?: string | null
           status: Database["public"]["Enums"]["submission_status"]
           student_email: string | null
           student_id: string | null
@@ -1000,6 +1079,7 @@ export type Database = {
           file_type?: string | null
           file_url: string
           id?: string
+          institution_id?: string | null
           status?: Database["public"]["Enums"]["submission_status"]
           student_email?: string | null
           student_id?: string | null
@@ -1013,6 +1093,7 @@ export type Database = {
           file_type?: string | null
           file_url?: string
           id?: string
+          institution_id?: string | null
           status?: Database["public"]["Enums"]["submission_status"]
           student_email?: string | null
           student_id?: string | null
@@ -1025,16 +1106,19 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
+          institution_id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           id?: string
+          institution_id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           id?: string
+          institution_id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }

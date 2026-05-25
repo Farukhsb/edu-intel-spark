@@ -26,6 +26,16 @@ vi.mock("@/hooks/use-toast", () => ({
   }),
 }));
 
+vi.mock("@/lib/env", () => ({
+  getEnv: () => ({
+    VITE_SUPABASE_URL: "https://example.supabase.co",
+    VITE_SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
+    VITE_APP_ENV: "development",
+    VITE_ANALYTICS_ENABLED: false,
+    VITE_INSTITUTION_SLUG: "default",
+  }),
+}));
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
@@ -129,6 +139,21 @@ describe("Auth", () => {
     await waitFor(() => {
       expect(mocks.authState.resendVerification).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("shows the institution workspace cue on the signup form", async () => {
+    mocks.authState.pendingVerificationEmail = "student@example.com";
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Auth />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Create account" })).toBeInTheDocument();
+    expect(screen.getByText("default").closest("div")).toHaveTextContent(
+      "New accounts created here join the default institution workspace.",
+    );
   });
 
   it("shows a custom department input for Other and submits the specified value", async () => {

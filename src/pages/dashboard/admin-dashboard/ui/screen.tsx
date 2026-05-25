@@ -60,6 +60,7 @@ export const AdminDashboardScreen = ({
   return (
     <div className="space-y-6 animate-fade-in">
       <DashboardHeader
+        institution={header.institution}
         refreshing={header.refreshing}
         onRefresh={() => void loadAdminDashboard({ silent: true })}
         showBulkUpload={header.showBulkUpload}

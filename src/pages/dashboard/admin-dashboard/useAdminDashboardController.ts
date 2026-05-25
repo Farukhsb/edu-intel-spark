@@ -28,6 +28,7 @@ export const useAdminDashboardController = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [institution, setInstitution] = useState<AdminDashboardState["institution"]>(null);
   const [metrics, setMetrics] = useState(EMPTY_METRICS);
   const [healthItems, setHealthItems] = useState<AdminDashboardState["healthItems"]>([]);
   const [failureCards, setFailureCards] = useState<AdminDashboardState["failureCards"]>([]);
@@ -71,6 +72,7 @@ export const useAdminDashboardController = () => {
       const dataset = await fetchAdminDashboardDataset();
       const nextData = buildAdminDashboardData({ dataset, activeView });
 
+      setInstitution(nextData.institution);
       setUsers(nextData.users);
       setAssignments(nextData.assignments);
       setSubmissions(nextData.submissions);
@@ -172,6 +174,7 @@ export const useAdminDashboardController = () => {
     loading,
     refreshing,
     loadError,
+    institution,
     metrics,
     healthItems,
     failureCards,

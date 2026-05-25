@@ -4,6 +4,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import type { AdminInstitutionSummary } from "../types";
 
 const BulkStudentUpload = lazy(() =>
   import("@/components/BulkStudentUpload").then((module) => ({
@@ -12,10 +13,12 @@ const BulkStudentUpload = lazy(() =>
 );
 
 export const DashboardHeader = ({
+  institution,
   refreshing,
   onRefresh,
   showBulkUpload,
 }: {
+  institution: AdminInstitutionSummary | null;
   refreshing: boolean;
   onRefresh: () => void;
   showBulkUpload: boolean;
@@ -27,6 +30,11 @@ export const DashboardHeader = ({
           <Badge variant="outline" className="border-primary/25 bg-background/70">
             Admin Workspace
           </Badge>
+          {institution ? (
+            <Badge variant="secondary" className="bg-background/80 text-foreground">
+              {institution.name}
+            </Badge>
+          ) : null}
           <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Platform Oversight</span>
         </div>
         <div className="space-y-2">
@@ -35,6 +43,11 @@ export const DashboardHeader = ({
             Monitor platform health, academic workflow progress, integrity risk, moderation load, and protected role activity
             without borrowing the lecturer workflow.
           </p>
+          {institution ? (
+            <p className="text-xs text-muted-foreground">
+              Tenant scope: <span className="font-medium text-foreground">{institution.slug}</span> · {institution.status}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="flex items-center gap-3">

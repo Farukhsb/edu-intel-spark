@@ -45,6 +45,7 @@ const profiles = [
     department_name: "Computer Science",
     department_id: "Computer Science",
     cohort_id: null,
+    institution_id: "institution-1",
     must_change_password: false,
     created_at: "2026-04-28T10:00:00.000Z",
   },
@@ -56,6 +57,7 @@ const profiles = [
     department_name: "Economics",
     department_id: "Economics",
     cohort_id: "year1",
+    institution_id: "institution-1",
     must_change_password: true,
     created_at: "2026-04-28T10:00:00.000Z",
   },
@@ -67,10 +69,18 @@ const profiles = [
     department_name: "Computer Science",
     department_id: "Computer Science",
     cohort_id: null,
+    institution_id: "institution-1",
     must_change_password: false,
     created_at: "2026-04-28T10:00:00.000Z",
   },
 ];
+
+const institution = {
+  id: "institution-1",
+  name: "Default Institution",
+  slug: "default",
+  status: "active",
+};
 
 const assignments = [
   {
@@ -187,6 +197,7 @@ const largeProfiles = [
     department_name: "Mathematics",
     department_id: "Mathematics",
     cohort_id: "year1",
+    institution_id: "institution-1",
     must_change_password: false,
     created_at: `2026-04-${String((index % 9) + 10).padStart(2, "0")}T10:00:00.000Z`,
   })),
@@ -236,6 +247,19 @@ const buildQueryResponse = (
         order: vi.fn().mockResolvedValue({
           data: profilesData,
           error: null,
+        }),
+      }),
+    };
+  }
+
+  if (table === "institutions") {
+    return {
+      select: () => ({
+        limit: () => ({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: institution,
+            error: null,
+          }),
         }),
       }),
     };
@@ -636,6 +660,8 @@ describe("AdminDashboard", () => {
 
     expect(await screen.findByRole("heading", { name: /GradeAI Admin Dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bulk Upload Students" })).toBeInTheDocument();
+    expect(screen.getByText("Default Institution")).toBeInTheDocument();
+    expect(screen.getByText(/Tenant scope:/i)).toHaveTextContent("Tenant scope: default · active");
   });
 
   it("shows a page-level error state when the admin dashboard cannot be loaded", async () => {

@@ -12,6 +12,7 @@ export interface Profile {
   department_name: string | null;
   // Temporary compatibility mirror. New UI logic should read department_name.
   department_id: string | null;
+  institution_id?: string | null;
   must_change_password: boolean;
 }
 

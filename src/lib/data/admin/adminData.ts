@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const PROFILE_FIELDS = "id, full_name, email, role, department_name, department_id, cohort_id, must_change_password, created_at";
+const PROFILE_FIELDS = "id, full_name, email, role, department_name, department_id, cohort_id, must_change_password, created_at, institution_id";
+const INSTITUTION_FIELDS = "id, name, slug, status";
 const ASSIGNMENT_FIELDS = "id, title, module_code, status, due_date, created_at, lecturer_id";
 const SUBMISSION_FIELDS = "id, assignment_id, student_name, student_email, status, submitted_at, file_name";
 const MODERATION_CASE_FIELDS =
@@ -36,6 +37,7 @@ export const fetchAdminDashboardDataset = async () => {
     assignmentOversightRes,
     moderationOverviewRes,
     recentActivityRes,
+    institutionRes,
     profilesRes,
     assignmentsRes,
     submissionsRes,
@@ -52,6 +54,7 @@ export const fetchAdminDashboardDataset = async () => {
     supabase.rpc("get_admin_assignment_oversight"),
     supabase.rpc("get_admin_moderation_overview"),
     supabase.rpc("get_admin_recent_activity"),
+    supabase.from("institutions").select(INSTITUTION_FIELDS).limit(1).maybeSingle(),
     supabase.from("profiles").select(PROFILE_FIELDS).order("created_at", { ascending: false }),
     supabase.from("assignments").select(ASSIGNMENT_FIELDS).order("created_at", { ascending: false }),
     supabase.from("submissions").select(SUBMISSION_FIELDS).order("submitted_at", { ascending: false }),
@@ -74,6 +77,14 @@ export const fetchAdminDashboardDataset = async () => {
     assignmentOversightRes,
     moderationOverviewRes,
     recentActivityRes,
+    institution: institutionRes.data
+      ? {
+          id: institutionRes.data.id,
+          name: institutionRes.data.name,
+          slug: institutionRes.data.slug,
+          status: institutionRes.data.status,
+        }
+      : null,
     profiles: profilesRes.data || [],
     assignments: assignmentsRes.data || [],
     submissions: submissionsRes.data || [],

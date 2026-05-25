@@ -150,6 +150,9 @@ describe("edge function hardening", () => {
     expect(source).toContain("department_name: z.string().trim().min(1).optional()");
     expect(source).toContain("department_id: z.string().trim().min(1).optional()");
     expect(source).toContain("inviteUserByEmail");
+    expect(source).toContain("resolveActorInstitutionContext");
+    expect(source).toContain("institution_id: actorInstitution.institutionId");
+    expect(source).toContain("institution_slug: actorInstitution.institutionSlug");
     expect(source).not.toContain("results.push({ name, email, password, success: true })");
   });
 
@@ -284,12 +287,15 @@ describe("edge function hardening", () => {
   it("centralizes role resolution inside shared edge-function auth", () => {
     const authSource = readRepoFile("supabase/functions/_shared/auth.ts");
     const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+    const adminRoleSource = readRepoFile("supabase/functions/admin-set-user-role/index.ts");
 
     expect(authSource).toContain("export async function resolveUserRoles");
     expect(authSource).toContain("export async function requireAppRoles");
     expect(authSource).toContain("export async function requireAdmin");
     expect(gradingSource).not.toContain("async function resolveActorRoles");
     expect(gradingSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
+    expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? existingMetadata.institution_id ?? null");
+    expect(adminRoleSource).toContain("institution_slug: institutionSlug ?? existingMetadata.institution_slug ?? null");
   });
 
   it("persists grading failure audit events for admin operational monitoring", () => {

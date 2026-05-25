@@ -103,4 +103,13 @@ describe("environment validation", () => {
 
     expect(parsed.VITE_ANALYTICS_ENABLED).toBe(true);
   });
+
+  it("accepts an optional institution slug for tenant-aware signup routing", () => {
+    const parsed = parseEnv({
+      ...baseEnv,
+      VITE_INSTITUTION_SLUG: "uni-alpha",
+    });
+
+    expect(parsed.VITE_INSTITUTION_SLUG).toBe("uni-alpha");
+  });
 });

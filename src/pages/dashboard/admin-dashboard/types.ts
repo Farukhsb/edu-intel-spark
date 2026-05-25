@@ -17,6 +17,13 @@ export type AdminMetrics = {
   highIntegrityRiskCases: number;
 };
 
+export type AdminInstitutionSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+};
+
 export type AdminUserRow = {
   id: string;
   fullName: string | null;
@@ -211,6 +218,7 @@ export type AdminDashboardState = {
   loading: boolean;
   refreshing: boolean;
   loadError: string | null;
+  institution: AdminInstitutionSummary | null;
   metrics: AdminMetrics;
   healthItems: OperationalHealthItem[];
   failureCards: OperationalFailureCard[];
@@ -243,6 +251,7 @@ export type AdminDashboardStatus = Pick<AdminDashboardState, "loading" | "refres
 export type AdminDashboardViewModel = {
   activeView: AdminView;
   header: {
+    institution: AdminInstitutionSummary | null;
     refreshing: boolean;
     showBulkUpload: boolean;
   };
