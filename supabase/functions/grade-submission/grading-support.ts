@@ -4,7 +4,7 @@ import type { RubricCriterion } from "./prompting.ts";
 const CONFIDENCE_THRESHOLD = 0.7;
 const REGRADING_DRIFT_THRESHOLD_RATIO = 0.08;
 const REGRADING_DRIFT_THRESHOLD_MIN = 8;
-export const GRADING_PROMPT_VERSION = "2026-04-24-v4";
+export const GRADING_PROMPT_VERSION = "2026-05-25-v9";
 
 export type GradeBreakdownItem = {
   criterion: string;
@@ -247,6 +247,42 @@ function normalizeCriterionKey(value: unknown) {
     .trim();
 }
 
+function deriveNegativeEvidenceCap(params: {
+  performanceBand: string;
+  comment: string;
+  evidence: string;
+  reason: string;
+  maxScore: number;
+}) {
+  const combined = `${params.performanceBand} ${params.comment} ${params.evidence} ${params.reason}`.toLowerCase();
+
+  if (combined.includes("no evidence")) {
+    return Number((params.maxScore * 0.1).toFixed(2));
+  }
+
+  const severeNegativeSignals = [
+    "no supporting quote extracted",
+    "no justification",
+    "no discussion of design choices",
+    "no discussion of trade-offs",
+    "does not identify any functional dependencies",
+    "fails to identify any functional dependencies",
+    "no functional dependencies identified",
+    "does not define any primary or foreign keys",
+    "no primary or foreign keys",
+    "no keys or integrity constraints defined",
+    "no coherent 3nf structure",
+    "does not provide a coherent 3nf structure",
+    "lacks a coherent 3nf structure",
+  ];
+
+  if (severeNegativeSignals.some((signal) => combined.includes(signal))) {
+    return Number((params.maxScore * 0.25).toFixed(2));
+  }
+
+  return null;
+}
+
 export function normalizeBreakdown(raw: unknown, rubric: RubricCriterion[]): NormalizedBreakdown {
   const provided = Array.isArray(raw) ? raw : [];
   const normalizedProvided = provided.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
@@ -268,9 +304,23 @@ export function normalizeBreakdown(raw: unknown, rubric: RubricCriterion[]): Nor
     const maxScore = criterion.weight;
     const rawScoreValue = matched?.awarded_score ?? matched?.score;
     const rawScore = Number(rawScoreValue);
-    const score = clampScore(rawScoreValue, maxScore);
+    let score = clampScore(rawScoreValue, maxScore);
     const rawMaxScore = Number(matched?.max_score);
     const confidence = clampConfidence(matched?.confidence_score);
+    const performanceBand = normalizePerformanceBand(matched?.performance_band);
+    const comment = normalizeComment(matched?.reason_for_score ?? matched?.comment);
+    const evidence = normalizeEvidence(
+      Array.isArray(matched?.evidence_from_submission)
+        ? normalizeStringList(matched?.evidence_from_submission).join("; ")
+        : matched?.evidence_from_submission ?? matched?.evidence_snippet,
+    );
+    const negativeEvidenceCap = deriveNegativeEvidenceCap({
+      performanceBand,
+      comment,
+      evidence,
+      reason: comment,
+      maxScore,
+    });
     const reviewRequired =
       typeof matched?.review_required === "boolean"
         ? matched.review_required
@@ -286,25 +336,24 @@ export function normalizeBreakdown(raw: unknown, rubric: RubricCriterion[]): Nor
       recalibrated = true;
       fairnessNotes.push(`${criterion.criterion}: AI appeared to score this criterion out of 100 instead of ${maxScore}.`);
     }
+    if (negativeEvidenceCap != null && score > negativeEvidenceCap) {
+      recalibrated = true;
+      fairnessNotes.push(
+        `${criterion.criterion}: score was capped because the criterion rationale described missing or absent evidence.`,
+      );
+      score = negativeEvidenceCap;
+    }
 
     return {
       criterion: criterion.criterion,
       score,
       max_score: maxScore,
-      performance_band: normalizePerformanceBand(matched?.performance_band),
-      comment: normalizeComment(matched?.reason_for_score ?? matched?.comment),
-      evidence_snippet: normalizeEvidence(
-        Array.isArray(matched?.evidence_from_submission)
-          ? normalizeStringList(matched?.evidence_from_submission).join("; ")
-          : matched?.evidence_from_submission ?? matched?.evidence_snippet,
-      ),
+      performance_band: performanceBand,
+      comment,
+      evidence_snippet: evidence,
       rubric_expectation: normalizeComment(matched?.rubric_expectation ?? criterion.description ?? ""),
-      evidence_from_submission: normalizeEvidence(
-        Array.isArray(matched?.evidence_from_submission)
-          ? normalizeStringList(matched?.evidence_from_submission).join("; ")
-          : matched?.evidence_from_submission ?? matched?.evidence_snippet,
-      ),
-      reason_for_score: normalizeComment(matched?.reason_for_score ?? matched?.comment),
+      evidence_from_submission: evidence,
+      reason_for_score: comment,
       improvement_feedback: normalizeImprovementFeedback(matched?.improvement_feedback),
       strengths: normalizeStringList(matched?.strengths),
       weaknesses: normalizeStringList(matched?.weaknesses),

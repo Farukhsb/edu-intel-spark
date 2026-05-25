@@ -55,6 +55,15 @@ function getConfiguredGradingPasses() {
   return Math.min(normalized, MAX_GRADING_PASSES);
 }
 
+function resolveGradingPasses(override: number | undefined) {
+  const configuredPasses = getConfiguredGradingPasses();
+  if (override === undefined) {
+    return configuredPasses;
+  }
+
+  return Math.min(configuredPasses, override);
+}
+
 function getPassSpreadThreshold(maxScore: number) {
   return Math.max(PASS_SPREAD_REVIEW_THRESHOLD_MIN, Math.round(maxScore * PASS_SPREAD_REVIEW_THRESHOLD_RATIO));
 }
@@ -269,9 +278,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { assignmentId, submissionId, submissionIds, force_regenerate } = parsedRequest.data;
+    const { assignmentId, submissionId, submissionIds, force_regenerate, grading_passes_override } = parsedRequest.data;
     const gradingModel = getModel("OPENAI_GRADING_MODEL", "gpt-4o-mini");
-    const gradingPasses = getConfiguredGradingPasses();
+    const gradingPasses = resolveGradingPasses(grading_passes_override);
     const forceRegenerate = force_regenerate ?? false;
     const regradeReason =
       typeof rawBody?.regrade_reason === "string" && rawBody.regrade_reason.trim()

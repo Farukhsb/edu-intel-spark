@@ -164,6 +164,158 @@ export function redistributeBreakdownToTotal(breakdown: GradeBreakdownItem[], ta
   });
 }
 
+function roundCriterionFloor(score: number) {
+  return Number(score.toFixed(2));
+}
+
+function getPerformanceBandFloorRatio(performanceBand: string) {
+  const normalized = performanceBand.toLowerCase();
+  if (normalized.includes("excellent")) return 0.85;
+  if (normalized.includes("good")) return 0.7;
+  if (normalized.includes("satisfactory")) return 0.55;
+  if (normalized.includes("basic")) return 0.4;
+  return null;
+}
+
+function detectCriterionBandFloor(item: GradeBreakdownItem) {
+  const combined = [
+    item.performance_band,
+    item.comment,
+    item.reason_for_score,
+    item.evidence_from_submission,
+    ...item.strengths,
+  ].join(" ").toLowerCase();
+
+  const excellentSignals = [
+    "excellent",
+    "outstanding",
+    "insightful",
+    "strong analytical insight",
+    "well-developed analysis",
+    "high quality",
+  ];
+  const goodSignals = [
+    "good",
+    "solid",
+    "strong",
+    "coherent",
+    "clear",
+    "well-justified",
+    "appropriate",
+    "defensible",
+    "logical",
+    "correct",
+    "accurate",
+    "meets all core requirements",
+    "meets the core requirements",
+    "clear trade-off",
+    "clear trade off",
+  ];
+  const satisfactorySignals = [
+    "satisfactory",
+    "competent",
+    "relevant",
+    "addresses the task",
+    "addresses the criterion",
+    "meets requirements",
+    "reasonable interpretation",
+    "sound",
+  ];
+  const harshLimiters = [
+    "incorrect",
+    "inaccurate",
+    "off-topic",
+    "fails to meet",
+    "little evidence",
+    "no evidence",
+    "missing key",
+    "missing keys",
+    "serious error",
+    "major flaw",
+  ];
+
+  if (harshLimiters.some((signal) => combined.includes(signal))) {
+    return null;
+  }
+
+  const performanceBandFloorRatio = getPerformanceBandFloorRatio(item.performance_band);
+  let floor: { score: number; performanceBand: string } | null =
+    performanceBandFloorRatio == null
+      ? null
+      : {
+          score: roundCriterionFloor(item.max_score * performanceBandFloorRatio),
+          performanceBand: item.performance_band,
+        };
+
+  if (excellentSignals.some((signal) => combined.includes(signal))) {
+    floor = {
+      score: roundCriterionFloor(item.max_score * 0.85),
+      performanceBand: "Excellent",
+    };
+  } else if (goodSignals.some((signal) => combined.includes(signal))) {
+    floor = {
+      score: roundCriterionFloor(item.max_score * 0.7),
+      performanceBand: "Good",
+    };
+  } else if (satisfactorySignals.some((signal) => combined.includes(signal))) {
+    floor = {
+      score: roundCriterionFloor(item.max_score * 0.55),
+      performanceBand: "Satisfactory",
+    };
+  }
+
+  return floor;
+}
+
+export function applyCriterionBandFloorRecalibration({
+  breakdown,
+  extractionSuccess,
+  extractedTextLength,
+}: {
+  breakdown: GradeBreakdownItem[];
+  extractionSuccess: boolean;
+  extractedTextLength: number;
+}) {
+  if (!extractionSuccess || extractedTextLength < 400) {
+    return {
+      breakdown,
+      total: Number(breakdown.reduce((sum, item) => sum + item.score, 0).toFixed(2)),
+      notes: [] as string[],
+      changed: false,
+    };
+  }
+
+  const notes: string[] = [];
+  let changed = false;
+
+  const nextBreakdown = breakdown.map((item) => {
+    const floor = detectCriterionBandFloor(item);
+    if (!floor || item.score >= floor.score) {
+      return item;
+    }
+
+    changed = true;
+    notes.push(
+      `${item.criterion}: criterion score was lifted to the ${floor.performanceBand} floor because the criterion feedback described stronger work than the original mark reflected.`,
+    );
+
+    return {
+      ...item,
+      score: floor.score,
+      performance_band: floor.performanceBand,
+      confidence_score: Math.min(item.confidence_score, 0.7),
+      review_required: true,
+    };
+  });
+
+  return {
+    breakdown: nextBreakdown,
+    total: Number(nextBreakdown.reduce((sum, item) => sum + item.score, 0).toFixed(2)),
+    notes,
+    changed,
+  };
+}
+
 function extractKeywordSet(text: string) {
   const stopWords = new Set([
     "the", "and", "for", "with", "that", "this", "from", "into", "about", "your", "their", "have", "has", "had",

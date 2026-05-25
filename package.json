@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node tools/generate-seo-files.mjs && vite build",
+    "benchmark:grading": "node tools/grading-benchmark/score-benchmark.mjs",
+    "benchmark:grading:capture": "node tools/grading-benchmark/capture-benchmark-results.mjs",
     "build:dev": "vite build --mode development",
     "check": "npm run test && npm run build",
     "lint": "eslint .",

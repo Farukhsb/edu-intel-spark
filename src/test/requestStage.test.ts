@@ -82,7 +82,7 @@ describe("grade-submission request stage", () => {
       expect.stringContaining(`${assignment.id}:`),
     );
     expect(cluster.canonicalGrade.grading_metadata?.grading_input_hash).toEqual(expect.any(String));
-    expect(cluster.canonicalGrade.grading_metadata?.grading_prompt_version).toBe("2026-04-24-v4");
+    expect(cluster.canonicalGrade.grading_metadata?.grading_prompt_version).toBe("2026-05-25-v9");
     expect(cluster.canonicalGrade.grading_metadata?.blind_grading_applied).toBe(true);
   });
 });

@@ -52,6 +52,15 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("create trigger sync_grade_institution_id");
   });
 
+  it("adds text overloads for institution helper compatibility on legacy text-key paths", () => {
+    const source = readRepoFile("supabase/migrations/20260525094500_add_text_institution_helper_overloads.sql");
+
+    expect(source).toContain("create or replace function private.assignment_institution_id(_assignment_id text)");
+    expect(source).toContain("select private.assignment_institution_id(public.try_parse_uuid(_assignment_id))");
+    expect(source).toContain("create or replace function private.submission_institution_id(_submission_id text)");
+    expect(source).toContain("select private.submission_institution_id(public.try_parse_uuid(_submission_id))");
+  });
+
   it("enforces institution-aware helpers and core RLS policies", () => {
     const source = readRepoFile("supabase/migrations/20260525100000_enforce_multi_tenant_rls.sql");
 

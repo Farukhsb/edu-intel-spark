@@ -14,6 +14,30 @@ export type ExistingGradeRecord = {
   ai_breakdown: unknown;
 };
 
+function buildDomainSpecificRubricExemplars(rubric: RubricCriterion[]) {
+  const rubricText = rubric
+    .map((criterion) => `${criterion.criterion} ${criterion.description ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+
+  const isNormalizationTask =
+    rubricText.includes("functional depend") ||
+    rubricText.includes("normalisation") ||
+    rubricText.includes("normalization") ||
+    rubricText.includes("integrity constraint") ||
+    rubricText.includes("trade-off") ||
+    rubricText.includes("trade off");
+
+  if (!isNormalizationTask) return "";
+
+  return `DATABASE NORMALISATION EXEMPLARS:
+- Strong concise functional dependency analysis can still deserve Good or better. Example: "student_id determines student_name and programme_id; module_id determines module_title and credits; delivery_id determines lecturer_id and semester." If those dependencies are correct and tied to the schema, treat that as strong evidence rather than penalising brevity.
+- Good key and integrity reasoning does not need long prose. Example: "Student uses student_id as the primary key, Enrolment uses a surrogate enrolment_id plus a unique constraint on student_id + delivery_id, and foreign keys from Enrolment to Student and Delivery preserve integrity." If that structure is correct, mark it in the Good band rather than capping it for brevity.
+- Brief but correct trade-off justification can still deserve strong marks. Example: "Delivery stays separate from Module because staffing changes by run, which avoids update anomalies but adds joins when reporting." If the trade-off is defensible and relevant, reward it even if only one or two sentences.
+- Do not require textbook wording. If the schema logic, keys, and trade-off rationale are correct in plain language, award the marks for correctness rather than penalising short wording.
+- Distinguish missing detail from wrong logic. A concise but correct normalization answer belongs in Good or Satisfactory depending on completeness; reserve Basic or Weak for incorrect, missing, or incoherent schema reasoning.`;
+}
+
 export function buildAssignmentTypeStrategy(assignmentType: AssignmentType) {
   switch (assignmentType) {
     case "Code":
@@ -76,18 +100,25 @@ export function buildRubricCalibrationGuide(rubric: RubricCriterion[], maxScore:
     `${index + 1}. ${criterion.criterion} (${criterion.weight}/${maxScore})` +
     `${criterion.description ? ` -> ${criterion.description}` : ""}`
   );
+  const domainSpecificExemplars = buildDomainSpecificRubricExemplars(rubric);
 
   return `RUBRIC-FIRST CALIBRATION GUIDE:
 - Use the rubric wording as the primary basis for marking. Do not introduce hidden expectations.
 - Award marks because the submission satisfies the stated rubric criterion, not because it resembles an ideal answer.
+- Concise but correct answers can still deserve high marks when they identify the right method, the right structure, and the right justification.
+- Do not require exhaustive textbook-style explanation before awarding upper-band marks if the core reasoning and evidence are already correct.
 - If the rubric is broad, mark according to the quality of the evidence actually shown.
 - Do not collapse competent work into the 40s just because it lacks distinction-level depth.
 - If work meets the main requirements of a broad criterion, it will normally sit in the 50s.
 - If work meets all core requirements with correct methods and reasonable interpretation, it will normally sit in the 60s.
 - 70+ requires strong depth, strong evidence, and clear analytical insight.
+- 70+ does not require long prose. If a submission is concise but clearly correct, well-structured, and explicitly justified, award strong marks rather than capping it for brevity alone.
+- For criteria like keys, integrity constraints, and design trade-offs, award high marks when the submission states the correct relationships or rationale clearly, even if every implication is not expanded at length.
 - If unsure between two adjacent bands, lower confidence and recommend lecturer review rather than forcing the lower band.
 
-Criterion guide:
+${domainSpecificExemplars ? `${domainSpecificExemplars}
+
+` : ""}Criterion guide:
 ${criterionLines.join("\n")}`;
 }
 
@@ -241,6 +272,13 @@ Percentages refer to the proportion of the criterion's own max_score.
 - Weak (20â€“39%): very limited relevant evidence
 - No evidence (0â€“19%): little or no relevant evidence
 
+UPPER-BAND CALIBRATION:
+
+- A concise answer can still be Good or Excellent if it is correct, relevant, and directly satisfies the criterion.
+- Do not cap a strong answer at Satisfactory purely because it is brief.
+- If the student correctly identifies the right decomposition, the right keys or integrity relationships, or the right practical trade-off, reward that substance even when the explanation is compact.
+- Use lack of detail to separate Excellent from Good, or Good from Satisfactory. Do not use brevity alone to push clearly correct work into Basic.
+
 EMPTY OR OFF-TOPIC SUBMISSIONS:
 If a criterion has no addressable submission content, meaning blank, gibberish, unreadable, or entirely off-topic, set awarded_score to 0, performance_band to "No evidence", and explain clearly in reason_for_score.
 
@@ -248,6 +286,8 @@ CALIBRATION OVERRIDES:
 
 - Treat lack of depth alone as a Satisfactory-level limitation, not a Basic-level failure.
 - If work meets all core requirements, applies required techniques correctly, and provides a logical interpretation, default to at least the Satisfactory band.
+- If work is concise but clearly correct on the criterion, default to at least the Good band unless important rubric elements are genuinely missing.
+- When the submission names the correct keys, foreign-key structure, or trade-off rationale in a defensible way, do not mark it down simply for not elaborating every implication.
 - Reserve the Basic band for cases where multiple required elements are weak or missing, or understanding is clearly limited.
 
 FAIRNESS RULES (CRITICAL):
@@ -255,6 +295,7 @@ FAIRNESS RULES (CRITICAL):
 - If the student clearly addresses the criterion, DO NOT assign a near-zero or fail score.
 - If the student meets core requirements, the score must not fall below the Basic or Satisfactory band.
 - If the student meets all core requirements, applies required techniques correctly, and provides a logical interpretation, the score must not fall below the Satisfactory band.
+- If the student meets the criterion correctly and succinctly, the score should normally sit in the Good band unless there is a specific missing element required by the rubric.
 - Lack of depth alone should reduce a Good score to Satisfactory, not to Basic.
 - Use partial credit fairly when there is some correct or relevant work.
 - Do NOT over-penalise grammar, structure, or formatting unless the rubric explicitly assesses writing quality.
@@ -266,6 +307,7 @@ CONSISTENCY RULES:
 
 - Feedback must match the score.
 - If feedback is positive, for example "clear", "relevant", or "meets requirement", the score must not be in the fail range.
+- If feedback says the work is coherent, correct, clear, or shows a defensible design choice, the score should not remain in a low mid-band without a specific rubric-based reason.
 - If score is below 40%, you must clearly explain why the work fails to meet the criterion.
 - If unsure, reduce confidence instead of reducing score.
 - When describing off-topic or non-responsive work, prefer the phrase "assignment instruction" instead of "assignment prompt" or "assignment brief".

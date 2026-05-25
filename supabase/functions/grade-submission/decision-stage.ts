@@ -40,6 +40,18 @@ type FairnessAndReviewHelpers = {
     evidenceText: string;
   }) => EvidenceCoverage;
   deriveUkBand: (score: number, maxScore: number) => string;
+  applyCriterionBandFloorRecalibration: (
+    params: {
+      breakdown: GradeBreakdownItem[];
+      extractionSuccess: boolean;
+      extractedTextLength: number;
+    },
+  ) => {
+    breakdown: GradeBreakdownItem[];
+    total: number;
+    notes: string[];
+    changed: boolean;
+  };
   assessSubmissionRelevance: (params: {
     assignmentTitle: string;
     assignmentInstructions: string;
@@ -333,6 +345,29 @@ export function evaluateFairnessAndReviewState(
         evidenceCoverage = recalibratedBand.evidenceCoverage;
         ukBand = recalibratedBand.ukBand;
       }
+    }
+  }
+
+  if (
+    !fairnessRecalibrationApplied &&
+    nextNormalized.breakdown.length > 1 &&
+    !relevanceBlocksFairness &&
+    !(mathAnalysis?.solver_signals.length)
+  ) {
+    const criterionFloorRecalibration = helpers.applyCriterionBandFloorRecalibration({
+      breakdown: nextNormalized.breakdown,
+      extractionSuccess: extractionMetadata.extraction_success === true,
+      extractedTextLength: Number(extractionMetadata.extracted_text_length || 0),
+    });
+    if (criterionFloorRecalibration.changed && criterionFloorRecalibration.total > nextNormalized.total) {
+      nextNormalized = {
+        ...nextNormalized,
+        breakdown: criterionFloorRecalibration.breakdown,
+        total: criterionFloorRecalibration.total,
+      };
+      fairnessNotes.push(...criterionFloorRecalibration.notes);
+      gradingConfidence = Math.min(gradingConfidence, 0.7);
+      fairnessRecalibrationApplied = true;
     }
   }
 

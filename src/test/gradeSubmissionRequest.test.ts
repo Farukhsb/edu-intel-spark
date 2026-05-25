@@ -13,6 +13,7 @@ describe("grade-submission request parsing", () => {
       ],
       assignmentId: "11111111-1111-4111-8111-111111111111",
       force_regenerate: true,
+      grading_passes_override: 1,
     });
 
     expect(result.success).toBe(true);
@@ -27,6 +28,7 @@ describe("grade-submission request parsing", () => {
       ],
       assignmentId: "11111111-1111-4111-8111-111111111111",
       force_regenerate: true,
+      grading_passes_override: 1,
     });
   });
 
@@ -68,5 +70,20 @@ describe("grade-submission request parsing", () => {
     }
 
     expect(result.error.issues.length).toBeGreaterThan(0);
+  });
+
+  it("rejects invalid grading pass overrides", () => {
+    const result = parseGradeSubmissionRequestPayload({
+      submissionIds: ["6f951f5c-2665-48c8-b404-3ef9b6288882"],
+      assignmentId: "11111111-1111-4111-8111-111111111111",
+      grading_passes_override: 0,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      return;
+    }
+
+    expect(result.error.issues.some((issue) => issue.path.includes("grading_passes_override"))).toBe(true);
   });
 });

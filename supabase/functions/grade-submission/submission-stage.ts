@@ -42,6 +42,7 @@ import {
   type GradingCandidate,
 } from "./grading-support.ts";
 import {
+  applyCriterionBandFloorRecalibration,
   assessSubmissionRelevance,
   deriveUkBand,
   detectEvidenceCoverage,
@@ -438,6 +439,7 @@ export async function gradeSingleSubmission({
     },
     {
       normalizeMathAnalysis,
+      applyCriterionBandFloorRecalibration,
       detectEvidenceCoverage,
       deriveUkBand,
       assessSubmissionRelevance,

@@ -5,6 +5,7 @@ This note is a small internal benchmark for the current GradeAI grading pipeline
 It is not a formal validation study.
 It is not a claim that the model is unbiased, deployment-ready for high-stakes automation, or proven against a large academic gold set.
 It is a practical pilot check to see whether the existing grading flow produces broadly reasonable marks on a controlled set of short submissions.
+It should become the first honest evidence table you can show in pilot conversations.
 
 ## What This Benchmark Is
 
@@ -63,11 +64,49 @@ The safest route is to use the current app and Edge Function exactly as they alr
 4. Upload those files as student submissions against that assignment.
 5. Run the normal `AI grade` flow from the assignment detail page, or invoke the existing `grade-submission` Edge Function for those submission IDs.
 6. Capture the returned AI scores from the resulting grade rows.
-7. Export or copy those scores into a small JSON file for comparison.
+7. Export them with the live capture script instead of hand-copying them.
+
+### Capture script
+
+If your benchmark submissions are uploaded with file names that match the fixture IDs, for example:
+
+- `benchmark-dbnorm-01.txt`
+- `benchmark-dbnorm-02.txt`
+
+you can export the live benchmark rows directly from Supabase:
+
+```bash
+SUPABASE_URL=https://your-project.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key \
+node tools/grading-benchmark/capture-benchmark-results.mjs --assignment-id <assignment-uuid>
+```
+
+That writes:
+
+- `benchmarks/grading-benchmark-results.run.json`
+
+The script pulls:
+
+- live submission IDs
+- file names
+- AI scores
+- final scores
+- grading confidence
+- review timestamps
+
+and maps them back to the fixture IDs by file name.
+
+If there are unmatched rows, the output will tell you which submissions did not match the benchmark naming convention.
+
+You can also run the npm alias:
+
+```bash
+npm run benchmark:grading:capture -- --assignment-id <assignment-uuid>
+```
 
 ### Result file shape
 
-The comparison script accepts a JSON array like this:
+The comparison script accepts either a plain JSON array like this:
 
 ```json
 [
@@ -77,6 +116,16 @@ The comparison script accepts a JSON array like this:
 ```
 
 It also accepts `final_score` if you want to compare final reviewed marks instead of raw AI marks.
+
+If you want a checked-in starting point, copy:
+
+```bash
+cp benchmarks/grading-benchmark-results.template.json benchmarks/grading-benchmark-results.run.json
+```
+
+and fill in the `ai_score` values after running the benchmark submissions.
+
+The live capture script already writes a richer version of this structure, so in normal use you should prefer the generated file over hand-editing a JSON array.
 
 ### Comparison script
 
@@ -94,34 +143,38 @@ If you already have AI results:
 node tools/grading-benchmark/score-benchmark.mjs path/to/results.json
 ```
 
-That prints a populated Markdown table and a small summary:
+That prints a populated Markdown table and a stronger summary:
 
 - compared rows
 - mean absolute error
+- mean signed error
 - count within 5 marks
+- count within 10 marks
+- exact grade-band matches
+- over-scoring vs under-scoring count
 
 ## Results Table Template
 
 Use this structure when recording a run:
 
-| Submission ID | Expected Score | AI Score | Absolute Error | Within 5 Marks | Notes |
-| --- | ---: | ---: | ---: | :---: | --- |
-| benchmark-dbnorm-01 | 76 |  |  |  |  |
-| benchmark-dbnorm-02 | 68 |  |  |  |  |
-| benchmark-dbnorm-03 | 64 |  |  |  |  |
-| benchmark-dbnorm-04 | 52 |  |  |  |  |
-| benchmark-dbnorm-05 | 46 |  |  |  |  |
-| benchmark-dbnorm-06 | 74 |  |  |  |  |
-| benchmark-dbnorm-07 | 18 |  |  |  |  |
-| benchmark-dbnorm-08 | 58 |  |  |  |  |
-| benchmark-dbnorm-09 | 66 |  |  |  |  |
-| benchmark-dbnorm-10 | 34 |  |  |  |  |
-| benchmark-dbnorm-11 | 61 |  |  |  |  |
-| benchmark-dbnorm-12 | 79 |  |  |  |  |
-| benchmark-dbnorm-13 | 42 |  |  |  |  |
-| benchmark-dbnorm-14 | 56 |  |  |  |  |
-| benchmark-dbnorm-15 | 12 |  |  |  |  |
-| benchmark-dbnorm-16 | 77 |  |  |  |  |
+| Submission ID | Expected Score | Expected Band | AI Score | AI Band | Absolute Error | Delta | Within 5 | Band Match | Notes |
+| --- | ---: | --- | ---: | --- | ---: | ---: | :---: | :---: | --- |
+| benchmark-dbnorm-01 | 76 | First |  |  |  |  |  |  |  |
+| benchmark-dbnorm-02 | 68 | Upper Second |  |  |  |  |  |  |  |
+| benchmark-dbnorm-03 | 64 | Upper Second |  |  |  |  |  |  |  |
+| benchmark-dbnorm-04 | 52 | Lower Second |  |  |  |  |  |  |  |
+| benchmark-dbnorm-05 | 46 | Third / Pass |  |  |  |  |  |  |  |
+| benchmark-dbnorm-06 | 74 | First |  |  |  |  |  |  |  |
+| benchmark-dbnorm-07 | 18 | Fail |  |  |  |  |  |  |  |
+| benchmark-dbnorm-08 | 58 | Lower Second |  |  |  |  |  |  |  |
+| benchmark-dbnorm-09 | 66 | Upper Second |  |  |  |  |  |  |  |
+| benchmark-dbnorm-10 | 34 | Fail |  |  |  |  |  |  |  |
+| benchmark-dbnorm-11 | 61 | Upper Second |  |  |  |  |  |  |  |
+| benchmark-dbnorm-12 | 79 | First |  |  |  |  |  |  |  |
+| benchmark-dbnorm-13 | 42 | Third / Pass |  |  |  |  |  |  |  |
+| benchmark-dbnorm-14 | 56 | Lower Second |  |  |  |  |  |  |  |
+| benchmark-dbnorm-15 | 12 | Fail |  |  |  |  |  |  |  |
+| benchmark-dbnorm-16 | 77 | First |  |  |  |  |  |  |  |
 
 ## How To Read The Output
 
@@ -144,11 +197,15 @@ What it cannot tell you:
 As a rough internal signal:
 
 - many scores within `5` marks of the expected score is encouraging
+- many exact grade-band matches is a stronger sign than small raw-score coincidences
 - repeated misses above `10` marks need investigation
 - confident high scores on clearly weak work are a stronger warning sign than small misses on middle-band work
+- repeated over-scoring is a worse pilot signal than repeated slight under-scoring, because it erodes lecturer trust faster
 - if the grade band is often wrong, the benchmark should be treated as a failure even if some raw scores look close
 
 ## Files Used
 
 - [`../benchmarks/database-normalisation-benchmark.json`](../benchmarks/database-normalisation-benchmark.json)
+- [`../benchmarks/grading-benchmark-results.template.json`](../benchmarks/grading-benchmark-results.template.json)
+- [`../tools/grading-benchmark/capture-benchmark-results.mjs`](../tools/grading-benchmark/capture-benchmark-results.mjs)
 - [`../tools/grading-benchmark/score-benchmark.mjs`](../tools/grading-benchmark/score-benchmark.mjs)
