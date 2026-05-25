@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  GradePersistenceError,
-  persistGradedSubmissionResult,
-} from "@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions";
+import { persistGradedSubmissionResult } from "@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions";
+import { GradePersistenceError } from "@/pages/dashboard/assignment-detail/workflows/automatedAssessmentShared";
 
 describe("persistGradedSubmissionResult", () => {
   it("writes the grade row", async () => {
@@ -56,17 +54,17 @@ describe("persistGradedSubmissionResult", () => {
             throw new Error(`Unexpected table: ${table}`);
           },
         },
-        validatedGrade: {
+      validatedGrade: {
           ai_score: 72,
           ai_feedback: "Solid reasoning.",
           ai_breakdown: [],
           grading_confidence: 0.84,
         },
       }),
-    ).rejects.toMatchObject({
-      message: "grade write failed",
+    ).rejects.toMatchObject<Partial<GradePersistenceError>>({
       name: "GradePersistenceError",
+      message: "grade write failed",
       step: "grade_write",
-    } satisfies Partial<GradePersistenceError>);
+    });
   });
 });

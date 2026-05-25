@@ -1,9 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
-import type {
-  AssignmentDetailSubmission,
-  SubmissionStatus,
-} from "@/pages/dashboard/assignment-detail/types";
+import type { AssignmentDetailSubmission } from "@/pages/dashboard/assignment-detail/types";
 import type { AIResponse, GradeBreakdown } from "@/types";
 
 export interface GradeSubmissionResult {
@@ -61,7 +58,7 @@ export const GRADABLE_TEXT_EXTENSIONS = [
 ] as const;
 export const GRADABLE_FILE_LABEL = "PDF, DOCX, TXT, or supported code file";
 export const EXTRACTION_FAILURE_MESSAGE =
-  "We could not read this document. Please upload a readable PDF, DOCX, TXT, or supported code file.";
+  "We could not extract reliable readable content from this document.";
 
 export const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "AI grading failed";
@@ -141,7 +138,7 @@ export const buildServiceFailureRecoveryIssue = (
 });
 
 export type GradePersistenceClient = {
-  from: (table: "grades" | "submissions") => {
+  from: (table: "grades") => {
     upsert?: (
       values: {
         submission_id: string;
@@ -154,9 +151,6 @@ export type GradePersistenceClient = {
       },
       options: { onConflict: string },
     ) => Promise<{ error: { message?: string } | null }>;
-    update?: (values: { status: SubmissionStatus }) => {
-      eq: (column: string, value: string) => Promise<{ error: { message?: string } | null }>;
-    };
   };
 };
 
@@ -172,6 +166,16 @@ type PersistGradedSubmissionResultArgs = {
   };
 };
 
+export class GradePersistenceError extends Error {
+  step: "client_configuration" | "grade_write";
+
+  constructor(step: "client_configuration" | "grade_write", message: string) {
+    super(message);
+    this.name = "GradePersistenceError";
+    this.step = step;
+  }
+}
+
 export const persistGradedSubmissionResult = async ({
   gradingResult,
   submissionId,
@@ -179,10 +183,9 @@ export const persistGradedSubmissionResult = async ({
   validatedGrade,
 }: PersistGradedSubmissionResultArgs) => {
   const gradesTable = supabaseClient.from("grades");
-  const submissionsTable = supabaseClient.from("submissions");
 
-  if (!gradesTable.upsert || !submissionsTable.update) {
-    throw new Error("The grading persistence client is not configured correctly.");
+  if (!gradesTable.upsert) {
+    throw new GradePersistenceError("client_configuration", "The grading persistence client is not configured correctly.");
   }
 
   const { error: gradeWriteError } = await gradesTable.upsert(
@@ -199,14 +202,7 @@ export const persistGradedSubmissionResult = async ({
   );
 
   if (gradeWriteError) {
-    throw new Error(gradeWriteError.message || "The AI grade could not be saved.");
-  }
-
-  const nextStatus = gradingResult.requiresLecturerReview ? ("first_review" as const) : ("ai_graded" as const);
-  const { error: submissionWriteError } = await submissionsTable.update({ status: nextStatus }).eq("id", submissionId);
-
-  if (submissionWriteError) {
-    throw new Error(submissionWriteError.message || "The submission workflow status could not be updated.");
+    throw new GradePersistenceError("grade_write", gradeWriteError.message || "The AI grade could not be saved.");
   }
 };
 
