@@ -65,6 +65,29 @@ const UUID_PATTERN =
 const isUuid = (value: string | null | undefined): value is string =>
   typeof value === "string" && UUID_PATTERN.test(value);
 
+const resolveLinkedProfileByStudentId = async (studentId: string) => {
+  if (!isUuid(studentId)) return null;
+
+  const { data, error } = await supabase.from("profiles").select("id, email").eq("id", studentId).maybeSingle();
+
+  if (error) {
+    log.error("Failed to resolve linked student profile", error, {
+      studentId,
+    });
+    return null;
+  }
+
+  return data;
+};
+
+const normalizeResolvedProfile = (profile: { id: string; email?: string | null } | null | undefined) =>
+  profile
+    ? {
+        id: profile.id,
+        email: profile.email ?? null,
+      }
+    : null;
+
 const getSupportNotificationToastCopy = (
   actionLabel: string,
   dispatchResult: {
@@ -159,10 +182,21 @@ const StudentProfile = () => {
           setLoading(false);
           return;
         }
-        const matchingSubmissions = matchStudentSubmissions({
+        let resolvedStudentLookupId = decodedStudentId;
+        let matchingSubmissions = matchStudentSubmissions({
           submissions: allSubmissions,
-          studentId: decodedStudentId,
+          studentId: resolvedStudentLookupId,
         });
+
+        let linkedProfile = normalizeResolvedProfile(await resolveLinkedProfileByStudentId(decodedStudentId));
+
+        if (matchingSubmissions.length === 0 && linkedProfile?.email) {
+          resolvedStudentLookupId = linkedProfile.email;
+          matchingSubmissions = matchStudentSubmissions({
+            submissions: allSubmissions,
+            studentId: resolvedStudentLookupId,
+          });
+        }
 
         if (matchingSubmissions.length === 0) {
           setStudent(null);
@@ -176,7 +210,7 @@ const StudentProfile = () => {
         const matchedStudentEmail =
           sortedSubmissions.find((submission) => submission.student_email)?.student_email || null;
         let linkedStudentRecordId =
-          sortedSubmissions.find((submission) => submission.student_id)?.student_id || null;
+          sortedSubmissions.find((submission) => submission.student_id)?.student_id || linkedProfile?.id || null;
 
         if (!linkedStudentRecordId && matchedStudentEmail) {
           const { data: profileData, error: profileError } = await supabase
@@ -191,6 +225,7 @@ const StudentProfile = () => {
             });
           } else {
             linkedStudentRecordId = profileData?.id ?? null;
+            linkedProfile = normalizeResolvedProfile(profileData ? { ...linkedProfile, ...profileData } : linkedProfile);
           }
         }
 
@@ -199,7 +234,7 @@ const StudentProfile = () => {
             assignments,
             submissions: allSubmissions,
             grades,
-            decodedStudentId,
+            decodedStudentId: resolvedStudentLookupId,
             studentRecordId: linkedStudentRecordId,
             computeRisk,
           }),
