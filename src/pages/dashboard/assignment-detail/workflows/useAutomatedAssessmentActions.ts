@@ -50,6 +50,7 @@ interface UseAutomatedAssessmentActionsArgs {
   reloadSubmissions: () => Promise<void>;
   role: string | null;
   selected: Set<string>;
+  setPinnedVisibleSubmissionIds: React.Dispatch<React.SetStateAction<string[]>>;
   setPlagiarismFlags: React.Dispatch<React.SetStateAction<AcademicIntegrityFlag[]>>;
   setPlagiarismSummary: React.Dispatch<React.SetStateAction<string>>;
   setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -64,6 +65,7 @@ export const useAutomatedAssessmentActions = ({
   reloadSubmissions,
   role,
   selected,
+  setPinnedVisibleSubmissionIds,
   setPlagiarismFlags,
   setPlagiarismSummary,
   setSelected,
@@ -81,12 +83,13 @@ export const useAutomatedAssessmentActions = ({
   const gradingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const runAIGrade = async (selectedSubmissionIds: Set<string>) => {
+    const selectedAtActionTime = new Set(selectedSubmissionIds);
     if (isDemo) {
       toast.info("AI grading is disabled in demo mode");
       return;
     }
     const toGrade = submissions.filter(
-      (submission) => selectedSubmissionIds.has(submission.id) && isRegradableWorkflowStatus(submission.status),
+      (submission) => selectedAtActionTime.has(submission.id) && isRegradableWorkflowStatus(submission.status),
     );
     if (toGrade.length === 0) {
       toast.error("Select submitted or reviewable files to grade");
@@ -116,6 +119,7 @@ export const useAutomatedAssessmentActions = ({
 
     setLastGradingRunSummary(null);
     setLastSubmissionRecoveryIssues({});
+    setPinnedVisibleSubmissionIds([]);
     setGrading(true);
     setGradingCount(gradableSubmissions.length);
     setGradingElapsed(0);
@@ -123,6 +127,9 @@ export const useAutomatedAssessmentActions = ({
     gradingTimerRef.current = setInterval(() => {
       setGradingElapsed((value) => value + 1);
     }, 1000);
+
+    const statusReadySubmissions: AssignmentDetailSubmission[] = [];
+    const statusUpdateFailures: AssignmentDetailSubmission[] = [];
 
     for (const submission of gradableSubmissions) {
       try {
@@ -135,14 +142,50 @@ export const useAutomatedAssessmentActions = ({
             submissionId: submission.id,
             error: error.message,
           });
+          statusUpdateFailures.push(submission);
+        } else {
+          statusReadySubmissions.push(submission);
         }
       } catch (statusError) {
         log.warn("Failed to mark submission as ai_grading", {
           submissionId: submission.id,
           error: statusError instanceof Error ? statusError.message : "Unknown error",
         });
+        statusUpdateFailures.push(submission);
       }
     }
+
+    if (statusUpdateFailures.length > 0) {
+      toast.error(
+        statusUpdateFailures.length === gradableSubmissions.length
+          ? "Could not start AI grading because the selected workflow state could not be updated."
+          : `${statusUpdateFailures.length} submission(s) could not be moved into AI grading and were skipped.`,
+      );
+    }
+
+    if (statusReadySubmissions.length === 0) {
+      setGrading(false);
+      setGradingCount(0);
+      setGradingElapsed(0);
+      if (gradingTimerRef.current) {
+        clearInterval(gradingTimerRef.current);
+        gradingTimerRef.current = null;
+      }
+      setLastSubmissionRecoveryIssues(
+        Object.fromEntries(
+          statusUpdateFailures.map((submission) => [
+            submission.id,
+            buildServiceFailureRecoveryIssue(
+              "The submission could not be moved into AI grading. Refresh the page and retry or continue with manual follow-up.",
+            ),
+          ]),
+        ),
+      );
+      return;
+    }
+
+    setGradingCount(statusReadySubmissions.length);
+    setPinnedVisibleSubmissionIds(statusReadySubmissions.map((submission) => submission.id));
     await reloadSubmissions();
 
     try {
@@ -163,7 +206,7 @@ export const useAutomatedAssessmentActions = ({
         },
         body: JSON.stringify({
           assignmentId: assignment.id,
-          submissions: gradableSubmissions.map((submission) => ({
+          submissions: statusReadySubmissions.map((submission) => ({
             id: submission.id,
             student_name: submission.student_name || submission.student_email || "Anonymous",
             file_name: submission.file_name,
@@ -192,7 +235,7 @@ export const useAutomatedAssessmentActions = ({
       let serviceFailureCount = 0;
       const failureMessages = new Set<string>();
 
-      for (const submission of gradableSubmissions) {
+      for (const submission of statusReadySubmissions) {
         const result = resultMap.get(submission.id);
         if (!result) {
           try {
@@ -296,15 +339,20 @@ export const useAutomatedAssessmentActions = ({
       for (const submission of preflightFailures) {
         nextRecoveryIssues[submission.id] = buildMissingFileRecoveryIssue();
       }
+      for (const submission of statusUpdateFailures) {
+        nextRecoveryIssues[submission.id] = buildServiceFailureRecoveryIssue(
+          "The submission could not be moved into AI grading. Refresh the page and retry or continue with manual follow-up.",
+        );
+      }
       setLastSubmissionRecoveryIssues(nextRecoveryIssues);
       setLastGradingRunSummary(
         buildLastGradingRunSummary({
-          attemptedCount: gradableSubmissions.length,
+          attemptedCount: statusReadySubmissions.length,
           extractionFailureCount,
           failedCount: failCount,
           invalidResultCount,
           serviceFailureCount,
-          skippedCount: preflightFailures.length,
+          skippedCount: preflightFailures.length + statusUpdateFailures.length,
           successCount,
         }),
       );
@@ -320,7 +368,13 @@ export const useAutomatedAssessmentActions = ({
       const nextRecoveryIssues = Object.fromEntries(
         [
           ...preflightFailures.map((submission) => [submission.id, buildMissingFileRecoveryIssue()]),
-          ...gradableSubmissions.map((submission) => [
+          ...statusUpdateFailures.map((submission) => [
+            submission.id,
+            buildServiceFailureRecoveryIssue(
+              "The submission could not be moved into AI grading. Refresh the page and retry or continue with manual follow-up.",
+            ),
+          ]),
+          ...statusReadySubmissions.map((submission) => [
             submission.id,
             buildServiceFailureRecoveryIssue(
               "The grading request failed before a usable result was returned. Retry the batch or continue with manual follow-up.",
@@ -331,16 +385,16 @@ export const useAutomatedAssessmentActions = ({
       setLastSubmissionRecoveryIssues(nextRecoveryIssues);
       setLastGradingRunSummary(
         buildLastGradingRunSummary({
-          attemptedCount: gradableSubmissions.length,
+          attemptedCount: statusReadySubmissions.length,
           extractionFailureCount: 0,
-          failedCount: gradableSubmissions.length,
+          failedCount: statusReadySubmissions.length,
           invalidResultCount: 0,
-          serviceFailureCount: gradableSubmissions.length,
-          skippedCount: preflightFailures.length,
+          serviceFailureCount: statusReadySubmissions.length,
+          skippedCount: preflightFailures.length + statusUpdateFailures.length,
           successCount: 0,
         }),
       );
-      for (const submission of gradableSubmissions) {
+      for (const submission of statusReadySubmissions) {
         try {
           await supabase.from("submissions").update({ status: submission.status }).eq("id", submission.id);
         } catch (statusError) {
@@ -353,6 +407,7 @@ export const useAutomatedAssessmentActions = ({
     }
 
     setGrading(false);
+    setPinnedVisibleSubmissionIds([]);
     setSelected(new Set());
     if (gradingTimerRef.current) {
       clearInterval(gradingTimerRef.current);

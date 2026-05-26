@@ -50,4 +50,95 @@ describe("useAssignmentDetailListState", () => {
       "review-2",
     ]);
   });
+
+  it("preserves a lecturer's manual selection changes after queue-focused submissions reload", () => {
+    const initialSubmissions = [
+      buildSubmission("review-1", "under_review"),
+      buildSubmission("review-2", "under_review"),
+      buildSubmission("submitted-1", "submitted"),
+    ];
+
+    const { result, rerender } = renderHook(
+      ({ submissions }) =>
+        useAssignmentDetailListState({
+          role: "lecturer",
+          search: "?source=queue&focus=manual-review",
+          submissions,
+        }),
+      {
+        initialProps: {
+          submissions: initialSubmissions,
+        },
+      },
+    );
+
+    expect(Array.from(result.current.selected)).toEqual(["review-1", "review-2"]);
+
+    act(() => {
+      result.current.toggleSelect("review-2");
+    });
+
+    expect(Array.from(result.current.selected)).toEqual(["review-1"]);
+
+    rerender({
+      submissions: [
+        { ...initialSubmissions[0], status: "ai_grading" },
+        initialSubmissions[1],
+        initialSubmissions[2],
+      ],
+    });
+
+    expect(Array.from(result.current.selected)).toEqual(["review-1"]);
+  });
+
+  it("keeps intentionally selected visible grading rows in the filtered list while status is ai_grading", () => {
+    const submissions = [
+      buildSubmission("submitted-1", "ai_grading"),
+      buildSubmission("submitted-2", "submitted"),
+    ];
+
+    const { result } = renderHook(() =>
+      useAssignmentDetailListState({
+        pinnedVisibleSubmissionIds: ["submitted-1"],
+        role: "lecturer",
+        search: "",
+        submissions,
+      }),
+    );
+
+    act(() => {
+      result.current.setStatusFilter("submitted");
+    });
+
+    expect(result.current.filteredSubmissions.map((submission) => submission.id)).toEqual([
+      "submitted-1",
+      "submitted-2",
+    ]);
+  });
+
+  it("keeps select-all behavior scoped to visible submissions", () => {
+    const submissions = [
+      buildSubmission("submitted-1", "submitted"),
+      buildSubmission("submitted-2", "submitted"),
+      buildSubmission("review-1", "first_review"),
+    ];
+
+    const { result } = renderHook(() =>
+      useAssignmentDetailListState({
+        role: "lecturer",
+        search: "",
+        submissions,
+      }),
+    );
+
+    act(() => {
+      result.current.setStatusFilter("submitted");
+    });
+
+    act(() => {
+      result.current.toggleAll();
+    });
+
+    expect(Array.from(result.current.selected)).toEqual(["submitted-1", "submitted-2"]);
+  });
 });

@@ -22,6 +22,7 @@ import type {
 import type { AcademicIntegrityFlag } from "@/types/academic";
 
 interface UseAssignmentDetailViewStateArgs {
+  pinnedVisibleSubmissionIds?: string[];
   assignment: AssignmentDetailAssignment | null;
   currentUserEmail: string | null;
   currentUserId: string | null;
@@ -69,6 +70,7 @@ interface UseAssignmentDetailViewStateResult {
 }
 
 export const useAssignmentDetailViewState = ({
+  pinnedVisibleSubmissionIds = [],
   assignment,
   currentUserEmail,
   currentUserId,
@@ -102,6 +104,7 @@ export const useAssignmentDetailViewState = ({
     toggleSelect,
     workflowLaneSummary,
   } = useAssignmentDetailListState({
+    pinnedVisibleSubmissionIds,
     role,
     search,
     submissions,

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useAssignmentDetailData";
@@ -67,8 +68,10 @@ export const useAssignmentDetailController = ({
 
   const currentUserId = user?.id ?? (isDemo ? profile?.id ?? null : null);
   const currentUserEmail = user?.email ?? (isDemo ? profile?.email ?? null : null);
+  const [pinnedVisibleSubmissionIds, setPinnedVisibleSubmissionIds] = useState<string[]>([]);
 
   const viewState = useAssignmentDetailViewState({
+    pinnedVisibleSubmissionIds,
     assignment,
     currentUserEmail,
     currentUserId,
@@ -103,6 +106,7 @@ export const useAssignmentDetailController = ({
     setModerationCases,
     setPlagiarismFlags,
     setPlagiarismSummary,
+    setPinnedVisibleSubmissionIds,
     setSelected: viewState.setSelected,
     submissions,
     user,
