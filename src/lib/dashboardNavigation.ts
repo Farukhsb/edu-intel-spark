@@ -6,7 +6,6 @@ import {
   FileOutput,
   GraduationCap,
   LayoutDashboard,
-  MessageSquare,
   Settings,
   Shield,
   Target,
@@ -56,7 +55,7 @@ export const lecturerSections = [
     links: [
       { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
       { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
-      { to: "/dashboard/learning-outcomes", label: "Learning Outcomes", icon: Target },
+      { to: "/dashboard/learning-outcomes", label: "Criterion Analysis", icon: Target },
     ],
   },
   {
@@ -120,20 +119,12 @@ export const adminSections = [
 
 export const studentSections = [
   {
-    label: "Learning",
-    description: "Assignments and current results",
+    label: "My Work",
+    description: "Assignments, submissions, and released results",
     defaultOpen: true,
     links: [
       { to: "/dashboard/assignments", label: "Assignments", icon: Upload },
       { to: "/dashboard", label: "My Grades", icon: GraduationCap },
-    ],
-  },
-  {
-    label: "Feedback Support",
-    description: "Feedback understanding and next-step support",
-    defaultOpen: true,
-    links: [
-      { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
     ],
   },
   {

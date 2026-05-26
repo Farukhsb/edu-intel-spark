@@ -34,6 +34,14 @@ export interface LecturerOverviewQueueFocus {
   detail: string;
 }
 
+export interface LecturerOverviewAtRiskSummary {
+  studentId: string;
+  name: string;
+  riskLevel: "critical" | "high" | "moderate";
+  riskScore: number;
+  signal: string;
+}
+
 export interface LecturerOverviewPipelineStage {
   label: string;
   count: number;
@@ -51,6 +59,7 @@ export interface LecturerOverviewState {
     likelyChallenge: string;
     bestNextAction: string;
   };
+  topAtRiskStudents: LecturerOverviewAtRiskSummary[];
   heroSummary: string;
   primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
   queueFocus: LecturerOverviewQueueFocus;

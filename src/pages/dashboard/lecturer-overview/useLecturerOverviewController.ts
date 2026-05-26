@@ -5,10 +5,12 @@ import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation"
 import { isGradedWorkflowStatus, isReviewQueueStatus } from "@/lib/assessmentWorkflow";
 import { safeToLocaleDate } from "@/lib/date";
 import { getLecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
+import { computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
 import { supabase } from "@/integrations/supabase/client";
 import { log } from "@/lib/logger";
 
 import type {
+  LecturerOverviewAtRiskSummary,
   LecturerOverviewPipelineStage,
   LecturerOverviewQueueFocus,
   LecturerOverviewRecentSubmission,
@@ -99,6 +101,30 @@ const DEMO_PIPELINE: LecturerOverviewPipelineStage[] = [
   { label: "AI Graded", count: 1, detail: "Ready for lecturer review." },
   { label: "Under Review", count: 1, detail: "Review, moderation, or approval in progress." },
   { label: "Released", count: 1, detail: "Visible to students." },
+];
+
+const DEMO_TOP_AT_RISK: LecturerOverviewAtRiskSummary[] = [
+  {
+    studentId: "demo-student-2",
+    name: "Grace Mensah",
+    riskLevel: "critical",
+    riskScore: 78,
+    signal: "Critical risk - average below 40% and recent decline",
+  },
+  {
+    studentId: "demo-student-4",
+    name: "Daniel Okafor",
+    riskLevel: "high",
+    riskScore: 56,
+    signal: "High risk - expected next outcome below threshold",
+  },
+  {
+    studentId: "demo-student-7",
+    name: "Riley Brooks",
+    riskLevel: "moderate",
+    riskScore: 32,
+    signal: "Moderate risk - only one low graded submission so far",
+  },
 ];
 
 const buildPipelineStages = (statuses: string[]): LecturerOverviewPipelineStage[] => [
@@ -199,6 +225,9 @@ export const useLecturerOverviewController = () => {
   const [stats, setStats] = useState<LecturerOverviewStats>(isDemo ? DEMO_STATS : EMPTY_STATS);
   const [recent, setRecent] = useState<LecturerOverviewRecentSubmission[]>(isDemo ? DEMO_RECENT : []);
   const [pipeline, setPipeline] = useState<LecturerOverviewPipelineStage[]>(isDemo ? DEMO_PIPELINE : EMPTY_PIPELINE);
+  const [topAtRiskStudents, setTopAtRiskStudents] = useState<LecturerOverviewAtRiskSummary[]>(
+    isDemo ? DEMO_TOP_AT_RISK : [],
+  );
   const [loading, setLoading] = useState(!isDemo);
   const [error, setError] = useState<string | null>(null);
 
@@ -221,6 +250,7 @@ export const useLecturerOverviewController = () => {
         setStats({ ...EMPTY_STATS, assignmentCount: 0 });
         setRecent([]);
         setPipeline(EMPTY_PIPELINE);
+        setTopAtRiskStudents([]);
         setLoading(false);
         return;
       }
@@ -308,6 +338,35 @@ export const useLecturerOverviewController = () => {
           : { avgScore: null, avgScoreScale: null };
 
       const studentScores: Record<string, number[]> = {};
+      const studentTrajectories = allSubs.reduce<Record<string, StudentTrajectory>>((accumulator, submission) => {
+        const key = submission.student_id || submission.student_email || submission.id;
+        const assignment = assignmentMap[submission.assignment_id];
+        const grade = gradeMap[submission.id];
+        const score = grade?.final_score ?? grade?.ai_score;
+
+        if (!key || score == null) {
+          return accumulator;
+        }
+
+        const trajectory =
+          accumulator[key] ??
+          {
+            studentId: submission.student_id || key,
+            name: submission.student_name || submission.student_email || "Student",
+            email: submission.student_email || null,
+            scores: [],
+          };
+
+        trajectory.scores.push({
+          score,
+          date: submission.submitted_at,
+          assignmentTitle: assignment?.title || "Assignment",
+        });
+
+        accumulator[key] = trajectory;
+        return accumulator;
+      }, {});
+
       allSubs.forEach((submission) => {
         const key = submission.student_id || submission.student_name || submission.student_email;
         if (!key) return;
@@ -331,6 +390,27 @@ export const useLecturerOverviewController = () => {
         else atRisk++;
       });
 
+      const riskSummaries = Object.values(studentTrajectories)
+        .map((trajectory) => ({
+          ...trajectory,
+          scores: [...trajectory.scores].sort(
+            (left, right) => new Date(left.date).getTime() - new Date(right.date).getTime(),
+          ),
+        }))
+        .map((trajectory) => computeRisk(trajectory))
+        .filter((risk): risk is NonNullable<ReturnType<typeof computeRisk>> => risk !== null)
+        .sort((left, right) => right.riskScore - left.riskScore)
+        .slice(0, 3)
+        .map((risk) => ({
+          studentId: risk.studentId,
+          name: risk.name,
+          riskLevel: risk.riskLevel,
+          riskScore: risk.riskScore,
+          signal: `${risk.riskLevel === "critical" ? "Critical" : risk.riskLevel === "high" ? "High" : "Moderate"} risk - ${
+            risk.flags[0] ?? `predicted next outcome ${risk.predictedNext}%`
+          }`,
+        }));
+
       const uniqueStudents = new Set(
         allSubs.map((submission) => submission.student_id || submission.student_name || submission.student_email).filter(Boolean),
       );
@@ -348,6 +428,7 @@ export const useLecturerOverviewController = () => {
       });
 
       setPipeline(buildPipelineStages(allSubs.map((submission) => submission.status)));
+      setTopAtRiskStudents(riskSummaries);
 
       const recentSubs: LecturerOverviewRecentSubmission[] = allSubs.slice(0, 6).map((submission) => {
         const assignment = assignmentMap[submission.assignment_id];
@@ -492,6 +573,7 @@ export const useLecturerOverviewController = () => {
       recent,
       pipeline,
       readiness,
+      topAtRiskStudents,
       heroSummary,
       primaryWorkflowTarget,
       queueFocus,

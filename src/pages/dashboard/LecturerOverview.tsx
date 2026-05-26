@@ -13,6 +13,7 @@ const LecturerOverview = () => {
       recent,
       pipeline,
       readiness,
+      topAtRiskStudents,
       heroSummary,
       primaryWorkflowTarget,
       queueFocus,
@@ -45,6 +46,7 @@ const LecturerOverview = () => {
       recent={recent}
       pipeline={pipeline}
       readiness={readiness}
+      topAtRiskStudents={topAtRiskStudents}
       heroSummary={heroSummary}
       primaryWorkflowTarget={primaryWorkflowTarget}
       queueFocus={queueFocus}

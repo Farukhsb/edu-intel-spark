@@ -1,4 +1,5 @@
 import { Suspense, lazy, type ComponentProps } from "react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 import {
   AssignmentDemoBanner,
@@ -90,7 +91,8 @@ export const AssignmentDetailScreen = ({
 
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
       <div className="space-y-6">
-        <AssignmentReadinessCard {...readinessCardProps} />
+        <WorkflowActionsSection {...workflowActionsProps} />
+        <SubmissionListSection {...submissionListProps} />
 
         {moderationReleaseFocus && isLecturer && (
           <AssignmentFocusCard
@@ -123,14 +125,32 @@ export const AssignmentDetailScreen = ({
             title={queueFocusState.title}
           />
         )}
-
-        <WorkflowActionsSection {...workflowActionsProps} />
-        <SubmissionListSection {...submissionListProps} />
+        <AssignmentReadinessCard {...readinessCardProps} />
       </div>
 
       <div className="space-y-6">
-        {rubric.length > 0 && <AssignmentRubricCard rubric={rubric} />}
-        {integrityCardProps && <AssignmentIntegrityCard {...integrityCardProps} />}
+        <Accordion type="multiple" className="space-y-4">
+          {rubric.length > 0 ? (
+            <AccordionItem value="rubric" className="rounded-xl border bg-background px-4 shadow-sm">
+              <AccordionTrigger className="py-4 text-sm font-medium hover:no-underline">
+                Rubric
+              </AccordionTrigger>
+              <AccordionContent className="pb-4 pt-0">
+                <AssignmentRubricCard rubric={rubric} />
+              </AccordionContent>
+            </AccordionItem>
+          ) : null}
+          {integrityCardProps ? (
+            <AccordionItem value="integrity" className="rounded-xl border bg-background px-4 shadow-sm">
+              <AccordionTrigger className="py-4 text-sm font-medium hover:no-underline">
+                Integrity Check Results
+              </AccordionTrigger>
+              <AccordionContent className="pb-4 pt-0">
+                <AssignmentIntegrityCard {...integrityCardProps} />
+              </AccordionContent>
+            </AccordionItem>
+          ) : null}
+        </Accordion>
       </div>
     </div>
 
