@@ -5,6 +5,7 @@ import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
   logDocumentExtractionResult,
   extractSubmissionDocument,
+  type DocumentExtractionResult,
 } from "../_shared/document-extraction.ts";
 import { getModel } from "../_shared/openai.ts";
 import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
@@ -32,6 +33,8 @@ const DEFAULT_GRADING_PASSES = 3;
 const MAX_GRADING_PASSES = 5;
 const PASS_SPREAD_REVIEW_THRESHOLD_RATIO = 0.08;
 const PASS_SPREAD_REVIEW_THRESHOLD_MIN = 8;
+const EXTRACTION_FAILURE_TELEMETRY_MESSAGE = "Document extraction failed before grading.";
+const EXTRACTION_QUALITY_FAILURE_TELEMETRY_MESSAGE = "Extracted document text was not reliable enough for grading.";
 
 function readEnv(name: string) {
   if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
@@ -112,6 +115,79 @@ function toSafeGradingErrorMessage(reason: string) {
   return "AI grading failed for this submission.";
 }
 
+type ExtractionFailureTelemetry = {
+  extraction_method: string;
+  file_type: string;
+  mime_type: string;
+  extracted_text_length: number;
+  extraction_quality_score: number | null;
+  extraction_quality_word_count: number | null;
+  extraction_quality_readable_sentence_count: number | null;
+  extraction_quality_suspicious_pdf_artifact_count: number | null;
+  parser_error?: {
+    class: string | null;
+    message: string | null;
+  } | null;
+};
+
+class ExtractionFailureError extends Error {
+  telemetry: ExtractionFailureTelemetry;
+  errorCode: "document_extraction_failed" | "extraction_quality_failed";
+  safeErrorCategory: "document_processing_failure";
+
+  constructor(params: {
+    message: string;
+    telemetry: ExtractionFailureTelemetry;
+    errorCode: "document_extraction_failed" | "extraction_quality_failed";
+  }) {
+    super(params.message);
+    this.name = "ExtractionFailureError";
+    this.telemetry = params.telemetry;
+    this.errorCode = params.errorCode;
+    this.safeErrorCategory = "document_processing_failure";
+  }
+}
+
+function sanitizeTelemetryString(value: string | null | undefined, maxLength = 200) {
+  if (!value) return null;
+  const sanitized = value
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, maxLength);
+
+  return sanitized || null;
+}
+
+function buildExtractionFailureTelemetry(extraction: DocumentExtractionResult): ExtractionFailureTelemetry {
+  const parserErrorClass = extraction.extractionFailureReason === "extractor_error" && extraction.extractionWarning
+    ? "ExtractionParserError"
+    : null;
+  const parserErrorMessage = extraction.extractionFailureReason === "extractor_error"
+    ? sanitizeTelemetryString(extraction.extractionWarning)
+    : null;
+
+  return {
+    extraction_method: extraction.extractionMethod ?? "unknown",
+    file_type: extraction.fileType ?? "unknown",
+    mime_type: extraction.mimeType ?? "application/octet-stream",
+    extracted_text_length: extraction.extractedTextLength ?? 0,
+    extraction_quality_score: extraction.extractionQuality?.qualityScore ?? null,
+    extraction_quality_word_count: extraction.extractionQuality?.wordCount ?? null,
+    extraction_quality_readable_sentence_count:
+      extraction.extractionQuality?.readableSentenceCount ?? null,
+    extraction_quality_suspicious_pdf_artifact_count:
+      extraction.extractionQuality?.suspiciousPdfArtifactCount ?? null,
+    parser_error:
+      parserErrorClass || parserErrorMessage
+        ? {
+          class: parserErrorClass,
+          message: parserErrorMessage,
+        }
+        : null,
+  };
+}
+
 async function recordGradingFailureAudit({
   supabaseAdmin,
   submissionId,
@@ -160,6 +236,10 @@ async function recordGradingErrorEvent({
   userId,
   provider,
   reason,
+  metadata,
+  errorCode,
+  safeErrorCategory,
+  safeErrorMessage,
 }: {
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   submissionId: string;
@@ -167,9 +247,15 @@ async function recordGradingErrorEvent({
   userId: string;
   provider: string;
   reason: string;
+  metadata?: Record<string, unknown> | null;
+  errorCode?: string;
+  safeErrorCategory?: string;
+  safeErrorMessage?: string;
 }) {
-  const classification = classifyGradingError(reason);
-  const safeErrorMessage = toSafeGradingErrorMessage(reason);
+  const classification = errorCode && safeErrorCategory
+    ? { errorCode, safeErrorCategory }
+    : classifyGradingError(reason);
+  const sanitizedSafeErrorMessage = safeErrorMessage ?? toSafeGradingErrorMessage(reason);
   const { error } = await supabaseAdmin.from("grading_error_events").insert({
     submission_id: submissionId,
     assignment_id: assignmentId,
@@ -178,8 +264,9 @@ async function recordGradingErrorEvent({
     error_code: classification.errorCode,
     // Keep telemetry messages short and safe. Do not store raw student text, prompts,
     // provider payloads, or secrets in grading_error_events.error_message.
-    error_message: safeErrorMessage,
+    error_message: sanitizedSafeErrorMessage,
     safe_error_category: classification.safeErrorCategory,
+    metadata: metadata ?? null,
   });
 
   if (error) {
@@ -225,7 +312,25 @@ async function fetchSubmissionContent(
   logDocumentExtractionResult("grade-submission", extraction);
 
   if (!extraction.success) {
-    throw new Error(extraction.extractionError || DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+    const telemetry = buildExtractionFailureTelemetry(extraction);
+    const isQualityFailure = extraction.extractionFailureReason === "unreadable_pdf" ||
+      extraction.extractionFailureReason === "extracted_text_unusable" ||
+      extraction.extractionFailureReason === "extracted_text_too_short" ||
+      extraction.extractionFailureReason === "binary_like_content";
+    logWarn("grade-submission extraction rejected", {
+      fileName: extraction.fileName,
+      fileType: extraction.fileType,
+      mimeType: extraction.mimeType,
+      extractionFailureReason: extraction.extractionFailureReason,
+      errorCode: isQualityFailure ? "extraction_quality_failed" : "document_extraction_failed",
+      safeErrorCategory: "document_processing_failure",
+      ...telemetry,
+    });
+    throw new ExtractionFailureError({
+      message: extraction.extractionError || DOCUMENT_EXTRACTION_ERROR_MESSAGE,
+      telemetry,
+      errorCode: isQualityFailure ? "extraction_quality_failed" : "document_extraction_failed",
+    });
   }
 
   return {
@@ -507,8 +612,20 @@ Deno.serve(async (req) => {
           submissionId: sub.id,
           assignmentId: requestedAssignmentId,
           userId: user.id,
-          provider: "openai",
+          provider: gradeErr instanceof ExtractionFailureError ? "document_extraction" : "openai",
           reason,
+          metadata: gradeErr instanceof ExtractionFailureError ? gradeErr.telemetry : null,
+          errorCode: gradeErr instanceof ExtractionFailureError ? gradeErr.errorCode : undefined,
+          safeErrorCategory: gradeErr instanceof ExtractionFailureError
+            ? gradeErr.safeErrorCategory
+            : undefined,
+          safeErrorMessage: gradeErr instanceof ExtractionFailureError
+            ? (
+              gradeErr.errorCode === "extraction_quality_failed"
+                ? EXTRACTION_QUALITY_FAILURE_TELEMETRY_MESSAGE
+                : EXTRACTION_FAILURE_TELEMETRY_MESSAGE
+            )
+            : undefined,
         });
         results.push({
           submissionId: sub.id,

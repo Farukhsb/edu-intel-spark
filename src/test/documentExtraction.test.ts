@@ -215,6 +215,8 @@ ${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref
     expect(result.extractionMethod).toBe("pdf_fallback");
     expect(result.extractionFailureReason).toBe("unreadable_pdf");
     expect(result.extractionWarning).toContain("internal PDF artefacts");
+    expect(result.extractionQuality?.qualityScore).not.toBeNull();
+    expect(result.extractionQuality?.suspiciousPdfArtifactCount).toBeGreaterThan(0);
   });
 
   it("rejects large garbled PDF extraction even when the text-length minimum is exceeded", async () => {

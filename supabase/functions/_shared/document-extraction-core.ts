@@ -159,6 +159,7 @@ export async function extractDocumentText(params: {
       extractionMethod?: ExtractionMethod;
       extractionFailureReason?: ExtractionFailureReason;
       extractedText?: string;
+      extractionQuality?: ReturnType<typeof assessExtractionQuality> | null;
     },
   ): DocumentExtractionResult => ({
     fileName,
@@ -172,7 +173,7 @@ export async function extractDocumentText(params: {
     extractionWarning: warning,
     extractionError: message,
     manualReviewRequired: true,
-    extractionQuality: null,
+    extractionQuality: options?.extractionQuality ?? null,
   });
 
   if (fileType === "unsupported") {
@@ -260,6 +261,7 @@ export async function extractDocumentText(params: {
       {
         extractionMethod,
         extractionFailureReason: fileType === "pdf" ? "unreadable_pdf" : "extracted_text_unusable",
+        extractionQuality,
       },
     );
   }
