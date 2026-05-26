@@ -104,7 +104,7 @@ describe("grade-submission submission stage", () => {
     expect(result.cacheMessage).toContain("Using saved AI marking result");
   });
 
-  it("stops before grading when extracted content is not reliable enough", async () => {
+  it("stops before grading when extracted content is not reliable enough, so no zero-score result is generated", async () => {
     const assignment: AssignmentForGrading = {
       id: "assignment-1",
       lecturer_id: "lecturer-1",
