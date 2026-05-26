@@ -3,6 +3,7 @@
 import { Buffer } from "node:buffer";
 import mammoth from "mammoth";
 import { strToU8, zipSync } from "fflate";
+import { jsPDF } from "jspdf";
 import { describe, expect, it } from "vitest";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -121,6 +122,21 @@ startxref
   return new TextEncoder().encode(pdf);
 }
 
+function buildJsPdfBytes(text: string, options?: { compress?: boolean }) {
+  const doc = new jsPDF({
+    compress: options?.compress ?? false,
+    unit: "pt",
+    format: "letter",
+  });
+
+  const lines = doc.splitTextToSize(text, 468);
+  doc.setFont("times", "normal");
+  doc.setFontSize(12);
+  doc.text(lines, 72, 96);
+
+  return new Uint8Array(doc.output("arraybuffer"));
+}
+
 const docxExtractor = async (bytes: Uint8Array) => {
   const result = await mammoth.extractRawText({ buffer: Buffer.from(bytes) });
   return {
@@ -151,13 +167,28 @@ describe("document extraction", () => {
     const result = await extractDocumentText({
       fileName: "report.pdf",
       mimeType: "application/pdf",
-      bytes: buildPdfBytes(reportText),
+      bytes: buildJsPdfBytes(reportText),
     });
 
     expect(result.success).toBe(true);
     expect(result.fileType).toBe("pdf");
-    expect(result.extractionMethod).toBe("pdf_text_operators");
+    expect(result.extractionMethod).toBe("pdf_parser");
     expect(result.extractedText).toContain("This PDF report discusses");
+    expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
+  });
+
+  it("extracts readable text from a compressed PDF report via the parser path", async () => {
+    const reportText = "This compressed PDF contains selectable academic text discussing argument quality, supporting evidence, and final judgement for a rubric-based assessment. ".repeat(8);
+    const result = await extractDocumentText({
+      fileName: "compressed-report.pdf",
+      mimeType: "application/pdf",
+      bytes: buildJsPdfBytes(reportText, { compress: true }),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.fileType).toBe("pdf");
+    expect(result.extractionMethod).toBe("pdf_parser");
+    expect(result.extractedText).toContain("This compressed PDF contains selectable academic text");
     expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
   });
 
@@ -181,7 +212,7 @@ ${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref
 
     expect(result.success).toBe(false);
     expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
-    expect(result.extractionMethod).toBe("pdf_printable_fallback");
+    expect(result.extractionMethod).toBe("pdf_fallback");
     expect(result.extractionFailureReason).toBe("unreadable_pdf");
     expect(result.extractionWarning).toContain("internal PDF artefacts");
   });
@@ -198,9 +229,52 @@ ${"A12B34C56D78EFGHIJKLmnopqrstuv 1 0 obj endobj xref trailer startxref ".repeat
 
     expect(result.success).toBe(false);
     expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
-    expect(result.extractionMethod).toBe("pdf_printable_fallback");
+    expect(result.extractionMethod).toBe("pdf_fallback");
     expect(result.extractionFailureReason).toBe("unreadable_pdf");
     expect(result.extractionWarning).toMatch(/token noise|document internals|internal PDF artefacts/i);
+  });
+
+  it("falls back safely when the PDF parser throws and still extracts readable operator text", async () => {
+    const reportText = "This fallback PDF still contains readable essay text discussing evidence, analysis, counter-argument, and conclusion in enough detail to remain gradable. ".repeat(6);
+    const result = await extractDocumentText({
+      fileName: "fallback-report.pdf",
+      mimeType: "application/pdf",
+      bytes: buildPdfBytes(reportText),
+      pdfTextParser: async () => {
+        throw new Error("primary parser unavailable");
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.extractionMethod).toBe("pdf_fallback");
+    expect(result.extractedText).toContain("This fallback PDF still contains readable essay text");
+  });
+
+  it("keeps fallback parser output behind the same quality gate when parser failure exposes polluted text", async () => {
+    const pollutedPdf = `%PDF-1.4
+ReportLab Generated PDF document http://www.reportlab.com
+1 0 obj << /Type /Catalog >> endobj
+2 0 obj << /Length 123 >> stream
+xref
+trailer
+startxref
+endstream
+3 0 obj << /Type /Page >> endobj
+${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref trailer startxref stream endstream ".repeat(8)}`;
+
+    const result = await extractDocumentText({
+      fileName: "fallback-polluted.pdf",
+      mimeType: "application/pdf",
+      bytes: new TextEncoder().encode(pollutedPdf),
+      pdfTextParser: async () => {
+        throw new Error("primary parser unavailable");
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+    expect(result.extractionMethod).toBe("pdf_fallback");
+    expect(result.extractionFailureReason).toBe("unreadable_pdf");
   });
 
   it("rejects a blank DOCX document", async () => {

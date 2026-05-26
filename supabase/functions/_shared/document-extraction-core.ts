@@ -1,9 +1,9 @@
-import { Buffer } from "node:buffer";
 import {
   assessExtractionQuality,
   cleanExtractedDocumentText,
-  extractReadablePdfTextFromBase64,
+  extractReadablePdfText,
   type PdfExtractionMethod,
+  type PdfTextParser,
   normalizeReadableText,
 } from "./text-analysis.ts";
 
@@ -76,10 +76,6 @@ export type DocumentExtractionResult = {
   extractionQuality: ReturnType<typeof assessExtractionQuality> | null;
 };
 
-function base64FromBytes(bytes: Uint8Array) {
-  return Buffer.from(bytes).toString("base64");
-}
-
 function binaryLooksLikeOfficeArchive(bytes: Uint8Array, text: string) {
   const startsWithZipMagic = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
   if (!startsWithZipMagic) return false;
@@ -150,6 +146,7 @@ export async function extractDocumentText(params: {
   mimeType?: string | null;
   bytes: Uint8Array;
   docxExtractor?: DocxExtractor;
+  pdfTextParser?: PdfTextParser;
 }): Promise<DocumentExtractionResult> {
   const fileName = params.fileName || "submission";
   const mimeType = params.mimeType || "application/octet-stream";
@@ -202,7 +199,10 @@ export async function extractDocumentText(params: {
         warningMessage = result.messages.join(" ");
       }
     } else if (fileType === "pdf") {
-      const pdfExtraction = extractReadablePdfTextFromBase64(base64FromBytes(params.bytes));
+      const pdfExtraction = await extractReadablePdfText({
+        bytes: params.bytes,
+        parser: params.pdfTextParser,
+      });
       extractionMethod = pdfExtraction.method;
       extractedText = pdfExtraction.text;
     } else {

@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 export type AssignmentType =
   | "Essay"
   | "Report"
@@ -36,7 +38,9 @@ export interface ExtractionQualityResult {
   suspiciousPdfArtifactCount: number;
 }
 
-export type PdfExtractionMethod = "pdf_text_operators" | "pdf_printable_fallback";
+export type PdfExtractionMethod = "pdf_parser" | "pdf_fallback";
+
+export type PdfTextParser = (bytes: Uint8Array) => Promise<string>;
 
 const STOPWORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "has", "have", "if", "in",
@@ -136,24 +140,60 @@ export function cleanExtractedDocumentText(input: string) {
   );
 }
 
-export function extractReadablePdfTextFromBase64(base64: string): {
-  text: string;
-  method: PdfExtractionMethod;
-} {
-  const binary = atob(base64);
+function extractReadablePdfTextFromBinary(binary: string) {
   const operatorText = cleanExtractedDocumentText(extractPdfTextFromOperators(binary));
   if (operatorText.trim().length >= 200) {
-    return {
-      text: operatorText,
-      method: "pdf_text_operators",
-    };
+    return operatorText;
   }
 
   const printableFallback = cleanExtractedDocumentText((binary.match(/[\x20-\x7E]{4,}/g) || []).join(" "));
-  return {
-    text: [operatorText, printableFallback].filter(Boolean).join("\n"),
-    method: "pdf_printable_fallback",
-  };
+  return [operatorText, printableFallback].filter(Boolean).join("\n");
+}
+
+let pdfTextParserPromise: Promise<PdfTextParser> | null = null;
+
+async function loadPdfTextParser(): Promise<PdfTextParser> {
+  if (!pdfTextParserPromise) {
+    pdfTextParserPromise = (async () => {
+      const pdfParseSpecifier = typeof Deno !== "undefined"
+        ? ["npm:pdf-parse", "1.1.1/lib/pdf-parse.js"].join("@")
+        : "pdf-parse/lib/pdf-parse.js";
+      const pdfParseModule = await import(pdfParseSpecifier);
+      const pdfParse = (pdfParseModule.default ?? pdfParseModule) as (
+        dataBuffer: Uint8Array,
+        options?: { max?: number },
+      ) => Promise<{ text?: string | null }>;
+
+      return async (bytes: Uint8Array) => {
+        const parsed = await pdfParse(Buffer.from(bytes), { max: 0 });
+        return cleanExtractedDocumentText(parsed?.text || "");
+      };
+    })();
+  }
+
+  return pdfTextParserPromise;
+}
+
+export async function extractReadablePdfText(params: {
+  bytes: Uint8Array;
+  parser?: PdfTextParser;
+}): Promise<{
+  text: string;
+  method: PdfExtractionMethod;
+}> {
+  try {
+    const parser = params.parser ?? await loadPdfTextParser();
+    return {
+      text: await parser(params.bytes),
+      method: "pdf_parser",
+    };
+  } catch {
+    const binary = Buffer.from(params.bytes).toString("latin1");
+    return {
+      text: extractReadablePdfTextFromBinary(binary),
+      method: "pdf_fallback",
+    };
+  }
 }
 
 export function assessExtractionQuality(
