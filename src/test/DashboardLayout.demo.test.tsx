@@ -170,20 +170,19 @@ describe("DashboardLayout demo mode", () => {
 
     expect(screen.getAllByText("Student workspace").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Learning").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Support & Improvement").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Feedback Support").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Assignments").length).toBeGreaterThan(0);
     expect(screen.getAllByText("My Grades").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Explain My Grade").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Improvement Plan").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Explain My Grade sits in feedback understanding and next-step support."),
     ).toBeInTheDocument();
     clickNotificationsButton();
 
     expect(await screen.findByText("Released result")).toBeInTheDocument();
-    expect(screen.getByText("Opens your released result and grade explanation.")).toBeInTheDocument();
+    expect(screen.getAllByText("Opens your released result and grade explanation.").length).toBeGreaterThan(0);
     expect(screen.getByText("Support")).toBeInTheDocument();
-    expect(screen.getByText("Opens your improvement plan.")).toBeInTheDocument();
+    expect(screen.getAllByText("Opens your released result and grade explanation.").length).toBeGreaterThan(1);
     expect(mocks.communications.loadVisibleCommunicationMessages).not.toHaveBeenCalled();
   });
 

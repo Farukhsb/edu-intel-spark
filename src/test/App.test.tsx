@@ -5,17 +5,31 @@ const routerState = vi.hoisted(() => ({
   initialEntries: ["/privacy"],
 }));
 
+const authState = vi.hoisted(() => ({
+  user: null as { id: string } | null,
+  loading: false,
+  isDemo: false,
+  profileError: null as string | null,
+  signOut: vi.fn(),
+  mustChangePassword: false,
+  role: null as "student" | "lecturer" | "admin" | null,
+}));
+
 vi.mock("@/contexts/AuthContext", () => ({
   AuthProvider: ({ children }: { children: any }) => <>{children}</>,
-  useAuth: () => ({
-    user: null,
-    loading: false,
-    isDemo: false,
-    profileError: null,
-    signOut: vi.fn(),
-    mustChangePassword: false,
-    role: null,
-  }),
+  useAuth: () => authState,
+}));
+
+vi.mock("@/components/DashboardLayout", () => ({
+  DashboardLayout: ({ children }: { children: any }) => <>{children}</>,
+}));
+
+vi.mock("@/pages/dashboard/StudentGrades", () => ({
+  default: () => <div>Student grades page</div>,
+}));
+
+vi.mock("@/pages/dashboard/ExplainGrade", () => ({
+  default: () => <div>Explain grade page</div>,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -40,6 +54,8 @@ describe("App legal routes", () => {
   afterEach(() => {
     cleanup();
     routerState.initialEntries = ["/privacy"];
+    authState.user = null;
+    authState.role = null;
   });
 
   it("renders the privacy notice on /privacy with pilot and decision-support wording", async () => {
@@ -69,5 +85,26 @@ describe("App legal routes", () => {
         "AI grading, integrity signals, feedback drafting, and student-support insights are decision-support tools. They do not replace lecturer judgement, moderation, approval, release, or formal institutional decision-making.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("redirects direct student access from /dashboard/improvements to the released grades page", async () => {
+    routerState.initialEntries = ["/dashboard/improvements"];
+    authState.user = { id: "student-1" };
+    authState.role = "student";
+
+    render(<App />);
+
+    expect(await screen.findByText("Student grades page")).toBeInTheDocument();
+    expect(screen.queryByText("Explain grade page")).not.toBeInTheDocument();
+  });
+
+  it("keeps Explain My Grade directly accessible for students", async () => {
+    routerState.initialEntries = ["/dashboard/explain-grade"];
+    authState.user = { id: "student-1" };
+    authState.role = "student";
+
+    render(<App />);
+
+    expect(await screen.findByText("Explain grade page")).toBeInTheDocument();
   });
 });

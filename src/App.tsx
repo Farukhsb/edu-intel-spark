@@ -35,7 +35,6 @@ const InstitutionalInsights = lazy(routeLoaders.institutionalInsights);
 const LearningOutcomes = lazy(routeLoaders.learningOutcomes);
 const StudentGrades = lazy(routeLoaders.studentGrades);
 const ExplainGrade = lazy(routeLoaders.explainGrade);
-const ImprovementPlan = lazy(routeLoaders.improvementPlan);
 const Assignments = lazy(routeLoaders.assignments);
 const AssignmentDetail = lazy(routeLoaders.assignmentDetail);
 const StudentProfile = lazy(routeLoaders.studentProfile);
@@ -245,7 +244,14 @@ const App = () => (
               <Route path="/dashboard/external-examiner" element={<DashboardRoute allowedRole="admin"><ExternalExaminerExport /></DashboardRoute>} />
               <Route path="/dashboard/learning-outcomes" element={<DashboardRoute allowedRole="lecturer"><LearningOutcomes /></DashboardRoute>} />
               <Route path="/dashboard/explain-grade" element={<DashboardRoute allowedRole="student"><ExplainGrade /></DashboardRoute>} />
-              <Route path="/dashboard/improvements" element={<DashboardRoute allowedRole="student"><ImprovementPlan /></DashboardRoute>} />
+              <Route
+                path="/dashboard/improvements"
+                element={
+                  <DashboardRoute allowedRole="student">
+                    <Navigate to="/dashboard" replace />
+                  </DashboardRoute>
+                }
+              />
               <Route path="/dashboard/assignments" element={<DashboardRoute><Assignments /></DashboardRoute>} />
               <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
               <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />

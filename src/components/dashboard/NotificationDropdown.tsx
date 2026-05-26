@@ -50,7 +50,7 @@ const getStudentNotificationPreviewHint = (notification: CommunicationMessage) =
       return "Opens the assignment submission window.";
     case "at-risk-alert":
     case "intervention-follow-up":
-      return "Opens your improvement plan.";
+      return "Opens your released result and grade explanation.";
     default:
       return null;
   }

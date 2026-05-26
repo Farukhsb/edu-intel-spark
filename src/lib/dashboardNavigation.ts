@@ -129,12 +129,11 @@ export const studentSections = [
     ],
   },
   {
-    label: "Support & Improvement",
+    label: "Feedback Support",
     description: "Feedback understanding and next-step support",
     defaultOpen: true,
     links: [
       { to: "/dashboard/explain-grade", label: "Explain My Grade", icon: MessageSquare },
-      { to: "/dashboard/improvements", label: "Improvement Plan", icon: TrendingUp },
     ],
   },
   {

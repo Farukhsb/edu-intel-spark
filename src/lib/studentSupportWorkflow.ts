@@ -3,7 +3,7 @@ import type { CommunicationMessage } from "@/lib/communications";
 type SupportNotificationCategory = "at-risk-alert" | "intervention-follow-up";
 
 export interface StudentSupportNotificationDestination {
-  kind: "improvement-plan" | "released-result" | "assignments";
+  kind: "released-result" | "assignments";
   targetNotification: CommunicationMessage | null;
 }
 
@@ -25,7 +25,7 @@ export const getStudentSupportNotificationDestination = ({
 }): StudentSupportNotificationDestination => {
   if (!isSupportNotification(notification.category)) {
     return {
-      kind: "improvement-plan",
+      kind: "released-result",
       targetNotification: null,
     };
   }
@@ -56,7 +56,7 @@ export const getStudentSupportNotificationDestination = ({
   }
 
   return {
-    kind: "improvement-plan",
+    kind: "released-result",
     targetNotification: null,
   };
 };
