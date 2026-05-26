@@ -56,6 +56,34 @@ export const ImprovementPlanHero = ({
   const openTasks = Math.max(0, total - completed);
   const hasActiveModule = module != null;
 
+  if (!hasActiveModule) {
+    return (
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-background shadow-sm">
+        <CardContent className="space-y-4 p-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Improvement Plan</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You are up to date. New tasks will appear after your next result.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" variant={activeView === "modules" ? "default" : "outline"} onClick={onViewModules}>
+              View modules
+            </Button>
+            <Button
+              type="button"
+              variant={activeView === "completed" ? "default" : "outline"}
+              onClick={onViewCompletedTasks}
+            >
+              View completed tasks
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-background shadow-sm">
       <CardContent className="space-y-6 p-6">
@@ -68,47 +96,38 @@ export const ImprovementPlanHero = ({
               </p>
             </div>
 
-            {hasActiveModule ? (
-              <div className="rounded-2xl border bg-background/80 p-4">
-                <p className="text-sm font-semibold text-foreground">{module.module}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                  <Badge variant="secondary">Current score: {module.currentGrade}%</Badge>
-                  <Badge variant="outline">Target score: {module.targetGrade}%</Badge>
-                  <Badge variant="outline">
-                    Progress: {module.trend === "up" ? "Improving" : module.trend === "down" ? "Needs attention" : "Steady"}
-                  </Badge>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strengths</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {module.strengths.map((strength) => (
-                        <Badge key={strength} variant="default">
-                          {strength}
-                        </Badge>
-                      ))}
-                    </div>
+            <div className="rounded-2xl border bg-background/80 p-4">
+              <p className="text-sm font-semibold text-foreground">{module.module}</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <Badge variant="secondary">Current score: {module.currentGrade}%</Badge>
+                <Badge variant="outline">Target score: {module.targetGrade}%</Badge>
+                <Badge variant="outline">
+                  Progress: {module.trend === "up" ? "Improving" : module.trend === "down" ? "Needs attention" : "Steady"}
+                </Badge>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strengths</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {module.strengths.map((strength) => (
+                      <Badge key={strength} variant="default">
+                        {strength}
+                      </Badge>
+                    ))}
                   </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Main area to improve</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {module.weaknesses.map((weakness) => (
-                        <Badge key={weakness} variant="outline">
-                          {weakness}
-                        </Badge>
-                      ))}
-                    </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Main area to improve</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {module.weaknesses.map((weakness) => (
+                      <Badge key={weakness} variant="outline">
+                        {weakness}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed bg-background/80 p-4">
-                <p className="text-sm font-semibold text-foreground">Current improvement tasks complete</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  You have cleared the current module tasks in this workspace. New priorities will appear here after your next released result adds a fresh improvement signal.
-                </p>
-              </div>
-            )}
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -122,38 +141,32 @@ export const ImprovementPlanHero = ({
 
             <div className="rounded-2xl border bg-background/80 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Why this matters</p>
-              <p className="mt-2 text-sm text-foreground">
-                {hasActiveModule
-                  ? readiness.likelyChallenge
-                  : "Completed module plans are hidden from the active workspace so your page stays focused on what still needs attention."}
-              </p>
+              <p className="mt-2 text-sm text-foreground">{readiness.likelyChallenge}</p>
             </div>
 
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {hasActiveModule
-                  ? readiness.bestNextAction
-                  : "Wait for the next released result or reopen completed tasks only if you want to review past work."}
-              </p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{readiness.bestNextAction}</p>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border bg-background/75 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Modules tracked</p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">{modulesCount}</p>
+        {openTasks > 0 && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border bg-background/75 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Modules tracked</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{modulesCount}</p>
+            </div>
+            <div className="rounded-xl border bg-background/75 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tasks completed</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{completed}</p>
+            </div>
+            <div className="rounded-xl border bg-background/75 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tasks open</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{openTasks}</p>
+            </div>
           </div>
-          <div className="rounded-xl border bg-background/75 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tasks completed</p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">{completed}</p>
-          </div>
-          <div className="rounded-xl border bg-background/75 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tasks open</p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">{openTasks}</p>
-          </div>
-        </div>
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Button type="button" variant={activeView === "modules" ? "default" : "outline"} onClick={onViewModules}>

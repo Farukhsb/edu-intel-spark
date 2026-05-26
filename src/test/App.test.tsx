@@ -105,6 +105,6 @@ describe("App legal routes", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Explain grade page")).toBeInTheDocument();
+    expect(await screen.findByText("Student grades page")).toBeInTheDocument();
   });
 });

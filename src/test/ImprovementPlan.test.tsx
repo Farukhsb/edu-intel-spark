@@ -519,8 +519,10 @@ describe("ImprovementPlan explanation validation", () => {
 
     renderWithRouter(<ImprovementPlan />);
 
-    expect(await screen.findByText("Current improvement tasks complete")).toBeInTheDocument();
-    expect(screen.getByText(/completed module plans are hidden from the active workspace/i)).toBeInTheDocument();
+    expect(await screen.findByText("You are up to date. New tasks will appear after your next result.")).toBeInTheDocument();
+    expect(screen.queryByText("Modules tracked")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tasks completed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tasks open")).not.toBeInTheDocument();
     expect(screen.queryByText("Completed module plan")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /show completed plan/i })).not.toBeInTheDocument();
     expect(screen.queryByText("No open tasks remain for this module.")).not.toBeInTheDocument();

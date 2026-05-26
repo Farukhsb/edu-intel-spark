@@ -429,7 +429,7 @@ export const AssignmentsScreen = ({
                       {role === "student" && studentState && isStudentGradeVisible(studentState.status) && (
                         <Button size="sm" asChild>
                           <Link
-                            to={`/dashboard/explain-grade?assignment=${encodeURIComponent(assignment.id)}&submission=${encodeURIComponent(studentState.submissionId)}&source=assignments`}
+                            to={`/dashboard?assignment=${encodeURIComponent(assignment.id)}&submission=${encodeURIComponent(studentState.submissionId)}&source=assignment-detail`}
                           >
                             Open Released Result
                           </Link>

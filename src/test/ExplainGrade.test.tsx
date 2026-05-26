@@ -265,17 +265,13 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Grade Breakdown")).toBeInTheDocument();
-    expect(screen.getByText("Current position")).toBeInTheDocument();
-    expect(screen.getByText("Your released feedback is ready")).toBeInTheDocument();
-    expect(screen.getByText("Released Result Summary")).toBeInTheDocument();
     expect(screen.getByText("Critical Essay")).toBeInTheDocument();
     expect(screen.getByText("74%")).toBeInTheDocument();
-    expect(screen.getByText("Strongest Areas")).toBeInTheDocument();
     expect(screen.getByText("Best Improvement Route")).toBeInTheDocument();
-    expect(screen.getByText("Critical Essay \u2014 74% is closest to improving through Structure")).toBeInTheDocument();
     expect(screen.getByText("Use the Structure guidance to work toward 1st")).toBeInTheDocument();
-    expect(screen.getByText("Next Submission Action Plan")).toBeInTheDocument();
-    expect(screen.getByText("Keep This Strength")).toBeInTheDocument();
+    expect(screen.queryByText("Released Result Summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current position")).not.toBeInTheDocument();
+    expect(screen.queryByText("Next Submission Action Plan")).not.toBeInTheDocument();
   });
 
   it("uses synthetic demo data and answers without Supabase session access in demo mode", async () => {
@@ -367,8 +363,7 @@ describe("ExplainGrade", () => {
     renderExplainGrade();
 
     expect(await screen.findByText("Critical Essay")).toBeInTheDocument();
-    expect(screen.getByText("How to Improve")).toBeInTheDocument();
-    expect(screen.getByText("Specific guidance to raise your grade band")).toBeInTheDocument();
+    expect(screen.getByText("Best Improvement Route")).toBeInTheDocument();
     expect(screen.queryByText("Draft Essay")).not.toBeInTheDocument();
   });
 
@@ -579,7 +574,7 @@ describe("ExplainGrade", () => {
 
     renderExplainGrade();
 
-    expect(await screen.findByText("Released Result Summary")).toBeInTheDocument();
+    expect(await screen.findByText("Best Improvement Route")).toBeInTheDocument();
     expect(screen.getAllByText("Released grade").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Sam Student/i)).not.toBeInTheDocument();
   });
@@ -589,10 +584,10 @@ describe("ExplainGrade", () => {
 
     renderExplainGrade();
 
-    expect(await screen.findByText("How to Improve")).toBeInTheDocument();
-    expect(screen.getByText("Specific guidance to raise your grade band")).toBeInTheDocument();
+    expect(await screen.findByText("Best Improvement Route")).toBeInTheDocument();
     expect(screen.getByText(/Seek specific feedback on this area from your lecturer/i)).toBeInTheDocument();
-    expect(screen.getByText("Turn this released result into a short, specific plan for the next piece of work.")).toBeInTheDocument();
+    expect(screen.queryByText("How to Improve")).not.toBeInTheDocument();
+    expect(screen.queryByText("Next Submission Action Plan")).not.toBeInTheDocument();
     expect(screen.queryByText(/provisional/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/approved/i)).not.toBeInTheDocument();
   });

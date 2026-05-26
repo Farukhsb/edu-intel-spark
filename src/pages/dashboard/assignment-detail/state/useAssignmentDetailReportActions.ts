@@ -31,7 +31,7 @@ export const useAssignmentDetailReportActions = ({
 }: UseAssignmentDetailReportActionsArgs): UseAssignmentDetailReportActionsResult => {
   const openReleasedResult = (submission: AssignmentDetailSubmission) => {
     navigate(
-      `/dashboard/explain-grade?assignment=${encodeURIComponent(submission.assignment_id)}&submission=${encodeURIComponent(submission.id)}&source=assignment-detail`,
+      `/dashboard?assignment=${encodeURIComponent(submission.assignment_id)}&submission=${encodeURIComponent(submission.id)}&source=assignment-detail`,
     );
   };
 

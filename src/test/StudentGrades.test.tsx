@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StudentGrades, { calculateGradeStats } from "@/pages/dashboard/StudentGrades";
@@ -55,10 +56,20 @@ vi.mock("lucide-react", () => {
 
   return {
     AlertTriangle: Icon,
+    Brain: Icon,
+    Check: Icon,
+    ChevronDown: Icon,
+    ChevronUp: Icon,
     Download: Icon,
     Loader2: () => <svg data-testid="loading-spinner" />,
+    Send: Icon,
+    Sparkles: Icon,
   };
 });
+
+vi.mock("react-markdown", () => ({
+  default: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+}));
 
 type ProjectionRow = {
   submission_id: string;
@@ -173,9 +184,24 @@ const setupSupabase = ({
       };
     }
 
+    if (table === "academic_access_events") {
+      return {
+        insert: vi.fn().mockResolvedValue({
+          error: null,
+        }),
+      };
+    }
+
     throw new Error(`Unexpected table: ${table}`);
   });
 };
+
+const renderStudentGrades = (initialEntry = "/dashboard") =>
+  render(
+    <MemoryRouter initialEntries={[initialEntry]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <StudentGrades />
+    </MemoryRouter>,
+  );
 
 describe("StudentGrades", () => {
   beforeEach(() => {
@@ -196,27 +222,23 @@ describe("StudentGrades", () => {
   it("shows assignment title when student metadata is available", async () => {
     setupSupabase();
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
     expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Your results, Ada")).toBeInTheDocument();
-    expect(screen.getByText("Current position")).toBeInTheDocument();
-    expect(screen.getByText("You have a released result ready")).toBeInTheDocument();
-    expect(screen.getByText("Algorithms Essay has feedback ready to review")).toBeInTheDocument();
-    expect(screen.getByText("Open the released result and review the criterion feedback")).toBeInTheDocument();
-    expect(screen.getByText("76/100")).toBeInTheDocument();
+    expect(screen.getByText("Released results")).toBeInTheDocument();
+    expect(screen.getByText("Grade Breakdown")).toBeInTheDocument();
+    expect(screen.getByText("76%")).toBeInTheDocument();
     expect(screen.getByText("Released")).toBeInTheDocument();
-    expect(screen.getByText("You scored 76 out of 100.")).toBeInTheDocument();
-    expect(screen.getByText("That is 36 marks above the pass mark of 40.")).toBeInTheDocument();
-    expect(screen.getByText("Good work on this one.")).toBeInTheDocument();
-    expect(screen.getByText("Rubric Breakdown")).toBeInTheDocument();
     expect(screen.getByText("Clear argument with a mostly convincing line of reasoning.")).toBeInTheDocument();
     expect(screen.getByText("Evidence is relevant, though some examples need tighter analysis.")).toBeInTheDocument();
     expect(screen.getByText("Strongest Areas")).toBeInTheDocument();
-    expect(screen.getByText("Areas To Work On")).toBeInTheDocument();
+    expect(screen.getByText("Focus Areas")).toBeInTheDocument();
+    expect(screen.getByText("Best Improvement Route")).toBeInTheDocument();
+    expect(screen.getByText("Ask About Your Grade")).toBeInTheDocument();
     expect(screen.getByText("Lecturer Feedback")).toBeInTheDocument();
     expect(mocks.supabase.rpc).toHaveBeenCalledWith("get_student_submission_grade_projection");
   });
@@ -231,14 +253,14 @@ describe("StudentGrades", () => {
       ],
     });
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getByText("Assignment title unavailable")).toBeInTheDocument();
+      expect(screen.getByText("essay.pdf")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("76/100")).toBeInTheDocument();
-    expect(mocks.logger.warn).not.toHaveBeenCalled();
+    expect(screen.getByText("76%")).toBeInTheDocument();
+    expect(screen.queryByText("Assignment title unavailable")).not.toBeInTheDocument();
   });
 
   it("falls back to direct student queries when the projection RPC is unavailable", async () => {
@@ -263,7 +285,7 @@ describe("StudentGrades", () => {
           ai_score: null,
           final_feedback: "Released feedback",
           ai_feedback: null,
-          ai_breakdown: null,
+          ai_breakdown: defaultProjection[0].ai_breakdown,
         },
       ],
       assignments: [
@@ -276,13 +298,14 @@ describe("StudentGrades", () => {
       ],
     });
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getByText("Algorithms Essay")).toBeInTheDocument();
+      expect(screen.getByText("Grade Breakdown")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("76/100")).toBeInTheDocument();
+    expect(screen.getByText("76%")).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveTextContent("Algorithms Essay");
     expect(mocks.supabase.from).toHaveBeenCalledWith("submissions");
     expect(mocks.supabase.from).toHaveBeenCalledWith("grades");
     expect(mocks.supabase.from).toHaveBeenCalledWith("assignments");
@@ -302,15 +325,15 @@ describe("StudentGrades", () => {
       ],
     });
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getByText("Statistics Report")).toBeInTheDocument();
+      expect(screen.getByText("34%")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("You scored 34 out of 100.")).toBeInTheDocument();
-    expect(screen.getByText("That is 6 marks below the pass mark of 40.")).toBeInTheDocument();
-    expect(screen.getByText("Here is what to focus on next.")).toBeInTheDocument();
+    expect(screen.getByText("34%")).toBeInTheDocument();
+    expect(screen.getByText("Best Improvement Route")).toBeInTheDocument();
+    expect(screen.getByText("Interpretation needs to be clearer.")).toBeInTheDocument();
   });
 
   it("uses shared synthetic assignment-set data in demo mode", async () => {
@@ -318,7 +341,7 @@ describe("StudentGrades", () => {
     mocks.authState.user = null;
     mocks.authState.profile = { full_name: "Demo Student" };
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
       expect(
@@ -328,9 +351,10 @@ describe("StudentGrades", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("84/100")).toBeInTheDocument();
-    expect(screen.getByText("Network Security Incident Reflection")).toBeInTheDocument();
-    expect(screen.getByText("submitted")).toBeInTheDocument();
+    expect(screen.getByText("84%")).toBeInTheDocument();
+    expect(screen.getByText("Released results")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText(/1 submission\(s\) are still being reviewed/i)).toBeInTheDocument();
     expect(mocks.supabase.rpc).not.toHaveBeenCalled();
   });
 
@@ -338,7 +362,7 @@ describe("StudentGrades", () => {
     setupSupabase();
     mocks.supabase.rpc.mockRejectedValueOnce(new Error("offline"));
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
       expect(screen.getByText("Results unavailable")).toBeInTheDocument();
@@ -366,17 +390,12 @@ describe("StudentGrades", () => {
       ],
     });
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getByText("Pending Review Essay")).toBeInTheDocument();
+      expect(screen.getByText("Your results are on the way")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Current position")).toBeInTheDocument();
-    expect(screen.getByText("Your result is still being prepared")).toBeInTheDocument();
-    expect(screen.getByText("moderation in progress is still blocking release")).toBeInTheDocument();
-    expect(screen.getByText("Wait for marking and moderation to complete before checking again")).toBeInTheDocument();
-    expect(screen.getByText("moderation in progress")).toBeInTheDocument();
     expect(screen.getByText("Your results are on the way")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -406,15 +425,14 @@ describe("StudentGrades", () => {
       ],
     });
 
-    const { container } = render(<StudentGrades />);
+    const { container } = renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getByText("0%")).toBeInTheDocument();
+      expect(screen.getByText("12%")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("12/100")).toBeInTheDocument();
-    expect(screen.getByText("You scored 12 out of 100.")).toBeInTheDocument();
-    expect(screen.getByText("That is 28 marks below the pass mark of 40.")).toBeInTheDocument();
+    expect(screen.getByText("12%")).toBeInTheDocument();
+    expect(screen.getByText("Argument (0%)")).toBeInTheDocument();
     expect(screen.getByText("12/100 (0%)")).toBeInTheDocument();
     expect(container.textContent).not.toContain("NaN");
     expect(container.textContent).not.toContain("Infinity");
@@ -438,10 +456,10 @@ describe("StudentGrades", () => {
       ],
     });
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
+      expect(screen.getByText("40/30 (100%)")).toBeInTheDocument();
     });
   });
 
@@ -463,10 +481,10 @@ describe("StudentGrades", () => {
       ],
     });
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getAllByText("0%").length).toBeGreaterThan(0);
+      expect(screen.getByText("-2/30 (0%)")).toBeInTheDocument();
     });
   });
 
@@ -484,7 +502,7 @@ describe("StudentGrades", () => {
       error: { message: "storage offline" },
     });
 
-    render(<StudentGrades />);
+    renderStudentGrades();
 
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
 
@@ -496,9 +514,13 @@ describe("StudentGrades", () => {
 
     await waitFor(() => {
       expect(mocks.toast.error).toHaveBeenCalledWith("Download unavailable", {
-        description: "Your submission could not be opened right now. Please try again later.",
+        description: "Your submission file could not be opened right now. Please try again later.",
       });
     });
+
+    expect(
+      screen.getByText("Your submission file could not be opened right now. Please try again later."),
+    ).toBeInTheDocument();
 
     expect(mocks.logger.error).toHaveBeenCalledWith(
       "Failed to create student submission download URL",
