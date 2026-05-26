@@ -121,7 +121,6 @@ export const useAssignmentDetailListState = ({
   }, [queueFocus, submissions]);
 
   const notificationFocusedSubmissionIds = assignmentNotificationFocusState?.visibleSubmissionIds;
-  const shouldApplyHiddenNotificationFocus = !manualStatusFilterOverride;
 
   const filteredSubmissions = useMemo(
     () =>
@@ -165,11 +164,6 @@ export const useAssignmentDetailListState = ({
     setSelected(new Set(assignmentNotificationFocusState.selectedSubmissionIds));
   }, [assignmentNotificationFocusState, isLecturer]);
 
-  const handleSetStatusFilter = (value: "all" | SubmissionStatus) => {
-    setManualStatusFilterOverride(true);
-    setStatusFilter(value);
-  };
-
   const selectedWorkflowState = useMemo(() => {
     const selectedStatuses = submissions
       .filter((submission) => selected.has(submission.id))
@@ -211,7 +205,7 @@ export const useAssignmentDetailListState = ({
 
   const handleSetStatusFilter: Dispatch<SetStateAction<"all" | SubmissionStatus>> = (value) => {
     setManualStatusFilterOverride(true);
-    setStatusFilter(value);
+    setStatusFilter((current) => (typeof value === "function" ? value(current) : value));
   };
 
   return {
