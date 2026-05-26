@@ -241,9 +241,11 @@ const SubmissionCardItem = ({
                   <p className="text-xs font-medium text-amber-950">{gradingRecoveryIssue.headline}</p>
                 </div>
                 <p className="mt-2 text-xs text-amber-900">{gradingRecoveryIssue.detail}</p>
-                <p className="mt-2 text-xs text-amber-800">
-                  Try re-uploading as DOCX or a text-based PDF.
-                </p>
+                {(gradingRecoveryIssue.type === "missing_file" || gradingRecoveryIssue.type === "extraction_failure") && (
+                  <p className="mt-2 text-xs text-amber-800">
+                    Try re-uploading as DOCX or a text-based PDF.
+                  </p>
+                )}
               </div>
             )}
 
