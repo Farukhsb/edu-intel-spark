@@ -143,7 +143,6 @@ export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {
 
   if (role === "student") {
     preloadRoute("/dashboard/explain-grade");
-    preloadRoute("/dashboard/improvements");
     preloadRoute("/dashboard/assignments");
   }
 };

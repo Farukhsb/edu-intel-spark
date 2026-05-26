@@ -1,6 +1,7 @@
 import { safeParseGradeBreakdown } from "@/lib/schemas/aiResponses";
 import type { GradeBreakdown as SharedGradeBreakdown } from "@/types";
 import type { AcademicGradeBreakdownItem } from "@/types/academic";
+import { clampPercentage } from "@/lib/gradePresentation";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
   DEMO_STUDENT_ASSIGNMENT_GRADES,
@@ -169,7 +170,7 @@ export const buildSubmissionOptions = ({
     const components = breakdown.map((item) => ({
       name: item.criterion || item.name || "Unknown",
       weight: Math.round((getBreakdownMaxScore(item) / totalMax) * 100),
-      score: Math.round(((item.score ?? 0) / Math.max(getBreakdownMaxScore(item), 1)) * 100),
+      score: clampPercentage(item.score ?? 0, getBreakdownMaxScore(item)),
       maxScore: 100,
     }));
 
@@ -243,7 +244,7 @@ export const buildSubmissionOptionsFromProjection = (projection: StudentGradePro
     const components = breakdown.map((item) => ({
       name: item.criterion || item.name || "Unknown",
       weight: Math.round((getBreakdownMaxScore(item) / totalMax) * 100),
-      score: Math.round(((item.score ?? 0) / Math.max(getBreakdownMaxScore(item), 1)) * 100),
+      score: clampPercentage(item.score ?? 0, getBreakdownMaxScore(item)),
       maxScore: 100,
     }));
 
@@ -307,7 +308,7 @@ export const DEMO_SUBMISSIONS: SubmissionOption[] = Object.values(DEMO_STUDENT_A
     const components = breakdown.data.map((item) => ({
       name: item.criterion || item.name || "Unknown",
       weight: Math.round((getBreakdownMaxScore(item) / totalMax) * 100),
-      score: Math.round(((item.score ?? 0) / Math.max(getBreakdownMaxScore(item), 1)) * 100),
+      score: clampPercentage(item.score ?? 0, getBreakdownMaxScore(item)),
       maxScore: 100,
     }));
 

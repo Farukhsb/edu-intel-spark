@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Brain, ChevronDown, ChevronUp, Loader2, Send, Sparkles } from "lucide-react";
+import { Brain, Loader2, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 
@@ -14,7 +14,6 @@ import {
   DashboardEmptyState,
   DashboardErrorState,
   DashboardLoadingState,
-  DashboardPageIntro,
 } from "@/components/dashboard/PageStates";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,7 +45,6 @@ const ExplainGrade = () => {
     userId: user?.id,
   });
   const [searchParams, setSearchParams] = useSearchParams();
-  const [expandedArea, setExpandedArea] = useState<number | null>(0);
   const [messages, setMessages] = useState<ChatMsg[]>([INITIAL_ASSISTANT_MESSAGE]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -84,7 +82,6 @@ const ExplainGrade = () => {
     .sort((left, right) => right.score - left.score)
     .slice(0, 2);
   const primaryStrength = strongestComponents[0];
-  const priorityImprovementAreas = gradeBreakdown?.improvementAreas.slice(0, 2) ?? [];
   const readiness = getExplainGradeReadiness({
     assignmentLabel: selected?.label ?? null,
     band: gradeBreakdown?.band ?? "current",
@@ -274,12 +271,6 @@ const ExplainGrade = () => {
     <div className="space-y-6 animate-fade-in">
       {isDemo && <DashboardDemoBanner label="Viewing demo Explain Grade data" />}
 
-      <DashboardPageIntro
-        eyebrow="Grade explanation"
-        title="Explain Grade"
-        description="Review the released breakdown, see which criteria pulled the mark up or down, and ask targeted follow-up questions about how to improve next time."
-      />
-
       {submissions.length > 1 && (
         <Card>
           <CardContent className="flex flex-col gap-2 p-4">
@@ -333,76 +324,6 @@ const ExplainGrade = () => {
         </Card>
       )}
 
-      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
-        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
-          <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
-            <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Based on the released breakdown, your current band, and the clearest route to improve next time.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What matters most here</p>
-            <p className="mt-2 text-sm font-semibold">{readiness.likelyChallenge}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              This is the part of the released result most worth understanding before your next submission.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-background/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
-            <p className="mt-2 text-sm font-semibold">{readiness.bestNextAction}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Use this to decide what to carry into the next piece of work before going deeper into the detail.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Released Result Summary</CardTitle>
-          </div>
-          <CardDescription>{selected?.secondaryLabel || "Released grade context for this submission."}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-4xl font-bold font-display">{gradeBreakdown.totalGrade}%</span>
-            <Badge>{gradeBreakdown.band}</Badge>
-            <Badge variant="outline">Released grade</Badge>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl border bg-muted/20 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Strongest Areas</p>
-              <div className="mt-2 space-y-1">
-                {strongestComponents.map((component) => (
-                  <p key={component.name} className="text-sm">
-                    {component.name} <span className="text-muted-foreground">({component.score}%)</span>
-                  </p>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-xl border bg-muted/20 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Best Improvement Route</p>
-              {gradeBreakdown.improvementAreas[0] ? (
-                <div className="mt-2 space-y-1">
-                  <p className="text-sm font-medium">{gradeBreakdown.improvementAreas[0].area}</p>
-                  <p className="text-xs text-muted-foreground">
-                    +{gradeBreakdown.improvementAreas[0].pointsNeeded} points to move toward {gradeBreakdown.improvementAreas[0].nextBand}
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  No major weak area stands out from this released breakdown.
-                </p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -439,86 +360,43 @@ const ExplainGrade = () => {
         </CardContent>
       </Card>
 
-      {gradeBreakdown.improvementAreas.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">How to Improve</CardTitle>
-            <CardDescription>Specific guidance to raise your grade band</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {gradeBreakdown.improvementAreas.map((area, index) => (
-              <div key={index} className="rounded-lg border p-3">
-                <button
-                  className="flex w-full items-center justify-between text-left"
-                  onClick={() => setExpandedArea(expandedArea === index ? null : index)}
-                >
-                  <div>
-                    <span className="text-sm font-medium">{area.area}</span>
-                    <p className="text-xs text-muted-foreground">
-                      +{area.pointsNeeded} points to reach {area.nextBand}
-                    </p>
-                  </div>
-                  {expandedArea === index ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </button>
-                {expandedArea === index ? (
-                  <div className="mt-3 space-y-2 border-t pt-3">
-                    {area.tips.map((tip, tipIndex) => (
-                      <div key={tipIndex} className="flex items-start gap-2 text-sm">
-                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                        {tip}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Next Submission Action Plan</CardTitle>
-          <CardDescription>Turn this released result into a short, specific plan for the next piece of work.</CardDescription>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">Best Improvement Route</CardTitle>
+          </div>
+          <CardDescription>{selected?.secondaryLabel || "Use the released result to decide the next improvement move."}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="rounded-xl border bg-muted/20 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Keep This Strength</p>
-            <p className="mt-2 text-sm font-medium">
-              {primaryStrength
-                ? `${primaryStrength.name} is already one of your strongest criteria. Keep its current standard while you improve weaker areas.`
-                : "Carry your strongest habits forward into the next submission."}
-            </p>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-4xl font-bold font-display">{gradeBreakdown.totalGrade}%</span>
+            <Badge>{gradeBreakdown.band}</Badge>
+            <Badge variant="outline">Released grade</Badge>
           </div>
 
-          {priorityImprovementAreas.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              {priorityImprovementAreas.map((area) => (
-                <div key={area.area} className="rounded-xl border p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Priority Focus</p>
-                  <p className="mt-2 text-sm font-semibold">{area.area}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Aim for roughly +{area.pointsNeeded} points to move toward {area.nextBand}.
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {area.tips.slice(0, 2).map((tip) => (
-                      <div key={tip} className="flex items-start gap-2 text-sm">
-                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                        {tip}
-                      </div>
-                    ))}
+          {gradeBreakdown.improvementAreas[0] ? (
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <p className="text-sm font-semibold">{gradeBreakdown.improvementAreas[0].area}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                +{gradeBreakdown.improvementAreas[0].pointsNeeded} points to move toward {gradeBreakdown.improvementAreas[0].nextBand}
+              </p>
+              <p className="mt-3 text-sm">{readiness.bestNextAction}</p>
+              <div className="mt-3 space-y-2">
+                {gradeBreakdown.improvementAreas[0].tips.slice(0, 3).map((tip) => (
+                  <div key={tip} className="flex items-start gap-2 text-sm">
+                    <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    {tip}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
-            <div className="rounded-xl border p-4">
-              <p className="text-sm text-muted-foreground">
-                This released breakdown does not show a major weak criterion, so focus on consistency across the whole rubric.
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <p className="text-sm font-medium">
+                {primaryStrength
+                  ? `${primaryStrength.name} is currently your clearest strength. Keep it steady while you improve consistency across the rest of the rubric.`
+                  : "No single weak criterion stands out, so focus on improving consistency across the whole rubric."}
               </p>
             </div>
           )}

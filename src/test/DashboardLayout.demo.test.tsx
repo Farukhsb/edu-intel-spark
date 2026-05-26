@@ -161,7 +161,7 @@ describe("DashboardLayout demo mode", () => {
     const { DashboardLayout } = await import("@/components/DashboardLayout");
 
     render(
-      <MemoryRouter initialEntries={["/dashboard/explain-grade"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <DashboardLayout>
           <div>Student child</div>
         </DashboardLayout>
@@ -169,21 +169,16 @@ describe("DashboardLayout demo mode", () => {
     );
 
     expect(screen.getAllByText("Student workspace").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Learning").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Support & Improvement").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("My Work").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Assignments").length).toBeGreaterThan(0);
     expect(screen.getAllByText("My Grades").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Explain My Grade").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Improvement Plan").length).toBeGreaterThan(0);
-    expect(
-      screen.getByText("Explain My Grade sits in feedback understanding and next-step support."),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Explain My Grade")).not.toBeInTheDocument();
     clickNotificationsButton();
 
     expect(await screen.findByText("Released result")).toBeInTheDocument();
-    expect(screen.getByText("Opens your released result and grade explanation.")).toBeInTheDocument();
+    expect(screen.getAllByText("Opens your released result and grade explanation.").length).toBeGreaterThan(0);
     expect(screen.getByText("Support")).toBeInTheDocument();
-    expect(screen.getByText("Opens your improvement plan.")).toBeInTheDocument();
+    expect(screen.getAllByText("Opens your released result and grade explanation.").length).toBeGreaterThan(1);
     expect(mocks.communications.loadVisibleCommunicationMessages).not.toHaveBeenCalled();
   });
 
@@ -276,7 +271,7 @@ describe("DashboardLayout demo mode", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Study plan reminder/i }));
 
     expect(mocks.navigate).toHaveBeenCalledWith(
-      "/dashboard/explain-grade?assignment=demo-assignment-1&source=support-notification",
+      "/dashboard?assignment=demo-assignment-1&source=support-notification",
       expect.objectContaining({
         state: expect.objectContaining({
           redirectedFromSupportNotification: expect.objectContaining({

@@ -68,14 +68,14 @@ describe("student support workflow routing", () => {
     });
   });
 
-  it("keeps the student in improvement-plan flow when no newer academic notice exists", () => {
+  it("falls back to released-result guidance when no newer academic notice exists", () => {
     const result = getStudentSupportNotificationDestination({
       notification: baseSupportNotice,
       notifications: [baseSupportNotice],
     });
 
     expect(result).toEqual({
-      kind: "improvement-plan",
+      kind: "released-result",
       targetNotification: null,
     });
   });

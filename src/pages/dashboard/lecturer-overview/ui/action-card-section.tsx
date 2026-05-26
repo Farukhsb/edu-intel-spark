@@ -113,8 +113,7 @@ export const LecturerOverviewActionCardSection = ({
                 </p>
                 {stats.pendingCount > 0 ? (
                   <>
-                    <p className="text-sm font-semibold">{queueFocus.label}</p>
-                    <p className="text-xs text-muted-foreground">{queueFocus.detail}</p>
+                    <p className="text-sm font-semibold">{queueFocus.detail}</p>
                   </>
                 ) : (
                   <p className="text-sm font-semibold">{readiness.bestNextAction}</p>

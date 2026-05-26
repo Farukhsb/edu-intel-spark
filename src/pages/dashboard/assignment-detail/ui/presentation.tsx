@@ -2,6 +2,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { clampPercentage } from "@/lib/gradePresentation";
 import { safeFormatDate } from "@/lib/date";
 import { formatSubmissionStatus } from "@/lib/moderation";
 import {
@@ -232,17 +233,33 @@ export const AssignmentRubricCard = ({
       <CardTitle className="text-base">Rubric</CardTitle>
     </CardHeader>
     <CardContent className="space-y-3">
-      {rubric.map((criterion, index) => (
-        <div key={index} className="rounded-xl border p-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium">{criterion.criterion}</span>
-            <Badge variant="outline">{criterion.weight} pts</Badge>
-          </div>
-          {criterion.description && (
-            <p className="mt-2 text-xs text-muted-foreground">{criterion.description}</p>
-          )}
-        </div>
-      ))}
+      {(() => {
+        const totalWeight = rubric.reduce((sum, criterion) => sum + Math.max(criterion.weight || 0, 0), 0);
+
+        return rubric.map((criterion, index) => {
+          const weightPercent =
+            totalWeight > 0 ? clampPercentage(criterion.weight, totalWeight) : 0;
+
+          return (
+            <div key={index} className="rounded-xl border p-3">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium">{criterion.criterion}</span>
+                <span className="font-medium">{weightPercent}% of total mark</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${weightPercent}%` }} />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>{criterion.weight} pts</span>
+                <span>Weighting</span>
+              </div>
+              {criterion.description && (
+                <p className="mt-2 text-xs text-muted-foreground">{criterion.description}</p>
+              )}
+            </div>
+          );
+        });
+      })()}
     </CardContent>
   </Card>
 );

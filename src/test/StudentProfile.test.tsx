@@ -270,8 +270,20 @@ const setupSupabase = ({
 
       if (table === "profiles") {
         return {
-          eq: vi.fn(() => ({
-            maybeSingle: vi.fn(() => Promise.resolve({ data: { id: studentRecordId }, error: null })),
+          eq: vi.fn((column: string, value: string) => ({
+            maybeSingle: vi.fn(() =>
+              Promise.resolve({
+                data:
+                  column === "id"
+                    ? value === studentRecordId
+                      ? { id: studentRecordId, email: "sam@example.edu" }
+                      : null
+                    : value === "sam@example.edu"
+                      ? { id: studentRecordId }
+                      : null,
+                error: null,
+              }),
+            ),
           })),
         };
       }
@@ -450,6 +462,28 @@ describe("StudentProfile", () => {
 
     expect(await screen.findByText("Student not found for this lecturer view.")).toBeInTheDocument();
     expect(screen.queryByText("Sam Student")).not.toBeInTheDocument();
+  });
+
+  it("resolves a student profile route by profile id when submissions are linked by email", async () => {
+    mocks.params.studentId = studentRecordId;
+    setupSupabase({
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_id: null,
+          student_name: "Sam Student",
+          student_email: "sam@example.edu",
+          status: "released",
+          submitted_at: "2026-04-10T10:00:00.000Z",
+        },
+      ],
+    });
+
+    renderStudentProfile();
+
+    expect(await screen.findByText("Sam Student")).toBeInTheDocument();
+    expect(screen.getByText("Support Priorities")).toBeInTheDocument();
   });
 
   it("renders main student details when mocked profile data is available", async () => {

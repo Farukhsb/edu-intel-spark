@@ -1,11 +1,13 @@
 import type { LecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
 
 import { LecturerOverviewActionCardSection } from "./action-card-section";
+import { LecturerOverviewAtRiskSummarySection } from "./at-risk-summary-section";
 import { LecturerOverviewHeroSection } from "./hero-section";
 import { LecturerOverviewRecentSubmissionsSection } from "./recent-submissions-section";
 import { LecturerOverviewPrimaryStatsSection, LecturerOverviewSecondaryStatsSection } from "./stats-sections";
 import { LecturerOverviewWorkflowPipelineSection } from "./workflow-pipeline-section";
 import type {
+  LecturerOverviewAtRiskSummary,
   LecturerOverviewPipelineStage,
   LecturerOverviewQueueFocus,
   LecturerOverviewRecentSubmission,
@@ -19,6 +21,7 @@ export const LecturerOverviewScreen = ({
   recent,
   pipeline,
   readiness,
+  topAtRiskStudents,
   heroSummary,
   primaryWorkflowTarget,
   queueFocus,
@@ -28,6 +31,7 @@ export const LecturerOverviewScreen = ({
   recent: LecturerOverviewRecentSubmission[];
   pipeline: LecturerOverviewPipelineStage[];
   readiness: LecturerOverviewReadiness;
+  topAtRiskStudents: LecturerOverviewAtRiskSummary[];
   heroSummary: string;
   primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
   queueFocus: LecturerOverviewQueueFocus;
@@ -50,6 +54,8 @@ export const LecturerOverviewScreen = ({
         <LecturerOverviewRecentSubmissionsSection recent={recent} />
         <LecturerOverviewWorkflowPipelineSection pipeline={pipeline} />
       </div>
+
+      <LecturerOverviewAtRiskSummarySection students={topAtRiskStudents} />
 
       <LecturerOverviewSecondaryStatsSection stats={stats} />
     </div>

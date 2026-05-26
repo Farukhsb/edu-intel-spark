@@ -169,7 +169,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
             params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
           }
           params.set("source", "support-notification");
-          navigate(`/dashboard/explain-grade${params.toString() ? `?${params.toString()}` : ""}`, {
+          navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
             state: {
               notification: supportDestination.targetNotification ?? notification,
               redirectedFromSupportNotification: notification,
@@ -188,8 +188,16 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           return;
         }
 
-        navigate(`/dashboard/improvements?notice=${encodeURIComponent(notification.id)}`, {
-          state: { notification },
+        const params = new URLSearchParams();
+        if (supportDestination.targetNotification?.relatedAssignmentId) {
+          params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
+        }
+        params.set("source", "support-notification");
+        navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
+          state: {
+            notification: supportDestination.targetNotification ?? notification,
+            redirectedFromSupportNotification: notification,
+          },
         });
         return;
       }
@@ -203,7 +211,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           params.set("assignment", notification.relatedAssignmentId);
         }
         params.set("source", "notification");
-        navigate(`/dashboard/explain-grade${params.toString() ? `?${params.toString()}` : ""}`);
+        navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`);
         return;
       }
 
