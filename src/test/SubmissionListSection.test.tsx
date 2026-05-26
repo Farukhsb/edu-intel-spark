@@ -378,4 +378,85 @@ describe("SubmissionListSection", () => {
     expect(screen.getByText("Released results queue")).toBeInTheDocument();
     expect(screen.getByText("1 submission visible in the current released-results queue.")).toBeInTheDocument();
   });
+
+  it("keeps ai_grading submissions visible with a loading state when they remain pinned in the current view", () => {
+    render(
+      <SubmissionListSection
+        submissions={[
+          {
+            id: "submission-5",
+            assignment_id: "assignment-1",
+            student_name: "Lina Omar",
+            student_email: "lina@example.com",
+            file_name: "draft.pdf",
+            file_type: "application/pdf",
+            file_url: "https://example.com/draft.pdf",
+            status: "ai_grading",
+            submitted_at: "2026-05-10T10:40:00.000Z",
+            student_id: "student-5",
+          },
+        ]}
+        filteredSubmissions={[
+          {
+            id: "submission-5",
+            assignment_id: "assignment-1",
+            student_name: "Lina Omar",
+            student_email: "lina@example.com",
+            file_name: "draft.pdf",
+            file_type: "application/pdf",
+            file_url: "https://example.com/draft.pdf",
+            status: "ai_grading",
+            submitted_at: "2026-05-10T10:40:00.000Z",
+            student_id: "student-5",
+          },
+        ]}
+        isLecturer
+        selected={new Set<string>(["submission-5"])}
+        toggleAll={vi.fn()}
+        toggleSelect={vi.fn()}
+        grades={{}}
+        moderationCases={{}}
+        gradingRecoveryIssues={{}}
+        assignment={{
+          id: "assignment-1",
+          title: "Essay",
+          description: null,
+          module_code: "CS401",
+          max_score: 100,
+          due_date: null,
+          status: "published",
+          lecturer_id: "lecturer-1",
+          rubric: [],
+          created_at: "2026-05-01T00:00:00.000Z",
+          updated_at: "2026-05-01T00:00:00.000Z",
+        }}
+        isDemo={false}
+        openSubmissionFile={vi.fn().mockResolvedValue(undefined)}
+        openModeration={vi.fn()}
+        openReview={vi.fn()}
+        startManualReview={vi.fn().mockResolvedValue(undefined)}
+        approveSubmission={vi.fn().mockResolvedValue(false)}
+        releaseSubmission={vi.fn().mockResolvedValue(undefined)}
+        loadSubmissions={vi.fn().mockResolvedValue(undefined)}
+        queueFeedbackSummary={vi.fn().mockResolvedValue(undefined)}
+        queueGradeReleaseNotification={vi.fn().mockResolvedValue(undefined)}
+        openReleasedResult={vi.fn()}
+        moderationReleaseHandoffState={{
+          kind: "empty",
+          statusFilter: "approved",
+          selectedSubmissionIds: [],
+          title: "Opened from moderation release handoff",
+          description: "No approved or released submissions currently match this older moderation handoff.",
+        }}
+        activeQueueFocus={null}
+        focusQueue={vi.fn()}
+        clearQueueFocus={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("submission-status-submission-5")).toHaveTextContent("AI Grading");
+    expect(
+      screen.getByText("AI grading in progress. Keep this page open while the workflow runs."),
+    ).toBeInTheDocument();
+  });
 });

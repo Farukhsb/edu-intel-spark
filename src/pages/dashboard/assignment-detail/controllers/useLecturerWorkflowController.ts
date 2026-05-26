@@ -27,6 +27,7 @@ interface UseLecturerWorkflowControllerArgs {
   role: string | null;
   selected: Set<string>;
   setModerationCases: Dispatch<SetStateAction<Record<string, ModerationCase>>>;
+  setPinnedVisibleSubmissionIds: Dispatch<SetStateAction<string[]>>;
   setPlagiarismFlags: Dispatch<SetStateAction<PlagiarismFlag[]>>;
   setPlagiarismSummary: Dispatch<
     SetStateAction<string>
@@ -46,6 +47,7 @@ export const useLecturerWorkflowController = ({
   role,
   selected,
   setModerationCases,
+  setPinnedVisibleSubmissionIds,
   setPlagiarismFlags,
   setPlagiarismSummary,
   setSelected,
@@ -59,6 +61,7 @@ export const useLecturerWorkflowController = ({
     reloadSubmissions,
     role,
     selected,
+    setPinnedVisibleSubmissionIds,
     setPlagiarismFlags,
     setPlagiarismSummary,
     setSelected,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import {
   getLecturerSelectionGuidance,
@@ -20,6 +20,7 @@ import type {
 } from "@/pages/dashboard/assignment-detail/types";
 
 interface UseAssignmentDetailListStateArgs {
+  pinnedVisibleSubmissionIds?: string[];
   role: string | null;
   search: string;
   submissions: AssignmentDetailSubmission[];
@@ -53,6 +54,7 @@ interface UseAssignmentDetailListStateResult {
 }
 
 export const useAssignmentDetailListState = ({
+  pinnedVisibleSubmissionIds = [],
   role,
   search,
   submissions,
@@ -61,6 +63,7 @@ export const useAssignmentDetailListState = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | SubmissionStatus>("all");
   const [manualStatusFilterOverride, setManualStatusFilterOverride] = useState(false);
+  const autoSelectionAppliedKeyRef = useRef<string | null>(null);
   const isLecturer = role === "lecturer";
 
   const {
@@ -121,48 +124,73 @@ export const useAssignmentDetailListState = ({
   }, [queueFocus, submissions]);
 
   const notificationFocusedSubmissionIds = assignmentNotificationFocusState?.visibleSubmissionIds;
+  const pinnedVisibleIdSet = useMemo(() => new Set(pinnedVisibleSubmissionIds), [pinnedVisibleSubmissionIds]);
 
   const filteredSubmissions = useMemo(
     () =>
       submissions.filter((submission) => {
+        const isPinnedVisible = pinnedVisibleIdSet.has(submission.id);
         const matchesNotificationFocus =
+          isPinnedVisible ||
           manualStatusFilterOverride ||
           !notificationFocusedSubmissionIds ||
           notificationFocusedSubmissionIds.includes(submission.id);
         const matchesSearch =
+          isPinnedVisible ||
           !searchQuery ||
           [submission.student_name, submission.student_email, submission.file_name]
             .filter(Boolean)
             .some((value) => value?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-        const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
+        const matchesStatus = isPinnedVisible || statusFilter === "all" || submission.status === statusFilter;
         return matchesNotificationFocus && matchesSearch && matchesStatus;
       }),
-    [manualStatusFilterOverride, notificationFocusedSubmissionIds, searchQuery, statusFilter, submissions],
+    [
+      manualStatusFilterOverride,
+      notificationFocusedSubmissionIds,
+      pinnedVisibleIdSet,
+      searchQuery,
+      statusFilter,
+      submissions,
+    ],
   );
 
+  const moderationReleaseFocusKey = moderationReleaseFocus
+    ? `moderation-release:${moderationReleaseHandoffState.kind}`
+    : null;
+  const queueFocusKey = queueFocus ? `queue:${queueFocus}` : null;
+  const assignmentNotificationFocusKey = assignmentNotificationFocus
+    ? `notification:${assignmentNotificationFocus}`
+    : null;
+
   useEffect(() => {
-    if (!moderationReleaseFocus || !isLecturer) return;
+    if (!moderationReleaseFocus || !isLecturer || !moderationReleaseFocusKey) return;
+    if (autoSelectionAppliedKeyRef.current === moderationReleaseFocusKey) return;
 
     setManualStatusFilterOverride(false);
     setStatusFilter(moderationReleaseHandoffState.statusFilter);
     setSelected(new Set(moderationReleaseHandoffState.selectedSubmissionIds));
-  }, [isLecturer, moderationReleaseFocus, moderationReleaseHandoffState]);
+    autoSelectionAppliedKeyRef.current = moderationReleaseFocusKey;
+  }, [isLecturer, moderationReleaseFocus, moderationReleaseFocusKey, moderationReleaseHandoffState]);
 
   useEffect(() => {
-    if (!queueFocusState || !isLecturer) return;
+    if (!queueFocusState || !isLecturer || !queueFocusKey) return;
+    if (autoSelectionAppliedKeyRef.current === queueFocusKey) return;
 
     setManualStatusFilterOverride(false);
     setStatusFilter(queueFocusState.statusFilter);
     setSelected(new Set(queueFocusState.selectedSubmissionIds));
-  }, [isLecturer, queueFocusState]);
+    autoSelectionAppliedKeyRef.current = queueFocusKey;
+  }, [isLecturer, queueFocusKey, queueFocusState]);
 
   useEffect(() => {
-    if (!assignmentNotificationFocusState || !isLecturer) return;
+    if (!assignmentNotificationFocusState || !isLecturer || !assignmentNotificationFocusKey) return;
+    if (autoSelectionAppliedKeyRef.current === assignmentNotificationFocusKey) return;
 
     setManualStatusFilterOverride(false);
     setStatusFilter(assignmentNotificationFocusState.statusFilter);
     setSelected(new Set(assignmentNotificationFocusState.selectedSubmissionIds));
-  }, [assignmentNotificationFocusState, isLecturer]);
+    autoSelectionAppliedKeyRef.current = assignmentNotificationFocusKey;
+  }, [assignmentNotificationFocusKey, assignmentNotificationFocusState, isLecturer]);
 
   const selectedWorkflowState = useMemo(() => {
     const selectedStatuses = submissions

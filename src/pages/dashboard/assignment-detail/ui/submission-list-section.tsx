@@ -1,4 +1,4 @@
-import { CheckCheck, Clock, Edit, FileText, Send, Shield, Sparkles, type LucideIcon } from "lucide-react";
+import { CheckCheck, Clock, Edit, FileText, Loader2, Send, Shield, Sparkles, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -185,6 +185,12 @@ const SubmissionCardItem = ({
             <p className="text-xs text-muted-foreground">
               Submitted {safeFormatDate(submission.submitted_at, "MMM d, yyyy 'at' HH:mm")}
             </p>
+            {submission.status === "ai_grading" && (
+              <div className="flex items-center gap-2 pt-1 text-xs text-primary">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>AI grading in progress. Keep this page open while the workflow runs.</span>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 pt-1">
               <Button
                 size="sm"
