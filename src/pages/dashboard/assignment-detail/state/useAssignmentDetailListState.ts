@@ -121,13 +121,12 @@ export const useAssignmentDetailListState = ({
   }, [queueFocus, submissions]);
 
   const notificationFocusedSubmissionIds = assignmentNotificationFocusState?.visibleSubmissionIds;
-  const shouldApplyHiddenNotificationFocus = !manualStatusFilterOverride;
 
   const filteredSubmissions = useMemo(
     () =>
       submissions.filter((submission) => {
         const matchesNotificationFocus =
-          !shouldApplyHiddenNotificationFocus ||
+          manualStatusFilterOverride ||
           !notificationFocusedSubmissionIds ||
           notificationFocusedSubmissionIds.includes(submission.id);
         const matchesSearch =
@@ -138,13 +137,7 @@ export const useAssignmentDetailListState = ({
         const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
         return matchesNotificationFocus && matchesSearch && matchesStatus;
       }),
-    [
-      notificationFocusedSubmissionIds,
-      searchQuery,
-      shouldApplyHiddenNotificationFocus,
-      statusFilter,
-      submissions,
-    ],
+    [manualStatusFilterOverride, notificationFocusedSubmissionIds, searchQuery, statusFilter, submissions],
   );
 
   useEffect(() => {
@@ -212,7 +205,7 @@ export const useAssignmentDetailListState = ({
 
   const handleSetStatusFilter: Dispatch<SetStateAction<"all" | SubmissionStatus>> = (value) => {
     setManualStatusFilterOverride(true);
-    setStatusFilter(value);
+    setStatusFilter((current) => (typeof value === "function" ? value(current) : value));
   };
 
   return {
