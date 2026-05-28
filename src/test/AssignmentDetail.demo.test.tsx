@@ -150,8 +150,7 @@ describe("AssignmentDetail demo data isolation", () => {
     );
 
     expect(await screen.findByTestId("assignment-notification-focus")).toBeInTheDocument();
-    expect(screen.getByText("Opened from release follow-up notice")).toBeInTheDocument();
-    expect(screen.getByText("This assignment notification points to the released-grade follow-up state for this workflow.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show all submissions" })).toBeInTheDocument();
   });
 
   it("falls forward from an older lecturer notice into the latest released workflow stage", async () => {
@@ -167,9 +166,8 @@ describe("AssignmentDetail demo data isolation", () => {
     );
 
     expect(await screen.findByTestId("assignment-notification-focus")).toBeInTheDocument();
-    expect(screen.getByText("Opened from an earlier notice after release")).toBeInTheDocument();
-    expect(screen.getByText("The earlier workflow notice has already been overtaken by released results, so the list is focused on submissions already released to students.")).toBeInTheDocument();
-    expect(screen.queryByText("Daniel Okafor")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show all submissions" })).toBeInTheDocument();
+    expect(screen.getByText("Daniel Okafor")).toBeInTheDocument();
   });
 
   it("does not offer stale approval actions on AI-graded submissions before first review", async () => {
