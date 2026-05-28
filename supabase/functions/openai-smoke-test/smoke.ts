@@ -1,6 +1,7 @@
 import { getModel, openAiRequest } from "../_shared/openai.ts";
 
 const SMOKE_TEST_PROMPT = "Reply with exactly: OK";
+const SMOKE_MAX_OUTPUT_TOKENS = 64;
 const SMOKE_SECRET_HEADER = "x-openai-smoke-secret";
 const SAFE_MODEL_LABEL = "configured_grading_model";
 
@@ -183,7 +184,7 @@ function buildSmokeRequestBody() {
         content: [{ type: "input_text", text: SMOKE_TEST_PROMPT }],
       },
     ],
-    max_output_tokens: 5,
+    max_output_tokens: SMOKE_MAX_OUTPUT_TOKENS,
   } satisfies Record<string, unknown>;
 }
 

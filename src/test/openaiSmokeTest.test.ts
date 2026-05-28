@@ -112,6 +112,7 @@ describe("openai smoke test", () => {
     expect(init?.method).toBe("POST");
     expect(String(init?.body ?? "")).toContain("Reply with exactly: OK");
     expect(String(init?.body ?? "")).toContain("gpt-4.1-mini");
+    expect(String(init?.body ?? "")).toContain('"max_output_tokens":64');
     expect(JSON.stringify(payload)).not.toContain("test-openai-key");
     expect(JSON.stringify(payload)).not.toContain("smoke-secret");
     expect(JSON.stringify(payload)).not.toContain("Authorization");
