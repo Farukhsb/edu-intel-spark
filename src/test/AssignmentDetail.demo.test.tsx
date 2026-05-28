@@ -151,6 +151,12 @@ describe("AssignmentDetail demo data isolation", () => {
 
     expect(await screen.findByTestId("assignment-notification-focus")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show all submissions" })).toBeInTheDocument();
+    expect(screen.getByText("Opened from an earlier notice after moderation started")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The earlier workflow notice has been overtaken by moderation activity, so the list is focused on submissions currently blocked in moderation or escalation.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("falls forward from an older lecturer notice into the latest released workflow stage", async () => {
@@ -167,7 +173,12 @@ describe("AssignmentDetail demo data isolation", () => {
 
     expect(await screen.findByTestId("assignment-notification-focus")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show all submissions" })).toBeInTheDocument();
-    expect(screen.getByText("Daniel Okafor")).toBeInTheDocument();
+    expect(screen.getByText("Opened from an earlier notice after moderation started")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The earlier workflow notice has been overtaken by moderation activity, so the list is focused on submissions currently blocked in moderation or escalation.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("does not offer stale approval actions on AI-graded submissions before first review", async () => {
