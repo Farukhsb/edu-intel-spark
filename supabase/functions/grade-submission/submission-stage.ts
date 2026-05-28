@@ -526,14 +526,17 @@ export async function gradeSingleSubmission({
   );
   normalized = fairnessAndReview.normalized;
   gradingConfidence = fairnessAndReview.gradingConfidence;
-  const reviewReasons = fairnessAndReview.reviewReasons;
   const mathAnalysis = fairnessAndReview.mathAnalysis;
   const fairnessNotes = fairnessAndReview.fairnessNotes;
   const evidenceCoverage = fairnessAndReview.evidenceCoverage;
   const ukBand = fairnessAndReview.ukBand;
   const relevanceAssessment = fairnessAndReview.relevanceAssessment;
   const recalibrationApplied = fairnessAndReview.recalibrationApplied;
-  const requiresLecturerReview = fairnessAndReview.requiresLecturerReview;
+  const reviewReasons = [...fairnessAndReview.reviewReasons];
+  const requiresLecturerReview = pilotLeanMode ? true : fairnessAndReview.requiresLecturerReview;
+  if (pilotLeanMode) {
+    reviewReasons.push("Pilot lean mode requires lecturer review for every AI-generated grade before release.");
+  }
   const feedbackParts = fairnessAndReview.feedbackParts;
 
   const gradingHistory = buildGradingHistory({
