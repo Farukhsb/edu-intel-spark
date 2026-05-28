@@ -101,7 +101,7 @@ describe("shared OpenAI helpers", () => {
         model: "gpt-4o-mini",
         input: "Explain this grade",
       }),
-    ).rejects.toThrow("OpenAI request timed out after 30000ms");
+    ).rejects.toThrow("OpenAI grading request timed out after 30000ms. Retry the submission or try again later.");
 
     await vi.advanceTimersByTimeAsync(30_000);
 
@@ -125,7 +125,7 @@ describe("shared OpenAI helpers", () => {
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "Explain this grade" }],
       }),
-    ).rejects.toThrow("OpenAI request timed out after 30000ms");
+    ).rejects.toThrow("OpenAI grading request timed out after 30000ms. Retry the submission or try again later.");
 
     await vi.advanceTimersByTimeAsync(30_000);
 

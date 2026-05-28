@@ -10,6 +10,7 @@ import {
 import { getModel } from "../_shared/openai.ts";
 import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import { parseGradeSubmissionRequestPayload } from "../_shared/grade-submission-request.ts";
+import { buildGradingErrorEventPayload } from "./error-telemetry.ts";
 import {
   type CachedGradeResult,
 } from "./orchestration.ts";
@@ -69,50 +70,6 @@ function resolveGradingPasses(override: number | undefined) {
 
 function getPassSpreadThreshold(maxScore: number) {
   return Math.max(PASS_SPREAD_REVIEW_THRESHOLD_MIN, Math.round(maxScore * PASS_SPREAD_REVIEW_THRESHOLD_RATIO));
-}
-
-function classifyGradingError(reason: string) {
-  const normalizedReason = reason.toLowerCase();
-
-  if (normalizedReason.includes("parse ai response")) {
-    return { errorCode: "response_parse_failed", safeErrorCategory: "grading_failure" };
-  }
-  if (normalizedReason.includes("download")) {
-    return { errorCode: "submission_download_failed", safeErrorCategory: "submission_access_failure" };
-  }
-  if (normalizedReason.includes("missing") && normalizedReason.includes("file url")) {
-    return { errorCode: "submission_file_missing", safeErrorCategory: "submission_access_failure" };
-  }
-  if (normalizedReason.includes("supported")) {
-    return { errorCode: "unsupported_submission_file", safeErrorCategory: "submission_validation_failure" };
-  }
-  if (normalizedReason.includes("extract")) {
-    return { errorCode: "document_extraction_failed", safeErrorCategory: "document_processing_failure" };
-  }
-
-  return { errorCode: "grading_failed", safeErrorCategory: "grading_failure" };
-}
-
-function toSafeGradingErrorMessage(reason: string) {
-  const normalizedReason = reason.toLowerCase();
-
-  if (normalizedReason.includes("parse ai response")) {
-    return "AI grading response could not be parsed.";
-  }
-  if (normalizedReason.includes("download")) {
-    return "Submission file could not be downloaded.";
-  }
-  if (normalizedReason.includes("missing") && normalizedReason.includes("file url")) {
-    return "Submission file URL is missing.";
-  }
-  if (normalizedReason.includes("supported")) {
-    return "Submission file type is not supported.";
-  }
-  if (normalizedReason.includes("extract")) {
-    return "Submission document extraction failed.";
-  }
-
-  return "AI grading failed for this submission.";
 }
 
 type ExtractionFailureTelemetry = {
@@ -236,7 +193,6 @@ async function recordGradingErrorEvent({
   userId,
   provider,
   reason,
-  metadata,
   errorCode,
   safeErrorCategory,
   safeErrorMessage,
@@ -247,27 +203,22 @@ async function recordGradingErrorEvent({
   userId: string;
   provider: string;
   reason: string;
-  metadata?: Record<string, unknown> | null;
   errorCode?: string;
   safeErrorCategory?: string;
   safeErrorMessage?: string;
 }) {
-  const classification = errorCode && safeErrorCategory
-    ? { errorCode, safeErrorCategory }
-    : classifyGradingError(reason);
-  const sanitizedSafeErrorMessage = safeErrorMessage ?? toSafeGradingErrorMessage(reason);
-  const { error } = await supabaseAdmin.from("grading_error_events").insert({
-    submission_id: submissionId,
-    assignment_id: assignmentId,
-    user_id: userId,
-    provider,
-    error_code: classification.errorCode,
-    // Keep telemetry messages short and safe. Do not store raw student text, prompts,
-    // provider payloads, or secrets in grading_error_events.error_message.
-    error_message: sanitizedSafeErrorMessage,
-    safe_error_category: classification.safeErrorCategory,
-    metadata: metadata ?? null,
-  });
+  const { error } = await supabaseAdmin.from("grading_error_events").insert(
+    buildGradingErrorEventPayload({
+      submissionId,
+      assignmentId,
+      userId,
+      provider,
+      reason,
+      errorCode,
+      safeErrorCategory,
+      safeErrorMessage,
+    }),
+  );
 
   if (error) {
     logWarn("grade-submission grading error telemetry insert failed", {
@@ -614,7 +565,6 @@ Deno.serve(async (req) => {
           userId: user.id,
           provider: gradeErr instanceof ExtractionFailureError ? "document_extraction" : "openai",
           reason,
-          metadata: gradeErr instanceof ExtractionFailureError ? gradeErr.telemetry : null,
           errorCode: gradeErr instanceof ExtractionFailureError ? gradeErr.errorCode : undefined,
           safeErrorCategory: gradeErr instanceof ExtractionFailureError
             ? gradeErr.safeErrorCategory

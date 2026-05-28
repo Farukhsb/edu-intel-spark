@@ -99,13 +99,15 @@ describe("SubmissionListSection", () => {
   it("does not show re-upload guidance for service failure and still allows retry selection", async () => {
     const { toggleSelect, startManualReview } = renderSection({
       headline: "Retry AI grading",
-      detail: "OpenAI request timed out after 60000ms",
+      detail: "OpenAI grading request timed out after 60000ms. Retry the submission or try again later.",
       recoveryLabel: "Select for retry",
       type: "service_failure",
     });
 
     expect(screen.getByText("Retry AI grading")).toBeInTheDocument();
-    expect(screen.getByText("OpenAI request timed out after 60000ms")).toBeInTheDocument();
+    expect(
+      screen.getByText("OpenAI grading request timed out after 60000ms. Retry the submission or try again later."),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Try re-uploading as DOCX or a text-based PDF.")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Select for retry" }));

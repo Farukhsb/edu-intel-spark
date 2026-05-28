@@ -86,7 +86,9 @@ async function openAiFetch(path: string, body: Record<string, unknown>) {
     });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`OpenAI request timed out after ${timeoutMs}ms`);
+      throw new Error(
+        `OpenAI grading request timed out after ${timeoutMs}ms. Retry the submission or try again later.`,
+      );
     }
 
     throw error;

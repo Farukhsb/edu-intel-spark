@@ -24,12 +24,121 @@ import type {
   SubmissionForGrading,
 } from "../../supabase/functions/grade-submission/types";
 
+const originalDeno = globalThis.Deno;
+
 describe("grade-submission consensus grading", () => {
   beforeEach(() => {
     requestStructuredGradeMock.mockReset();
+    globalThis.Deno = originalDeno;
+  });
+
+  it("defaults to a single grading pass in pilot mode and skips reevaluation", async () => {
+    requestStructuredGradeMock.mockResolvedValueOnce({
+      assignment_type: "Report",
+      total_score: 20,
+      overall_feedback: "This is a clear and relevant submission with solid structure, but the depth is limited.",
+      main_strengths: ["Clear and relevant"],
+      main_weaknesses: ["Limited depth"],
+      confidence_score: 0.28,
+      lecturer_review_required: true,
+      criteria: [
+        {
+          criterion_name: "Analysis",
+          awarded_score: 10,
+          max_score: 50,
+          performance_band: "Basic",
+          evidence_from_submission: ["The submission is clear and relevant."],
+          reason_for_score: "The work is present but thin.",
+          strengths: ["Relevant"],
+          weaknesses: ["Limited depth"],
+          improvement_feedback: "Add more analytical depth.",
+          confidence_score: 0.28,
+          error_type: "none",
+        },
+        {
+          criterion_name: "Evidence",
+          awarded_score: 10,
+          max_score: 50,
+          performance_band: "Basic",
+          evidence_from_submission: ["The submission is clear and relevant."],
+          reason_for_score: "Support is present but minimal.",
+          strengths: ["Relevant"],
+          weaknesses: ["Limited support"],
+          improvement_feedback: "Use more concrete evidence.",
+          confidence_score: 0.28,
+          error_type: "none",
+        },
+      ],
+    });
+
+    const assignment: AssignmentForGrading = {
+      id: "assignment-1",
+      lecturer_id: "lecturer-1",
+      title: "Systems Design Report",
+      description: "Evaluate the trade-offs in a distributed system design.",
+      module_code: "CS330",
+      max_score: 100,
+      rubric: [
+        { criterion: "Analysis", weight: 50, description: "Analyse the key trade-offs." },
+        { criterion: "Evidence", weight: 50, description: "Support claims with relevant evidence." },
+      ],
+    };
+    const { normalizedRubric, rubricText } = normalizeRubricForAssignment(assignment);
+
+    const submission: SubmissionForGrading = {
+      id: "submission-1",
+      assignment_id: assignment.id,
+      student_name: "Student Example",
+      student_email: "student@example.com",
+      file_name: "systems-report.txt",
+      file_url: "submissions/systems-report.txt",
+    };
+
+    const extractedText =
+      "The report compares replication, partitioning, and consistency strategies with direct discussion of latency, fault tolerance, and operational cost. " +
+      "It cites benchmark evidence and explains where stronger trade-offs still need justification.";
+
+    const result = await gradeSingleSubmission({
+      sub: submission,
+      assignment,
+      existingGrade: null,
+      existingGradesByFingerprint: new Map(),
+      generatedResultsByFingerprint: new Map(),
+      normalizedRubric,
+      rubricText,
+      gradingModel: "gpt-test-model",
+      forceRegenerate: false,
+      regradeReason: "Initial grade generation.",
+      confidenceThreshold: 0.7,
+      gradingPasses: 3,
+      getPassSpreadThreshold: () => 10,
+      fetchSubmissionContent: async () => ({
+        extractedText,
+        extractionMetadata: {
+          extracted_text_length: extractedText.length,
+          extraction_success: true,
+        },
+      }),
+    });
+
+    expect(requestStructuredGradeMock).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+    expect(result.gradingMetadata.grading_pass_count).toBe(1);
+    expect(result.gradingMetadata.grading_pass_scores).toEqual([20]);
+    expect(result.gradingMetadata.lecturer_review_required).toBe(true);
   });
 
   it("uses the median score across multiple passes and requires lecturer review when spread is high", async () => {
+    globalThis.Deno = {
+      env: {
+        get: (name: string) => {
+          if (name === "OPENAI_PILOT_SINGLE_PASS_MODE") return "false";
+          if (name === "OPENAI_GRADING_PASSES") return "3";
+          return undefined;
+        },
+      },
+    } as typeof Deno;
+
     const assignment: AssignmentForGrading = {
       id: "assignment-1",
       lecturer_id: "lecturer-1",

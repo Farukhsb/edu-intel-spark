@@ -308,20 +308,24 @@ describe("edge function hardening", () => {
 
   it("stores only short safe grading error telemetry messages", () => {
     const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
-    const migrationSource = readRepoFile(
-      "supabase/migrations/20260526124500_add_grading_error_event_metadata.sql",
-    );
+    const telemetrySource = readRepoFile("supabase/functions/grade-submission/error-telemetry.ts");
 
-    expect(gradingSource).toContain("function toSafeGradingErrorMessage");
-    expect(gradingSource).toContain("error_message: sanitizedSafeErrorMessage");
-    expect(gradingSource).toContain("Do not store raw student text, prompts,");
-    expect(gradingSource).not.toContain("error_message: reason");
+    expect(telemetrySource).toContain("function sanitizeSafeMessage");
+    expect(telemetrySource).toContain("export function classifyGradingError");
+    expect(telemetrySource).toContain('return { errorCode: "openai_timeout", safeErrorCategory: "service_failure" };');
+    expect(telemetrySource).toContain("export function toSafeGradingErrorMessage");
+    expect(telemetrySource).toContain("export function buildGradingErrorEventPayload");
+    expect(telemetrySource).toContain("error_message: safeErrorMessage ?? toSafeGradingErrorMessage(reason)");
+    expect(telemetrySource).toContain("safe_error_category: classification.safeErrorCategory");
+    expect(telemetrySource).not.toContain("metadata");
+    expect(gradingSource).toContain("buildGradingErrorEventPayload");
+    expect(telemetrySource).toContain("submission_id: submissionId");
+    expect(telemetrySource).toContain("assignment_id: assignmentId");
     expect(gradingSource).toContain("class ExtractionFailureError");
     expect(gradingSource).toContain("function sanitizeTelemetryString");
     expect(gradingSource).toContain('logWarn("grade-submission extraction rejected"');
     expect(gradingSource).toContain('provider: gradeErr instanceof ExtractionFailureError ? "document_extraction" : "openai"');
-    expect(gradingSource).toContain("metadata: metadata ?? null");
     expect(gradingSource).toContain("extraction_quality_suspicious_pdf_artifact_count");
-    expect(migrationSource).toContain("add column if not exists metadata jsonb null;");
+    expect(gradingSource).toContain('safeErrorCategory: gradeErr instanceof ExtractionFailureError');
   });
 });
