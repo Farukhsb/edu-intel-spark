@@ -4,8 +4,11 @@ const SMOKE_TEST_PROMPT = "Reply with exactly: OK";
 const SMOKE_MAX_OUTPUT_TOKENS = 64;
 const SMOKE_SECRET_HEADER = "x-openai-smoke-secret";
 const SAFE_MODEL_LABEL = "configured_grading_model";
+const STRUCTURED_MINIMAL_PROBE = "structured_minimal";
+const DEFAULT_PROBE = "minimal";
 
 type SmokeResponse = {
+  probe_type: "minimal" | "structured_minimal";
   ok: boolean;
   timed_out: boolean;
   status_code: number | null;
@@ -188,12 +191,62 @@ function buildSmokeRequestBody() {
   } satisfies Record<string, unknown>;
 }
 
-export async function runOpenAISmokeTest(): Promise<SmokeResponse> {
+function buildStructuredMinimalRequestBody() {
+  const model = getModel("OPENAI_GRADING_MODEL", "gpt-4o-mini");
+
+  return {
+    model,
+    temperature: 0,
+    top_p: 1,
+    max_output_tokens: SMOKE_MAX_OUTPUT_TOKENS,
+    input: [
+      {
+        role: "developer",
+        content: [{ type: "input_text", text: "You are a strict rubric-faithful marker." }],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: "Rubric: relevance, maximum score 10. Submission: AI should support lecturers but final judgement remains human. Grade this synthetic response.",
+          },
+        ],
+      },
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "structured_smoke_grade",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            total_score: { type: "number" },
+            overall_feedback: { type: "string" },
+            confidence_score: { type: "number" },
+          },
+          required: ["total_score", "overall_feedback", "confidence_score"],
+          additionalProperties: false,
+        },
+      },
+    },
+  } satisfies Record<string, unknown>;
+}
+
+function normalizeProbeType(value: unknown): "minimal" | "structured_minimal" {
+  return value === STRUCTURED_MINIMAL_PROBE ? STRUCTURED_MINIMAL_PROBE : DEFAULT_PROBE;
+}
+
+async function runOpenAISmokeTestForProbe(probeType: "minimal" | "structured_minimal"): Promise<SmokeResponse> {
   const startedAt = performance.now();
   const modelLabel = SAFE_MODEL_LABEL;
 
   try {
-    const response = await openAiRequest("/responses", buildSmokeRequestBody());
+    const requestBody = probeType === STRUCTURED_MINIMAL_PROBE
+      ? buildStructuredMinimalRequestBody()
+      : buildSmokeRequestBody();
+    const response = await openAiRequest("/responses", requestBody);
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
     let providerErrorType: string | null = null;
     let providerErrorCode: string | null = null;
@@ -215,6 +268,7 @@ export async function runOpenAISmokeTest(): Promise<SmokeResponse> {
     }
 
     return {
+      probe_type: probeType,
       ok: response.ok,
       timed_out: false,
       status_code: response.status,
@@ -240,6 +294,7 @@ export async function runOpenAISmokeTest(): Promise<SmokeResponse> {
     const timedOut = error instanceof Error && /timed out/i.test(error.message);
 
     return {
+      probe_type: probeType,
       ok: false,
       timed_out: timedOut,
       status_code: null,
@@ -253,6 +308,26 @@ export async function runOpenAISmokeTest(): Promise<SmokeResponse> {
       model_label: modelLabel,
     };
   }
+}
+
+export async function runOpenAISmokeTest(): Promise<SmokeResponse> {
+  return runOpenAISmokeTestForProbe(DEFAULT_PROBE);
+}
+
+function parseSmokeProbeType(req: Request) {
+  if (req.method !== "POST") return DEFAULT_PROBE;
+
+  return req
+    .clone()
+    .json()
+    .then((body: unknown) => {
+      if (body && typeof body === "object" && "probe" in body) {
+        return normalizeProbeType((body as Record<string, unknown>).probe);
+      }
+
+      return DEFAULT_PROBE;
+    })
+    .catch(() => DEFAULT_PROBE);
 }
 
 function validateSmokeSecret(req: Request) {
@@ -281,6 +356,7 @@ export async function handleOpenAISmokeTestRequest(req: Request) {
   const secretError = validateSmokeSecret(req);
   if (secretError) return secretError;
 
-  const result = await runOpenAISmokeTest();
+  const probeType = await parseSmokeProbeType(req);
+  const result = await runOpenAISmokeTestForProbe(probeType);
   return jsonResponse(result);
 }

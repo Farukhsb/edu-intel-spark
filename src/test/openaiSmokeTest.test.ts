@@ -97,6 +97,7 @@ describe("openai smoke test", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload).toMatchObject({
+      probe_type: "minimal",
       ok: true,
       timed_out: false,
       status_code: 200,
@@ -117,6 +118,52 @@ describe("openai smoke test", () => {
     expect(JSON.stringify(payload)).not.toContain("smoke-secret");
     expect(JSON.stringify(payload)).not.toContain("Authorization");
     expect(JSON.stringify(payload)).not.toContain("Reply with exactly: OK");
+  });
+
+  it("runs the structured minimal probe with strict JSON schema and one OpenAI request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "response_456", output_text: "{\"total_score\":10,\"overall_feedback\":\"OK\",\"confidence_score\":0.95}" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const response = await handleOpenAISmokeTestRequest(
+      new Request("https://gradeai.test/functions/v1/openai-smoke-test", {
+        method: "POST",
+        headers: { "x-openai-smoke-secret": "smoke-secret" },
+        body: JSON.stringify({ probe: "structured_minimal" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toMatchObject({
+      probe_type: "structured_minimal",
+      ok: true,
+      timed_out: false,
+      status_code: 200,
+      duration_ms: expect.any(Number),
+      response_received: true,
+      safe_error_category: null,
+      model_label: "configured_grading_model",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("/v1/responses");
+    expect(init?.method).toBe("POST");
+    expect(String(init?.body ?? "")).toContain("structured_smoke_grade");
+    expect(String(init?.body ?? "")).toContain('"type":"json_schema"');
+    expect(String(init?.body ?? "")).toContain('"strict":true');
+    expect(String(init?.body ?? "")).not.toContain("Reply with exactly: OK");
+    expect(String(init?.body ?? "")).toContain("Rubric: relevance, maximum score 10");
+    expect(String(init?.body ?? "")).toContain('"max_output_tokens":64');
+    expect(JSON.stringify(payload)).not.toContain("response_456");
+    expect(JSON.stringify(payload)).not.toContain("total_score");
+    expect(JSON.stringify(payload)).not.toContain("confidence_score");
+    expect(JSON.stringify(payload)).not.toContain("smoke-secret");
   });
 
   it("marks a timeout as a service failure", async () => {
