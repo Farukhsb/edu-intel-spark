@@ -38,7 +38,7 @@ export interface ExtractionQualityResult {
   suspiciousPdfArtifactCount: number;
 }
 
-export type PdfExtractionMethod = "pdf_parser" | "pdf_fallback";
+export type PdfExtractionMethod = "pdf_fallback";
 
 export type PdfTextParser = (bytes: Uint8Array) => Promise<string>;
 
@@ -150,30 +150,6 @@ function extractReadablePdfTextFromBinary(binary: string) {
   return [operatorText, printableFallback].filter(Boolean).join("\n");
 }
 
-let pdfTextParserPromise: Promise<PdfTextParser> | null = null;
-
-async function loadPdfTextParser(): Promise<PdfTextParser> {
-  if (!pdfTextParserPromise) {
-    pdfTextParserPromise = (async () => {
-      const pdfParseSpecifier = typeof Deno !== "undefined"
-        ? ["npm:pdf-parse", "1.1.1/lib/pdf-parse.js"].join("@")
-        : "pdf-parse/lib/pdf-parse.js";
-      const pdfParseModule = await import(pdfParseSpecifier);
-      const pdfParse = (pdfParseModule.default ?? pdfParseModule) as (
-        dataBuffer: Uint8Array,
-        options?: { max?: number },
-      ) => Promise<{ text?: string | null }>;
-
-      return async (bytes: Uint8Array) => {
-        const parsed = await pdfParse(Buffer.from(bytes), { max: 0 });
-        return cleanExtractedDocumentText(parsed?.text || "");
-      };
-    })();
-  }
-
-  return pdfTextParserPromise;
-}
-
 export async function extractReadablePdfText(params: {
   bytes: Uint8Array;
   parser?: PdfTextParser;
@@ -181,19 +157,11 @@ export async function extractReadablePdfText(params: {
   text: string;
   method: PdfExtractionMethod;
 }> {
-  try {
-    const parser = params.parser ?? await loadPdfTextParser();
-    return {
-      text: await parser(params.bytes),
-      method: "pdf_parser",
-    };
-  } catch {
-    const binary = Buffer.from(params.bytes).toString("latin1");
-    return {
-      text: extractReadablePdfTextFromBinary(binary),
-      method: "pdf_fallback",
-    };
-  }
+  const binary = Buffer.from(params.bytes).toString("latin1");
+  return {
+    text: extractReadablePdfTextFromBinary(binary),
+    method: "pdf_fallback",
+  };
 }
 
 export function assessExtractionQuality(
