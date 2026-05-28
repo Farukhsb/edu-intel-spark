@@ -167,6 +167,140 @@ describe("openai smoke test", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("maps a 400 model-not-found body safely", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { type: "invalid_request_error", code: "model_not_found", message: "Model not found" } }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const payload = await runOpenAISmokeTest();
+
+    expect(payload).toMatchObject({
+      ok: false,
+      timed_out: false,
+      status_code: 400,
+      response_received: true,
+      safe_error_category: "provider_error",
+      provider_error_type: "invalid_request_error",
+      provider_error_code: "model_not_found",
+      provider_error_param: null,
+      provider_error_classification: "model_not_found",
+      model_label: "configured_grading_model",
+    });
+    expect(JSON.stringify(payload)).not.toContain("Model not found");
+    expect(JSON.stringify(payload)).not.toContain("test-openai-key");
+    expect(JSON.stringify(payload)).not.toContain("smoke-secret");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a 400 unsupported-parameter body safely", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { type: "invalid_request_error", code: "unsupported_parameter", param: "input[0].content[0].text", message: "Unsupported parameter" } }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const payload = await runOpenAISmokeTest();
+
+    expect(payload).toMatchObject({
+      ok: false,
+      timed_out: false,
+      status_code: 400,
+      response_received: true,
+      safe_error_category: "provider_error",
+      provider_error_type: "invalid_request_error",
+      provider_error_code: "unsupported_parameter",
+      provider_error_param: "input[0].content[0].text",
+      provider_error_classification: "unsupported_parameter",
+      model_label: "configured_grading_model",
+    });
+    expect(JSON.stringify(payload)).not.toContain("Unsupported parameter");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a 400 unsupported endpoint/model body safely", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { type: "invalid_request_error", code: "unsupported_model", message: "The model does not support this endpoint" } }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const payload = await runOpenAISmokeTest();
+
+    expect(payload).toMatchObject({
+      ok: false,
+      timed_out: false,
+      status_code: 400,
+      response_received: true,
+      safe_error_category: "provider_error",
+      provider_error_type: "invalid_request_error",
+      provider_error_code: "unsupported_model",
+      provider_error_param: null,
+      provider_error_classification: "model_not_supported_for_endpoint",
+      model_label: "configured_grading_model",
+    });
+    expect(JSON.stringify(payload)).not.toContain("does not support this endpoint");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies auth, rate limit, and quota bodies safely", async () => {
+    const cases = [
+      {
+        status: 401,
+        body: { error: { type: "invalid_api_key", code: "invalid_api_key", message: "Invalid API key" } },
+        classification: "auth_error",
+      },
+      {
+        status: 429,
+        body: { error: { type: "rate_limit_error", code: "rate_limit_exceeded", message: "Rate limit exceeded" } },
+        classification: "rate_limited",
+      },
+      {
+        status: 429,
+        body: { error: { type: "insufficient_quota", code: "insufficient_quota", message: "You exceeded your current quota" } },
+        classification: "quota_or_billing",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(testCase.body), {
+          status: testCase.status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      global.fetch = fetchMock as typeof fetch;
+
+      const payload = await runOpenAISmokeTest();
+
+      expect(payload).toMatchObject({
+        ok: false,
+        timed_out: false,
+        status_code: testCase.status,
+        response_received: true,
+        safe_error_category:
+          testCase.classification === "auth_error"
+            ? "auth_error"
+            : testCase.classification === "rate_limited"
+              ? "rate_limited"
+              : "provider_error",
+        provider_error_classification: testCase.classification,
+        model_label: "configured_grading_model",
+      });
+      expect(JSON.stringify(payload)).not.toContain("Invalid API key");
+      expect(JSON.stringify(payload)).not.toContain("Rate limit exceeded");
+      expect(JSON.stringify(payload)).not.toContain("You exceeded your current quota");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("returns provider status safely without exposing secrets or raw OpenAI output", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response("provider unavailable", {
@@ -185,6 +319,10 @@ describe("openai smoke test", () => {
       duration_ms: expect.any(Number),
       response_received: true,
       safe_error_category: "provider_error",
+      provider_error_type: null,
+      provider_error_code: null,
+      provider_error_param: null,
+      provider_error_classification: "provider_error",
       model_label: "configured_grading_model",
     });
     expect(JSON.stringify(payload)).not.toContain("test-openai-key");
