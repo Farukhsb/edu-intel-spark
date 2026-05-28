@@ -18,9 +18,18 @@ import {
   buildRegradeAnchorText,
   buildRubricCalibrationGuide,
   buildSystemPrompt,
+  buildResponseSchema,
   requestStructuredGrade,
   type RubricCriterion,
 } from "./prompting.ts";
+import {
+  buildPilotLeanGradingPrompt,
+  buildPilotLeanResponseSchema,
+  buildPilotLeanSystemPrompt,
+  isPilotLeanGradingMode,
+  PILOT_LEAN_CRITERION_EVIDENCE_MAX_CHARS,
+  PILOT_LEAN_GRADING_EVIDENCE_MAX_CHARS,
+} from "./pilot-grading.ts";
 import {
   blindSubmissionText,
   buildCriterionEvidencePackets,
@@ -70,6 +79,10 @@ function readEnv(name: string) {
 
 function isPilotSinglePassMode() {
   return readEnv("OPENAI_PILOT_SINGLE_PASS_MODE") !== "false";
+}
+
+export function isPilotLeanGradingModeEnabled() {
+  return isPilotLeanGradingMode();
 }
 
 type GradeSingleSubmissionParams = {
@@ -262,19 +275,20 @@ export async function gradeSingleSubmission({
     });
   }
 
+  const pilotLeanMode = isPilotLeanGradingMode();
   const gradingEvidencePacket = buildGradingEvidencePacket({
     submissionText: blindedText,
     rubric: normalizedRubric,
     assignmentTitle: assignment.title,
     assignmentDescription: assignment.description,
-    maxChars: 18_000,
+    maxChars: pilotLeanMode ? PILOT_LEAN_GRADING_EVIDENCE_MAX_CHARS : 18_000,
   });
   const criterionEvidencePackets = buildCriterionEvidencePackets({
     submissionText: blindedText,
     rubric: normalizedRubric,
     assignmentTitle: assignment.title,
     assignmentDescription: assignment.description,
-    maxCharsPerCriterion: 2600,
+    maxCharsPerCriterion: pilotLeanMode ? PILOT_LEAN_CRITERION_EVIDENCE_MAX_CHARS : 2600,
   });
   const criterionEvidenceText = criterionEvidencePackets
     .map((entry, index) =>
@@ -289,27 +303,58 @@ export async function gradeSingleSubmission({
   });
   const isMathMode = assignmentType === "Mathematics" || assignmentType === "Problem Solving";
 
-  const systemPrompt = buildSystemPrompt(
-    assignmentType,
-    normalizedRubric.length,
-    assignment.max_score,
-  );
-  const rubricCalibrationGuide = buildRubricCalibrationGuide(
-    normalizedRubric,
-    assignment.max_score,
-  );
-  const prompt = buildGradingPrompt({
-    assignmentType,
-    assignmentTitle: assignment.title,
-    assignmentDescription: assignment.description,
-    moduleCode: assignment.module_code,
-    maximumScore: assignment.max_score,
-    rubricText,
-    rubricCalibrationGuide,
-    regradeAnchorText: buildRegradeAnchorText(existingGrade),
-    textPreview: gradingEvidencePacket,
-    criterionEvidenceText,
-  });
+  const systemPrompt = pilotLeanMode
+    ? buildPilotLeanSystemPrompt({
+      assignmentType,
+      rubricLength: normalizedRubric.length,
+      maximumScore: assignment.max_score,
+    })
+    : buildSystemPrompt(
+      assignmentType,
+      normalizedRubric.length,
+      assignment.max_score,
+    );
+  const responseSchema = pilotLeanMode
+    ? buildPilotLeanResponseSchema(normalizedRubric.length, isMathMode)
+    : buildResponseSchema(normalizedRubric.length, isMathMode);
+  const prompt = pilotLeanMode
+    ? buildPilotLeanGradingPrompt({
+      assignmentType,
+      assignmentTitle: assignment.title,
+      assignmentDescription: assignment.description,
+      maximumScore: assignment.max_score,
+      rubric: normalizedRubric,
+      textPreview: gradingEvidencePacket,
+      criterionEvidenceText,
+    })
+    : buildGradingPrompt({
+      assignmentType,
+      assignmentTitle: assignment.title,
+      assignmentDescription: assignment.description,
+      moduleCode: assignment.module_code,
+      maximumScore: assignment.max_score,
+      rubricText,
+      rubricCalibrationGuide: buildRubricCalibrationGuide(
+        normalizedRubric,
+        assignment.max_score,
+      ),
+      regradeAnchorText: buildRegradeAnchorText(existingGrade),
+      textPreview: gradingEvidencePacket,
+      criterionEvidenceText,
+    });
+
+  const requestDiagnostics = {
+    pilot_lean_mode: pilotLeanMode,
+    system_prompt_char_length: systemPrompt.length,
+    user_prompt_char_length: prompt.length,
+    response_schema_char_length: JSON.stringify(responseSchema).length,
+    rubric_criterion_count: normalizedRubric.length,
+    submission_evidence_char_length: gradingEvidencePacket.length,
+    criterion_evidence_total_char_length: criterionEvidencePackets.reduce(
+      (sum, entry) => sum + entry.packet.length,
+      0,
+    ),
+  };
 
   const previousAiScore = existingGrade?.ai_score != null ? Number(existingGrade.ai_score) : null;
   const pilotSinglePassMode = isPilotSinglePassMode();
@@ -331,6 +376,7 @@ export async function gradeSingleSubmission({
       prompt,
       rubricLength: normalizedRubric.length,
       isMathMode,
+      responseSchema,
     });
 
     if (!passResult) continue;
@@ -348,6 +394,7 @@ export async function gradeSingleSubmission({
         prompt: reevaluationPrompt,
         rubricLength: normalizedRubric.length,
         isMathMode,
+        responseSchema,
       });
       if (reevaluated) {
         passResult = reevaluated;
@@ -533,6 +580,7 @@ export async function gradeSingleSubmission({
     mainStrengths: normalizeStringList(gradeResult.main_strengths),
     mainWeaknesses: normalizeStringList(gradeResult.main_weaknesses),
     extractionMetadata,
+    requestDiagnostics,
   });
 
   generatedResultsByFingerprint.set(gradingInputHash, finalizedGradeResult);

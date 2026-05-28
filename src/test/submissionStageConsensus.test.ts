@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { requestStructuredGradeMock } = vi.hoisted(() => ({
   requestStructuredGradeMock: vi.fn(),
@@ -29,7 +29,19 @@ const originalDeno = globalThis.Deno;
 describe("grade-submission consensus grading", () => {
   beforeEach(() => {
     requestStructuredGradeMock.mockReset();
+    globalThis.Deno = {
+      env: {
+        get: (name: string) => {
+          if (name === "OPENAI_PILOT_LEAN_GRADING_MODE") return "false";
+          return undefined;
+        },
+      },
+    } as typeof Deno;
+  });
+
+  afterEach(() => {
     globalThis.Deno = originalDeno;
+    vi.restoreAllMocks();
   });
 
   it("defaults to a single grading pass in pilot mode and skips reevaluation", async () => {
@@ -132,6 +144,7 @@ describe("grade-submission consensus grading", () => {
     globalThis.Deno = {
       env: {
         get: (name: string) => {
+          if (name === "OPENAI_PILOT_LEAN_GRADING_MODE") return "false";
           if (name === "OPENAI_PILOT_SINGLE_PASS_MODE") return "false";
           if (name === "OPENAI_GRADING_PASSES") return "3";
           return undefined;

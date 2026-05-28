@@ -52,6 +52,7 @@ type FinalizedGradeResultParams = {
   mainStrengths: string[];
   mainWeaknesses: string[];
   extractionMetadata: Record<string, unknown>;
+  requestDiagnostics?: Record<string, unknown>;
 };
 
 type GradingHistoryParams = {
@@ -145,6 +146,7 @@ export function buildFinalizedGradeResult({
   mainStrengths,
   mainWeaknesses,
   extractionMetadata,
+  requestDiagnostics,
 }: FinalizedGradeResultParams): CachedGradeResult {
   return {
     score,
@@ -183,6 +185,7 @@ export function buildFinalizedGradeResult({
       main_strengths: mainStrengths,
       main_weaknesses: mainWeaknesses,
       extraction: extractionMetadata,
+      ...(requestDiagnostics ?? {}),
     },
   };
 }
