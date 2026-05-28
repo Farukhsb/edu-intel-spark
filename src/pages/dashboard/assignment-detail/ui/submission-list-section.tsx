@@ -111,6 +111,7 @@ const SubmissionCardItem = ({
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
+  sendToModeration,
   gradingRecoveryIssue,
 }: {
   submission: AssignmentDetailSubmission;
@@ -131,6 +132,7 @@ const SubmissionCardItem = ({
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
+  sendToModeration: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   gradingRecoveryIssue?: SubmissionGradingRecoveryIssue;
 }) => {
   const submissionDisplay = getSubmissionDisplayState({
@@ -241,9 +243,11 @@ const SubmissionCardItem = ({
                   <p className="text-xs font-medium text-amber-950">{gradingRecoveryIssue.headline}</p>
                 </div>
                 <p className="mt-2 text-xs text-amber-900">{gradingRecoveryIssue.detail}</p>
-                <p className="mt-2 text-xs text-amber-800">
-                  Try re-uploading as DOCX or a text-based PDF.
-                </p>
+                {(gradingRecoveryIssue.type === "missing_file" || gradingRecoveryIssue.type === "extraction_failure") && (
+                  <p className="mt-2 text-xs text-amber-800">
+                    Try re-uploading as DOCX or a text-based PDF.
+                  </p>
+                )}
               </div>
             )}
 
@@ -303,6 +307,16 @@ const SubmissionCardItem = ({
                   onClick={() => openReview(submission)}
                 >
                   <Edit className="mr-1 h-3 w-3" /> First review
+                </Button>
+              )}
+              {(submission.status === "first_review" || submission.status === "under_review") && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={isDemo}
+                  onClick={() => void sendToModeration(submission)}
+                >
+                  <Send className="mr-1 h-3 w-3" /> Send to moderation
                 </Button>
               )}
               {submissionDisplay.showApprove && (
@@ -390,6 +404,7 @@ export const SubmissionListSection = ({
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
+  sendToModeration,
   moderationReleaseHandoffState,
   activeQueueFocus,
   focusQueue,
@@ -416,6 +431,7 @@ export const SubmissionListSection = ({
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
+  sendToModeration: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   moderationReleaseHandoffState: ModerationReleaseHandoffState;
   activeQueueFocus: AssignmentQueueFocusValue | null;
   focusQueue: (focus: AssignmentQueueFocusValue) => void;
@@ -574,6 +590,7 @@ export const SubmissionListSection = ({
                 queueFeedbackSummary={queueFeedbackSummary}
                 queueGradeReleaseNotification={queueGradeReleaseNotification}
                 openReleasedResult={openReleasedResult}
+                sendToModeration={sendToModeration}
               />
             ))}
           </div>

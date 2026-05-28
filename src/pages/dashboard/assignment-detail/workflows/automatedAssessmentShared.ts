@@ -108,7 +108,7 @@ export const buildMissingFileRecoveryIssue = (): SubmissionGradingRecoveryIssue 
 export const buildExtractionFailureRecoveryIssue = (): SubmissionGradingRecoveryIssue => ({
   headline: "Readable file needed",
   detail:
-    "The grading service could not read this document. Check that the file opens correctly and ask for a clearer upload if needed.",
+    "GradeAI could not reliably extract text from this PDF. Continue with manual review or upload a DOCX copy while PDF support is being verified.",
   recoveryLabel: "Needs re-upload",
   type: "extraction_failure",
 });

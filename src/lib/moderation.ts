@@ -65,10 +65,12 @@ export const evaluateModerationSignals = ({
   grade,
   integrityReview,
   maxScore,
+  context = "full",
 }: {
   grade: GradeRow | null | undefined;
   integrityReview?: IntegrityReviewRow;
   maxScore: number;
+  context?: "full" | "lecturer_review";
 }) => {
   const signals: ModerationSignal[] = [];
   const aiScore = numeric(grade?.ai_score);
@@ -77,7 +79,7 @@ export const evaluateModerationSignals = ({
   const scoreWindow = Math.max(2, Math.round(maxScore * 0.02));
   const varianceThreshold = Math.max(10, Math.round(maxScore * 0.1));
 
-  if (confidence != null && confidence < MODERATION_CONFIDENCE_THRESHOLD) {
+  if (context === "full" && confidence != null && confidence < MODERATION_CONFIDENCE_THRESHOLD) {
     signals.push({
       code: "low_confidence",
       label: "Low confidence",
@@ -100,7 +102,7 @@ export const evaluateModerationSignals = ({
       return Math.abs(effectiveScore - boundaryScore) <= scoreWindow;
     });
 
-    if (matchedBoundary != null) {
+    if (context === "full" && matchedBoundary != null) {
       signals.push({
         code: "boundary_score",
         label: "Boundary classification",

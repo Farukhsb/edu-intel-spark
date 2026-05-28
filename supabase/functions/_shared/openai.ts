@@ -86,7 +86,9 @@ async function openAiFetch(path: string, body: Record<string, unknown>) {
     });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`OpenAI request timed out after ${timeoutMs}ms`);
+      throw new Error(
+        `OpenAI grading request timed out after ${timeoutMs}ms. Retry the submission or try again later.`,
+      );
     }
 
     throw error;
@@ -100,7 +102,7 @@ export function getModel(envName: string, fallback: string) {
 }
 
 export async function createResponse(body: Record<string, unknown>) {
-  const response = await openAiFetch("/responses", body);
+  const response = await openAiRequest("/responses", body);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -111,7 +113,11 @@ export async function createResponse(body: Record<string, unknown>) {
 }
 
 export async function createChatCompletion(body: Record<string, unknown>) {
-  return await openAiFetch("/chat/completions", body);
+  return await openAiRequest("/chat/completions", body);
+}
+
+export async function openAiRequest(path: string, body: Record<string, unknown>) {
+  return await openAiFetch(path, body);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

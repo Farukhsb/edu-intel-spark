@@ -56,6 +56,22 @@ import type {
   SubmissionForGrading,
 } from "./types.ts";
 
+function readEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  if (typeof process !== "undefined" && process.env) {
+    return process.env[name];
+  }
+
+  return undefined;
+}
+
+function isPilotSinglePassMode() {
+  return readEnv("OPENAI_PILOT_SINGLE_PASS_MODE") !== "false";
+}
+
 type GradeSingleSubmissionParams = {
   sub: SubmissionForGrading;
   assignment: AssignmentForGrading;
@@ -296,8 +312,10 @@ export async function gradeSingleSubmission({
   });
 
   const previousAiScore = existingGrade?.ai_score != null ? Number(existingGrade.ai_score) : null;
+  const pilotSinglePassMode = isPilotSinglePassMode();
+  const effectiveGradingPasses = pilotSinglePassMode ? 1 : gradingPasses;
   const passCandidates: GradingCandidate[] = [];
-  for (let passIndex = 0; passIndex < gradingPasses; passIndex++) {
+  for (let passIndex = 0; passIndex < effectiveGradingPasses; passIndex++) {
     logInfo("grade-submission ai-call", {
       cache_hit: false,
       grading_input_hash: gradingInputHash,
@@ -318,7 +336,7 @@ export async function gradeSingleSubmission({
     if (!passResult) continue;
 
     let candidate = buildGradingCandidate(passResult, normalizedRubric, assignment.max_score);
-    if (candidate.positiveFeedbackLowScoreMismatch) {
+    if (!pilotSinglePassMode && candidate.positiveFeedbackLowScoreMismatch) {
       const reevaluationPrompt = buildPositiveFeedbackReevaluationPrompt({
         prompt,
         passResult,
@@ -370,34 +388,45 @@ export async function gradeSingleSubmission({
       `Consensus grading applied across ${passScores.length} passes. Pass scores: ${passScores.join(", ")}. Median score selected: ${normalized.total}.`,
     );
   }
-  if (passSpread >= passSpreadThreshold) {
+  if (!pilotSinglePassMode && passSpread >= passSpreadThreshold) {
     stabilityNotes.push(
       `Pass spread ${passSpread} exceeded the review threshold of ${passSpreadThreshold}, so lecturer review was required.`,
     );
   }
-  const regradeStability = await applyRegradeStabilityAdjudication(
-    {
-      previousAiScore,
-      normalized,
-      assignmentMaxScore: assignment.max_score,
-      stabilityNotes,
-      prompt,
-      existingGrade,
+  const regradeStability = pilotSinglePassMode
+    ? {
       gradeResult,
-      gradingModel,
-      systemPrompt,
-      normalizedRubric,
-      isMathMode,
+      normalized,
+      modelScore,
       modelFeedback,
-    },
-    {
-      normalizeBreakdown,
-      normalizeOverallScore,
-      detectPositiveFeedbackLowScoreMismatch,
-      hasMeaningfulScoreDrift,
-      requestStructuredGrade,
-    },
-  );
+      scoreAdjusted,
+      positiveFeedbackLowScoreMismatch,
+      regradeVariancePreservedPrior: false,
+      stabilityNotes,
+    }
+    : await applyRegradeStabilityAdjudication(
+      {
+        previousAiScore,
+        normalized,
+        assignmentMaxScore: assignment.max_score,
+        stabilityNotes,
+        prompt,
+        existingGrade,
+        gradeResult,
+        gradingModel,
+        systemPrompt,
+        normalizedRubric,
+        isMathMode,
+        modelFeedback,
+      },
+      {
+        normalizeBreakdown,
+        normalizeOverallScore,
+        detectPositiveFeedbackLowScoreMismatch,
+        hasMeaningfulScoreDrift,
+        requestStructuredGrade,
+      },
+    );
   gradeResult = regradeStability.gradeResult;
   normalized = regradeStability.normalized;
   modelScore = regradeStability.modelScore;

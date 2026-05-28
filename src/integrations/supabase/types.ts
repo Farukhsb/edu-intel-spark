@@ -566,6 +566,7 @@ export type Database = {
           error_message: string | null
           id: string
           institution_id?: string | null
+          metadata?: Json | null
           provider: string | null
           safe_error_category: string
           submission_id: string | null
@@ -578,6 +579,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           institution_id?: string | null
+          metadata?: Json | null
           provider?: string | null
           safe_error_category?: string
           submission_id?: string | null
@@ -590,6 +592,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           institution_id?: string | null
+          metadata?: Json | null
           provider?: string | null
           safe_error_category?: string
           submission_id?: string | null
