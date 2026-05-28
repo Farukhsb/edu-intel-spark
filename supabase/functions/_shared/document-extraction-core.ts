@@ -61,6 +61,13 @@ export type DocxExtractor = (bytes: Uint8Array) => Promise<{
   messages?: string[];
 }>;
 
+type DoclingExtractionResult = {
+  success: boolean;
+  text: string;
+  warnings: string[];
+  errors: string[];
+};
+
 export type DocumentExtractionResult = {
   fileName: string;
   fileType: string;
@@ -105,6 +112,116 @@ function looksLikeBinaryText(text: string) {
   }
 
   return controlChars > Math.max(8, Math.floor(trimmed.length * 0.05));
+}
+
+function readEnv(name: string) {
+  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
+    return Deno.env.get(name);
+  }
+
+  if (typeof process !== "undefined" && process.env) {
+    return process.env[name];
+  }
+
+  return undefined;
+}
+
+function readBooleanEnv(name: string) {
+  const value = readEnv(name);
+  if (!value) return false;
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function safeStringList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getDoclingFallbackConfig() {
+  if (!readBooleanEnv("DOCLING_EXTRACTION_FALLBACK_ENABLED")) {
+    return null;
+  }
+
+  const url = readEnv("DOCLING_EXTRACTION_FALLBACK_URL")?.trim();
+  if (!url) return null;
+
+  const timeoutMs = Number(readEnv("DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS") || 15000);
+  const normalizedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.trunc(timeoutMs) : 15000;
+
+  return {
+    url,
+    secret: readEnv("DOCLING_EXTRACTION_FALLBACK_SECRET")?.trim() || null,
+    timeoutMs: normalizedTimeoutMs,
+  };
+}
+
+async function tryDoclingPdfFallback(params: {
+  bytes: Uint8Array;
+  fileName: string;
+  mimeType: string;
+}): Promise<DoclingExtractionResult | null> {
+  const config = getDoclingFallbackConfig();
+  if (!config) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([params.bytes], { type: params.mimeType || "application/pdf" }), params.fileName);
+    form.append("enable_ocr", "false");
+
+    const headers = new Headers();
+    if (config.secret) {
+      headers.set("x-docling-extraction-secret", config.secret);
+    }
+
+    const response = await fetch(config.url, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+
+    const payload = await response.json().catch(() => null) as
+      | {
+        success?: boolean;
+        markdown?: string | null;
+        text?: string | null;
+        extracted_text?: string | null;
+        warnings?: unknown;
+        errors?: unknown;
+      }
+      | null;
+
+    if (!payload || payload.success !== true) return null;
+
+    const text = typeof payload.markdown === "string" && payload.markdown.trim().length > 0
+      ? payload.markdown
+      : typeof payload.text === "string" && payload.text.trim().length > 0
+        ? payload.text
+        : typeof payload.extracted_text === "string" && payload.extracted_text.trim().length > 0
+          ? payload.extracted_text
+          : "";
+
+    if (!text.trim()) return null;
+
+    return {
+      success: true,
+      text,
+      warnings: safeStringList(payload.warnings),
+      errors: safeStringList(payload.errors),
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export function detectDocumentType(fileName: string | null | undefined, mimeType: string | null | undefined): SupportedDocumentType {
@@ -183,6 +300,7 @@ export async function extractDocumentText(params: {
   let extractedText = "";
   let warningMessage: string | null = null;
   let extractionMethod: ExtractionMethod = "none";
+  let doclingFallbackApplied = false;
 
   try {
     if (fileType === "docx") {
@@ -219,9 +337,44 @@ export async function extractDocumentText(params: {
   }
 
   const normalizedText = normalizeReadableText(extractedText);
+  const initialExtractionQuality = assessExtractionQuality(normalizedText, {
+    fileType,
+    rawText: extractedText,
+  });
+  let extractionQuality = initialExtractionQuality;
+
+  if (fileType === "pdf" && !initialExtractionQuality.isUsable) {
+    const doclingFallback = await tryDoclingPdfFallback({
+      bytes: params.bytes,
+      fileName,
+      mimeType,
+    });
+
+    if (doclingFallback) {
+      const doclingText = cleanExtractedDocumentText(doclingFallback.text);
+      const doclingNormalizedText = normalizeReadableText(doclingText);
+      const doclingQuality = assessExtractionQuality(doclingNormalizedText, {
+        fileType,
+        rawText: doclingText,
+      });
+
+      extractedText = doclingNormalizedText;
+      extractionMethod = "pdf_docling_fallback";
+      warningMessage = [
+        warningMessage,
+        ...doclingFallback.warnings,
+        ...doclingFallback.errors,
+        ...doclingQuality.reasons,
+      ].filter(Boolean).join(" ").trim() || null;
+      extractionQuality = doclingQuality;
+      doclingFallbackApplied = true;
+    }
+  }
+
+  const finalNormalizedText = doclingFallbackApplied ? extractedText : normalizedText;
   if (
-    binaryLooksLikeOfficeArchive(params.bytes, normalizedText) ||
-    looksLikeBinaryText(normalizedText)
+    binaryLooksLikeOfficeArchive(params.bytes, finalNormalizedText) ||
+    looksLikeBinaryText(finalNormalizedText)
   ) {
     return fail(
       DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -233,11 +386,11 @@ export async function extractDocumentText(params: {
     );
   }
 
-  if (!normalizedText || normalizedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
+  if (!finalNormalizedText || finalNormalizedText.trim().length < MIN_EXTRACTED_TEXT_CHARS) {
     const shortTextMessage =
       fileType === "pdf"
         ? "Readable PDF text was too short after extraction. The PDF may be scanned, image-only, corrupted, or otherwise unreadable."
-        : `Readable text was too short after extraction (${normalizedText.trim().length} characters).`;
+        : `Readable text was too short after extraction (${finalNormalizedText.trim().length} characters).`;
     return fail(
       DOCUMENT_EXTRACTION_ERROR_MESSAGE,
       shortTextMessage,
@@ -248,10 +401,6 @@ export async function extractDocumentText(params: {
     );
   }
 
-  const extractionQuality = assessExtractionQuality(normalizedText, {
-    fileType,
-    rawText: extractedText,
-  });
   if (!extractionQuality.isUsable) {
     const extractionQualityWarning =
       [warningMessage, ...extractionQuality.reasons].filter(Boolean).join(" ").trim() || null;
@@ -272,8 +421,8 @@ export async function extractDocumentText(params: {
     mimeType,
     extractionMethod,
     extractionFailureReason: null,
-    extractedText: normalizedText,
-    extractedTextLength: normalizedText.length,
+    extractedText: finalNormalizedText,
+    extractedTextLength: finalNormalizedText.length,
     success: true,
     extractionWarning: warningMessage,
     extractionError: null,

@@ -91,6 +91,37 @@ describe("access policy contracts", () => {
     expect(source).toContain("mc.moderator_id = (select auth.uid())");
   });
 
+  it("breaks the moderation assignment recursion with a security-definer helper", () => {
+    const source = readRepoFile("supabase/migrations/20260528233000_break_moderation_assignment_rls_recursion.sql");
+
+    expect(source).toContain("create or replace function private.is_assigned_moderator_for_assignment");
+    expect(source).toContain("security definer");
+    expect(source).toContain("grant execute on function private.is_assigned_moderator_for_assignment(uuid) to authenticated");
+    expect(source).toContain('create policy "Assigned moderators can view linked assignments"');
+    expect(source).toContain("private.is_assigned_moderator_for_assignment(public.assignments.id)");
+    expect(source).toContain("from public.moderation_cases mc");
+    expect(source).not.toContain("using (\n  private.same_institution(institution_id)\n  and exists (\n    select 1\n    from public.moderation_cases mc");
+  });
+
+  it("uses the assignment-owner helper in moderation-case insert and update policies", () => {
+    const source = readRepoFile("supabase/migrations/20260528234000_fix_moderation_case_assignment_rls_recursion.sql");
+
+    expect(source).toContain('create policy "Lecturers can insert moderation cases"');
+    expect(source).toContain('create policy "Lecturers can update moderation cases"');
+    expect(source).not.toContain("private.is_assignment_owner(assignment_id)");
+    expect(source).not.toContain("from public.assignments a");
+  });
+
+  it("provides an explicit security-definer lecturer moderation handoff RPC", () => {
+    const source = readRepoFile("supabase/migrations/20260528240000_add_lecturer_moderation_handoff_rpc.sql");
+
+    expect(source).toContain("create or replace function public.send_submission_to_moderation");
+    expect(source).toContain("security definer");
+    expect(source).toContain("Only the assignment owner can send a submission to moderation");
+    expect(source).toContain("Save a lecturer score before sending to moderation");
+    expect(source).toContain("grant execute on function public.send_submission_to_moderation(uuid) to authenticated");
+  });
+
   it("keeps admin dashboard metrics behind an explicit admin check", () => {
     const source = readRepoFile("supabase/migrations/20260503120500_add_admin_dashboard_metrics_rpc.sql");
 

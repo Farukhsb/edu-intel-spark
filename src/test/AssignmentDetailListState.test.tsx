@@ -116,6 +116,60 @@ describe("useAssignmentDetailListState", () => {
     ]);
   });
 
+  it("treats AI graded as the pilot review lane so first review rows stay visible", () => {
+    const submissions = [
+      buildSubmission("graded-1", "ai_graded"),
+      buildSubmission("review-1", "first_review"),
+      buildSubmission("submitted-1", "submitted"),
+    ];
+
+    const { result } = renderHook(() =>
+      useAssignmentDetailListState({
+        role: "lecturer",
+        search: "",
+        submissions,
+      }),
+    );
+
+    act(() => {
+      result.current.setStatusFilter("ai_graded");
+    });
+
+    expect(result.current.filteredSubmissions.map((submission) => submission.id)).toEqual([
+      "graded-1",
+      "review-1",
+    ]);
+  });
+
+  it("treats moderation as a grouped lane across the moderation workflow states", () => {
+    const submissions = [
+      buildSubmission("pending-1", "moderation_pending"),
+      buildSubmission("progress-1", "moderation_in_progress"),
+      buildSubmission("moderated-1", "moderated"),
+      buildSubmission("escalated-1", "escalated"),
+      buildSubmission("released-1", "released"),
+    ];
+
+    const { result } = renderHook(() =>
+      useAssignmentDetailListState({
+        role: "lecturer",
+        search: "",
+        submissions,
+      }),
+    );
+
+    act(() => {
+      result.current.setStatusFilter("moderation_pending");
+    });
+
+    expect(result.current.filteredSubmissions.map((submission) => submission.id)).toEqual([
+      "pending-1",
+      "progress-1",
+      "moderated-1",
+      "escalated-1",
+    ]);
+  });
+
   it("keeps select-all behavior scoped to visible submissions", () => {
     const submissions = [
       buildSubmission("submitted-1", "submitted"),

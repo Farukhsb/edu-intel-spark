@@ -38,7 +38,7 @@ export interface ExtractionQualityResult {
   suspiciousPdfArtifactCount: number;
 }
 
-export type PdfExtractionMethod = "pdf_fallback";
+export type PdfExtractionMethod = "pdf_fallback" | "pdf_docling_fallback";
 
 export type PdfTextParser = (bytes: Uint8Array) => Promise<string>;
 
