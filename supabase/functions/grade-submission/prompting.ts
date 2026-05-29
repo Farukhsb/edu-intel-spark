@@ -205,12 +205,14 @@ export async function requestStructuredGrade({
   prompt,
   rubricLength,
   isMathMode,
+  responseSchema,
 }: {
   gradingModel: string;
   systemPrompt: string;
   prompt: string;
   rubricLength: number;
   isMathMode: boolean;
+  responseSchema?: Record<string, unknown>;
 }) {
   const aiData = await createResponse({
     model: gradingModel,
@@ -224,7 +226,7 @@ export async function requestStructuredGrade({
       format: {
         type: "json_schema",
         name: "submit_grade",
-        schema: buildResponseSchema(rubricLength, isMathMode),
+        schema: responseSchema ?? buildResponseSchema(rubricLength, isMathMode),
         strict: true,
       },
     },

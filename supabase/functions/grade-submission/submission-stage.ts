@@ -18,9 +18,18 @@ import {
   buildRegradeAnchorText,
   buildRubricCalibrationGuide,
   buildSystemPrompt,
+  buildResponseSchema,
   requestStructuredGrade,
   type RubricCriterion,
 } from "./prompting.ts";
+import {
+  buildPilotLeanGradingPrompt,
+  buildPilotLeanResponseSchema,
+  buildPilotLeanSystemPrompt,
+  isPilotLeanGradingMode,
+  PILOT_LEAN_CRITERION_EVIDENCE_MAX_CHARS,
+  PILOT_LEAN_GRADING_EVIDENCE_MAX_CHARS,
+} from "./pilot-grading.ts";
 import {
   blindSubmissionText,
   buildCriterionEvidencePackets,
@@ -56,6 +65,9 @@ import type {
   SubmissionForGrading,
 } from "./types.ts";
 
+export const PDF_EVIDENCE_INADEQUATE_MESSAGE =
+  "We could not extract enough reliable text from this PDF for AI-assisted marking. Please upload a DOCX version or continue with manual review.";
+
 function readEnv(name: string) {
   if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
     return Deno.env.get(name);
@@ -68,8 +80,172 @@ function readEnv(name: string) {
   return undefined;
 }
 
+type PdfEvidenceAdequacyTelemetry = {
+  file_type: string;
+  extraction_method: string;
+  assignment_type: string;
+  extracted_text_length: number;
+  word_count: number;
+  readable_sentence_count: number;
+  rubric_criterion_count: number;
+  rubric_text_length: number;
+  essay_like_assignment: boolean;
+  substantial_context: boolean;
+  minimum_word_count: number;
+  minimum_character_count: number;
+  minimum_sentence_count: number;
+  reasons: string[];
+};
+
+export class PdfEvidenceAdequacyError extends Error {
+  telemetry: PdfEvidenceAdequacyTelemetry;
+  errorCode: "extraction_quality_failed";
+  safeErrorCategory: "document_processing_failure";
+
+  constructor(telemetry: PdfEvidenceAdequacyTelemetry) {
+    super(PDF_EVIDENCE_INADEQUATE_MESSAGE);
+    this.name = "PdfEvidenceAdequacyError";
+    this.telemetry = telemetry;
+    this.errorCode = "extraction_quality_failed";
+    this.safeErrorCategory = "document_processing_failure";
+  }
+}
+
 function isPilotSinglePassMode() {
   return readEnv("OPENAI_PILOT_SINGLE_PASS_MODE") !== "false";
+}
+
+export function isPilotLeanGradingModeEnabled() {
+  return isPilotLeanGradingMode();
+}
+
+function normalizeContextText(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function isSubstantialProseAssessmentContext(params: {
+  assignment: AssignmentForGrading;
+  normalizedRubric: RubricCriterion[];
+  rubricText: string;
+}) {
+  const title = normalizeContextText(params.assignment.title);
+  const description = normalizeContextText(params.assignment.description);
+  const rubricText = normalizeContextText(params.rubricText);
+  const rubricCriterionCount = params.normalizedRubric.length;
+  const maximumScore = Number(params.assignment.max_score) || 0;
+  const proseAssessmentSignals = [
+    "essay",
+    "report",
+    "reflect",
+    "reflection",
+    "critical",
+    "discussion",
+    "analysis",
+    "evaluate",
+    "evaluation",
+    "literature review",
+    "case study",
+    "argument",
+    "written",
+    "prose",
+  ];
+  const combinedContext = `${title}\n${description}\n${rubricText}`;
+  const hasProseAssessmentSignal = proseAssessmentSignals.some((signal) => combinedContext.includes(signal));
+
+  return (
+    hasProseAssessmentSignal ||
+    rubricCriterionCount >= 2 ||
+    maximumScore >= 50 ||
+    rubricText.length >= 180 ||
+    description.length >= 120
+  );
+}
+
+function countReadableSentences(text: string) {
+  return text
+    .replace(/\r/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .split(/(?<=[.?!])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 20 && /\s/.test(sentence)).length;
+}
+
+function countWords(text: string) {
+  return (text.match(/\b[\p{L}\p{N}']+\b/gu) || []).length;
+}
+
+function getTextLength(text: string) {
+  return text.replace(/\r/g, "\n").trim().length;
+}
+
+function toPositiveInteger(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
+  return Math.trunc(numeric);
+}
+
+export function assessPdfEvidenceAdequacy(params: {
+  assignment: AssignmentForGrading;
+  normalizedRubric: RubricCriterion[];
+  rubricText: string;
+  extractedText: string;
+  extractionMetadata?: Record<string, unknown>;
+}): { isAdequate: boolean; telemetry: PdfEvidenceAdequacyTelemetry } {
+  const fileType = typeof params.extractionMetadata?.file_type === "string"
+    ? params.extractionMetadata?.file_type.toLowerCase()
+    : "";
+  const extractionMethod = typeof params.extractionMetadata?.extraction_method === "string"
+    ? params.extractionMetadata?.extraction_method
+    : "unknown";
+  const substantialContext = isSubstantialProseAssessmentContext({
+    assignment: params.assignment,
+    normalizedRubric: params.normalizedRubric,
+    rubricText: params.rubricText,
+  });
+  const extractedTextLength =
+    toPositiveInteger(params.extractionMetadata?.extracted_text_length) ?? getTextLength(params.extractedText);
+  const wordCount =
+    toPositiveInteger(params.extractionMetadata?.extraction_quality_word_count) ?? countWords(params.extractedText);
+  const readableSentenceCount =
+    toPositiveInteger(params.extractionMetadata?.extraction_quality_readable_sentence_count) ??
+    countReadableSentences(params.extractedText);
+  const minimumWordCount = 120;
+  const minimumCharacterCount = 900;
+  const minimumSentenceCount = 4;
+  const shouldGuardPdf = fileType === "pdf" && substantialContext;
+  const reasons: string[] = [];
+
+  if (shouldGuardPdf) {
+    if (wordCount < minimumWordCount) {
+      reasons.push(`Only ${wordCount} readable words were extracted from the PDF.`);
+    }
+    if (extractedTextLength < minimumCharacterCount) {
+      reasons.push(`Only ${extractedTextLength} readable characters were extracted from the PDF.`);
+    }
+    if (readableSentenceCount < minimumSentenceCount) {
+      reasons.push(`Only ${readableSentenceCount} readable sentence${readableSentenceCount === 1 ? "" : "s"} were extracted from the PDF.`);
+    }
+  }
+
+  return {
+    isAdequate: !shouldGuardPdf || reasons.length === 0,
+    telemetry: {
+      file_type: fileType || "unknown",
+      extraction_method: extractionMethod,
+      assignment_type: substantialContext ? "Substantial prose assessment" : "Short-form or non-prose assessment",
+      extracted_text_length: extractedTextLength,
+      word_count: wordCount,
+      readable_sentence_count: readableSentenceCount,
+      rubric_criterion_count: params.normalizedRubric.length,
+      rubric_text_length: params.rubricText.trim().length,
+      essay_like_assignment: substantialContext,
+      substantial_context: substantialContext,
+      minimum_word_count: minimumWordCount,
+      minimum_character_count: minimumCharacterCount,
+      minimum_sentence_count: minimumSentenceCount,
+      reasons,
+    },
+  };
 }
 
 type GradeSingleSubmissionParams = {
@@ -106,6 +282,16 @@ export async function gradeSingleSubmission({
   fetchSubmissionContent,
 }: GradeSingleSubmissionParams) {
   const { extractedText, extractionMetadata } = await fetchSubmissionContent(sub);
+  const pdfEvidenceAdequacy = assessPdfEvidenceAdequacy({
+    assignment,
+    normalizedRubric,
+    rubricText,
+    extractedText,
+    extractionMetadata,
+  });
+  if (!pdfEvidenceAdequacy.isAdequate) {
+    throw new PdfEvidenceAdequacyError(pdfEvidenceAdequacy.telemetry);
+  }
   const blindedText = blindSubmissionText({
     text: extractedText,
     studentName: sub.student_name,
@@ -262,19 +448,20 @@ export async function gradeSingleSubmission({
     });
   }
 
+  const pilotLeanMode = isPilotLeanGradingMode();
   const gradingEvidencePacket = buildGradingEvidencePacket({
     submissionText: blindedText,
     rubric: normalizedRubric,
     assignmentTitle: assignment.title,
     assignmentDescription: assignment.description,
-    maxChars: 18_000,
+    maxChars: pilotLeanMode ? PILOT_LEAN_GRADING_EVIDENCE_MAX_CHARS : 18_000,
   });
   const criterionEvidencePackets = buildCriterionEvidencePackets({
     submissionText: blindedText,
     rubric: normalizedRubric,
     assignmentTitle: assignment.title,
     assignmentDescription: assignment.description,
-    maxCharsPerCriterion: 2600,
+    maxCharsPerCriterion: pilotLeanMode ? PILOT_LEAN_CRITERION_EVIDENCE_MAX_CHARS : 2600,
   });
   const criterionEvidenceText = criterionEvidencePackets
     .map((entry, index) =>
@@ -289,27 +476,58 @@ export async function gradeSingleSubmission({
   });
   const isMathMode = assignmentType === "Mathematics" || assignmentType === "Problem Solving";
 
-  const systemPrompt = buildSystemPrompt(
-    assignmentType,
-    normalizedRubric.length,
-    assignment.max_score,
-  );
-  const rubricCalibrationGuide = buildRubricCalibrationGuide(
-    normalizedRubric,
-    assignment.max_score,
-  );
-  const prompt = buildGradingPrompt({
-    assignmentType,
-    assignmentTitle: assignment.title,
-    assignmentDescription: assignment.description,
-    moduleCode: assignment.module_code,
-    maximumScore: assignment.max_score,
-    rubricText,
-    rubricCalibrationGuide,
-    regradeAnchorText: buildRegradeAnchorText(existingGrade),
-    textPreview: gradingEvidencePacket,
-    criterionEvidenceText,
-  });
+  const systemPrompt = pilotLeanMode
+    ? buildPilotLeanSystemPrompt({
+      assignmentType,
+      rubricLength: normalizedRubric.length,
+      maximumScore: assignment.max_score,
+    })
+    : buildSystemPrompt(
+      assignmentType,
+      normalizedRubric.length,
+      assignment.max_score,
+    );
+  const responseSchema = pilotLeanMode
+    ? buildPilotLeanResponseSchema(normalizedRubric.length, isMathMode)
+    : buildResponseSchema(normalizedRubric.length, isMathMode);
+  const prompt = pilotLeanMode
+    ? buildPilotLeanGradingPrompt({
+      assignmentType,
+      assignmentTitle: assignment.title,
+      assignmentDescription: assignment.description,
+      maximumScore: assignment.max_score,
+      rubric: normalizedRubric,
+      textPreview: gradingEvidencePacket,
+      criterionEvidenceText,
+    })
+    : buildGradingPrompt({
+      assignmentType,
+      assignmentTitle: assignment.title,
+      assignmentDescription: assignment.description,
+      moduleCode: assignment.module_code,
+      maximumScore: assignment.max_score,
+      rubricText,
+      rubricCalibrationGuide: buildRubricCalibrationGuide(
+        normalizedRubric,
+        assignment.max_score,
+      ),
+      regradeAnchorText: buildRegradeAnchorText(existingGrade),
+      textPreview: gradingEvidencePacket,
+      criterionEvidenceText,
+    });
+
+  const requestDiagnostics = {
+    pilot_lean_mode: pilotLeanMode,
+    system_prompt_char_length: systemPrompt.length,
+    user_prompt_char_length: prompt.length,
+    response_schema_char_length: JSON.stringify(responseSchema).length,
+    rubric_criterion_count: normalizedRubric.length,
+    submission_evidence_char_length: gradingEvidencePacket.length,
+    criterion_evidence_total_char_length: criterionEvidencePackets.reduce(
+      (sum, entry) => sum + entry.packet.length,
+      0,
+    ),
+  };
 
   const previousAiScore = existingGrade?.ai_score != null ? Number(existingGrade.ai_score) : null;
   const pilotSinglePassMode = isPilotSinglePassMode();
@@ -331,6 +549,7 @@ export async function gradeSingleSubmission({
       prompt,
       rubricLength: normalizedRubric.length,
       isMathMode,
+      responseSchema,
     });
 
     if (!passResult) continue;
@@ -348,6 +567,7 @@ export async function gradeSingleSubmission({
         prompt: reevaluationPrompt,
         rubricLength: normalizedRubric.length,
         isMathMode,
+        responseSchema,
       });
       if (reevaluated) {
         passResult = reevaluated;
@@ -479,14 +699,17 @@ export async function gradeSingleSubmission({
   );
   normalized = fairnessAndReview.normalized;
   gradingConfidence = fairnessAndReview.gradingConfidence;
-  const reviewReasons = fairnessAndReview.reviewReasons;
   const mathAnalysis = fairnessAndReview.mathAnalysis;
   const fairnessNotes = fairnessAndReview.fairnessNotes;
   const evidenceCoverage = fairnessAndReview.evidenceCoverage;
   const ukBand = fairnessAndReview.ukBand;
   const relevanceAssessment = fairnessAndReview.relevanceAssessment;
   const recalibrationApplied = fairnessAndReview.recalibrationApplied;
-  const requiresLecturerReview = fairnessAndReview.requiresLecturerReview;
+  const reviewReasons = [...fairnessAndReview.reviewReasons];
+  const requiresLecturerReview = pilotLeanMode ? true : fairnessAndReview.requiresLecturerReview;
+  if (pilotLeanMode) {
+    reviewReasons.push("Pilot lean mode requires lecturer review for every AI-generated grade before release.");
+  }
   const feedbackParts = fairnessAndReview.feedbackParts;
 
   const gradingHistory = buildGradingHistory({
@@ -533,6 +756,7 @@ export async function gradeSingleSubmission({
     mainStrengths: normalizeStringList(gradeResult.main_strengths),
     mainWeaknesses: normalizeStringList(gradeResult.main_weaknesses),
     extractionMetadata,
+    requestDiagnostics,
   });
 
   generatedResultsByFingerprint.set(gradingInputHash, finalizedGradeResult);
