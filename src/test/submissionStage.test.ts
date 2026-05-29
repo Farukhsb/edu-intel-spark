@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { gradeSingleSubmission } from "../../supabase/functions/grade-submission/submission-stage";
+import {
+  assessPdfEvidenceAdequacy,
+  gradeSingleSubmission,
+  PDF_EVIDENCE_INADEQUATE_MESSAGE,
+} from "../../supabase/functions/grade-submission/submission-stage";
 import {
   buildGradingInputHash,
   GRADING_PROMPT_VERSION,
@@ -150,5 +154,237 @@ describe("grade-submission submission stage", () => {
     ).rejects.toThrow(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
 
     expect(requestStructuredGradeSpy).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for a readable but insufficient essay PDF before AI grading", async () => {
+    const assignment: AssignmentForGrading = {
+      id: "assignment-pdf-essay",
+      lecturer_id: "lecturer-1",
+      title: "Evaluating AI in Higher Education",
+      description: "Write a structured essay evaluating benefits and risks.",
+      module_code: "EDU401",
+      max_score: 100,
+      rubric: [
+        { criterion: "Critical evaluation", weight: 60, description: "Address the assignment brief directly." },
+        { criterion: "Use of evidence", weight: 40, description: "Support claims with relevant evidence." },
+      ],
+    };
+    const { normalizedRubric, rubricText } = normalizeRubricForAssignment(assignment);
+    const submission: SubmissionForGrading = {
+      id: "submission-pdf-essay",
+      assignment_id: assignment.id,
+      student_name: "Student C",
+      student_email: "studentc@example.com",
+      file_name: "essay.pdf",
+      file_url: "submissions/essay.pdf",
+    };
+    const extractedText = Array.from({ length: 8 }, (_, index) =>
+      `Paragraph ${index + 1}. Artificial intelligence is changing university assessment, but lecturers still need human oversight to protect student data and fairness.`
+    ).join("\n\n");
+    const requestStructuredGradeSpy = vi.spyOn(promptingModule, "requestStructuredGrade");
+
+    const adequacy = assessPdfEvidenceAdequacy({
+      assignment,
+      normalizedRubric,
+      rubricText,
+      extractedText: extractedText.slice(0, 480),
+      extractionMetadata: {
+        file_type: "pdf",
+        extraction_method: "pdf_fallback",
+        extracted_text_length: 480,
+        extraction_quality_word_count: 64,
+        extraction_quality_readable_sentence_count: 2,
+        extraction_success: true,
+      },
+    });
+
+    expect(adequacy.isAdequate).toBe(false);
+    expect(adequacy.telemetry.reasons.length).toBeGreaterThan(0);
+
+    await expect(
+      gradeSingleSubmission({
+        sub: submission,
+        assignment,
+        existingGrade: null,
+        existingGradesByFingerprint: new Map(),
+        generatedResultsByFingerprint: new Map(),
+        normalizedRubric,
+        rubricText,
+        gradingModel: "gpt-test-model",
+        forceRegenerate: false,
+        regradeReason: "Initial grade generation.",
+        confidenceThreshold: 0.7,
+        gradingPasses: 1,
+        getPassSpreadThreshold: () => 8,
+        fetchSubmissionContent: async () => ({
+          extractedText: extractedText.slice(0, 480),
+          extractionMetadata: {
+            file_type: "pdf",
+            extraction_method: "pdf_fallback",
+            extracted_text_length: 480,
+            extraction_quality_word_count: 64,
+            extraction_quality_readable_sentence_count: 2,
+            extraction_success: true,
+          },
+        }),
+      }),
+    ).rejects.toThrow(PDF_EVIDENCE_INADEQUATE_MESSAGE);
+
+    expect(requestStructuredGradeSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows a complete selectable-text PDF to proceed to AI grading", async () => {
+    const requestStructuredGradeSpy = vi.spyOn(promptingModule, "requestStructuredGrade");
+    requestStructuredGradeSpy.mockResolvedValueOnce({
+      total_score: 74,
+      overall_feedback: "The essay is well supported and directly addresses the brief.",
+      confidence_score: 0.84,
+      lecturer_review_required: false,
+      criteria: [
+        {
+          criterion_name: "Critical evaluation",
+          awarded_score: 44,
+          max_score: 60,
+          reason_for_score: "The discussion is balanced and substantive.",
+          evidence_from_submission: ["The essay compares benefits, risks, and governance issues in detail."],
+          confidence_score: 0.84,
+        },
+        {
+          criterion_name: "Use of evidence",
+          awarded_score: 30,
+          max_score: 40,
+          reason_for_score: "The essay cites several relevant examples.",
+          evidence_from_submission: ["The lecturer examples and policy references are integrated throughout."],
+          confidence_score: 0.8,
+        },
+      ],
+    });
+
+    const assignment: AssignmentForGrading = {
+      id: "assignment-pdf-complete",
+      lecturer_id: "lecturer-1",
+      title: "Evaluating AI in Higher Education",
+      description: "Write a structured essay evaluating benefits and risks.",
+      module_code: "EDU401",
+      max_score: 100,
+      rubric: [
+        { criterion: "Critical evaluation", weight: 60, description: "Address the assignment brief directly." },
+        { criterion: "Use of evidence", weight: 40, description: "Support claims with relevant evidence." },
+      ],
+    };
+    const { normalizedRubric, rubricText } = normalizeRubricForAssignment(assignment);
+    const submission: SubmissionForGrading = {
+      id: "submission-pdf-complete",
+      assignment_id: assignment.id,
+      student_name: "Student C",
+      student_email: "studentc@example.com",
+      file_name: "essay.pdf",
+      file_url: "submissions/essay.pdf",
+    };
+    const extractedText = Array.from({ length: 14 }, (_, index) =>
+      `Paragraph ${index + 1}. Artificial intelligence is changing university assessment, but lecturers still need human oversight to protect student data and fairness.`
+    ).join("\n\n");
+
+    const result = await gradeSingleSubmission({
+      sub: submission,
+      assignment,
+      existingGrade: null,
+      existingGradesByFingerprint: new Map(),
+      generatedResultsByFingerprint: new Map(),
+      normalizedRubric,
+      rubricText,
+      gradingModel: "gpt-test-model",
+      forceRegenerate: false,
+      regradeReason: "Initial grade generation.",
+      confidenceThreshold: 0.7,
+      gradingPasses: 1,
+      getPassSpreadThreshold: () => 8,
+      fetchSubmissionContent: async () => ({
+        extractedText,
+        extractionMetadata: {
+          file_type: "pdf",
+          extraction_method: "pdf_fallback",
+          extracted_text_length: extractedText.length,
+          extraction_quality_word_count: 260,
+          extraction_quality_readable_sentence_count: 14,
+          extraction_success: true,
+        },
+      }),
+    });
+
+    expect(result.success).toBe(true);
+    expect(requestStructuredGradeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reject a short valid PDF when the assignment is a short-task style prompt", async () => {
+    const requestStructuredGradeSpy = vi.spyOn(promptingModule, "requestStructuredGrade");
+    requestStructuredGradeSpy.mockResolvedValueOnce({
+      total_score: 20,
+      overall_feedback: "The answer is concise but correct.",
+      confidence_score: 0.77,
+      lecturer_review_required: true,
+      criteria: [
+        {
+          criterion_name: "Correct method",
+          awarded_score: 20,
+          max_score: 20,
+          reason_for_score: "The method is correct for the worked solution.",
+          evidence_from_submission: ["The student isolates the variable and shows the working clearly."],
+          confidence_score: 0.77,
+        },
+      ],
+    });
+
+    const assignment: AssignmentForGrading = {
+      id: "assignment-short-pdf",
+      lecturer_id: "lecturer-1",
+      title: "Worked Solution",
+      description: "Show your working for the short numerical problem.",
+      module_code: "MATH101",
+      max_score: 20,
+      rubric: [
+        { criterion: "Correct method", weight: 20, description: "Show the correct working." },
+      ],
+    };
+    const { normalizedRubric, rubricText } = normalizeRubricForAssignment(assignment);
+    const submission: SubmissionForGrading = {
+      id: "submission-short-pdf",
+      assignment_id: assignment.id,
+      student_name: "Student C",
+      student_email: "studentc@example.com",
+      file_name: "short-worked-solution.pdf",
+      file_url: "submissions/short-worked-solution.pdf",
+    };
+    const extractedText = "x = 4 because 2x = 8.";
+
+    const result = await gradeSingleSubmission({
+      sub: submission,
+      assignment,
+      existingGrade: null,
+      existingGradesByFingerprint: new Map(),
+      generatedResultsByFingerprint: new Map(),
+      normalizedRubric,
+      rubricText,
+      gradingModel: "gpt-test-model",
+      forceRegenerate: false,
+      regradeReason: "Initial grade generation.",
+      confidenceThreshold: 0.7,
+      gradingPasses: 1,
+      getPassSpreadThreshold: () => 8,
+      fetchSubmissionContent: async () => ({
+        extractedText,
+        extractionMetadata: {
+          file_type: "pdf",
+          extraction_method: "pdf_fallback",
+          extracted_text_length: extractedText.length,
+          extraction_quality_word_count: 5,
+          extraction_quality_readable_sentence_count: 1,
+          extraction_success: true,
+        },
+      }),
+    });
+
+    expect(result.success).toBe(true);
+    expect(requestStructuredGradeSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -27,6 +27,7 @@ import {
   normalizeRubricForAssignment,
 } from "./request-stage.ts";
 import { gradeSingleSubmission } from "./submission-stage.ts";
+import { PdfEvidenceAdequacyError } from "./submission-stage.ts";
 import type { FetchSubmissionContentForGrading } from "./types.ts";
 
 const CONFIDENCE_THRESHOLD = 0.7;
@@ -103,6 +104,12 @@ class ExtractionFailureError extends Error {
     this.errorCode = params.errorCode;
     this.safeErrorCategory = "document_processing_failure";
   }
+}
+
+function isDocumentExtractionError(
+  error: unknown,
+): error is ExtractionFailureError | PdfEvidenceAdequacyError {
+  return error instanceof ExtractionFailureError || error instanceof PdfEvidenceAdequacyError;
 }
 
 function sanitizeTelemetryString(value: string | null | undefined, maxLength = 200) {
@@ -563,18 +570,14 @@ Deno.serve(async (req) => {
           submissionId: sub.id,
           assignmentId: requestedAssignmentId,
           userId: user.id,
-          provider: gradeErr instanceof ExtractionFailureError ? "document_extraction" : "openai",
+          provider: isDocumentExtractionError(gradeErr) ? "document_extraction" : "openai",
           reason,
-          errorCode: gradeErr instanceof ExtractionFailureError ? gradeErr.errorCode : undefined,
-          safeErrorCategory: gradeErr instanceof ExtractionFailureError
-            ? gradeErr.safeErrorCategory
-            : undefined,
-          safeErrorMessage: gradeErr instanceof ExtractionFailureError
-            ? (
-              gradeErr.errorCode === "extraction_quality_failed"
-                ? EXTRACTION_QUALITY_FAILURE_TELEMETRY_MESSAGE
-                : EXTRACTION_FAILURE_TELEMETRY_MESSAGE
-            )
+          errorCode: isDocumentExtractionError(gradeErr) ? gradeErr.errorCode : undefined,
+          safeErrorCategory: isDocumentExtractionError(gradeErr) ? gradeErr.safeErrorCategory : undefined,
+          safeErrorMessage: isDocumentExtractionError(gradeErr)
+            ? gradeErr.errorCode === "extraction_quality_failed"
+              ? EXTRACTION_QUALITY_FAILURE_TELEMETRY_MESSAGE
+              : EXTRACTION_FAILURE_TELEMETRY_MESSAGE
             : undefined,
         });
         results.push({
