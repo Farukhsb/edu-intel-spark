@@ -13,6 +13,7 @@ Core platform responsibilities are split like this:
 - Postgres stores assignments, submissions, grades, moderation data, communications, and analytics-supporting records
 - Supabase Storage stores uploaded student files
 - Supabase Edge Functions handle AI-heavy or privileged backend workflows such as grading, explain-grade, integrity review, and bulk operations
+- Document extraction stays inside Edge Functions, and unreadable PDFs can optionally fall back to a separately hosted Docling service when the backend secrets are configured
 
 At a high level:
 
