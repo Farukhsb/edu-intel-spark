@@ -212,7 +212,7 @@ export function assessPdfEvidenceAdequacy(params: {
   const minimumWordCount = 120;
   const minimumCharacterCount = 900;
   const minimumSentenceCount = 4;
-  const shouldGuardPdf = fileType === "pdf" && essayLikeAssignment && substantialContext;
+  const shouldGuardPdf = fileType === "pdf" && substantialContext;
   const reasons: string[] = [];
 
   if (shouldGuardPdf) {
