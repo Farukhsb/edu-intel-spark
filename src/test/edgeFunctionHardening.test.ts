@@ -324,8 +324,9 @@ describe("edge function hardening", () => {
     expect(gradingSource).toContain("class ExtractionFailureError");
     expect(gradingSource).toContain("function sanitizeTelemetryString");
     expect(gradingSource).toContain('logWarn("grade-submission extraction rejected"');
-    expect(gradingSource).toContain('provider: gradeErr instanceof ExtractionFailureError ? "document_extraction" : "openai"');
+    expect(gradingSource).toContain("function isDocumentExtractionError(");
+    expect(gradingSource).toContain('provider: isDocumentExtractionError(gradeErr) ? "document_extraction" : "openai"');
     expect(gradingSource).toContain("extraction_quality_suspicious_pdf_artifact_count");
-    expect(gradingSource).toContain('safeErrorCategory: gradeErr instanceof ExtractionFailureError');
+    expect(gradingSource).toContain('safeErrorCategory: isDocumentExtractionError(gradeErr) ? gradeErr.safeErrorCategory : undefined');
   });
 });
