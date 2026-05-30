@@ -15,6 +15,7 @@ export type SupportedDocumentType = "code" | "docx" | "pdf" | "txt" | "unsupport
 export type ExtractionMethod =
   | "docx_mammoth"
   | PdfExtractionMethod
+  | "docling_remote"
   | "plain_text_decoder"
   | "code_text_decoder"
   | "none";
