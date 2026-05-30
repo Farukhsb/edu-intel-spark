@@ -289,7 +289,9 @@ export async function gradeSingleSubmission({
     extractedText,
     extractionMetadata,
   });
-  if (!pdfEvidenceAdequacy.isAdequate) {
+  const isPdfSubmission = pdfEvidenceAdequacy.telemetry.file_type === "pdf";
+  const isWeakPdfEvidence = isPdfSubmission && !pdfEvidenceAdequacy.isAdequate;
+  if (isWeakPdfEvidence && pdfEvidenceAdequacy.telemetry.substantial_context) {
     throw new PdfEvidenceAdequacyError(pdfEvidenceAdequacy.telemetry);
   }
   const blindedText = blindSubmissionText({
@@ -322,6 +324,9 @@ export async function gradeSingleSubmission({
     existingHash === gradingInputHash &&
     existingPromptVersion === GRADING_PROMPT_VERSION;
   if (cacheHit) {
+    if (isWeakPdfEvidence) {
+      throw new PdfEvidenceAdequacyError(pdfEvidenceAdequacy.telemetry);
+    }
     logInfo("grade-submission cache", {
       cache_hit: true,
       grading_input_hash: gradingInputHash,
@@ -368,6 +373,9 @@ export async function gradeSingleSubmission({
 
   const matchingGeneratedResult = generatedResultsByFingerprint.get(gradingInputHash);
   if (matchingGeneratedResult) {
+    if (isWeakPdfEvidence) {
+      throw new PdfEvidenceAdequacyError(pdfEvidenceAdequacy.telemetry);
+    }
     logInfo("grade-submission cache", {
       cache_hit: true,
       grading_input_hash: gradingInputHash,
@@ -404,6 +412,9 @@ export async function gradeSingleSubmission({
     matchingClusterHash === gradingInputHash &&
     matchingClusterPromptVersion === GRADING_PROMPT_VERSION
   ) {
+    if (isWeakPdfEvidence) {
+      throw new PdfEvidenceAdequacyError(pdfEvidenceAdequacy.telemetry);
+    }
     logInfo("grade-submission cache", {
       cache_hit: true,
       grading_input_hash: gradingInputHash,
