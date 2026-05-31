@@ -22,6 +22,7 @@ export interface ExternalExaminerExportRow {
   aiScore: number | null;
   lecturerScore: number | null;
   finalScore: number | null;
+  gradeSource: string | null;
   aiFeedback: string;
   lecturerFeedback: string;
   finalFeedback: string;
@@ -53,6 +54,7 @@ export interface ExternalExaminerGradeRow {
   ai_score: number | null;
   lecturer_score: number | null;
   final_score: number | null;
+  grade_source: string | null;
   ai_feedback: string | null;
   lecturer_feedback: string | null;
   final_feedback: string | null;

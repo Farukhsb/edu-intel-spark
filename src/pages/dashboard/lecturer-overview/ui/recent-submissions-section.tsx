@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GradeSourceBadge } from "@/components/dashboard/GradeSourceBadge";
 import { safeToLocaleDate } from "@/lib/date";
 
 import { formatStatusLabel } from "../useLecturerOverviewController";
@@ -53,6 +54,7 @@ export const LecturerOverviewRecentSubmissionsSection = ({
                         {submission.score}/{submission.max_score}
                       </Badge>
                     ) : null}
+                    <GradeSourceBadge source={submission.grade_source} />
                     <Button
                       size="sm"
                       variant="ghost"

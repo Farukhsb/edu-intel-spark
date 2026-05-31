@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { safeFormatDate } from "@/lib/date";
+import { buildDetailedExternalExaminerCsv, buildExternalExaminerCsv } from "@/lib/externalExaminerExport";
 import { log } from "@/lib/logger";
 import {
   DashboardDemoBanner,
@@ -125,6 +126,7 @@ const ExternalExaminerExport = () => {
               aiScore: grade?.ai_score ?? null,
               lecturerScore: grade?.lecturer_score ?? null,
               finalScore,
+              gradeSource: grade?.grade_source ?? null,
               aiFeedback: grade?.ai_feedback || "",
               lecturerFeedback: grade?.lecturer_feedback || "",
               finalFeedback: grade?.final_feedback || "",
@@ -158,59 +160,11 @@ const ExternalExaminerExport = () => {
   const handleExport = (format: "csv" | "detailed") => {
     setExporting(true);
     try {
-      const headers: string[] = [];
-      if (includeOptions.studentIdentity) headers.push("Student Name", "Student Email");
-      headers.push("Assignment", "Module Code");
-      if (includeOptions.scores) headers.push("AI Score", "Lecturer Score", "Final Score", "Classification");
-      if (includeOptions.feedback) headers.push("AI Feedback", "Lecturer Feedback", "Final Feedback");
-      if (includeOptions.moderation) headers.push("Status", "Submitted", "Reviewed", "Reviewed By");
-
-      const rows = filteredData.map((row) => {
-        const csvRow: string[] = [];
-        if (includeOptions.studentIdentity) csvRow.push(`"${row.studentName}"`, `"${row.studentEmail}"`);
-        csvRow.push(`"${row.assignmentTitle}"`, `"${row.moduleCode}"`);
-        if (includeOptions.scores) {
-          csvRow.push(String(row.aiScore ?? ""), String(row.lecturerScore ?? ""), String(row.finalScore ?? ""), row.classification);
-        }
-        if (includeOptions.feedback) {
-          csvRow.push(
-            `"${row.aiFeedback.replace(/"/g, "\"\"")}"`,
-            `"${row.lecturerFeedback.replace(/"/g, "\"\"")}"`,
-            `"${row.finalFeedback.replace(/"/g, "\"\"")}"`,
-          );
-        }
-        if (includeOptions.moderation) csvRow.push(row.status, row.submittedAt, row.reviewedAt, `"${row.reviewedBy}"`);
-        return csvRow.join(",");
-      });
-
-      const csv = [headers.join(","), ...rows].join("\n");
+      const csv = buildExternalExaminerCsv(filteredData, includeOptions);
 
       if (format === "detailed") {
-        const scores = filteredData.map((row) => row.finalScore).filter((score): score is number => score != null);
-        const avg = scores.length > 0 ? Math.round(scores.reduce((left, right) => left + right, 0) / scores.length) : 0;
-        const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
-        const moderated = filteredData.filter((row) => row.lecturerScore != null).length;
-
-        const summary = [
-          "",
-          "",
-          "EXTERNAL EXAMINER SUMMARY",
-          `Report Generated: ${new Date().toISOString().slice(0, 10)}`,
-          `Total Submissions: ${filteredData.length}`,
-          `Average Score: ${avg}%`,
-          `Pass Rate: ${passRate}%`,
-          `Moderation Coverage: ${filteredData.length > 0 ? Math.round((moderated / filteredData.length) * 100) : 0}% (${moderated}/${filteredData.length})`,
-          "",
-          "GRADE DISTRIBUTION",
-          `1st (>=70%): ${filteredData.filter((row) => row.classification === "1st").length}`,
-          `2:1 (60-69%): ${filteredData.filter((row) => row.classification === "2:1").length}`,
-          `2:2 (50-59%): ${filteredData.filter((row) => row.classification === "2:2").length}`,
-          `3rd (40-49%): ${filteredData.filter((row) => row.classification === "3rd").length}`,
-          `Fail (<40%): ${filteredData.filter((row) => row.classification === "Fail").length}`,
-        ];
-
         downloadCSV(
-          `${csv}\n${summary.join("\n")}`,
+          buildDetailedExternalExaminerCsv(filteredData, includeOptions),
           `external_examiner_report_detailed_${new Date().toISOString().slice(0, 10)}.csv`,
         );
       } else {
@@ -383,6 +337,7 @@ const ExternalExaminerExport = () => {
                     <th className="pb-2 text-right font-medium">AI</th>
                     <th className="pb-2 text-right font-medium">Lecturer</th>
                     <th className="pb-2 text-right font-medium">Final</th>
+                    <th className="pb-2 font-medium">Source</th>
                     <th className="pb-2 font-medium">Class</th>
                     <th className="pb-2 font-medium">Status</th>
                   </tr>
@@ -396,6 +351,11 @@ const ExternalExaminerExport = () => {
                       <td className="py-2 text-right">{row.aiScore ?? MISSING_FIELD_LABEL}</td>
                       <td className="py-2 text-right">{row.lecturerScore ?? MISSING_FIELD_LABEL}</td>
                       <td className="py-2 text-right font-medium">{row.finalScore ?? MISSING_FIELD_LABEL}</td>
+                      <td className="py-2">
+                        <Badge variant={row.gradeSource === "lecturer_uploaded" ? "outline" : row.gradeSource === "lecturer_reviewed" ? "default" : "secondary"} className="text-xs">
+                          {row.gradeSource ?? MISSING_FIELD_LABEL}
+                        </Badge>
+                      </td>
                       <td className="py-2"><Badge variant="outline" className="text-xs">{row.classification}</Badge></td>
                       <td className="py-2"><Badge variant={row.status === "released" ? "default" : "secondary"} className="text-xs">{row.status}</Badge></td>
                     </tr>

@@ -74,6 +74,10 @@ export const useAssignmentDetailData = ({
 
     const gradeMap: Record<string, Grade> = {};
     for (const grade of data || []) {
+      const gradeRow = grade as typeof grade & {
+        grade_source?: string | null;
+        source_metadata?: Record<string, unknown> | null;
+      };
       gradeMap[grade.submission_id] = {
         id: grade.id,
         submission_id: grade.submission_id,
@@ -81,6 +85,8 @@ export const useAssignmentDetailData = ({
         ai_feedback: grade.ai_feedback,
         ai_breakdown: toAssignmentDetailBreakdown(grade.ai_breakdown),
         assignment_type: grade.assignment_type,
+        grade_source: gradeRow.grade_source ?? null,
+        source_metadata: gradeRow.source_metadata ?? null,
         grading_confidence: grade.grading_confidence,
         grading_metadata: (grade.grading_metadata as GradingMetadata | null) ?? null,
         lecturer_score: grade.lecturer_score,
@@ -169,6 +175,8 @@ export const useAssignmentDetailData = ({
               lecturer_feedback: grade.lecturer_feedback,
               final_score: grade.final_score,
               final_feedback: grade.final_feedback,
+              grade_source: grade.grade_source ?? null,
+              source_metadata: (grade.source_metadata as Record<string, unknown> | null) ?? null,
             },
           ];
         })

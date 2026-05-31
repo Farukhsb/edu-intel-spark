@@ -22,6 +22,7 @@ export const DEMO_EXTERNAL_EXAMINER_EXPORT_DATA: ExternalExaminerExportRow[] = [
     aiScore: 68,
     lecturerScore: 70,
     finalScore: 69,
+    gradeSource: "lecturer_reviewed",
     aiFeedback:
       "The brief identifies the main affordability pressures clearly and uses current evidence effectively. Policy options are compared with reasonable balance, but the implementation risks need stronger quantification.",
     lecturerFeedback:
@@ -42,6 +43,7 @@ export const DEMO_EXTERNAL_EXAMINER_EXPORT_DATA: ExternalExaminerExportRow[] = [
     aiScore: 61,
     lecturerScore: 63,
     finalScore: 62,
+    gradeSource: "ai_graded",
     aiFeedback:
       "The memo covers informed consent, confidentiality, and participant risk appropriately. The discussion of data retention is accurate, but the mitigation plan for vulnerable participants is underdeveloped.",
     lecturerFeedback:

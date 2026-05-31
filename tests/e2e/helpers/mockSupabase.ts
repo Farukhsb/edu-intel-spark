@@ -20,6 +20,7 @@ type TableState = {
   profiles: Row[];
   communication_messages: Row[];
   student_interventions: Row[];
+  import_runs?: Row[];
 };
 
 export interface MockSupabaseState {
@@ -274,6 +275,57 @@ const handleFunctionInvoke = async (route: Route, state: MockSupabaseState) => {
     return;
   }
 
+  if (url.pathname.endsWith("/functions/v1/import-grades")) {
+    let payload: Row = {};
+    const contentType = route.request().headers()["content-type"] || "";
+    const postData = route.request().postData() || "";
+    if (contentType.includes("application/json") || postData.trim().startsWith("{")) {
+      try {
+        payload = JSON.parse(postData);
+      } catch {
+        payload = {};
+      }
+    }
+
+    state.counters.import_grades = (state.counters.import_grades ?? 0) + 1;
+    const committed = payload.confirm === true || payload.confirm === "true";
+    const preview = {
+      success: true,
+      committed,
+      assignmentId: payload.assignmentId ?? "assignment-1",
+      importMethod: payload.importMethod ?? "csv",
+      summary: {
+        rowsProcessed: 1,
+        rowsAccepted: 1,
+        rowsRejected: 0,
+        matchedExistingSubmissions: 1,
+        createdSyntheticSubmissions: 0,
+        rowsWithWarnings: 0,
+      },
+      rows: [
+        {
+          rowNumber: 2,
+          studentName: "Jane Doe",
+          studentEmail: "jane@example.edu",
+          score: 18,
+          maxScore: 20,
+          submissionDate: "2026-05-15",
+          notes: "Great work",
+          normalizedScore: 90,
+          matchedSubmissionId: "submission-1",
+          submissionAction: "match",
+          accepted: true,
+          issues: [],
+        },
+      ],
+      rejectedRows: [],
+      importId: committed ? "import-1" : undefined,
+    };
+
+    await fulfillJson(route, preview);
+    return;
+  }
+
   await fulfillJson(route, { error: "Unhandled function mock" }, 404);
 };
 
@@ -333,6 +385,7 @@ export const createMockSupabaseState = (overrides: Partial<TableState>): MockSup
     profiles: [],
     communication_messages: [],
     student_interventions: [],
+    import_runs: [],
     ...clone(overrides),
   },
   counters: {},
