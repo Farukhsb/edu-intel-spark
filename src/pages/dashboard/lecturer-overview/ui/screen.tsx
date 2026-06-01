@@ -1,4 +1,5 @@
 import type { LecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { LecturerOverviewActionCardSection } from "./action-card-section";
 import { LecturerOverviewAtRiskSummarySection } from "./at-risk-summary-section";
@@ -7,6 +8,7 @@ import { LecturerOverviewRecentSubmissionsSection } from "./recent-submissions-s
 import { LecturerOverviewPrimaryStatsSection, LecturerOverviewSecondaryStatsSection } from "./stats-sections";
 import { LecturerOverviewWorkflowPipelineSection } from "./workflow-pipeline-section";
 import type {
+  LecturerOverviewAssignment,
   LecturerOverviewAtRiskSummary,
   LecturerOverviewPipelineStage,
   LecturerOverviewQueueFocus,
@@ -23,6 +25,8 @@ export const LecturerOverviewScreen = ({
   readiness,
   topAtRiskStudents,
   heroSummary,
+  loadWarning,
+  assignments,
   primaryWorkflowTarget,
   queueFocus,
 }: {
@@ -33,6 +37,8 @@ export const LecturerOverviewScreen = ({
   readiness: LecturerOverviewReadiness;
   topAtRiskStudents: LecturerOverviewAtRiskSummary[];
   heroSummary: string;
+  loadWarning: string | null;
+  assignments: LecturerOverviewAssignment[];
   primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
   queueFocus: LecturerOverviewQueueFocus;
 }) => {
@@ -41,7 +47,14 @@ export const LecturerOverviewScreen = ({
       <LecturerOverviewHeroSection
         profile={profile}
         heroSummary={heroSummary}
+        assignments={assignments}
       />
+      {loadWarning ? (
+        <Alert className="border-warning/30 bg-warning/5 text-warning-foreground">
+          <AlertTitle>Partial data loaded</AlertTitle>
+          <AlertDescription>{loadWarning}</AlertDescription>
+        </Alert>
+      ) : null}
       <LecturerOverviewActionCardSection
         stats={stats}
         readiness={readiness}

@@ -22,10 +22,10 @@ import { safeFormatDate } from "@/lib/date";
 type AssignmentOption = {
   id: string;
   title: string;
-  module_code: string | null;
+  module_code?: string | null;
   max_score: number;
-  due_date: string | null;
-  status: string;
+  due_date?: string | null;
+  status?: string;
 };
 
 type GradeImportIssue = {
@@ -434,7 +434,7 @@ export const HybridGradeImportDialog = ({
                   </Select>
                   {selectedAssignment ? (
                     <p className="text-xs text-muted-foreground">
-                      Max score {selectedAssignment.max_score}. {formatDueLabel(selectedAssignment.due_date)}.
+                      Max score {selectedAssignment.max_score}. {formatDueLabel(selectedAssignment.due_date ?? null)}.
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">No assignments available for this account.</p>

@@ -43,10 +43,13 @@ vi.mock("lucide-react", () => {
     Clock: Icon,
     Clock3: Icon,
     Download: Icon,
+    FileSpreadsheet: Icon,
     FileText: Icon,
+    Image: Icon,
     Loader2: () => <svg data-testid="loading-spinner" />,
     Sparkles: Icon,
     Target: Icon,
+    Upload: Icon,
     Users: Icon,
   };
 });
@@ -66,23 +69,27 @@ type DashboardData = {
   assignments?: Array<Record<string, unknown>>;
   submissions?: Array<Record<string, unknown>>;
   grades?: Array<Record<string, unknown>>;
+  fallbackGrades?: Array<Record<string, unknown>>;
   keepAssignmentsPending?: boolean;
   assignmentsError?: Error | null;
   submissionsError?: Error | null;
-  gradesError?: Error | null;
+  gradesPrimaryError?: Error | null;
+  gradesFallbackError?: Error | null;
 };
 
 const setupSupabase = ({
   assignments = [],
   submissions = [],
   grades = [],
+  fallbackGrades,
   keepAssignmentsPending = false,
   assignmentsError = null,
   submissionsError = null,
-  gradesError = null,
+  gradesPrimaryError = null,
+  gradesFallbackError = null,
 }: DashboardData) => {
   mocks.supabase.from.mockImplementation((table: string) => ({
-    select: vi.fn(() => {
+    select: vi.fn((fields?: string) => {
       if (table === "assignments") {
         return {
           eq: vi.fn(() =>
@@ -103,8 +110,22 @@ const setupSupabase = ({
       }
 
       if (table === "grades") {
+        const selectedFields = typeof fields === "string" ? fields : "";
         return {
-          in: vi.fn(() => (gradesError ? Promise.reject(gradesError) : Promise.resolve({ data: grades, error: null }))),
+          in: vi.fn(() => {
+            const selectedFallbackGrades = fallbackGrades ?? grades;
+            const isPrimaryGradeQuery = selectedFields.includes("grade_source");
+
+            if (isPrimaryGradeQuery) {
+              return gradesPrimaryError
+                ? Promise.reject(gradesPrimaryError)
+                : Promise.resolve({ data: grades, error: null });
+            }
+
+            return gradesFallbackError
+              ? Promise.reject(gradesFallbackError)
+              : Promise.resolve({ data: selectedFallbackGrades, error: null });
+          }),
         };
       }
 
@@ -169,11 +190,11 @@ describe("LecturerOverview", () => {
     renderLecturerOverview();
 
     expect(await screen.findByText("Lecturer overview unavailable")).toBeInTheDocument();
-    expect(screen.getByText("The lecturer overview could not load assignments right now.")).toBeInTheDocument();
+    expect(screen.getByText("The lecturer overview could not be loaded right now.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
-  it("shows the specific grades load error when the grades query fails", async () => {
+  it("shows a warning when the grades query needs to fall back without grade_source", async () => {
     setupSupabase({
       assignments: [{ id: "assignment-1", title: "Algorithms", max_score: 100 }],
       submissions: [
@@ -188,14 +209,19 @@ describe("LecturerOverview", () => {
           submitted_at: "2026-04-01T00:00:00.000Z",
         },
       ],
-      gradesError: new Error("grades schema mismatch"),
+      gradesPrimaryError: new Error("grades schema mismatch"),
+      fallbackGrades: [{ submission_id: "submission-1", ai_score: 72, final_score: 74 }],
     });
 
     renderLecturerOverview();
 
-    expect(await screen.findByText("Lecturer overview unavailable")).toBeInTheDocument();
-    expect(screen.getByText("The lecturer overview could not load grades right now.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(await screen.findByText("Welcome back, Dr")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Some grade metadata is temporarily unavailable, but the teaching overview is still loading.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sam Student")).toBeInTheDocument();
   });
 
   it("shows empty states when no dashboard data is returned", async () => {
