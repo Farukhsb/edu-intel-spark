@@ -1,13 +1,22 @@
 import { getEnv, HttpError } from "../_shared/auth.ts";
+import { parseImportScope, parseNewAssignment } from "./assignment.ts";
 
 export type ParsedImportRequest = {
-  assignmentId: string;
+  assignmentId: string | null;
+  importScope: "existing_assignment" | "new_assignment";
   confirm: boolean;
   importMethod: "csv" | "image";
   createMissingSubmissions: boolean;
   csvText: string | null;
   files: File[];
   sourceFileName: string | null;
+  newAssignment: {
+    title: string;
+    moduleCode: string;
+    maxScore: number;
+    dueDate: string | null;
+    description: string | null;
+  } | null;
 };
 
 const HYBRID_IMPORT_ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
@@ -79,16 +88,25 @@ export async function readImportRequest(req: Request): Promise<ParsedImportReque
       .filter((value): value is File => value instanceof File);
     const assignmentId = String(formData.get("assignmentId") ?? formData.get("assignment_id") ?? "").trim();
     const explicitMethod = String(formData.get("importMethod") ?? formData.get("import_method") ?? "").trim().toLowerCase();
+    const importScope = parseImportScope(formData.get("importScope") ?? formData.get("import_scope"));
     const csvTextValue = formData.get("csvText") ?? formData.get("csv_text");
 
     return {
-      assignmentId,
+      assignmentId: assignmentId || null,
+      importScope,
       confirm: parseBoolean(formData.get("confirm"), false),
       importMethod: guessImportMethod(files, explicitMethod),
       createMissingSubmissions: parseBoolean(formData.get("createMissingSubmissions") ?? formData.get("create_missing_submissions"), true),
       csvText: typeof csvTextValue === "string" && csvTextValue.trim() ? csvTextValue : null,
       files,
       sourceFileName: files[0]?.name ?? null,
+      newAssignment: parseNewAssignment({
+        title: formData.get("newAssignmentTitle") ?? formData.get("new_assignment_title"),
+        moduleCode: formData.get("newAssignmentModuleCode") ?? formData.get("new_assignment_module_code"),
+        maxScore: formData.get("newAssignmentMaxScore") ?? formData.get("new_assignment_max_score"),
+        dueDate: formData.get("newAssignmentDueDate") ?? formData.get("new_assignment_due_date"),
+        description: formData.get("newAssignmentDescription") ?? formData.get("new_assignment_description"),
+      }),
     };
   }
 
@@ -108,6 +126,7 @@ export async function readImportRequest(req: Request): Promise<ParsedImportReque
     : typeof raw.import_method === "string"
       ? raw.import_method.trim().toLowerCase()
       : "";
+  const importScope = parseImportScope(raw.importScope ?? raw.import_scope);
   const csvText = typeof raw.csvText === "string"
     ? raw.csvText
     : typeof raw.csv_text === "string"
@@ -115,7 +134,8 @@ export async function readImportRequest(req: Request): Promise<ParsedImportReque
       : null;
 
   return {
-    assignmentId,
+    assignmentId: assignmentId || null,
+    importScope,
     confirm: typeof raw.confirm === "boolean" ? raw.confirm : parseBoolean(typeof raw.confirm === "string" ? raw.confirm : null, false),
     importMethod: guessImportMethod([], explicitMethod),
     createMissingSubmissions: typeof raw.createMissingSubmissions === "boolean"
@@ -127,5 +147,12 @@ export async function readImportRequest(req: Request): Promise<ParsedImportReque
     csvText: typeof csvText === "string" && csvText.trim() ? csvText : null,
     files: [],
     sourceFileName: typeof raw.sourceFileName === "string" ? raw.sourceFileName : null,
+    newAssignment: parseNewAssignment({
+      title: raw.newAssignmentTitle ?? raw.new_assignment_title,
+      moduleCode: raw.newAssignmentModuleCode ?? raw.new_assignment_module_code,
+      maxScore: raw.newAssignmentMaxScore ?? raw.new_assignment_max_score,
+      dueDate: raw.newAssignmentDueDate ?? raw.new_assignment_due_date,
+      description: raw.newAssignmentDescription ?? raw.new_assignment_description,
+    }),
   };
 }

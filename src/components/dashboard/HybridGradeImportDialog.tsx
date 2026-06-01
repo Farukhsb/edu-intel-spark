@@ -81,6 +81,16 @@ type DraftState = {
   imageFiles: File[];
 };
 
+type ImportScope = "existing_assignment" | "new_assignment";
+
+type NewAssignmentDraft = {
+  title: string;
+  moduleCode: string;
+  maxScore: string;
+  dueDate: string;
+  description: string;
+};
+
 const importModeLabels: Record<"csv" | "image", { title: string; subtitle: string; icon: ReactNode }> = {
   csv: {
     title: "CSV upload",
@@ -116,8 +126,16 @@ export const HybridGradeImportDialog = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"csv" | "image">(defaultMode);
+  const [importScope, setImportScope] = useState<ImportScope>(assignments.length > 0 ? "existing_assignment" : "new_assignment");
   const [assignmentId, setAssignmentId] = useState("");
   const [draft, setDraft] = useState<DraftState>({ csvText: "", csvFileName: "", imageFiles: [] });
+  const [newAssignment, setNewAssignment] = useState<NewAssignmentDraft>({
+    title: `Imported grades - ${new Date().toISOString().slice(0, 10)}`,
+    moduleCode: "",
+    maxScore: "100",
+    dueDate: "",
+    description: "",
+  });
   const [preview, setPreview] = useState<GradeImportResponse | null>(null);
   const [committed, setCommitted] = useState<GradeImportResponse | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -131,16 +149,24 @@ export const HybridGradeImportDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    if (!assignmentId && assignments.length > 0) {
+    if (importScope === "existing_assignment" && !assignmentId && assignments.length > 0) {
       setAssignmentId(assignments[0].id);
     }
-  }, [assignmentId, assignments, open]);
+  }, [assignmentId, assignments, importScope, open]);
 
   useEffect(() => {
     if (!open) {
       setMode(defaultMode);
+      setImportScope(assignments.length > 0 ? "existing_assignment" : "new_assignment");
       setAssignmentId(assignments[0]?.id ?? "");
       setDraft({ csvText: "", csvFileName: "", imageFiles: [] });
+      setNewAssignment({
+        title: `Imported grades - ${new Date().toISOString().slice(0, 10)}`,
+        moduleCode: "",
+        maxScore: "100",
+        dueDate: "",
+        description: "",
+      });
       setPreview(null);
       setCommitted(null);
       setErrorMessage(null);
@@ -152,29 +178,51 @@ export const HybridGradeImportDialog = ({
   }
 
   const activeFiles = mode === "csv" ? [] : draft.imageFiles;
-  const canPreview = Boolean(selectedAssignment) && (mode === "csv" ? draft.csvText.trim().length > 0 : activeFiles.length > 0);
+  const usingExistingAssignment = importScope === "existing_assignment";
+  const selectedNewAssignmentMaxScore = Number(newAssignment.maxScore) || 100;
+  const canPreview = usingExistingAssignment
+    ? Boolean(selectedAssignment) && (mode === "csv" ? draft.csvText.trim().length > 0 : activeFiles.length > 0)
+    : Boolean(newAssignment.title.trim()) &&
+      Boolean(newAssignment.moduleCode.trim()) &&
+      Number.isFinite(selectedNewAssignmentMaxScore) &&
+      selectedNewAssignmentMaxScore > 0 &&
+      (mode === "csv" ? draft.csvText.trim().length > 0 : activeFiles.length > 0);
   const hasAcceptedRows = Boolean(preview?.rows.some((row) => row.accepted));
   const confirmLabel = preview
     ? `Import ${preview.summary.rowsAccepted} grade${preview.summary.rowsAccepted === 1 ? "" : "s"}`
     : "Import grades";
 
   const buildBody = (confirm: boolean) => {
-    if (!selectedAssignment) {
-      throw new Error("Select an assignment before importing.");
-    }
-
     if (mode === "csv") {
       if (!draft.csvText.trim()) {
         throw new Error("Paste or upload CSV content first.");
       }
-
-      return {
-        assignmentId: selectedAssignment.id,
+      const baseBody: Record<string, unknown> = {
         confirm,
         importMethod: "csv" as const,
         createMissingSubmissions: true,
         csvText: draft.csvText.trim(),
         sourceFileName: draft.csvFileName || "grades.csv",
+        importScope,
+      };
+
+      if (usingExistingAssignment) {
+        if (!selectedAssignment) {
+          throw new Error("Select an assignment before importing.");
+        }
+        return {
+          ...baseBody,
+          assignmentId: selectedAssignment.id,
+        };
+      }
+
+      return {
+        ...baseBody,
+        newAssignmentTitle: newAssignment.title.trim(),
+        newAssignmentModuleCode: newAssignment.moduleCode.trim(),
+        newAssignmentMaxScore: selectedNewAssignmentMaxScore,
+        newAssignmentDueDate: newAssignment.dueDate || null,
+        newAssignmentDescription: newAssignment.description.trim() || null,
       };
     }
 
@@ -183,10 +231,22 @@ export const HybridGradeImportDialog = ({
     }
 
     const formData = new FormData();
-    formData.append("assignmentId", selectedAssignment.id);
     formData.append("confirm", String(confirm));
     formData.append("importMethod", "image");
     formData.append("createMissingSubmissions", "true");
+    formData.append("importScope", importScope);
+    if (usingExistingAssignment) {
+      if (!selectedAssignment) {
+        throw new Error("Select an assignment before importing.");
+      }
+      formData.append("assignmentId", selectedAssignment.id);
+    } else {
+      formData.append("newAssignmentTitle", newAssignment.title.trim());
+      formData.append("newAssignmentModuleCode", newAssignment.moduleCode.trim());
+      formData.append("newAssignmentMaxScore", String(selectedNewAssignmentMaxScore));
+      if (newAssignment.dueDate) formData.append("newAssignmentDueDate", newAssignment.dueDate);
+      if (newAssignment.description.trim()) formData.append("newAssignmentDescription", newAssignment.description.trim());
+    }
     for (const file of draft.imageFiles) {
       formData.append("file", file, file.name);
     }
@@ -236,13 +296,17 @@ export const HybridGradeImportDialog = ({
   };
 
   const handlePreview = async () => {
-    if (!selectedAssignment) {
+    if (usingExistingAssignment && !selectedAssignment) {
       toast.error("Choose an assignment first.");
       return;
     }
 
     if (!canPreview) {
-      toast.error(mode === "csv" ? "Add CSV content first." : "Upload image files first.");
+      if (usingExistingAssignment) {
+        toast.error(mode === "csv" ? "Add CSV content first." : "Upload image files first.");
+      } else {
+        toast.error("Fill in the new assignment details and add the CSV or image first.");
+      }
       return;
     }
 
@@ -417,27 +481,104 @@ export const HybridGradeImportDialog = ({
                   <Badge variant="outline">{preview ? "Preview ready" : "Draft"}</Badge>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="hybrid-grade-import-assignment">Assignment</Label>
-                  <Select value={assignmentId} onValueChange={setAssignmentId}>
-                    <SelectTrigger id="hybrid-grade-import-assignment">
-                      <SelectValue placeholder="Select an assignment" />
+              <div className="space-y-2">
+                  <Label htmlFor="hybrid-grade-import-scope">Import destination</Label>
+                  <Select
+                    value={importScope}
+                    onValueChange={(value) => {
+                      setImportScope(value as ImportScope);
+                      setPreview(null);
+                      setCommitted(null);
+                      setErrorMessage(null);
+                    }}
+                  >
+                    <SelectTrigger id="hybrid-grade-import-scope">
+                      <SelectValue placeholder="Choose destination" />
                     </SelectTrigger>
                     <SelectContent>
-                      {assignments.map((assignment) => (
-                        <SelectItem key={assignment.id} value={assignment.id}>
-                          {assignment.title}
-                          {assignment.module_code ? ` (${assignment.module_code})` : ""}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="existing_assignment">Map to existing assignment</SelectItem>
+                      <SelectItem value="new_assignment">Create new imported assignment</SelectItem>
                     </SelectContent>
                   </Select>
-                  {selectedAssignment ? (
-                    <p className="text-xs text-muted-foreground">
-                      Max score {selectedAssignment.max_score}. {formatDueLabel(selectedAssignment.due_date ?? null)}.
-                    </p>
+                  {usingExistingAssignment ? (
+                    <>
+                      <Label htmlFor="hybrid-grade-import-assignment" className="mt-3 block">Assignment</Label>
+                      <Select value={assignmentId} onValueChange={setAssignmentId}>
+                        <SelectTrigger id="hybrid-grade-import-assignment">
+                          <SelectValue placeholder="Select an assignment" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {assignments.map((assignment) => (
+                            <SelectItem key={assignment.id} value={assignment.id}>
+                              {assignment.title}
+                              {assignment.module_code ? ` (${assignment.module_code})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedAssignment ? (
+                        <p className="text-xs text-muted-foreground">
+                          Max score {selectedAssignment.max_score}. {formatDueLabel(selectedAssignment.due_date ?? null)}.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No assignments available for this account.</p>
+                      )}
+                    </>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No assignments available for this account.</p>
+                    <div className="space-y-3 rounded-lg border bg-background/80 p-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="hybrid-grade-import-new-title">Assignment title *</Label>
+                        <Input
+                          id="hybrid-grade-import-new-title"
+                          value={newAssignment.title}
+                          onChange={(event) => setNewAssignment((current) => ({ ...current, title: event.target.value }))}
+                          placeholder="Imported grades - 2026-06-01"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="hybrid-grade-import-new-module">Module code *</Label>
+                        <Input
+                          id="hybrid-grade-import-new-module"
+                          value={newAssignment.moduleCode}
+                          onChange={(event) => setNewAssignment((current) => ({ ...current, moduleCode: event.target.value }))}
+                          placeholder="e.g. CS301"
+                        />
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="hybrid-grade-import-new-max-score">Max score *</Label>
+                          <Input
+                            id="hybrid-grade-import-new-max-score"
+                            type="number"
+                            min="1"
+                            value={newAssignment.maxScore}
+                            onChange={(event) => setNewAssignment((current) => ({ ...current, maxScore: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="hybrid-grade-import-new-due-date">Due date</Label>
+                          <Input
+                            id="hybrid-grade-import-new-due-date"
+                            type="datetime-local"
+                            value={newAssignment.dueDate}
+                            onChange={(event) => setNewAssignment((current) => ({ ...current, dueDate: event.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="hybrid-grade-import-new-description">Description</Label>
+                        <Textarea
+                          id="hybrid-grade-import-new-description"
+                          value={newAssignment.description}
+                          onChange={(event) => setNewAssignment((current) => ({ ...current, description: event.target.value }))}
+                          placeholder="Optional assignment notes or rubric context"
+                          className="min-h-[90px]"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        A new draft assignment will be created first, then the imported rows will be linked to it.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

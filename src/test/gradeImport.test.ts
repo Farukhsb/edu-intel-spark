@@ -7,6 +7,7 @@ import {
   parseGradeImportCsv,
   summarizeRejectedRows,
 } from "../../supabase/functions/_shared/grade-import";
+import { parseImportScope, parseNewAssignment } from "../../supabase/functions/import-grades/assignment";
 
 describe("hybrid grade import", () => {
   it("parses CSV grade rows and normalizes scores to the assignment max", () => {
@@ -187,6 +188,25 @@ describe("hybrid grade import", () => {
       import_method: "csv",
       source_file_name: "grades.csv",
       source_file_hash: "abc123",
+    });
+  });
+
+  it("parses new assignment metadata for the import path", () => {
+    expect(parseImportScope("new_assignment")).toBe("new_assignment");
+    expect(parseImportScope("existing_assignment")).toBe("existing_assignment");
+
+    expect(parseNewAssignment({
+      title: "Imported grades - 2026-06-01",
+      moduleCode: "CS301",
+      maxScore: 20,
+      dueDate: "2026-06-30T12:00",
+      description: "Imported from legacy CSV",
+    })).toMatchObject({
+      title: "Imported grades - 2026-06-01",
+      moduleCode: "CS301",
+      maxScore: 20,
+      dueDate: "2026-06-30T12:00",
+      description: "Imported from legacy CSV",
     });
   });
 });

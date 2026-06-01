@@ -75,6 +75,43 @@ export async function loadExistingGrades(
   );
 }
 
+export async function createImportedAssignment(params: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  userId: string;
+  title: string;
+  moduleCode: string;
+  maxScore: number;
+  dueDate: string | null;
+  description: string | null;
+}) {
+  const { data, error } = await params.supabaseAdmin
+    .from("assignments")
+    .insert({
+      lecturer_id: params.userId,
+      title: params.title,
+      description: params.description,
+      module_code: params.moduleCode || null,
+      max_score: params.maxScore,
+      due_date: params.dueDate,
+      status: "draft",
+      rubric: [],
+    })
+    .select("id, title, module_code, max_score, due_date")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || "Failed to create imported assignment");
+  }
+
+  return {
+    id: data.id as string,
+    title: data.title as string,
+    moduleCode: (data.module_code as string | null) ?? null,
+    maxScore: Number(data.max_score ?? params.maxScore),
+    dueDate: (data.due_date as string | null) ?? null,
+  };
+}
+
 export async function confirmImport(params: {
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   userId: string;
