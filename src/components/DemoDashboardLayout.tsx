@@ -19,7 +19,7 @@ import {
   type CommunicationMessage,
 } from "@/lib/communications";
 import { getStudentSupportNotificationDestination } from "@/lib/studentSupportWorkflow";
-import { preloadCommonRoleRoutes } from "@/lib/routePreloads";
+import { preloadDemoRoleRoutes } from "@/lib/routePreloads";
 import {
   adminSections,
   getDefaultSectionState,
@@ -36,6 +36,9 @@ const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 const STUDENT_SIDEBAR_STATE_KEY = "gradeai:student-sidebar-sections";
 
 const rewriteDashboardLinkForDemo = (to: string) => {
+  if (to === "/dashboard" || to.startsWith("/dashboard?")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
   if (to.startsWith("/dashboard/performance")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
@@ -337,7 +340,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
   }, [openSections, sidebarStateKey]);
 
   useEffect(() => {
-    preloadCommonRoleRoutes(profile?.role);
+    preloadDemoRoleRoutes(profile?.role);
   }, [profile?.role]);
 
   const toggleSection = (label: string) => {

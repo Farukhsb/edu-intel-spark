@@ -46,6 +46,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/LecturerOverview"),
     paths: [],
   },
+  demoLecturerOverview: {
+    loader: () => import("@/pages/dashboard/DemoLecturerOverview"),
+    paths: [],
+  },
   cohortAnalytics: {
     loader: () => import("@/pages/dashboard/CohortAnalytics"),
     paths: ["/dashboard/cohort-analytics"],
@@ -188,5 +192,29 @@ export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {
 
   if (role === "student") {
     preloadRoute("/dashboard/assignments");
+  }
+};
+
+export const preloadDemoRoleRoutes = (role: AppRole | null | undefined) => {
+  if (role === "lecturer") {
+    void routeLoaders.demoLecturerOverview();
+    void routeLoaders.demoPerformanceTrends();
+    void routeLoaders.demoCohortAnalytics();
+    void routeLoaders.demoLearningOutcomes();
+    void routeLoaders.demoModerationDashboard();
+    void routeLoaders.demoAcademicIntegrity();
+    return;
+  }
+
+  if (role === "admin") {
+    void routeLoaders.demoInstitutionalInsights();
+    void routeLoaders.demoAccreditationDashboard();
+    void routeLoaders.demoExternalExaminerExport();
+    return;
+  }
+
+  if (role === "student") {
+    void routeLoaders.demoStudentGrades();
+    void routeLoaders.demoImprovementPlan();
   }
 };

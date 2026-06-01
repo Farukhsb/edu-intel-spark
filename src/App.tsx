@@ -28,6 +28,7 @@ const ForcePasswordChange = lazy(routeLoaders.forcePasswordChange);
 const DashboardLayout = lazy(routeLoaders.dashboardLayout);
 const DemoDashboardLayout = lazy(routeLoaders.demoDashboardLayout);
 const LecturerOverview = lazy(routeLoaders.lecturerOverview);
+const DemoLecturerOverview = lazy(routeLoaders.demoLecturerOverview);
 const DemoCohortAnalytics = lazy(routeLoaders.demoCohortAnalytics);
 const CohortAnalytics = lazy(routeLoaders.cohortAnalytics);
 const PerformanceTrends = lazy(routeLoaders.performanceTrends);
@@ -145,7 +146,7 @@ const DashboardRouter = () => {
 const DemoDashboardRouter = () => {
   const { role } = useAuth();
   if (isAdminRole(role)) return <AdminDashboard />;
-  if (role === "lecturer") return <LecturerOverview />;
+  if (role === "lecturer") return <DemoLecturerOverview />;
   return <DemoStudentGrades />;
 };
 
