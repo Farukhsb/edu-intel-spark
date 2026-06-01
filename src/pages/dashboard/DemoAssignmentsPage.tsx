@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { DemoAssignmentsScreen } from "@/pages/dashboard/assignments/screen";
+import { DemoAssignmentsScreen } from "@/pages/dashboard/assignments/demo-screen";
 import { useDemoAssignmentsController } from "@/pages/dashboard/assignments/useDemoAssignmentsController";
 
 const DemoAssignmentsPage = () => {
