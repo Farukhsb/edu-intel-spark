@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardDemoBanner, DashboardEmptyState } from "@/components/dashboard/PageStates";
-import { ProgrammeReports } from "./programmeReports";
+import { DemoProgrammeReports } from "./demo-programmeReports";
 import { useDemoAccreditationDashboardController } from "./useDemoAccreditationDashboardController";
 
 const MetricBar = ({ value, className = "h-2" }: { value: number; className?: string }) => (
@@ -353,7 +353,7 @@ export const AccreditationDashboardScreen = ({
       </TabsContent>
 
       <TabsContent value="programme" className="space-y-4">
-        {activeTab === "programme" ? <ProgrammeReports isDemo={true} /> : null}
+        {activeTab === "programme" ? <DemoProgrammeReports /> : null}
       </TabsContent>
     </Tabs>
   </div>

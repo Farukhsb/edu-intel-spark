@@ -354,7 +354,7 @@ export const LiveAccreditationDashboardScreen = ({
       </TabsContent>
 
       <TabsContent value="programme" className="space-y-4">
-        <ProgrammeReports isDemo={false} />
+        <ProgrammeReports />
       </TabsContent>
     </Tabs>
   </div>

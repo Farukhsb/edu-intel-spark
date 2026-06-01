@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { BookOpen, Download } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
-import { fetchProgrammeReportDataset } from "@/lib/data/academic";
-import { log } from "@/lib/logger";
-import { deriveProgrammeReports, type ProgrammeReport } from "@/lib/accreditationMetrics";
+import type { ProgrammeReport } from "@/lib/accreditationMetrics";
+import { DEMO_PROGRAMME_REPORTS } from "./demoData";
 
 const exportProgrammeReport = (programmes: ProgrammeReport[]) => {
   const lines = ["Programme-Level Report - GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
@@ -25,30 +25,13 @@ const exportProgrammeReport = (programmes: ProgrammeReport[]) => {
   URL.revokeObjectURL(url);
 };
 
-export const ProgrammeReports = () => {
+export const DemoProgrammeReports = () => {
   const [loading, setLoading] = useState(true);
   const [programmes, setProgrammes] = useState<ProgrammeReport[]>([]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { assignments, submissions, grades } = await fetchProgrammeReportDataset();
-
-        setProgrammes(
-          deriveProgrammeReports({
-            assignments,
-            submissions,
-            grades,
-          }),
-        );
-      } catch (error) {
-        log.error("Failed to load programme report data", error);
-        setProgrammes([]);
-      }
-      setLoading(false);
-    };
-
-    void fetchData();
+    setProgrammes(DEMO_PROGRAMME_REPORTS);
+    setLoading(false);
   }, []);
 
   if (loading) return <DashboardLoadingState />;
@@ -75,7 +58,7 @@ export const ProgrammeReports = () => {
                 <div>
                   <span className="font-medium text-sm">{programme.code}</span>
                   <p className="text-xs text-muted-foreground">
-                    {programme.submissions} submissions · {programme.graded} graded
+                    {programme.submissions} submissions Â· {programme.graded} graded
                   </p>
                 </div>
                 <div className="text-right">
