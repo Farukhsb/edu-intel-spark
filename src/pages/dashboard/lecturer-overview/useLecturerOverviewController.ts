@@ -234,11 +234,26 @@ export const useLecturerOverviewController = () => {
   const [loading, setLoading] = useState(!isDemo);
   const [error, setError] = useState<string | null>(null);
 
+  const buildLoadErrorMessage = (loadStep: "assignments" | "submissions" | "grades" | "overview") => {
+    switch (loadStep) {
+      case "assignments":
+        return "The lecturer overview could not load assignments right now.";
+      case "submissions":
+        return "The lecturer overview could not load submissions right now.";
+      case "grades":
+        return "The lecturer overview could not load grades right now.";
+      default:
+        return "The lecturer overview could not be loaded right now.";
+    }
+  };
+
   const fetchDashboard = async () => {
     if (!user) return;
     setError(null);
+    let loadStep: "assignments" | "submissions" | "grades" | "overview" = "overview";
 
     try {
+      loadStep = "assignments";
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from("assignments")
         .select(ASSIGNMENT_FIELDS)
@@ -258,6 +273,7 @@ export const useLecturerOverviewController = () => {
         return;
       }
 
+      loadStep = "submissions";
       const { data: submissionsData, error: submissionsError } = await supabase
         .from("submissions")
         .select(SUBMISSION_FIELDS)
@@ -273,6 +289,7 @@ export const useLecturerOverviewController = () => {
       let allGrades: Array<{ submission_id: string; final_score: number | null; ai_score: number | null; grade_source: string | null }> = [];
 
       if (submissionIds.length > 0) {
+        loadStep = "grades";
         const { data: gradesData, error: gradesError } = await supabase
           .from("grades")
           .select(GRADE_FIELDS as never)
@@ -467,7 +484,7 @@ export const useLecturerOverviewController = () => {
       log.error("Lecturer overview fetch failed", error, {
         userId: user.id,
       });
-      setError("The lecturer overview could not be loaded right now.");
+      setError(buildLoadErrorMessage(loadStep));
     }
 
     setLoading(false);

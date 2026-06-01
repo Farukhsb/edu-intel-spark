@@ -68,6 +68,8 @@ type DashboardData = {
   grades?: Array<Record<string, unknown>>;
   keepAssignmentsPending?: boolean;
   assignmentsError?: Error | null;
+  submissionsError?: Error | null;
+  gradesError?: Error | null;
 };
 
 const setupSupabase = ({
@@ -76,6 +78,8 @@ const setupSupabase = ({
   grades = [],
   keepAssignmentsPending = false,
   assignmentsError = null,
+  submissionsError = null,
+  gradesError = null,
 }: DashboardData) => {
   mocks.supabase.from.mockImplementation((table: string) => ({
     select: vi.fn(() => {
@@ -94,13 +98,13 @@ const setupSupabase = ({
 
       if (table === "submissions") {
         return {
-          in: vi.fn(() => Promise.resolve({ data: submissions, error: null })),
+          in: vi.fn(() => (submissionsError ? Promise.reject(submissionsError) : Promise.resolve({ data: submissions, error: null }))),
         };
       }
 
       if (table === "grades") {
         return {
-          in: vi.fn(() => Promise.resolve({ data: grades, error: null })),
+          in: vi.fn(() => (gradesError ? Promise.reject(gradesError) : Promise.resolve({ data: grades, error: null }))),
         };
       }
 
@@ -165,7 +169,32 @@ describe("LecturerOverview", () => {
     renderLecturerOverview();
 
     expect(await screen.findByText("Lecturer overview unavailable")).toBeInTheDocument();
-    expect(screen.getByText("The lecturer overview could not be loaded right now.")).toBeInTheDocument();
+    expect(screen.getByText("The lecturer overview could not load assignments right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("shows the specific grades load error when the grades query fails", async () => {
+    setupSupabase({
+      assignments: [{ id: "assignment-1", title: "Algorithms", max_score: 100 }],
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_id: "student-1",
+          student_name: "Sam Student",
+          student_email: "sam@example.com",
+          file_name: "essay.pdf",
+          status: "released",
+          submitted_at: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+      gradesError: new Error("grades schema mismatch"),
+    });
+
+    renderLecturerOverview();
+
+    expect(await screen.findByText("Lecturer overview unavailable")).toBeInTheDocument();
+    expect(screen.getByText("The lecturer overview could not load grades right now.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
