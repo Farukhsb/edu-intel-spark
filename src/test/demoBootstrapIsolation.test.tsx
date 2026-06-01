@@ -39,22 +39,22 @@ describe("demo bootstrap isolation", () => {
       useAuth: () => mocks.demoAuth,
     }));
 
-    const [{ DashboardLayout }, { default: AcademicIntegrity }, { default: StudentGrades }] = await Promise.all([
-      import("@/components/DashboardLayout"),
+    const [{ DemoDashboardLayout }, { default: AcademicIntegrity }, { default: DemoStudentGrades }] = await Promise.all([
+      import("@/components/DemoDashboardLayout"),
       import("@/pages/dashboard/AcademicIntegrity"),
-      import("@/pages/dashboard/StudentGrades"),
+      import("@/pages/dashboard/DemoStudentGrades"),
     ]);
 
     render(
-      <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+      <MemoryRouter initialEntries={["/demo/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DemoDashboardLayout>
           <AcademicIntegrity />
-          <StudentGrades />
-        </DashboardLayout>
+          <DemoStudentGrades />
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
-    expect(await screen.findAllByText("Demo")).not.toHaveLength(0);
+    expect(await screen.findByText("Demo Mode")).toBeInTheDocument();
     expect(await screen.findByText("Academic Integrity Review Queue")).toBeInTheDocument();
     expect(await screen.findByText("Your results, Dr.")).toBeInTheDocument();
   });
