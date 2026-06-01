@@ -38,6 +38,7 @@ import {
 } from "@/lib/moderationWorkflow";
 
 import type { ModerationProfile } from "../types";
+import type { ModerationReviewDialogProps } from "./review-dialog";
 
 const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
 const coerceSubmissionStatus = (value: string): SubmissionRow["status"] =>
@@ -61,26 +62,7 @@ const toAssignmentDetailSubmission = (submission: SubmissionRow): AssignmentDeta
   submitted_at: submission.submitted_at,
 });
 
-export type ModerationReviewDialogProps = {
-  feedbackDraft: string;
-  lecturers: ModerationProfile[];
-  moderatorDrafts: Record<string, string>;
-  noteDraft: string;
-  onAssignModerator: (item: ModerationCaseView) => void;
-  onClose: () => void;
-  onFeedbackDraftChange: (value: string) => void;
-  onModeratorDraftChange: (caseId: string, value: string) => void;
-  onNoteDraftChange: (value: string) => void;
-  onSaveAction: (action: ModerationAction) => void;
-  onScoreDraftChange: (value: string) => void;
-  open: boolean;
-  saving: boolean;
-  scoreDraft: string;
-  selectedCase: ModerationCaseView | null;
-  userId?: string | null;
-};
-
-export const ModerationReviewDialog = ({
+export const DemoModerationReviewDialog = ({
   feedbackDraft,
   lecturers,
   moderatorDrafts,
@@ -253,7 +235,7 @@ export const ModerationReviewDialog = ({
                             ) : (
                               <div className="space-y-2">
                                 {rubricItems.map((item, index) => {
-                                  const criterion = typeof item === "object" && item !== null ? item as Record<string, unknown> : {};
+                                  const criterion = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
                                   const title =
                                     String(
                                       criterion.name ??
@@ -362,7 +344,7 @@ export const ModerationReviewDialog = ({
                               <p className="text-sm font-medium">AI breakdown</p>
                               <div className="space-y-2">
                                 {aiBreakdown.map((item, index) => {
-                                  const breakdown = typeof item === "object" && item !== null ? item as Record<string, unknown> : {};
+                                  const breakdown = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
                                   return (
                                     <div key={index} className="rounded-lg border p-3 text-sm">
                                       <div className="flex flex-wrap items-center justify-between gap-2">

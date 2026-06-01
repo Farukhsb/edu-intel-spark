@@ -7,11 +7,10 @@ import { useModerationQueueState } from "../state";
 import { useModerationActions } from "../workflows";
 
 export const useModerationDashboardController = () => {
-  const { user, profile, isDemo } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   const queueState = useModerationQueueState({
-    isDemo,
     userId: user?.id,
   });
 
@@ -20,7 +19,6 @@ export const useModerationDashboardController = () => {
     bulkModeratorId: queueState.bulkModeratorId,
     feedbackDraft: queueState.feedbackDraft,
     fetchCases: queueState.fetchCases,
-    isDemo,
     moderatorDrafts: queueState.moderatorDrafts,
     noteDraft: queueState.noteDraft,
     profileRole: profile?.role,
