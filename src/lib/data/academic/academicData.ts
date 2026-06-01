@@ -30,6 +30,20 @@ const STUDENT_GRADE_GRADE_FIELDS =
   "submission_id, final_score, ai_score, final_feedback, ai_feedback, ai_breakdown";
 const STUDENT_GRADE_ASSIGNMENT_FIELDS = "id, title, module_code, max_score";
 
+type ExternalExaminerDatasetStage = "assignments" | "submissions" | "grades" | "profiles";
+
+export class ExternalExaminerDatasetError extends Error {
+  stage: ExternalExaminerDatasetStage;
+  cause?: unknown;
+
+  constructor(stage: ExternalExaminerDatasetStage, cause: unknown) {
+    super(`Failed to load external examiner ${stage}`);
+    this.name = "ExternalExaminerDatasetError";
+    this.stage = stage;
+    this.cause = cause;
+  }
+}
+
 export const fetchAccreditationDataset = async () => {
   const [
     { data: grades, error: gradesError },
@@ -83,28 +97,52 @@ export const fetchProgrammeReportDataset = async () => {
 };
 
 export const fetchExternalExaminerDataset = async () => {
-  const [
-    { data: assignmentsRaw, error: assignmentsError },
-    { data: submissionsRaw, error: submissionsError },
-    { data: gradesRaw, error: gradesError },
-    { data: profilesRaw, error: profilesError },
-  ] = await Promise.all([
-    supabase.from("assignments").select(EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS),
-    supabase.from("submissions").select(EXTERNAL_EXAMINER_SUBMISSION_FIELDS),
-    supabase.from("grades").select(EXTERNAL_EXAMINER_GRADE_FIELDS),
-    supabase.from("profiles").select(EXTERNAL_EXAMINER_PROFILE_FIELDS),
-  ]);
+  const stages: Array<{
+    key: ExternalExaminerDatasetStage;
+    promise: PromiseLike<{ data: unknown[] | null; error: unknown | null }>;
+  }> = [
+    {
+      key: "assignments",
+      promise: supabase.from("assignments").select(EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS),
+    },
+    {
+      key: "submissions",
+      promise: supabase.from("submissions").select(EXTERNAL_EXAMINER_SUBMISSION_FIELDS),
+    },
+    {
+      key: "grades",
+      promise: supabase.from("grades").select(EXTERNAL_EXAMINER_GRADE_FIELDS),
+    },
+    {
+      key: "profiles",
+      promise: supabase.from("profiles").select(EXTERNAL_EXAMINER_PROFILE_FIELDS),
+    },
+  ];
 
-  if (assignmentsError) throw assignmentsError;
-  if (submissionsError) throw submissionsError;
-  if (gradesError) throw gradesError;
-  if (profilesError) throw profilesError;
+  const results = await Promise.allSettled(stages.map((stage) => stage.promise));
+
+  for (const [index, result] of results.entries()) {
+    const stage = stages[index].key;
+    if (result.status === "rejected") {
+      throw new ExternalExaminerDatasetError(stage, result.reason);
+    }
+    if (result.value.error) {
+      throw new ExternalExaminerDatasetError(stage, result.value.error);
+    }
+  }
+
+  const [assignmentsResult, submissionsResult, gradesResult, profilesResult] = results.map((result) => {
+    if (result.status === "fulfilled") {
+      return result.value;
+    }
+    return { data: null, error: null };
+  });
 
   return {
-    assignments: (assignmentsRaw ?? []) as ExternalExaminerAssignmentRow[],
-    submissions: (submissionsRaw ?? []) as ExternalExaminerSubmissionRow[],
-    grades: (gradesRaw ?? []) as unknown as ExternalExaminerGradeRow[],
-    profiles: (profilesRaw ?? []) as ExternalExaminerProfileRow[],
+    assignments: (assignmentsResult.data ?? []) as ExternalExaminerAssignmentRow[],
+    submissions: (submissionsResult.data ?? []) as ExternalExaminerSubmissionRow[],
+    grades: (gradesResult.data ?? []) as unknown as ExternalExaminerGradeRow[],
+    profiles: (profilesResult.data ?? []) as ExternalExaminerProfileRow[],
   };
 };
 

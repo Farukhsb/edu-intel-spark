@@ -8,6 +8,7 @@ import { Download, FileText, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { fetchExternalExaminerDataset } from "@/lib/data/academic";
+import { ExternalExaminerDatasetError } from "@/lib/data/academic/academicData";
 import { safeFormatDate } from "@/lib/date";
 import { buildDetailedExternalExaminerCsv, buildExternalExaminerCsv } from "@/lib/externalExaminerExport";
 import { log } from "@/lib/logger";
@@ -58,7 +59,7 @@ const ExternalExaminerExport = () => {
   const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
   const [exportData, setExportData] = useState<ExternalExaminerExportRow[]>([]);
   const [hasSourceData, setHasSourceData] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [includeOptions, setIncludeOptions] = useState({
     scores: true,
     feedback: true,
@@ -75,7 +76,7 @@ const ExternalExaminerExport = () => {
         setHasSourceData(
           assignmentRows.length > 0 || submissionRows.length > 0 || gradeRows.length > 0 || profileRows.length > 0,
         );
-        setLoadError(false);
+        setLoadError(null);
 
         setAssignments(
           assignmentRows.map((row) => ({
@@ -130,7 +131,11 @@ const ExternalExaminerExport = () => {
         setAssignments([]);
         setExportData([]);
         setHasSourceData(false);
-        setLoadError(true);
+        if (err instanceof ExternalExaminerDatasetError) {
+          setLoadError(`External examiner data could not be loaded right now. Failed to load ${err.stage}. Try again later.`);
+        } else {
+          setLoadError("External examiner data could not be loaded right now. Try again later.");
+        }
       }
       setLoading(false);
     };
@@ -182,7 +187,7 @@ const ExternalExaminerExport = () => {
     return (
       <DashboardEmptyState
         title="External examiner export unavailable"
-        description="External examiner data could not be loaded right now. Try again later."
+        description={loadError}
       />
     );
   }

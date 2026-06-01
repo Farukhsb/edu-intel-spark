@@ -140,6 +140,9 @@ const setupSupabase = ({
   profiles = defaultProfiles,
   assignmentsPromise,
   assignmentsError,
+  submissionsError,
+  gradesError,
+  profilesError,
 }: {
   assignments?: AssignmentRow[];
   submissions?: SubmissionRow[];
@@ -147,6 +150,9 @@ const setupSupabase = ({
   profiles?: ProfileRow[];
   assignmentsPromise?: Promise<{ data: AssignmentRow[] }>;
   assignmentsError?: Error;
+  submissionsError?: Error;
+  gradesError?: Error;
+  profilesError?: Error;
 } = {}) => {
   mocks.supabase.from.mockImplementation((table: string) => ({
     select: vi.fn(() => {
@@ -160,12 +166,21 @@ const setupSupabase = ({
         return Promise.resolve({ data: assignments, error: null });
       }
       if (table === "submissions") {
+        if (submissionsError) {
+          return Promise.resolve({ data: null, error: submissionsError });
+        }
         return Promise.resolve({ data: submissions, error: null });
       }
       if (table === "grades") {
+        if (gradesError) {
+          return Promise.resolve({ data: null, error: gradesError });
+        }
         return Promise.resolve({ data: grades, error: null });
       }
       if (table === "profiles") {
+        if (profilesError) {
+          return Promise.resolve({ data: null, error: profilesError });
+        }
         return Promise.resolve({ data: profiles, error: null });
       }
       return Promise.resolve({ data: [], error: null });
@@ -341,6 +356,20 @@ describe("ExternalExaminerExport", () => {
 
     expect(await screen.findByText("External examiner export unavailable")).toBeInTheDocument();
     expect(screen.queryByText("Sam Student")).not.toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+
+  it("reports which external examiner query failed", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    setupSupabase({
+      gradesError: new Error("grades unavailable"),
+    });
+
+    render(<ExternalExaminerExport />);
+
+    expect(await screen.findByText("External examiner export unavailable")).toBeInTheDocument();
+    expect(screen.getByText("External examiner data could not be loaded right now. Failed to load grades. Try again later.")).toBeInTheDocument();
 
     consoleError.mockRestore();
   });
