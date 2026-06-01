@@ -1,5 +1,4 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { Brain, BarChart3, Shield, MessageSquare, TrendingUp, Users, Sparkles, ArrowRight, CheckCircle, GraduationCap, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,7 +26,6 @@ const benefits = [
 
 const Index = () => {
   const navigate = useNavigate();
-  const { enterDemo } = useAuth();
   const readiness = getPublicLandingReadiness();
 
   usePageMetadata({
@@ -37,11 +35,6 @@ const Index = () => {
     path: "/",
     robots: "index,follow",
   });
-
-  const handleDemo = (role: "lecturer" | "student") => {
-    enterDemo(role);
-    navigate("/dashboard");
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,7 +72,7 @@ const Index = () => {
               <Button size="lg" onClick={() => navigate("/auth")} className="px-8 text-base">
                 Get Started <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button size="lg" variant="outline" onClick={() => handleDemo("lecturer")} className="px-8 text-base">
+              <Button size="lg" variant="outline" onClick={() => navigate("/demo")} className="px-8 text-base">
                 <Zap className="mr-2 h-4 w-4" /> Try Demo
               </Button>
             </div>
@@ -120,7 +113,7 @@ const Index = () => {
           <p className="mt-2 text-muted-foreground">Try a live demo - no sign-up required</p>
         </div>
         <div className="mx-auto grid max-w-2xl gap-6 sm:grid-cols-2">
-          <Card className="group cursor-pointer transition-all hover:border-primary/40 hover:shadow-lg" onClick={() => handleDemo("lecturer")}>
+          <Card className="group cursor-pointer transition-all hover:border-primary/40 hover:shadow-lg" onClick={() => navigate("/demo")}>
             <CardContent className="space-y-3 p-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 transition-colors group-hover:bg-primary/20">
                 <GraduationCap className="h-7 w-7 text-primary" />
@@ -130,7 +123,7 @@ const Index = () => {
               <Badge variant="outline">Demo Mode</Badge>
             </CardContent>
           </Card>
-          <Card className="group cursor-pointer transition-all hover:border-primary/40 hover:shadow-lg" onClick={() => handleDemo("student")}>
+          <Card className="group cursor-pointer transition-all hover:border-primary/40 hover:shadow-lg" onClick={() => navigate("/demo")}>
             <CardContent className="space-y-3 p-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/10 transition-colors group-hover:bg-secondary/20">
                 <Users className="h-7 w-7 text-secondary" />
@@ -214,7 +207,7 @@ const Index = () => {
             <Button size="lg" onClick={() => navigate("/auth")}>
               Start Free <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => handleDemo("lecturer")}>
+            <Button size="lg" variant="outline" onClick={() => navigate("/demo")}>
               Try Demo First
             </Button>
           </div>

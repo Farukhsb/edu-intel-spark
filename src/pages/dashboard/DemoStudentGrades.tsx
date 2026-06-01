@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -6,17 +6,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
-import { log } from "@/lib/logger";
-import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
-import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
-import { getFirstName } from "@/lib/formatters";
-import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
+import { DashboardDemoBanner, DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import { parseExplainGradeSearchState } from "@/lib/schemas/navigation";
-import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
+import { getFirstName } from "@/lib/formatters";
+import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
 import { buildSubmissionOptionsFromProjection, type SubmissionOption } from "@/pages/dashboard/explain-grade/helpers";
+import {
+  DEMO_STUDENT_ASSIGNMENTS,
+  DEMO_STUDENT_ASSIGNMENT_GRADES,
+  DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
+} from "@/pages/dashboard/demoAssignments";
 import { GradeBreakdown } from "@/components/dashboard/GradeBreakdown";
-import { GradeChat } from "@/components/dashboard/GradeChat";
+import { DemoGradeChat } from "@/components/dashboard/DemoGradeChat";
+import { calculateGradeStats } from "@/pages/dashboard/StudentGrades";
 
 interface StudentGrade {
   id: string;
@@ -39,95 +41,71 @@ interface StudentGrade {
   fileUrl: string | null;
 }
 
-export const calculateGradeStats = (scores: number[]) => {
-  if (scores.length === 0) {
+const DEMO_GRADES: StudentGrade[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
+  .flat()
+  .map((submission) => {
+    const assignment = DEMO_STUDENT_ASSIGNMENTS.find((entry) => entry.id === submission.assignment_id);
+    const grade = DEMO_STUDENT_ASSIGNMENT_GRADES[submission.id];
+    const isReleased = submission.status === "released";
+
     return {
-      avg: 0,
-      count: 0,
-      highest: 0,
-      lowest: 0,
+      id: submission.id,
+      assignmentId: submission.assignment_id,
+      assignmentTitle: assignment?.title ?? "Assignment title unavailable",
+      moduleCode: assignment?.module_code ?? null,
+      score: isReleased ? (grade?.final_score ?? grade?.ai_score ?? null) : null,
+      maxScore: assignment?.max_score ?? 100,
+      feedback: isReleased ? (grade?.final_feedback ?? grade?.ai_feedback ?? null) : null,
+      status: submission.status,
+      submittedAt: submission.submitted_at,
+      breakdown: isReleased ? (grade?.ai_breakdown ?? null) : null,
+      fileName: submission.file_name ?? null,
+      fileUrl: submission.file_url ?? null,
     };
-  }
+  })
+  .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime());
 
-  return {
-    avg: Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10,
-    count: scores.length,
-    highest: Math.max(...scores),
-    lowest: Math.min(...scores),
-  };
-};
-
-const StudentGrades = () => {
-  const { user, profile } = useAuth();
+const DemoStudentGrades = () => {
+  const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [grades, setGrades] = useState<StudentGrade[]>([]);
-  const [releasedResults, setReleasedResults] = useState<SubmissionOption[]>([]);
+  const [grades] = useState<StudentGrade[]>(DEMO_GRADES);
+  const [releasedResults, setReleasedResults] = useState<SubmissionOption[]>(
+    buildSubmissionOptionsFromProjection([]),
+  );
   const [selectedId, setSelectedId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [stats, setStats] = useState({ avg: 0, count: 0, highest: 0, lowest: 0 });
-  const [downloadErrorBySubmission, setDownloadErrorBySubmission] = useState<Record<string, string>>({});
+  const [loading] = useState(false);
+  const [loadError] = useState<string | null>(null);
+  const [stats] = useState(() => {
+    const scores = DEMO_GRADES.filter((grade) => grade.score != null).map((grade) => grade.score!);
+    return calculateGradeStats(scores);
+  });
+  const [downloadErrorBySubmission] = useState<Record<string, string>>({});
   const lastLoggedGradeDetailsRef = useRef<string | null>(null);
   const { assignmentId: focusAssignmentId, submissionId: focusSubmissionId, source: focusSource } =
     parseExplainGradeSearchState(searchParams);
 
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchGrades = async () => {
-      setLoading(true);
-      setLoadError(null);
-
-      try {
-        const projectionRes = await fetchStudentGradeProjection(user.id);
-        if (projectionRes.error) {
-          throw projectionRes.error;
-        }
-
-        const studentGrades: StudentGrade[] = projectionRes.data.map((row) => {
-          const isReleased = row.submission_status === "released";
-          return {
-            id: row.submission_id,
-            assignmentId: row.assignment_id,
-            assignmentTitle: row.assignment_title || "Assignment title unavailable",
-            moduleCode: row.module_code || null,
-            score: isReleased ? (row.final_score ?? row.ai_score ?? null) : null,
-            maxScore: row.max_score ?? 100,
-            feedback: isReleased ? (row.final_feedback ?? row.ai_feedback ?? null) : null,
-            status: row.submission_status,
-            submittedAt: row.submitted_at,
-            breakdown: isReleased ? (row.ai_breakdown || null) : null,
-            fileName: row.file_name || null,
-            fileUrl: row.file_url || null,
-          };
-        });
-
-        const released = buildSubmissionOptionsFromProjection(
-          projectionRes.data.filter((row) => row.submission_status === "released"),
-        );
-
-        setGrades(studentGrades);
-        setReleasedResults(released);
-        setSelectedId((current) => current || released[0]?.gradeId || "");
-
-        const releasedScores = studentGrades.filter((grade) => grade.score != null).map((grade) => grade.score!);
-        setStats(calculateGradeStats(releasedScores));
-      } catch (err) {
-        log.error("Failed to fetch student grades", err, {
-          userId: user.id,
-        });
-        setLoadError("Your results could not be loaded right now.");
-      }
-
-      setLoading(false);
-    };
-
-    void fetchGrades();
-  }, [user, reloadKey]);
+    const demoReleased = buildSubmissionOptionsFromProjection(
+      DEMO_GRADES.filter((grade) => grade.score != null).map((grade) => ({
+        submission_id: grade.id,
+        assignment_id: grade.assignmentId,
+        assignment_title: grade.assignmentTitle,
+        module_code: grade.moduleCode,
+        max_score: grade.maxScore,
+        file_name: grade.fileName ?? "",
+        file_url: grade.fileUrl ?? "",
+        submission_status: grade.status,
+        submitted_at: grade.submittedAt,
+        final_score: grade.score,
+        ai_score: null,
+        final_feedback: grade.feedback,
+        ai_feedback: null,
+        ai_breakdown: grade.breakdown,
+      })),
+    );
+    setReleasedResults(demoReleased);
+    setSelectedId((current) => current || demoReleased[0]?.gradeId || "");
+  }, []);
 
   useEffect(() => {
     if (!releasedResults.length) {
@@ -167,7 +145,7 @@ const StudentGrades = () => {
   const selectedDownloadError = selectedGrade ? downloadErrorBySubmission[selectedGrade.id] ?? null : null;
 
   useEffect(() => {
-    if (!user || !selectedRelease) {
+    if (!selectedRelease) {
       return;
     }
 
@@ -177,64 +155,10 @@ const StudentGrades = () => {
     }
 
     lastLoggedGradeDetailsRef.current = logKey;
-
-    void logAcademicAccessEvent({
-      actorId: user.id,
-      actorRole: "student",
-      eventType: "grade_details_viewed",
-      resourceType: "grade",
-      resourceId: selectedRelease.gradeId,
-      assignmentId: selectedRelease.assignmentId,
-      submissionId: selectedRelease.submissionId,
-      metadata: {
-        source: "student_grades",
-        focusSource: focusSource || "direct",
-      },
-    });
-  }, [focusSource, selectedRelease, user]);
+  }, [selectedRelease]);
 
   const handleDownloadSubmission = async () => {
-    if (!selectedGrade?.fileUrl) {
-      return;
-    }
-
-    setDownloadErrorBySubmission((current) => ({
-      ...current,
-      [selectedGrade.id]: "",
-    }));
-
-    const { data, error } = await supabase.storage
-      .from("submissions")
-      .createSignedUrl(selectedGrade.fileUrl, 3600);
-
-    if (error) {
-      log.error("Failed to create student submission download URL", error, {
-        submissionId: selectedGrade.id,
-      });
-      const description = "Your submission file could not be opened right now. Please try again later.";
-      setDownloadErrorBySubmission((current) => ({
-        ...current,
-        [selectedGrade.id]: description,
-      }));
-      toast.error("Download unavailable", {
-        description,
-      });
-      return;
-    }
-
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, "_blank");
-      return;
-    }
-
-    const description = "The file link could not be created. Please try again later.";
-    setDownloadErrorBySubmission((current) => ({
-      ...current,
-      [selectedGrade.id]: description,
-    }));
-    toast.error("Download unavailable", {
-      description,
-    });
+    toast.info("Demo submissions are read-only.");
   };
 
   if (loading) {
@@ -247,14 +171,7 @@ const StudentGrades = () => {
         title="Results unavailable"
         description={loadError}
         action={
-          <Button
-            variant="outline"
-            onClick={() => {
-              setLoading(true);
-              setLoadError(null);
-              setReloadKey((current) => current + 1);
-            }}
-          >
+          <Button variant="outline" onClick={() => undefined}>
             Try again
           </Button>
         }
@@ -274,6 +191,7 @@ const StudentGrades = () => {
   if (releasedGrades.length === 0) {
     return (
       <div className="space-y-6 animate-fade-in">
+        <DashboardDemoBanner label="Viewing demo student results" />
         <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
           <CardContent className="p-4">
             <p className="text-sm font-medium">Your results, {getFirstName(profile?.full_name)}</p>
@@ -292,6 +210,8 @@ const StudentGrades = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <DashboardDemoBanner label="Viewing demo student results" />
+
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardContent className="space-y-4 p-4">
           <div>
@@ -357,29 +277,6 @@ const StudentGrades = () => {
         </CardContent>
       </Card>
 
-      {(focusSource === "notification" || focusSource === "email" || focusSource === "assignment-detail") &&
-      (focusAssignmentId || focusSubmissionId) ? (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm font-medium">Opened from released-grade notification</p>
-              <p className="text-xs text-muted-foreground">
-                This view is focused on the released result linked from your notification or released-result shortcut.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSearchParams({}, { replace: true });
-              }}
-            >
-              Show all released grades
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
       {gradeBreakdown && selectedGrade ? (
         <>
           <GradeBreakdown
@@ -395,15 +292,11 @@ const StudentGrades = () => {
             onDownloadSubmission={() => void handleDownloadSubmission()}
           />
 
-          <GradeChat
-            key={selectedRelease.submissionId}
-            submissionId={selectedRelease.submissionId}
-            gradeBreakdown={gradeBreakdown}
-          />
+          <DemoGradeChat key={selectedRelease.submissionId} submissionId={selectedRelease.submissionId} gradeBreakdown={gradeBreakdown} />
         </>
       ) : null}
     </div>
   );
 };
 
-export default StudentGrades;
+export default DemoStudentGrades;

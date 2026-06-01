@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StudentGrades, { calculateGradeStats } from "@/pages/dashboard/StudentGrades";
+import DemoStudentGrades from "@/pages/dashboard/DemoStudentGrades";
 
 const mocks = vi.hoisted(() => {
   const createSignedUrl = vi.fn();
@@ -337,11 +338,13 @@ describe("StudentGrades", () => {
   });
 
   it("uses shared synthetic assignment-set data in demo mode", async () => {
-    mocks.authState.isDemo = true;
-    mocks.authState.user = null;
     mocks.authState.profile = { full_name: "Demo Student" };
 
-    renderStudentGrades();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DemoStudentGrades />
+      </MemoryRouter>,
+    );
 
     await waitFor(() => {
       expect(
@@ -355,7 +358,6 @@ describe("StudentGrades", () => {
     expect(screen.getByText("Released results")).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
     expect(screen.getByText(/1 submission\(s\) are still being reviewed/i)).toBeInTheDocument();
-    expect(mocks.supabase.rpc).not.toHaveBeenCalled();
   });
 
   it("shows a page-level error state when grades cannot be loaded", async () => {

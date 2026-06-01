@@ -6,13 +6,6 @@ import Index from "@/pages/Index";
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
-  authState: {
-    enterDemo: vi.fn(),
-  },
-}));
-
-vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => mocks.authState,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -54,7 +47,7 @@ describe("Index", () => {
     expect(screen.getByRole("link", { name: /terms of service/i })).toHaveAttribute("href", "/terms");
   });
 
-  it("enters lecturer demo mode from the landing page", () => {
+  it("routes to the demo entry page from the landing page", () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Index />
@@ -63,7 +56,6 @@ describe("Index", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Try Demo" }));
 
-    expect(mocks.authState.enterDemo).toHaveBeenCalledWith("lecturer");
-    expect(mocks.navigate).toHaveBeenCalledWith("/dashboard");
+    expect(mocks.navigate).toHaveBeenCalledWith("/demo");
   });
 });

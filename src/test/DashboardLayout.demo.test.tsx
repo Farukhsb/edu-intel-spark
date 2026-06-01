@@ -55,17 +55,17 @@ describe("DashboardLayout demo mode", () => {
   };
 
   it("uses synthetic notifications and does not load live communication records in demo mode", async () => {
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Demo child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
-    expect(await screen.findAllByText("Demo")).not.toHaveLength(0);
+    expect(await screen.findByText("Demo Mode")).toBeInTheDocument();
     expect(screen.getByText("Demo child")).toBeInTheDocument();
     expect(screen.getAllByText("Teaching").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Teaching Insights").length).toBeGreaterThan(0);
@@ -88,13 +88,13 @@ describe("DashboardLayout demo mode", () => {
       email: "demo@gradeai.com",
     };
 
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Lecturer child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
@@ -121,13 +121,13 @@ describe("DashboardLayout demo mode", () => {
       email: "demo@gradeai.com",
     };
 
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Lecturer child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
@@ -158,13 +158,13 @@ describe("DashboardLayout demo mode", () => {
       email: "student@gradeai.com",
     };
 
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Student child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
@@ -194,13 +194,13 @@ describe("DashboardLayout demo mode", () => {
       email: "admin@gradeai.com",
     };
 
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Admin child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
@@ -227,13 +227,13 @@ describe("DashboardLayout demo mode", () => {
       email: "demo@gradeai.com",
     };
 
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Lecturer child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
@@ -256,13 +256,13 @@ describe("DashboardLayout demo mode", () => {
       email: "student@gradeai.com",
     };
 
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Student child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 
@@ -408,13 +408,13 @@ describe("DashboardLayout demo mode", () => {
     };
     mocks.communications.loadVisibleCommunicationMessages.mockResolvedValue([]);
 
-    const { DashboardLayout } = await import("@/components/DashboardLayout");
+    const { DemoDashboardLayout } = await import("@/components/DemoDashboardLayout");
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <DashboardLayout>
+        <DemoDashboardLayout>
           <div>Admin child</div>
-        </DashboardLayout>
+        </DemoDashboardLayout>
       </MemoryRouter>,
     );
 

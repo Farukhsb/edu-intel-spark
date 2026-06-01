@@ -21,10 +21,12 @@ import { AppErrorBoundary } from "./components/AppErrorBoundary";
 const Auth = lazy(routeLoaders.auth);
 const NotFound = lazy(routeLoaders.notFound);
 const Privacy = lazy(routeLoaders.privacy);
+const Demo = lazy(routeLoaders.demo);
 const Terms = lazy(routeLoaders.terms);
 const ResetPassword = lazy(routeLoaders.resetPassword);
 const ForcePasswordChange = lazy(routeLoaders.forcePasswordChange);
 const DashboardLayout = lazy(routeLoaders.dashboardLayout);
+const DemoDashboardLayout = lazy(routeLoaders.demoDashboardLayout);
 const LecturerOverview = lazy(routeLoaders.lecturerOverview);
 const CohortAnalytics = lazy(routeLoaders.cohortAnalytics);
 const PerformanceTrends = lazy(routeLoaders.performanceTrends);
@@ -34,6 +36,7 @@ const AdminDashboard = lazy(routeLoaders.adminDashboard);
 const InstitutionalInsights = lazy(routeLoaders.institutionalInsights);
 const LearningOutcomes = lazy(routeLoaders.learningOutcomes);
 const StudentGrades = lazy(routeLoaders.studentGrades);
+const DemoStudentGrades = lazy(routeLoaders.demoStudentGrades);
 const Assignments = lazy(routeLoaders.assignments);
 const AssignmentDetail = lazy(routeLoaders.assignmentDetail);
 const StudentProfile = lazy(routeLoaders.studentProfile);
@@ -130,6 +133,13 @@ const DashboardRouter = () => {
   return <StudentGrades />;
 };
 
+const DemoDashboardRouter = () => {
+  const { role } = useAuth();
+  if (isAdminRole(role)) return <AdminDashboard />;
+  if (role === "lecturer") return <LecturerOverview />;
+  return <DemoStudentGrades />;
+};
+
 const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
   const location = useLocation();
 
@@ -142,6 +152,24 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
               <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
             </AppErrorBoundary>
           </DashboardLayout>
+        </Suspense>
+      </RoleGate>
+    </ProtectedRoute>
+  );
+};
+
+const DemoDashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
+  const location = useLocation();
+
+  return (
+    <ProtectedRoute>
+      <RoleGate allowedRole={allowedRole}>
+        <Suspense fallback={<DashboardSkeleton />}>
+          <DemoDashboardLayout>
+            <AppErrorBoundary title="Demo dashboard page failed to load" resetKey={location.pathname}>
+              <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
+            </AppErrorBoundary>
+          </DemoDashboardLayout>
         </Suspense>
       </RoleGate>
     </ProtectedRoute>
@@ -200,6 +228,14 @@ const App = () => (
                 }
               />
               <Route
+                path="/demo"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <Demo />
+                  </Suspense>
+                }
+              />
+              <Route
                 path="/terms"
                 element={
                   <Suspense fallback={<PageSkeleton />}>
@@ -234,6 +270,7 @@ const App = () => (
                 }
               />
               <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
+              <Route path="/demo/dashboard" element={<DemoDashboardRoute><DemoDashboardRouter /></DemoDashboardRoute>} />
               <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
               <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
               <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
