@@ -28,7 +28,7 @@ describe("ModerationDashboard demo mode", () => {
   });
 
   it("renders synthetic moderation cases and skips Supabase reads in demo mode", async () => {
-    const { default: ModerationDashboard } = await import("@/pages/dashboard/ModerationDashboard");
+    const { default: ModerationDashboard } = await import("@/pages/dashboard/DemoModerationDashboard");
 
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

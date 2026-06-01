@@ -1,21 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type AtRiskStudent, computeRisk } from "@/lib/studentRisk";
-import { fetchLecturerPerformanceDataset } from "@/lib/data/student";
-import { log } from "@/lib/logger";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
+import { DashboardDemoBanner, DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
-  DashboardEmptyState,
-  DashboardErrorState,
-  DashboardLoadingState,
-} from "@/components/dashboard/PageStates";
-import {
-  buildPerformanceProjection,
-  EMPTY_GRADE_DIST,
+  buildGradeDistribution,
   filterAtRiskStudents,
   getPerformanceReportingReadiness,
 } from "@/lib/performanceAnalytics";
@@ -25,6 +15,11 @@ import {
   PerformanceFiltersBar,
   StudentSupportSummaryCard,
 } from "@/pages/dashboard/performance-trends/sections";
+import {
+  DEMO_ASSESSMENT_TRENDS,
+  DEMO_GRADE_SCORES,
+  DEMO_TRAJECTORIES,
+} from "@/pages/dashboard/performance-trends/demoData";
 
 const AssessmentTrendsCard = lazy(() =>
   import("@/pages/dashboard/performance-trends/charts").then((module) => ({
@@ -38,97 +33,46 @@ const GradeDistributionCard = lazy(() =>
   })),
 );
 
-const PerformanceTrends = () => {
-  const { user } = useAuth();
-  const { toast } = useToast();
+const DemoPerformanceTrends = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const performanceSearchState = parsePerformanceTrendsSearchState(searchParams);
   const [moduleFilter, setModuleFilter] = useState("all");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [alertsDismissed, setAlertsDismissed] = useState(false);
-  const [modules, setModules] = useState<string[]>([]);
-  const [assessmentTrends, setAssessmentTrends] = useState<{ name: string; avgGrade: number; participation: number }[]>([]);
-  const [gradeDist, setGradeDist] = useState(EMPTY_GRADE_DIST);
-  const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
 
   const { riskFilter, scoreBandFilter } = performanceSearchState;
 
-  useEffect(() => {
-    if (!user) return;
+  const modules = useMemo(
+    () => Array.from(new Set(DEMO_ASSESSMENT_TRENDS.map((entry) => entry.module))),
+    [],
+  );
 
-    const fetchLiveData = async () => {
-      setLoadError(null);
-      try {
-        const { assignments, submissions, grades } = await fetchLecturerPerformanceDataset(user.id);
-        if (assignments.length === 0) {
-          setModules([]);
-          setAssessmentTrends([]);
-          setGradeDist(EMPTY_GRADE_DIST);
-          setAtRiskStudents([]);
-          setLoading(false);
-          return;
-        }
+  const assessmentTrends = useMemo(
+    () =>
+      (moduleFilter === "all"
+        ? DEMO_ASSESSMENT_TRENDS
+        : DEMO_ASSESSMENT_TRENDS.filter((entry) => entry.module === moduleFilter)
+      ).map(({ name, avgGrade, participation }) => ({
+        name,
+        avgGrade,
+        participation,
+      })),
+    [moduleFilter],
+  );
 
-        const moduleSet = new Set(assignments.map((assignment) => assignment.module_code).filter(Boolean) as string[]);
-        setModules(Array.from(moduleSet));
+  const gradeDist = useMemo(() => {
+    const filteredScores = DEMO_GRADE_SCORES.filter((entry) => moduleFilter === "all" || entry.module === moduleFilter).map(
+      (entry) => entry.score,
+    );
+    return buildGradeDistribution(filteredScores);
+  }, [moduleFilter]);
 
-        if (submissions.length === 0) {
-          setAssessmentTrends([]);
-          setGradeDist(EMPTY_GRADE_DIST);
-          setAtRiskStudents([]);
-          setLoading(false);
-          return;
-        }
-
-        const projection = buildPerformanceProjection({
-          assignments,
-          submissions,
-          grades,
-          moduleFilter,
-          computeRisk,
-        });
-
-        setAssessmentTrends(projection.assessmentTrends);
-        setGradeDist(projection.gradeDist);
-        setAtRiskStudents(projection.atRiskStudents);
-      } catch (error) {
-        log.error("Failed to fetch performance data", error);
-        setLoadError("Performance trends could not be loaded right now.");
-      }
-
-      setLoading(false);
-    };
-
-    void fetchLiveData();
-  }, [user?.id, moduleFilter, reloadKey]);
-
-  useEffect(() => {
-    if (alertsDismissed || atRiskStudents.length === 0) return;
-
-    const critical = atRiskStudents.filter((student) => student.riskLevel === "critical");
-    const high = atRiskStudents.filter((student) => student.riskLevel === "high");
-
-    if (critical.length > 0) {
-      toast({
-        variant: "destructive",
-        title: `Critical At-Risk Student${critical.length > 1 ? "s" : ""}`,
-        description: `${critical.map((student) => student.name).join(", ")} - immediate intervention recommended.`,
-      });
-    }
-
-    if (high.length > 0) {
-      toast({
-        title: `${high.length} High-Risk Student${high.length > 1 ? "s" : ""} Detected`,
-        description: `${high.map((student) => student.name).join(", ")} - review their trajectories.`,
-      });
-    }
-
-    setAlertsDismissed(true);
-  }, [atRiskStudents, alertsDismissed, toast]);
+  const atRiskStudents = useMemo<AtRiskStudent[]>(() => {
+    return DEMO_TRAJECTORIES.filter((student) => moduleFilter === "all" || student.module === moduleFilter)
+      .map(computeRisk)
+      .filter((student): student is AtRiskStudent => student !== null)
+      .sort((left, right) => right.riskScore - left.riskScore);
+  }, [moduleFilter]);
 
   const filteredAtRiskStudents = useMemo(() => {
     return filterAtRiskStudents({
@@ -159,36 +103,12 @@ const PerformanceTrends = () => {
     setSearchParams(next);
   };
 
-  if (loading) {
-    return <DashboardLoadingState />;
-  }
-
-  if (loadError) {
-    return (
-      <DashboardErrorState
-        title="Performance trends unavailable"
-        description={loadError}
-        action={
-          <Button
-            variant="outline"
-            onClick={() => {
-              setLoading(true);
-              setLoadError(null);
-              setAlertsDismissed(false);
-              setReloadKey((current) => current + 1);
-            }}
-          >
-            Try again
-          </Button>
-        }
-      />
-    );
-  }
-
   const noData = assessmentTrends.length === 0 && gradeDist.every((entry) => entry.count === 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <DashboardDemoBanner label="Viewing demo performance trends data" />
+
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardHeader>
           <CardTitle className="text-base">Teaching Focus</CardTitle>
@@ -272,4 +192,4 @@ const PerformanceTrends = () => {
   );
 };
 
-export default PerformanceTrends;
+export default DemoPerformanceTrends;

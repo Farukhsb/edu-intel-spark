@@ -27,7 +27,7 @@ describe("AcademicIntegrity demo mode", () => {
   });
 
   it("renders synthetic integrity cases and skips Supabase reads in demo mode", async () => {
-    const { default: AcademicIntegrity } = await import("@/pages/dashboard/AcademicIntegrity");
+    const { default: AcademicIntegrity } = await import("@/pages/dashboard/DemoAcademicIntegrity");
 
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

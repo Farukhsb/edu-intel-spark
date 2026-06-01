@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import PerformanceTrends from "@/pages/dashboard/PerformanceTrends";
+import DemoPerformanceTrends from "@/pages/dashboard/DemoPerformanceTrends";
 
 const mocks = vi.hoisted(() => ({
   authState: {
@@ -57,10 +57,10 @@ describe("PerformanceTrends demo mode", () => {
   it("renders synthetic performance data and skips Supabase reads in demo mode", async () => {
     render(
       <MemoryRouter
-        initialEntries={["/dashboard/performance?risk=high-plus&scoreBand=lt40"]}
+        initialEntries={["/demo/dashboard/performance?risk=high-plus&scoreBand=lt40"]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
-        <PerformanceTrends />
+        <DemoPerformanceTrends />
       </MemoryRouter>,
     );
 

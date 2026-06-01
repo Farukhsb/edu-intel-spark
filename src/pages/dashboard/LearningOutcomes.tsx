@@ -31,17 +31,16 @@ import {
 import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation";
 
 const LearningOutcomes = () => {
-  const { isDemo, user } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [assignments, setAssignments] = useState<AssignmentOption[]>([]);
   const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
   const [outcomes, setOutcomes] = useState<OutcomeRow[]>([]);
   const [trajectories, setTrajectories] = useState<StudentTrajectory[]>([]);
-  const [loading, setLoading] = useState(!isDemo);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isDemo) { setLoading(false); return; }
-    if (!user) return;
+    if (!user) { setLoading(false); return; }
     const fetchData = async () => {
       try {
         const data = await loadLearningOutcomesData({
@@ -58,7 +57,7 @@ const LearningOutcomes = () => {
       setLoading(false);
     };
     fetchData();
-  }, [isDemo, selectedAssignment, user]);
+  }, [selectedAssignment, user]);
 
   if (loading) return <DashboardLoadingState />;
 
@@ -112,20 +111,9 @@ const LearningOutcomes = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo && (
-        <Card className="border-warning bg-warning/5">
-          <CardContent className="flex items-center gap-2 p-3">
-            <Badge variant="outline" className="border-warning text-warning">Demo</Badge>
-            <span className="text-sm text-muted-foreground">Viewing demo learning outcomes</span>
-          </CardContent>
-        </Card>
-      )}
+      <DashboardLiveBanner label="Viewing live learning outcomes for your lecturer-scoped assignments" />
 
-      {!isDemo && (
-        <DashboardLiveBanner label="Viewing live learning outcomes for your lecturer-scoped assignments" />
-      )}
-
-      {!isDemo && assignments.length === 0 && (
+      {assignments.length === 0 && (
         <DashboardEmptyState
           title="No learning outcomes data yet"
           description="This view fills in after you create assignments, receive submissions, and complete grading with rubric breakdowns."

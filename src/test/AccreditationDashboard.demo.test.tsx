@@ -25,7 +25,7 @@ describe("AccreditationDashboard demo mode", () => {
   });
 
   it("uses synthetic accreditation data and skips Supabase queries on the programme tab", async () => {
-    const { default: AccreditationDashboard } = await import("@/pages/dashboard/AccreditationDashboard");
+    const { default: AccreditationDashboard } = await import("@/pages/dashboard/DemoAccreditationDashboard");
 
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

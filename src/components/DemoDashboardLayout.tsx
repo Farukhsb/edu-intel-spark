@@ -35,13 +35,49 @@ const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
 const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 const STUDENT_SIDEBAR_STATE_KEY = "gradeai:student-sidebar-sections";
 
+const rewriteDashboardLinkForDemo = (to: string) => {
+  if (to.startsWith("/dashboard/performance")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/improvements")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/learning-outcomes")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/integrity")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/accreditation")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/moderation")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/external-examiner")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/institutional")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  return to;
+};
+
 export const DemoDashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = profile?.role === "admin";
   const isLecturerEquivalent = profile?.role === "lecturer";
-  const roleSections = isAdmin ? adminSections : isLecturerEquivalent ? lecturerSections : studentSections;
+  const roleSections = (isAdmin ? adminSections : isLecturerEquivalent ? lecturerSections : studentSections).map(
+    (section) => ({
+      ...section,
+      links: section.links.map((link) => ({
+        ...link,
+        to: rewriteDashboardLinkForDemo(link.to),
+      })),
+    }),
+  );
   const defaultSectionState = getDefaultSectionState(roleSections);
   const sidebarStateKey = isAdmin
     ? ADMIN_SIDEBAR_STATE_KEY
@@ -265,8 +301,11 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
 
   const isLinkActive = (to: string) => {
     const [path, query = ""] = to.split("?");
-    const activePath = location.pathname === "/demo/dashboard" ? "/dashboard" : location.pathname;
-    if (activePath !== path) return false;
+    const activePath = location.pathname.startsWith("/demo/dashboard")
+      ? location.pathname.replace("/demo", "")
+      : location.pathname;
+    const normalizedPath = path.startsWith("/demo/dashboard") ? path.replace("/demo", "") : path;
+    if (activePath !== normalizedPath) return false;
     return query ? location.search === `?${query}` : location.search === "";
   };
 

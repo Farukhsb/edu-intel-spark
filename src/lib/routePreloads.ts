@@ -54,9 +54,33 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/PerformanceTrends"),
     paths: ["/dashboard/performance"],
   },
+  demoPerformanceTrends: {
+    loader: () => import("@/pages/dashboard/DemoPerformanceTrends"),
+    paths: ["/demo/dashboard/performance"],
+  },
   academicIntegrity: {
     loader: () => import("@/pages/dashboard/AcademicIntegrity"),
     paths: ["/dashboard/integrity"],
+  },
+  demoAcademicIntegrity: {
+    loader: () => import("@/pages/dashboard/DemoAcademicIntegrity"),
+    paths: ["/demo/dashboard/integrity"],
+  },
+  demoAccreditationDashboard: {
+    loader: () => import("@/pages/dashboard/DemoAccreditationDashboard"),
+    paths: ["/demo/dashboard/accreditation"],
+  },
+  demoModerationDashboard: {
+    loader: () => import("@/pages/dashboard/DemoModerationDashboard"),
+    paths: ["/demo/dashboard/moderation"],
+  },
+  demoExternalExaminerExport: {
+    loader: () => import("@/pages/dashboard/DemoExternalExaminerExport"),
+    paths: ["/demo/dashboard/external-examiner"],
+  },
+  demoInstitutionalInsights: {
+    loader: () => import("@/pages/dashboard/DemoInstitutionalInsights"),
+    paths: ["/demo/dashboard/institutional"],
   },
   moderationDashboard: {
     loader: () => import("@/pages/dashboard/ModerationDashboard"),
@@ -74,6 +98,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/LearningOutcomes"),
     paths: ["/dashboard/learning-outcomes"],
   },
+  demoLearningOutcomes: {
+    loader: () => import("@/pages/dashboard/DemoLearningOutcomes"),
+    paths: ["/demo/dashboard/learning-outcomes"],
+  },
   studentGrades: {
     loader: () => import("@/pages/dashboard/StudentGrades"),
     paths: [],
@@ -85,6 +113,10 @@ const routeDefinitions = {
   improvementPlan: {
     loader: () => import("@/pages/dashboard/ImprovementPlan"),
     paths: ["/dashboard/improvements"],
+  },
+  demoImprovementPlan: {
+    loader: () => import("@/pages/dashboard/DemoImprovementPlan"),
+    paths: ["/demo/dashboard/improvements"],
   },
   assignments: {
     loader: () => import("@/pages/dashboard/Assignments"),
