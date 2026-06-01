@@ -49,9 +49,17 @@ export interface LecturerOverviewPipelineStage {
   detail: string;
 }
 
+export interface LecturerOverviewAssignment {
+  id: string;
+  title: string;
+  max_score: number;
+}
+
 export interface LecturerOverviewState {
   loading: boolean;
   error: string | null;
+  loadWarning: string | null;
+  assignments: LecturerOverviewAssignment[];
   stats: LecturerOverviewStats;
   recent: LecturerOverviewRecentSubmission[];
   pipeline: LecturerOverviewPipelineStage[];

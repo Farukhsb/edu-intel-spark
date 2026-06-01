@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-function getEnv(name: string) {
+export function getEnv(name: string) {
   if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
     return Deno.env.get(name);
   }

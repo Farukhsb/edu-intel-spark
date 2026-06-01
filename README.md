@@ -119,6 +119,8 @@ submission
 
 AI output is not treated as the final academic decision. Students only see feedback after it has passed through the educator review and release workflow.
 
+Unreadable PDFs can also be routed through an optional Docling fallback in the backend document-extraction flow when the relevant Supabase secrets are configured. That fallback is disabled by default and only applies to PDF extraction.
+
 ## Platform Preview
 
 ### Lecturer overview
@@ -418,6 +420,13 @@ VITE_ANALYTICS_ENABLED="false"
 ```
 
 Do not commit local environment files.
+
+If you enable the optional Docling fallback, set the backend secrets in Supabase rather than in the frontend `.env` file:
+
+- `DOCLING_EXTRACTION_FALLBACK_ENABLED=true`
+- `DOCLING_EXTRACTION_FALLBACK_URL=https://your-docling-service/extract`
+- `DOCLING_EXTRACTION_FALLBACK_SECRET=your_shared_secret`
+- `DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS=15000`
 
 ### 3. Start the app
 

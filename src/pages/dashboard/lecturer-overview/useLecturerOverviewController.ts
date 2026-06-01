@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { log } from "@/lib/logger";
 
 import type {
+  LecturerOverviewAssignment,
   LecturerOverviewAtRiskSummary,
   LecturerOverviewPipelineStage,
   LecturerOverviewQueueFocus,
@@ -22,6 +23,7 @@ import type {
 const ASSIGNMENT_FIELDS = "id, title, max_score";
 const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, file_name, status, submitted_at";
 const GRADE_FIELDS = "submission_id, ai_score, final_score, grade_source";
+const GRADE_FIELDS_FALLBACK = "submission_id, ai_score, final_score";
 
 const EMPTY_STATS: LecturerOverviewStats = {
   totalSubmissions: 0,
@@ -231,29 +233,17 @@ export const useLecturerOverviewController = () => {
   const [topAtRiskStudents, setTopAtRiskStudents] = useState<LecturerOverviewAtRiskSummary[]>(
     isDemo ? DEMO_TOP_AT_RISK : [],
   );
+  const [assignments, setAssignments] = useState<LecturerOverviewAssignment[]>([]);
   const [loading, setLoading] = useState(!isDemo);
   const [error, setError] = useState<string | null>(null);
-
-  const buildLoadErrorMessage = (loadStep: "assignments" | "submissions" | "grades" | "overview") => {
-    switch (loadStep) {
-      case "assignments":
-        return "The lecturer overview could not load assignments right now.";
-      case "submissions":
-        return "The lecturer overview could not load submissions right now.";
-      case "grades":
-        return "The lecturer overview could not load grades right now.";
-      default:
-        return "The lecturer overview could not be loaded right now.";
-    }
-  };
+  const [loadWarning, setLoadWarning] = useState<string | null>(null);
 
   const fetchDashboard = async () => {
     if (!user) return;
     setError(null);
-    let loadStep: "assignments" | "submissions" | "grades" | "overview" = "overview";
+    setLoadWarning(null);
 
     try {
-      loadStep = "assignments";
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from("assignments")
         .select(ASSIGNMENT_FIELDS)
@@ -262,6 +252,7 @@ export const useLecturerOverviewController = () => {
       if (assignmentsError) throw assignmentsError;
 
       const assignments = assignmentsData || [];
+      setAssignments(assignments);
       const assignmentIds = assignments.map((assignment) => assignment.id);
 
       if (assignmentIds.length === 0) {
@@ -273,7 +264,6 @@ export const useLecturerOverviewController = () => {
         return;
       }
 
-      loadStep = "submissions";
       const { data: submissionsData, error: submissionsError } = await supabase
         .from("submissions")
         .select(SUBMISSION_FIELDS)
@@ -289,19 +279,53 @@ export const useLecturerOverviewController = () => {
       let allGrades: Array<{ submission_id: string; final_score: number | null; ai_score: number | null; grade_source: string | null }> = [];
 
       if (submissionIds.length > 0) {
-        loadStep = "grades";
-        const { data: gradesData, error: gradesError } = await supabase
-          .from("grades")
-          .select(GRADE_FIELDS as never)
-          .in("submission_id", submissionIds);
+        const gradeQuery = async (fields: string) => {
+          try {
+            const { data, error: gradesError } = await supabase
+              .from("grades")
+              .select(fields as never)
+              .in("submission_id", submissionIds);
 
-        if (gradesError) throw gradesError;
-        allGrades = (gradesData as unknown as Array<{
-          submission_id: string;
-          final_score: number | null;
-          ai_score: number | null;
-          grade_source: string | null;
-        }>) || [];
+            return { data, gradesError: gradesError ?? null };
+          } catch (gradesError) {
+            return {
+              data: null,
+              gradesError,
+            };
+          }
+        };
+
+        const primaryGrades = await gradeQuery(GRADE_FIELDS);
+        if (primaryGrades.gradesError) {
+          log.warn("Lecturer overview grade source lookup failed; retrying without grade_source", {
+            userId: user.id,
+            error: primaryGrades.gradesError,
+          });
+          setLoadWarning("Some grade metadata is temporarily unavailable, but the teaching overview is still loading.");
+          const fallbackGrades = await gradeQuery(GRADE_FIELDS_FALLBACK);
+          if (fallbackGrades.gradesError) {
+            log.warn("Lecturer overview grade fallback query failed", {
+              userId: user.id,
+              error: fallbackGrades.gradesError,
+            });
+            setLoadWarning("Some grade metadata is temporarily unavailable, but the teaching overview is still loading.");
+            allGrades = [];
+          } else {
+            allGrades = (fallbackGrades.data as unknown as Array<{
+              submission_id: string;
+              final_score: number | null;
+              ai_score: number | null;
+              grade_source: string | null;
+            }>) || [];
+          }
+        } else {
+          allGrades = (primaryGrades.data as unknown as Array<{
+            submission_id: string;
+            final_score: number | null;
+            ai_score: number | null;
+            grade_source: string | null;
+          }>) || [];
+        }
       }
 
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
@@ -484,7 +508,7 @@ export const useLecturerOverviewController = () => {
       log.error("Lecturer overview fetch failed", error, {
         userId: user.id,
       });
-      setError(buildLoadErrorMessage(loadStep));
+      setError("The lecturer overview could not be loaded right now.");
     }
 
     setLoading(false);
@@ -596,6 +620,8 @@ export const useLecturerOverviewController = () => {
     state: {
       loading,
       error,
+      loadWarning,
+      assignments,
       stats,
       recent,
       pipeline,

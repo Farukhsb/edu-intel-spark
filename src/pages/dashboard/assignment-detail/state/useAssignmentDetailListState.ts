@@ -126,6 +126,30 @@ export const useAssignmentDetailListState = ({
   const notificationFocusedSubmissionIds = assignmentNotificationFocusState?.visibleSubmissionIds;
   const pinnedVisibleIdSet = useMemo(() => new Set(pinnedVisibleSubmissionIds), [pinnedVisibleSubmissionIds]);
 
+  const matchesStatusFilter = (submissionStatus: SubmissionStatus, currentFilter: "all" | SubmissionStatus) => {
+    if (currentFilter === "all") return true;
+
+    if (currentFilter === "ai_graded") {
+      return submissionStatus === "ai_graded" || submissionStatus === "first_review";
+    }
+
+    if (
+      currentFilter === "moderation_pending" ||
+      currentFilter === "moderation_in_progress" ||
+      currentFilter === "moderated" ||
+      currentFilter === "escalated"
+    ) {
+      return [
+        "moderation_pending",
+        "moderation_in_progress",
+        "moderated",
+        "escalated",
+      ].includes(submissionStatus);
+    }
+
+    return submissionStatus === currentFilter;
+  };
+
   const filteredSubmissions = useMemo(
     () =>
       submissions.filter((submission) => {
@@ -141,7 +165,7 @@ export const useAssignmentDetailListState = ({
           [submission.student_name, submission.student_email, submission.file_name]
             .filter(Boolean)
             .some((value) => value?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-        const matchesStatus = isPinnedVisible || statusFilter === "all" || submission.status === statusFilter;
+        const matchesStatus = isPinnedVisible || matchesStatusFilter(submission.status, statusFilter);
         return matchesNotificationFocus && matchesSearch && matchesStatus;
       }),
     [
