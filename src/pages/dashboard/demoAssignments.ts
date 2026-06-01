@@ -65,6 +65,8 @@ export interface DemoAssignmentGradeRecord {
     error_type?: "arithmetic_slip" | "conceptual_flaw" | "none";
   }>;
   assignment_type: string | null;
+  grade_source?: string | null;
+  source_metadata?: Record<string, unknown> | null;
   grading_confidence: number | null;
   grading_metadata: {
     fairness_notes?: string[];

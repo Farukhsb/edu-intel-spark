@@ -20,6 +20,7 @@ export interface LecturerOverviewRecentSubmission {
   assignment_title: string;
   score: number | null;
   max_score: number;
+  grade_source: string | null;
   workflowHref: string;
   workflowLabel: string;
 }

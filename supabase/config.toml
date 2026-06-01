@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.bulk-create-students]
 verify_jwt = true
+
+[functions.import-grades]
+verify_jwt = true

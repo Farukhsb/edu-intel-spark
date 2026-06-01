@@ -22,7 +22,7 @@ const EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS = "id, title, module_code";
 const EXTERNAL_EXAMINER_SUBMISSION_FIELDS =
   "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
 const EXTERNAL_EXAMINER_GRADE_FIELDS =
-  "submission_id, ai_score, lecturer_score, final_score, ai_feedback, lecturer_feedback, final_feedback, reviewed_at, reviewed_by";
+  "submission_id, ai_score, lecturer_score, final_score, grade_source, ai_feedback, lecturer_feedback, final_feedback, reviewed_at, reviewed_by";
 const EXTERNAL_EXAMINER_PROFILE_FIELDS = "id, full_name, email";
 
 const STUDENT_GRADE_SUBMISSION_FIELDS = "id, assignment_id, file_name, file_url, status, submitted_at, student_id";
@@ -103,7 +103,7 @@ export const fetchExternalExaminerDataset = async () => {
   return {
     assignments: (assignmentsRaw ?? []) as ExternalExaminerAssignmentRow[],
     submissions: (submissionsRaw ?? []) as ExternalExaminerSubmissionRow[],
-    grades: (gradesRaw ?? []) as ExternalExaminerGradeRow[],
+    grades: (gradesRaw ?? []) as unknown as ExternalExaminerGradeRow[],
     profiles: (profilesRaw ?? []) as ExternalExaminerProfileRow[],
   };
 };

@@ -134,4 +134,66 @@ test.describe("assignment management workflows", () => {
       state.tables.profiles.filter((row) => row.role === "student").map((row) => row.email).sort(),
     ).toEqual(["mina@student.test", "sam@student.test"]);
   });
+
+  test("lecturer can preview and commit a hybrid grade import from the dashboard", async ({ page }) => {
+    const state = createMockSupabaseState({
+      assignments: [
+        {
+          id: "assignment-import",
+          title: "Hybrid Import Essay",
+          description: "Import existing grades and then review analytics.",
+          module_code: "HIS210",
+          max_score: 20,
+          due_date: "2026-05-20T09:00:00.000Z",
+          status: "published",
+          lecturer_id: lecturer.id,
+          rubric: [{ criterion: "Analysis", weight: 50 }],
+        },
+      ],
+      profiles: [
+        {
+          id: lecturer.id,
+          full_name: lecturer.fullName,
+          email: lecturer.email,
+          role: "lecturer",
+          avatar_url: null,
+          cohort_id: null,
+          department_id: null,
+        },
+      ],
+    });
+
+    await installSupabaseMocks(page, state);
+    await setE2EAuth(page, { role: "lecturer", ...lecturer });
+
+    await page.goto("/dashboard/assignments");
+    await page.waitForURL("**/dashboard/assignments");
+    await page.getByRole("button", { name: "Skip for now" }).click();
+    await expect(page.getByRole("heading", { name: "Manage Assignments" })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Hybrid Import Essay")).toBeVisible();
+
+    await page.getByRole("button", { name: "Import Grades" }).click();
+    await expect(page.getByRole("dialog", { name: "Import Grades" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "CSV" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Photo" })).toBeVisible();
+
+    await page.getByRole("tab", { name: "Photo" }).click();
+    await expect(page.getByText("Best effort OCR only. Always review the preview before confirming.")).toBeVisible();
+    await page.getByRole("tab", { name: "CSV" }).click();
+
+    const csv = [
+      "student_name,student_email,score,max_score,submission_date,notes",
+      "Jane Doe,jane@example.edu,18,20,2026-05-15,Great work",
+    ].join("\n");
+
+    await page.locator("#hybrid-grade-import-csv-text").fill(csv);
+    await page.getByRole("button", { name: /Preview import/i }).click();
+    await expect(page.locator("p.font-medium").filter({ hasText: "Jane Doe" })).toBeVisible();
+    await expect(page.getByText("1 rows scanned")).toBeVisible();
+    await expect(page.getByText("1 accepted")).toBeVisible();
+
+    await page.getByRole("button", { name: /Import 1 grade/i }).click();
+    await expect(page.getByText("Import completed", { exact: true })).toBeVisible();
+    await expect(page.getByText("Grade import completed.")).toBeVisible();
+  });
 });

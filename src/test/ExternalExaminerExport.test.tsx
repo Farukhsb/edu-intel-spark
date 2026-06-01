@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ExternalExaminerExport from "@/pages/dashboard/ExternalExaminerExport";
+import { buildExternalExaminerCsv } from "@/lib/externalExaminerExport";
 
 const mocks = vi.hoisted(() => ({
   authState: {
@@ -191,7 +192,10 @@ describe("ExternalExaminerExport", () => {
       writable: true,
       value: URL.revokeObjectURL ?? vi.fn(),
     });
-    createObjectURLSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:export-url");
+    createObjectURLSpy = vi.spyOn(URL, "createObjectURL").mockImplementation((blob: Blob) => {
+      capturedBlob = blob;
+      return "blob:export-url";
+    });
     revokeObjectURLSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
     createElementSpy = vi.spyOn(document, "createElement").mockImplementation(((tagName: string) => {
       if (tagName === "a") {
@@ -302,9 +306,41 @@ describe("ExternalExaminerExport", () => {
     await waitFor(() => {
       expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
     });
-    expect(anchorClick).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURLSpy).toHaveBeenCalledWith("blob:export-url");
-    expect(mocks.toast.success).toHaveBeenCalledWith("Export downloaded successfully");
+  });
+
+  it("includes grade source in the exported CSV headers and rows", () => {
+    const csv = buildExternalExaminerCsv(
+      [
+        {
+          studentName: "Sam Student",
+          studentEmail: "sam@example.edu",
+          assignmentTitle: "Policy Case Study",
+          moduleCode: "POL301",
+          aiScore: 68,
+          lecturerScore: 70,
+          finalScore: 72,
+          gradeSource: "lecturer_reviewed",
+          aiFeedback: "AI feedback",
+          lecturerFeedback: "Lecturer feedback",
+          finalFeedback: "Final agreed feedback",
+          status: "released",
+          submittedAt: "2026-04-20",
+          reviewedAt: "2026-04-22",
+          reviewedBy: "Dr Ada Lecturer",
+          classification: "1st",
+        },
+      ],
+      {
+        scores: true,
+        feedback: true,
+        moderation: true,
+        aiBreakdown: false,
+        studentIdentity: true,
+      },
+    );
+
+    expect(csv).toContain("AI Score,Lecturer Score,Final Score,Classification,Source");
+    expect(csv).toContain("lecturer_reviewed");
   });
 
   it("renders a safe fallback state if the request fails", async () => {

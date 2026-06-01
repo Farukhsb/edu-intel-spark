@@ -46,6 +46,8 @@ export interface Grade {
   ai_feedback: string | null;
   ai_breakdown: AssignmentDetailBreakdown[] | null;
   assignment_type?: string | null;
+  grade_source?: string | null;
+  source_metadata?: Record<string, unknown> | null;
   grading_confidence?: number | null;
   grading_metadata?: GradingMetadata | null;
   lecturer_score: number | null;

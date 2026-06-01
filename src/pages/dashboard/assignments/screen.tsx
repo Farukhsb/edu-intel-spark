@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { HybridGradeImportDialog } from "@/components/dashboard/HybridGradeImportDialog";
 import { AssignmentFormDialog } from "@/pages/dashboard/assignments/assignment-form-dialog";
 import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
 import type { useAssignmentsController } from "@/pages/dashboard/assignments/useAssignmentsController";
@@ -90,36 +91,39 @@ export const AssignmentsScreen = ({
         }
         actions={
           role === "lecturer" && !isDemo ? (
-            <AssignmentFormDialog
-              applyStarterTemplate={applyStarterTemplate}
-              creating={formState.creating}
-              departments={departments}
-              description={formState.description}
-              dialogOpen={formState.dialogOpen}
-              dueDate={formState.dueDate}
-              editingAssignmentId={formState.editingAssignmentId}
-              maxScore={formState.maxScore}
-              moduleCode={formState.moduleCode}
-              onDialogOpenChange={setFormDialogOpen}
-              onOpenCreateDialog={openCreateDialog}
-              onSave={handleSaveAssignment}
-              resetAssignmentForm={resetAssignmentForm}
-              rubric={formState.rubric}
-              selectedCohorts={formState.selectedCohorts}
-              selectedDepartments={formState.selectedDepartments}
-              selectedTemplateId={formState.selectedTemplateId}
-              setDescription={(value) => updateFormField("description", typeof value === "function" ? value(formState.description) : value)}
-              setDueDate={(value) => updateFormField("dueDate", typeof value === "function" ? value(formState.dueDate) : value)}
-              setMaxScore={(value) => updateFormField("maxScore", typeof value === "function" ? value(formState.maxScore) : value)}
-              setModuleCode={(value) => updateFormField("moduleCode", typeof value === "function" ? value(formState.moduleCode) : value)}
-              setRubric={(value) => updateFormField("rubric", typeof value === "function" ? value(formState.rubric) : value)}
-              setTitle={(value) => updateFormField("title", typeof value === "function" ? value(formState.title) : value)}
-              summarizeSelection={summarizeSelection}
-              targetCohorts={[...targetCohorts]}
-              title={formState.title}
-              toggleCohort={toggleCohort}
-              toggleDepartment={toggleDepartment}
-            />
+            <div className="flex flex-wrap gap-2">
+              <HybridGradeImportDialog assignments={assignments} />
+              <AssignmentFormDialog
+                applyStarterTemplate={applyStarterTemplate}
+                creating={formState.creating}
+                departments={departments}
+                description={formState.description}
+                dialogOpen={formState.dialogOpen}
+                dueDate={formState.dueDate}
+                editingAssignmentId={formState.editingAssignmentId}
+                maxScore={formState.maxScore}
+                moduleCode={formState.moduleCode}
+                onDialogOpenChange={setFormDialogOpen}
+                onOpenCreateDialog={openCreateDialog}
+                onSave={handleSaveAssignment}
+                resetAssignmentForm={resetAssignmentForm}
+                rubric={formState.rubric}
+                selectedCohorts={formState.selectedCohorts}
+                selectedDepartments={formState.selectedDepartments}
+                selectedTemplateId={formState.selectedTemplateId}
+                setDescription={(value) => updateFormField("description", typeof value === "function" ? value(formState.description) : value)}
+                setDueDate={(value) => updateFormField("dueDate", typeof value === "function" ? value(formState.dueDate) : value)}
+                setMaxScore={(value) => updateFormField("maxScore", typeof value === "function" ? value(formState.maxScore) : value)}
+                setModuleCode={(value) => updateFormField("moduleCode", typeof value === "function" ? value(formState.moduleCode) : value)}
+                setRubric={(value) => updateFormField("rubric", typeof value === "function" ? value(formState.rubric) : value)}
+                setTitle={(value) => updateFormField("title", typeof value === "function" ? value(formState.title) : value)}
+                summarizeSelection={summarizeSelection}
+                targetCohorts={[...targetCohorts]}
+                title={formState.title}
+                toggleCohort={toggleCohort}
+                toggleDepartment={toggleDepartment}
+              />
+            </div>
           ) : null
         }
       />

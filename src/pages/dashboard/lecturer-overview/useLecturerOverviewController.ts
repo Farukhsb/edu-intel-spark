@@ -21,7 +21,7 @@ import type {
 
 const ASSIGNMENT_FIELDS = "id, title, max_score";
 const SUBMISSION_FIELDS = "id, assignment_id, student_id, student_name, student_email, file_name, status, submitted_at";
-const GRADE_FIELDS = "submission_id, ai_score, final_score";
+const GRADE_FIELDS = "submission_id, ai_score, final_score, grade_source";
 
 const EMPTY_STATS: LecturerOverviewStats = {
   totalSubmissions: 0,
@@ -58,6 +58,7 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     assignment_title: "Data Structures",
     score: 78,
     max_score: 100,
+    grade_source: "lecturer_reviewed",
     workflowHref: "/dashboard/assignments/demo-assignment-1?source=queue&focus=released-results",
     workflowLabel: "Continue workflow",
   },
@@ -71,6 +72,7 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     assignment_title: "Algorithms",
     score: 55,
     max_score: 100,
+    grade_source: "ai_graded",
     workflowHref: "/dashboard/assignments/demo-assignment-2?source=notification&focus=ai-results",
     workflowLabel: "Review submission",
   },
@@ -84,6 +86,7 @@ const DEMO_RECENT: LecturerOverviewRecentSubmission[] = [
     assignment_title: "Database Design",
     score: null,
     max_score: 100,
+    grade_source: null,
     workflowHref: "/dashboard/assignments/demo-assignment-3?source=notification&focus=submission-review",
     workflowLabel: "Review submission",
   },
@@ -267,16 +270,21 @@ export const useLecturerOverviewController = () => {
       );
 
       const submissionIds = allSubs.map((submission) => submission.id);
-      let allGrades: Array<{ submission_id: string; final_score: number | null; ai_score: number | null }> = [];
+      let allGrades: Array<{ submission_id: string; final_score: number | null; ai_score: number | null; grade_source: string | null }> = [];
 
       if (submissionIds.length > 0) {
         const { data: gradesData, error: gradesError } = await supabase
           .from("grades")
-          .select(GRADE_FIELDS)
+          .select(GRADE_FIELDS as never)
           .in("submission_id", submissionIds);
 
         if (gradesError) throw gradesError;
-        allGrades = gradesData || [];
+        allGrades = (gradesData as unknown as Array<{
+          submission_id: string;
+          final_score: number | null;
+          ai_score: number | null;
+          grade_source: string | null;
+        }>) || [];
       }
 
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
@@ -284,11 +292,12 @@ export const useLecturerOverviewController = () => {
         assignmentMap[assignment.id] = { title: assignment.title, max_score: assignment.max_score };
       });
 
-      const gradeMap: Record<string, { final_score: number | null; ai_score: number | null }> = {};
+      const gradeMap: Record<string, { final_score: number | null; ai_score: number | null; grade_source: string | null }> = {};
       allGrades.forEach((grade) => {
         gradeMap[grade.submission_id] = {
           final_score: grade.final_score,
           ai_score: grade.ai_score,
+          grade_source: grade.grade_source,
         };
       });
 
@@ -448,6 +457,7 @@ export const useLecturerOverviewController = () => {
           assignment_title: assignment?.title || "Unknown",
           score: grade?.final_score ?? grade?.ai_score ?? null,
           max_score: assignment?.max_score || 100,
+          grade_source: grade?.grade_source ?? null,
           workflowHref: appendOverviewReturnContext(workflowTarget.href),
           workflowLabel: getOverviewSubmissionActionLabel(submission.status),
         };

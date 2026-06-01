@@ -5,6 +5,7 @@ import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { GradeSourceBadge } from "@/components/dashboard/GradeSourceBadge";
 import { getSubmissionDisplayState } from "@/lib/assessmentWorkflow";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
@@ -282,6 +283,7 @@ const SubmissionCardItem = ({
                 {grade.assignment_type}
               </Badge>
             )}
+            <GradeSourceBadge source={grade?.grade_source ?? null} />
             <Badge
               data-testid={`submission-status-${submission.id}`}
               variant={sc.variant}

@@ -195,6 +195,24 @@ describe("edge function hardening", () => {
     expect(explainGradeSource).toContain("Authorization: `Bearer ${accessToken}`");
   });
 
+  it("keeps hybrid grade import backend-only and JWT protected", () => {
+    const importSource = readRepoFile("supabase/functions/import-grades/index.ts");
+    const helperSource = readRepoFile("supabase/functions/_shared/grade-import.ts");
+    const configSource = readRepoFile("supabase/config.toml");
+
+    expect(configSource).toContain("[functions.import-grades]");
+    expect(configSource).toContain("verify_jwt = true");
+    expect(importSource).toContain("requireLecturer(req)");
+    expect(importSource).toContain("IMPORT_RATE_LIMIT_SCOPE");
+    expect(importSource).toContain("HYBRID_IMPORT_ENABLED");
+    expect(importSource).toContain('from("grade_imports").insert');
+    expect(helperSource).toContain('grade_source: "lecturer_uploaded"');
+    expect(importSource).toContain("source_metadata");
+    expect(importSource).toContain('.getAll("file")');
+    expect(importSource).toContain("createChatCompletion({");
+    expect(importSource).toContain('logInfo("import-grades completed"');
+  });
+
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
     const source = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
     const entrySource = readRepoFile("supabase/functions/check-plagiarism/index.ts");
