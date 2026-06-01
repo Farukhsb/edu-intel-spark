@@ -70,6 +70,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/DemoAccreditationDashboard"),
     paths: ["/demo/dashboard/accreditation"],
   },
+  demoModerationDashboard: {
+    loader: () => import("@/pages/dashboard/DemoModerationDashboard"),
+    paths: ["/demo/dashboard/moderation"],
+  },
   moderationDashboard: {
     loader: () => import("@/pages/dashboard/ModerationDashboard"),
     paths: ["/dashboard/moderation"],
