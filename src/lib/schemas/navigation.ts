@@ -24,6 +24,7 @@ const AdminViewSchema = z.enum([
   "submissions",
   "moderation",
   "audit",
+  "compliance",
   "data-access-log",
   "integrity-overview",
   "moderation-audit",

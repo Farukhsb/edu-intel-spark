@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom";
+
 import { IntegrityModerationSection } from "./integrity-moderation-section";
 import { AssignmentOversightSection } from "./assignment-oversight-section";
 import { SubmissionOversightSection } from "./submission-oversight-section";
@@ -5,13 +7,10 @@ import { SystemHealthSection } from "./system-health-section";
 import { UserManagementSection } from "./user-management-section";
 import { DashboardHeader } from "./dashboard-header";
 import {
-  AcademicIntegrityOverviewSection,
+  ComplianceHubSection,
   AuditLogSection,
-  DataAccessLogSection,
-  ModerationAuditSection,
   OperationalFailureSection,
   OverviewPage,
-  PolicyExceptionsSection,
   RecentActivitySection,
 } from "./dashboard-sections";
 import {
@@ -20,7 +19,21 @@ import {
   UserSummaryDialog,
 } from "./profile-management-dialogs";
 
-import type { AdminDashboardActions, AdminDashboardViewModel } from "../types";
+import type { AdminComplianceTab, AdminDashboardActions, AdminDashboardViewModel } from "../types";
+
+const isComplianceHubView = (value: string) =>
+  value === "compliance" ||
+  value === "data-access-log" ||
+  value === "integrity-overview" ||
+  value === "moderation-audit" ||
+  value === "policy-exceptions";
+
+const getComplianceTab = (value: string): AdminComplianceTab =>
+  value === "integrity-overview" ||
+  value === "moderation-audit" ||
+  value === "policy-exceptions"
+    ? value
+    : "data-access-log";
 
 export const AdminDashboardScreen = ({
   viewModel,
@@ -29,6 +42,7 @@ export const AdminDashboardScreen = ({
   viewModel: AdminDashboardViewModel;
   actions: AdminDashboardActions;
 }) => {
+  const navigate = useNavigate();
   const {
     activeView,
     header,
@@ -62,11 +76,22 @@ export const AdminDashboardScreen = ({
       <DashboardHeader
         institution={header.institution}
         refreshing={header.refreshing}
-        onRefresh={() => void loadAdminDashboard({ silent: true })}
-        showBulkUpload={header.showBulkUpload}
-      />
+      onRefresh={() => void loadAdminDashboard({ silent: true })}
+      showBulkUpload={header.showBulkUpload}
+    />
 
-      {activeView === "users" ? (
+      {isComplianceHubView(activeView) ? (
+        <ComplianceHubSection
+          activeTab={getComplianceTab(activeView)}
+          dataAccessLog={dataAccessLog}
+          integrityOverview={integrityOverview}
+          moderationAudit={moderationAudit}
+          onTabChange={(tab: AdminComplianceTab) => {
+            navigate(`/dashboard?view=${tab}`);
+          }}
+          policyExceptions={policyExceptions}
+        />
+      ) : activeView === "users" ? (
         <UserManagementSection
           users={users.users}
           onRequestRoleChange={requestRoleChange}
@@ -87,14 +112,6 @@ export const AdminDashboardScreen = ({
           <AuditLogSection auditRows={audit.auditRows} />
           <RecentActivitySection activityFeed={audit.activityFeed} />
         </div>
-      ) : activeView === "data-access-log" ? (
-        <DataAccessLogSection rows={dataAccessLog.rows} status={dataAccessLog.status} />
-      ) : activeView === "integrity-overview" ? (
-        <AcademicIntegrityOverviewSection overview={integrityOverview.overview} />
-      ) : activeView === "moderation-audit" ? (
-        <ModerationAuditSection rows={moderationAudit.rows} status={moderationAudit.status} />
-      ) : activeView === "policy-exceptions" ? (
-        <PolicyExceptionsSection rows={policyExceptions.rows} status={policyExceptions.status} />
       ) : activeView === "system" ? (
         <div className="space-y-6">
           <OperationalFailureSection cards={system.failureCards} />

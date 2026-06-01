@@ -175,6 +175,13 @@ export type AdminView =
   | "submissions"
   | "moderation"
   | "audit"
+  | "compliance"
+  | "data-access-log"
+  | "integrity-overview"
+  | "moderation-audit"
+  | "policy-exceptions";
+
+export type AdminComplianceTab =
   | "data-access-log"
   | "integrity-overview"
   | "moderation-audit"

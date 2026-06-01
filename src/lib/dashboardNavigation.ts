@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   Award,
   BarChart3,
   ClipboardCheck,
@@ -99,14 +98,11 @@ export const adminSections = [
     ],
   },
   {
-    label: "Compliance & Governance",
-    description: "Audit and institutional governance views",
+    label: "Compliance",
+    description: "Audit and governance views",
     defaultOpen: false,
     links: [
-      { to: "/dashboard?view=data-access-log", label: "Data Access Log", icon: FileOutput },
-      { to: "/dashboard?view=integrity-overview", label: "Academic Integrity Overview", icon: Shield },
-      { to: "/dashboard?view=moderation-audit", label: "Moderation Audit", icon: ClipboardCheck },
-      { to: "/dashboard?view=policy-exceptions", label: "Policy Exceptions", icon: AlertTriangle },
+      { to: "/dashboard?view=compliance", label: "Compliance", icon: Shield },
     ],
   },
   {

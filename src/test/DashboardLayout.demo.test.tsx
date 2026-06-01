@@ -208,12 +208,11 @@ describe("DashboardLayout demo mode", () => {
     expect(screen.getAllByText("Reports").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Institutional Insights").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Academic Oversight").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Compliance & Governance").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Compliance").length).toBeGreaterThan(0);
     expect(screen.queryByText("Academic Access")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Academic Oversight/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Compliance & Governance/i }));
-    expect(screen.getAllByText("Data Access Log").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Policy Exceptions").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Compliance 1 Audit and governance views/i }));
+    expect(screen.getAllByText("Audit and governance views").length).toBeGreaterThan(0);
   });
 
   it("does not show institutional insights in the lecturer sidebar", async () => {
