@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import DemoStudentProfile from "@/pages/dashboard/DemoStudentProfile";
 import StudentProfile from "@/pages/dashboard/StudentProfile";
 
 const mocks = vi.hoisted(() => ({
@@ -325,11 +326,11 @@ describe("StudentProfile", () => {
   });
 
   it("uses synthetic demo data and does not queue live notifications in demo mode", async () => {
-    mocks.authState.isDemo = true;
-    mocks.authState.user = { id: "demo-lecturer" };
     mocks.params.studentId = "demo-student";
 
-    renderStudentProfile();
+    render(
+      <DemoStudentProfile />
+    );
 
     expect(await screen.findByText("David Lee")).toBeInTheDocument();
 
