@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { Archive, Calendar, CheckCircle2, Clock3, FileText, Search } from "lucide-react";
 
 import {
-  DashboardDemoBanner,
   DashboardEmptyState,
   DashboardLoadingState,
   DashboardPageIntro,
@@ -20,9 +19,9 @@ import {
 } from "@/components/ui/select";
 import { AssignmentFormDialog } from "@/pages/dashboard/assignments/assignment-form-dialog";
 import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
-import type { useDemoAssignmentsController } from "@/pages/dashboard/assignments/useDemoAssignmentsController";
+import type { useAssignmentsController } from "@/pages/dashboard/assignments/useAssignmentsController";
 
-type DemoAssignmentsScreenProps = ReturnType<typeof useDemoAssignmentsController>;
+type AssignmentsScreenProps = ReturnType<typeof useAssignmentsController>;
 
 const statusVariant = (status: string) => {
   if (status === "published") return "default";
@@ -30,16 +29,15 @@ const statusVariant = (status: string) => {
   return "secondary";
 };
 
-const statusIcon = (status: DemoAssignmentsScreenProps["assignments"][number]["status"]) => {
+const statusIcon = (status: AssignmentsScreenProps["assignments"][number]["status"]) => {
   if (status === "published") return CheckCircle2;
   if (status === "closed") return Archive;
   return Clock3;
 };
 
-export const DemoAssignmentsScreen = ({
+export const AssignmentsScreen = ({
   loading,
   role,
-  isDemo,
   assignments,
   sortedAssignments,
   submissionStats,
@@ -73,16 +71,14 @@ export const DemoAssignmentsScreen = ({
   setFormDialogOpen,
   targetCohorts,
   departments,
-}: DemoAssignmentsScreenProps) => {
+}: AssignmentsScreenProps) => {
   if (loading) return <DashboardLoadingState />;
 
-  const dashboardBaseHref = isDemo ? "/demo/dashboard" : "/dashboard";
-  const assignmentsBaseHref = isDemo ? "/demo/dashboard/assignments" : "/dashboard/assignments";
+  const dashboardBaseHref = "/dashboard";
+  const assignmentsBaseHref = "/dashboard/assignments";
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo && <DashboardDemoBanner label="Demo Mode — synthetic sample data" />}
-
       <DashboardPageIntro
         eyebrow={role === "lecturer" ? "Assignment workflow" : "Student assignment view"}
         title={role === "lecturer" ? "Manage Assignments" : "My Assignments"}
@@ -92,7 +88,7 @@ export const DemoAssignmentsScreen = ({
             : "Track live assignments, upcoming deadlines, and the next action needed for each submission window."
         }
         actions={
-          role === "lecturer" && !isDemo ? (
+          role === "lecturer" ? (
             <div className="flex flex-wrap gap-2">
               <AssignmentFormDialog
                 applyStarterTemplate={applyStarterTemplate}
@@ -128,31 +124,6 @@ export const DemoAssignmentsScreen = ({
           ) : null
         }
       />
-
-      {isDemo && role === "lecturer" && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="grid gap-3 p-4 md:grid-cols-3">
-            <div>
-              <p className="text-sm font-medium">Create assignment</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The live lecturer flow starts with a draft brief, due date, cohort targeting, and optional department scoping.
-              </p>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Reusable assignment sets</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Open the reviewer-ready set to inspect a complete brief, full rubric, AI-facing grading context, and synthetic workflow evidence.
-              </p>
-            </div>
-            <div>
-              <p className="text-sm font-medium">Review marking and integrity</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Open Workflow to see synthetic submissions, an integrity flag example, AI marking output, moderation-ready work, and released feedback.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardContent className="grid gap-4 p-6 md:grid-cols-3">
@@ -259,7 +230,7 @@ export const DemoAssignmentsScreen = ({
               : "Your assignments will appear here once your lecturer has published them."
           }
           action={
-            role === "lecturer" && !isDemo ? (
+            role === "lecturer" ? (
               <Button onClick={openCreateDialog}>Create your first assignment</Button>
             ) : undefined
           }
@@ -312,9 +283,6 @@ export const DemoAssignmentsScreen = ({
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {assignment.status}
                         </Badge>
-                        {isDemo && (
-                          <Badge variant="outline" className="text-xs">Assignment set</Badge>
-                        )}
                         {rubricCriteria.length > 0 && (
                           <Badge variant="outline" className="text-xs">{rubricCriteria.length} criteria</Badge>
                         )}
@@ -395,15 +363,15 @@ export const DemoAssignmentsScreen = ({
                     </div>
 
                     <div className="flex gap-2 self-start">
-                      {role === "lecturer" && !isDemo && (
+                      {role === "lecturer" && (
                         <Button size="sm" variant="outline" onClick={() => openEditDialog(assignment)}>
                           Edit
                         </Button>
                       )}
-                      {role === "lecturer" && assignment.status === "draft" && !isDemo && (
+                      {role === "lecturer" && assignment.status === "draft" && (
                         <Button size="sm" onClick={() => handlePublish(assignment.id)}>Publish</Button>
                       )}
-                      {role === "lecturer" && assignment.status !== "closed" && !isDemo && (
+                      {role === "lecturer" && assignment.status !== "closed" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -417,7 +385,7 @@ export const DemoAssignmentsScreen = ({
                           Archive
                         </Button>
                       )}
-                      {role === "lecturer" && assignment.status === "closed" && !isDemo && (
+                      {role === "lecturer" && assignment.status === "closed" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -441,17 +409,7 @@ export const DemoAssignmentsScreen = ({
                         </Button>
                       )}
                       <Button size="sm" variant="outline" asChild>
-                        <Link
-                          to={
-                            role === "lecturer"
-                              ? lecturerWorkflowTarget?.href
-                                ? (isDemo
-                                    ? lecturerWorkflowTarget.href.replace("/dashboard", "/demo/dashboard")
-                                    : lecturerWorkflowTarget.href)
-                                : `${assignmentsBaseHref}/${assignment.id}`
-                              : `${assignmentsBaseHref}/${assignment.id}`
-                          }
-                        >
+                        <Link to={role === "lecturer" ? lecturerWorkflowTarget?.href ?? `${assignmentsBaseHref}/${assignment.id}` : `${assignmentsBaseHref}/${assignment.id}`}>
                           {role === "lecturer"
                             ? lecturerWorkflowTarget?.label ?? "Open Workflow"
                             : studentState
