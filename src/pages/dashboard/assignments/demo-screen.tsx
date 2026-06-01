@@ -39,7 +39,6 @@ const statusIcon = (status: DemoAssignmentsScreenProps["assignments"][number]["s
 export const DemoAssignmentsScreen = ({
   loading,
   role,
-  isDemo,
   assignments,
   sortedAssignments,
   submissionStats,
@@ -76,12 +75,12 @@ export const DemoAssignmentsScreen = ({
 }: DemoAssignmentsScreenProps) => {
   if (loading) return <DashboardLoadingState />;
 
-  const dashboardBaseHref = isDemo ? "/demo/dashboard" : "/dashboard";
-  const assignmentsBaseHref = isDemo ? "/demo/dashboard/assignments" : "/dashboard/assignments";
+  const dashboardBaseHref = "/demo/dashboard";
+  const assignmentsBaseHref = "/demo/dashboard/assignments";
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo && <DashboardDemoBanner label="Demo Mode — synthetic sample data" />}
+      <DashboardDemoBanner label="Demo Mode — synthetic sample data" />
 
       <DashboardPageIntro
         eyebrow={role === "lecturer" ? "Assignment workflow" : "Student assignment view"}
@@ -92,7 +91,7 @@ export const DemoAssignmentsScreen = ({
             : "Track live assignments, upcoming deadlines, and the next action needed for each submission window."
         }
         actions={
-          role === "lecturer" && !isDemo ? (
+          role === "lecturer" ? (
             <div className="flex flex-wrap gap-2">
               <AssignmentFormDialog
                 applyStarterTemplate={applyStarterTemplate}
@@ -129,7 +128,7 @@ export const DemoAssignmentsScreen = ({
         }
       />
 
-      {isDemo && role === "lecturer" && (
+      {role === "lecturer" && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="grid gap-3 p-4 md:grid-cols-3">
             <div>
@@ -259,7 +258,7 @@ export const DemoAssignmentsScreen = ({
               : "Your assignments will appear here once your lecturer has published them."
           }
           action={
-            role === "lecturer" && !isDemo ? (
+            role === "lecturer" ? (
               <Button onClick={openCreateDialog}>Create your first assignment</Button>
             ) : undefined
           }
@@ -312,9 +311,7 @@ export const DemoAssignmentsScreen = ({
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {assignment.status}
                         </Badge>
-                        {isDemo && (
-                          <Badge variant="outline" className="text-xs">Assignment set</Badge>
-                        )}
+                        <Badge variant="outline" className="text-xs">Assignment set</Badge>
                         {rubricCriteria.length > 0 && (
                           <Badge variant="outline" className="text-xs">{rubricCriteria.length} criteria</Badge>
                         )}
@@ -395,15 +392,15 @@ export const DemoAssignmentsScreen = ({
                     </div>
 
                     <div className="flex gap-2 self-start">
-                      {role === "lecturer" && !isDemo && (
+                      {role === "lecturer" && (
                         <Button size="sm" variant="outline" onClick={() => openEditDialog(assignment)}>
                           Edit
                         </Button>
                       )}
-                      {role === "lecturer" && assignment.status === "draft" && !isDemo && (
+                      {role === "lecturer" && assignment.status === "draft" && (
                         <Button size="sm" onClick={() => handlePublish(assignment.id)}>Publish</Button>
                       )}
-                      {role === "lecturer" && assignment.status !== "closed" && !isDemo && (
+                      {role === "lecturer" && assignment.status !== "closed" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -417,7 +414,7 @@ export const DemoAssignmentsScreen = ({
                           Archive
                         </Button>
                       )}
-                      {role === "lecturer" && assignment.status === "closed" && !isDemo && (
+                      {role === "lecturer" && assignment.status === "closed" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -445,9 +442,7 @@ export const DemoAssignmentsScreen = ({
                           to={
                             role === "lecturer"
                               ? lecturerWorkflowTarget?.href
-                                ? (isDemo
-                                    ? lecturerWorkflowTarget.href.replace("/dashboard", "/demo/dashboard")
-                                    : lecturerWorkflowTarget.href)
+                                ? lecturerWorkflowTarget.href.replace("/dashboard", "/demo/dashboard")
                                 : `${assignmentsBaseHref}/${assignment.id}`
                               : `${assignmentsBaseHref}/${assignment.id}`
                           }

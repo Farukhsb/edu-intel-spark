@@ -82,5 +82,4 @@ export const buildDemoWorkflowActionsProps = (
 ): ComponentProps<typeof DemoWorkflowActionsSection> =>
   ({
     ...buildWorkflowActionsProps(args),
-    isDemo: true,
   }) as ComponentProps<typeof DemoWorkflowActionsSection>;

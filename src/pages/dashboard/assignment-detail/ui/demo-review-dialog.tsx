@@ -13,8 +13,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CriterionBars } from "@/components/dashboard/CriterionBars";
-import { useAuth } from "@/contexts/AuthContext";
-import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 
 import type { AssignmentDetailSubmission, Grade } from "@/pages/dashboard/assignment-detail/types";
 
@@ -23,7 +21,6 @@ export interface DemoSubmissionReviewDialogProps {
   editFeedback: string;
   editScore: string;
   grade: Grade | null;
-  isDemo: boolean;
   onEditFeedbackChange: Dispatch<SetStateAction<string>>;
   onEditScoreChange: Dispatch<SetStateAction<string>>;
   onOpenChange: (open: boolean) => void;
@@ -37,7 +34,6 @@ export const DemoSubmissionReviewDialog = ({
   editFeedback,
   editScore,
   grade,
-  isDemo,
   onEditFeedbackChange,
   onEditScoreChange,
   onOpenChange,
@@ -45,11 +41,10 @@ export const DemoSubmissionReviewDialog = ({
   open,
   reviewSubmission,
 }: DemoSubmissionReviewDialogProps) => {
-  const { user, profile, isDemo: sessionIsDemo } = useAuth();
   const lastLoggedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!open || !reviewSubmission || sessionIsDemo) {
+    if (!open || !reviewSubmission) {
       return;
     }
 
@@ -58,35 +53,7 @@ export const DemoSubmissionReviewDialog = ({
       return;
     }
     lastLoggedKeyRef.current = logKey;
-
-    void logAcademicAccessEvent({
-      actorId: user?.id,
-      actorRole: profile?.role ?? null,
-      eventType: "submission_viewed",
-      resourceType: "submission",
-      resourceId: reviewSubmission.id,
-      assignmentId: reviewSubmission.assignment_id,
-      submissionId: reviewSubmission.id,
-      metadata: {
-        source: "assignment_review_dialog",
-        status: reviewSubmission.status,
-      },
-    });
-
-    void logAcademicAccessEvent({
-      actorId: user?.id,
-      actorRole: profile?.role ?? null,
-      eventType: "grade_details_viewed",
-      resourceType: "grade",
-      resourceId: grade?.id ?? reviewSubmission.id,
-      assignmentId: reviewSubmission.assignment_id,
-      submissionId: reviewSubmission.id,
-      metadata: {
-        source: "assignment_review_dialog",
-        hasAiDraft: Boolean(grade?.ai_score != null),
-      },
-    });
-  }, [grade?.ai_score, grade?.id, open, profile?.role, reviewSubmission, sessionIsDemo, user?.id]);
+  }, [grade?.id, open, reviewSubmission]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -176,7 +143,7 @@ export const DemoSubmissionReviewDialog = ({
               />
             </div>
             <div className="flex gap-2">
-              <Button data-testid="submission-review-save" onClick={onSave} disabled={isDemo} className="flex-1">
+              <Button data-testid="submission-review-save" onClick={onSave} className="flex-1">
                 Save Review
               </Button>
               <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">

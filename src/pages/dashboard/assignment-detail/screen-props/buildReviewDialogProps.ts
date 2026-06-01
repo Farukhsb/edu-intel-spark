@@ -39,5 +39,4 @@ export const buildDemoReviewDialogProps = ({
       grades,
       lecturerActions,
     }),
-    isDemo: true,
   }) as DemoSubmissionReviewDialogProps;

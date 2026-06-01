@@ -80,5 +80,4 @@ export const buildDemoSubmissionListProps = (
 ): ComponentProps<typeof DemoSubmissionListSection> =>
   ({
     ...buildSubmissionListProps(args),
-    isDemo: true,
   }) as ComponentProps<typeof DemoSubmissionListSection>;

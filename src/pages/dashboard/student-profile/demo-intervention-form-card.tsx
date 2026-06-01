@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ManualInterventionStatus, ManualInterventionType } from "@/lib/interventions";
 
 export const DemoStudentInterventionFormCard = ({
-  isDemo,
   canSave,
   interventionType,
   interventionStatus,
@@ -22,7 +21,6 @@ export const DemoStudentInterventionFormCard = ({
   onFollowUpDateChange,
   onSubmit,
 }: {
-  isDemo: boolean;
   canSave: boolean;
   interventionType: ManualInterventionType;
   interventionStatus: ManualInterventionStatus;
@@ -43,11 +41,9 @@ export const DemoStudentInterventionFormCard = ({
       <CardDescription>Log actions, follow-up dates, and resolution status</CardDescription>
     </CardHeader>
     <CardContent className="space-y-4">
-      {isDemo && (
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
-          Demo entries are local to this page and do not touch the live database.
-        </div>
-      )}
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+        Demo entries are local to this page and do not touch the live database.
+      </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-2">
@@ -100,7 +96,7 @@ export const DemoStudentInterventionFormCard = ({
         <Input type="date" value={followUpDate} onChange={(event) => onFollowUpDateChange(event.target.value)} />
       </div>
 
-      <Button className="w-full" onClick={onSubmit} disabled={!interventionNote.trim() || (!isDemo && !canSave)}>
+      <Button className="w-full" onClick={onSubmit} disabled={!interventionNote.trim() || !canSave}>
         Log intervention
       </Button>
     </CardContent>

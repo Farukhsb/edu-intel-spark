@@ -115,7 +115,6 @@ export const useDemoAssignmentDetailController = ({
       automatedActions,
       backHref,
       currentUserId,
-      isDemo: true,
       demoAssignmentSet,
       fileActions: {
         ...studentWorkflow,

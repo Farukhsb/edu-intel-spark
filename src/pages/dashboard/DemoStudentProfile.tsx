@@ -187,7 +187,6 @@ const DemoStudentProfile = () => {
       <div className="grid gap-6 lg:grid-cols-2">
         <StudentMissedAssignmentsCard assignments={student.missedAssignments} />
         <DemoStudentInterventionFormCard
-          isDemo={true}
           canSave
           interventionType={interventionType}
           interventionStatus={interventionStatus}

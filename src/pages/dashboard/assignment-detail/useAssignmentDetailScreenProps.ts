@@ -40,7 +40,6 @@ interface BuildAssignmentDetailScreenPropsArgs {
   lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
   moderationCases: Record<string, ModerationCase>;
   navigate: NavigateFunction;
-  isDemo: boolean;
   plagiarismFlags: NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["plagiarismFlags"];
   plagiarismSummary: NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["plagiarismSummary"];
   reloadSubmissions: () => Promise<void>;
@@ -58,7 +57,6 @@ export const buildLiveAssignmentDetailScreenProps = ({
   fileActions,
   grades,
   integrityCard,
-  isDemo,
   lecturerActions,
   moderationCases,
   navigate,
