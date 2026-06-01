@@ -1,5 +1,6 @@
 import { DashboardLoadingState } from "@/components/dashboard/PageStates";
-import { AccreditationDashboardScreen, useAccreditationDashboardController } from "./accreditation-dashboard";
+import { LiveAccreditationDashboardScreen } from "./accreditation-dashboard/live-screen";
+import { useAccreditationDashboardController } from "./accreditation-dashboard";
 
 const AccreditationDashboard = () => {
   const controller = useAccreditationDashboardController();
@@ -8,7 +9,7 @@ const AccreditationDashboard = () => {
     return <DashboardLoadingState />;
   }
 
-  return <AccreditationDashboardScreen {...controller} />;
+  return <LiveAccreditationDashboardScreen {...controller} />;
 };
 
 export default AccreditationDashboard;

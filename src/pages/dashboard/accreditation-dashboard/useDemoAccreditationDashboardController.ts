@@ -13,7 +13,38 @@ type AccreditationWorkflowTarget = {
   label: string;
 } | null;
 
-export const useDemoAccreditationDashboardController = () => {
+type DemoAccreditationDashboardSummary = {
+  overallCompliance: number;
+  metCount: number;
+  atRiskCount: number;
+  belowCount: number;
+  nssAverage: number;
+  nssBenchmarkAverage: number;
+  weakestQaaMetric: QAAMetric | undefined;
+  weakestTefIndicator: TEFIndicator | undefined;
+};
+
+type DemoAccreditationDashboardController = {
+  isDemo: true;
+  activeTab: string;
+  setActiveTab: (value: string) => void;
+  loading: false;
+  loadError: false;
+  qaaMetrics: QAAMetric[];
+  nssMetrics: NSSMetric[];
+  tefIndicators: TEFIndicator[];
+  feedbackTurnaround: typeof DEMO_FEEDBACK_TURNAROUND;
+  summary: DemoAccreditationDashboardSummary;
+  statusIcon: (status: string) => "met" | "at-risk" | "below";
+  tefColor: (rating: string) => string;
+  exportQAAReport: () => void;
+  pendingWorkflowTarget: AccreditationWorkflowTarget;
+  openPendingWorkflow: () => void;
+  openSubmissionOversight: () => void;
+  openAssignmentOversight: () => void;
+};
+
+export const useDemoAccreditationDashboardController = (): DemoAccreditationDashboardController => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("qaa");
   const [qaaMetrics] = useState<QAAMetric[]>(DEMO_QAA_METRICS);
