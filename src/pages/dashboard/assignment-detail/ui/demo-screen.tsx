@@ -2,6 +2,9 @@ import { Suspense, lazy, type ComponentProps } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 import {
+  AssignmentDemoBanner,
+  AssignmentDemoSetCard,
+  AssignmentDemoWorkflowCard,
   AssignmentFocusCard,
   AssignmentHeroCard,
   AssignmentIntegrityCard,
@@ -32,8 +35,9 @@ type FocusState = {
   title: string;
 };
 
-export interface AssignmentDetailScreenProps {
+export interface DemoAssignmentDetailScreenProps {
   assignmentNotificationFocusState: FocusState | null;
+  demoAssignmentSet: DemoAssignmentSet | null;
   integrityCardProps: ComponentProps<typeof AssignmentIntegrityCard> | null;
   isLecturer: boolean;
   moderationReleaseFocus: boolean;
@@ -51,8 +55,9 @@ export interface AssignmentDetailScreenProps {
   readinessCardProps: ComponentProps<typeof AssignmentReadinessCard>;
 }
 
-export const AssignmentDetailScreen = ({
+export const DemoAssignmentDetailScreen = ({
   assignmentNotificationFocusState,
+  demoAssignmentSet,
   integrityCardProps,
   isLecturer,
   moderationReleaseFocus,
@@ -68,8 +73,18 @@ export const AssignmentDetailScreen = ({
   workflowActionsProps,
   heroCardProps,
   readinessCardProps,
-}: AssignmentDetailScreenProps) => (
+}: DemoAssignmentDetailScreenProps) => (
   <div className="space-y-6 animate-fade-in">
+    <AssignmentDemoBanner />
+    {demoAssignmentSet && isLecturer && (
+      <AssignmentDemoSetCard
+        label={demoAssignmentSet.label}
+        name={demoAssignmentSet.name}
+        reviewerSummary={demoAssignmentSet.reviewerSummary}
+      />
+    )}
+    {isLecturer && <AssignmentDemoWorkflowCard />}
+
     <AssignmentHeroCard {...heroCardProps} />
 
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">

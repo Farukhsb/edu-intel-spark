@@ -4,7 +4,7 @@ import { DashboardErrorState, DashboardLoadingState } from "@/components/dashboa
 import { Button } from "@/components/ui/button";
 
 import { useAssignmentDetailController } from "@/pages/dashboard/assignment-detail/controllers";
-import { AssignmentDetailScreen } from "@/pages/dashboard/assignment-detail/ui";
+import { AssignmentDetailScreen } from "@/pages/dashboard/assignment-detail/ui/screen";
 
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();

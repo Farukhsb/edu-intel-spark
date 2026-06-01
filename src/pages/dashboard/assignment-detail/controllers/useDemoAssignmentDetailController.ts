@@ -8,12 +8,12 @@ import { useDemoLecturerAssessmentActions } from "@/pages/dashboard/assignment-d
 import { useDemoSubmissionActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoSubmissionActions";
 import { useSubmissionFileActions } from "@/pages/dashboard/assignment-detail/workflows/useSubmissionFileActions";
 import { useDemoAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useDemoAssignmentDetailData";
-import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui";
+import type { DemoAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui/demo-screen";
 import type { Profile } from "@/contexts/AuthContext";
 import type { User } from "@supabase/supabase-js";
 
 type DemoAssignmentDetailControllerArgs = {
-  demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
+  demoAssignmentSet: DemoAssignmentDetailScreenProps["demoAssignmentSet"];
   id: string | undefined;
   profile: Profile | null;
   role: string | null;
@@ -26,7 +26,7 @@ type DemoAssignmentDetailControllerResult = {
   loading: boolean;
   navigate: ReturnType<typeof useNavigate>;
   refreshData: () => Promise<void>;
-  screenProps: AssignmentDetailScreenProps | null;
+  screenProps: DemoAssignmentDetailScreenProps | null;
 };
 
 export const useDemoAssignmentDetailController = ({
@@ -115,6 +115,7 @@ export const useDemoAssignmentDetailController = ({
       automatedActions,
       backHref,
       currentUserId,
+      isDemo: true,
       demoAssignmentSet,
       fileActions: {
         ...studentWorkflow,

@@ -8,7 +8,8 @@ import {
   buildSubmissionListProps,
   buildWorkflowActionsProps,
 } from "@/pages/dashboard/assignment-detail/screen-props";
-import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui";
+import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui/screen";
+import type { DemoAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui/demo-screen";
 import type { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import type {
   useAutomatedAssessmentActions,
@@ -26,7 +27,6 @@ interface BuildAssignmentDetailScreenPropsArgs {
   assignment: AssignmentDetailAssignment;
   backHref: string;
   currentUserId: string | null;
-  demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
   fileActions: ReturnType<typeof useSubmissionActions> & {
     openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
   };
@@ -34,10 +34,10 @@ interface BuildAssignmentDetailScreenPropsArgs {
   integrityCard: {
     shouldShowCard: boolean;
   } & NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["integrityCard"];
-  isDemo: boolean;
   lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
   moderationCases: Record<string, ModerationCase>;
   navigate: NavigateFunction;
+  isDemo: boolean;
   plagiarismFlags: NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["plagiarismFlags"];
   plagiarismSummary: NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["plagiarismSummary"];
   reloadSubmissions: () => Promise<void>;
@@ -47,12 +47,11 @@ interface BuildAssignmentDetailScreenPropsArgs {
   automatedActions: ReturnType<typeof useAutomatedAssessmentActions>;
 }
 
-export const buildAssignmentDetailScreenProps = ({
+export const buildLiveAssignmentDetailScreenProps = ({
   assignment,
   automatedActions,
   backHref,
   currentUserId,
-  demoAssignmentSet,
   fileActions,
   grades,
   integrityCard,
@@ -67,7 +66,6 @@ export const buildAssignmentDetailScreenProps = ({
   submissions,
   viewState,
 }: BuildAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps => ({
-  demoAssignmentSet,
   heroCardProps: buildHeroCardProps({
     assignment,
     backHref,
@@ -82,7 +80,6 @@ export const buildAssignmentDetailScreenProps = ({
         plagiarismSummary,
       }
     : null,
-  isDemo,
   ...buildFocusStateProps({
     navigate,
     searchPathname,
@@ -113,27 +110,25 @@ export const buildAssignmentDetailScreenProps = ({
     viewState,
   }),
   workflowActionsProps: buildWorkflowActionsProps({
-      automatedActions,
-      currentUserId,
-      fileActions,
-      isDemo,
-      lecturerActions,
+    automatedActions,
+    currentUserId,
+    fileActions,
+    isDemo,
+    lecturerActions,
       submissions,
       submissionsCount: submissions.length,
       viewState,
     }),
 });
 
-type BuildLiveAssignmentDetailScreenPropsArgs = Omit<BuildAssignmentDetailScreenPropsArgs, "isDemo">;
+type BuildDemoAssignmentDetailScreenPropsArgs = BuildAssignmentDetailScreenPropsArgs & {
+  demoAssignmentSet: DemoAssignmentDetailScreenProps["demoAssignmentSet"];
+};
 
-export const buildLiveAssignmentDetailScreenProps = (args: BuildLiveAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps =>
-  buildAssignmentDetailScreenProps({
-    ...args,
-    isDemo: false,
-  });
-
-export const buildDemoAssignmentDetailScreenProps = (args: BuildLiveAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps =>
-  buildAssignmentDetailScreenProps({
-    ...args,
-    isDemo: true,
-  });
+export const buildDemoAssignmentDetailScreenProps = ({
+  demoAssignmentSet,
+  ...args
+}: BuildDemoAssignmentDetailScreenPropsArgs): DemoAssignmentDetailScreenProps => ({
+  demoAssignmentSet,
+  ...buildLiveAssignmentDetailScreenProps(args),
+});

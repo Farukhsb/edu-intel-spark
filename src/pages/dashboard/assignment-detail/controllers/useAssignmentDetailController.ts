@@ -128,7 +128,7 @@ export const useAssignmentDetailController = ({
       automatedActions,
       backHref,
       currentUserId,
-      demoAssignmentSet: null,
+      isDemo: false,
       fileActions: studentWorkflow,
       grades,
       integrityCard: viewState.integrityCard,
