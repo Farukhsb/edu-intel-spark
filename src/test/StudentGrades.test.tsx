@@ -432,8 +432,10 @@ describe("StudentGrades", () => {
     });
 
     expect(screen.getByText("12%")).toBeInTheDocument();
-    expect(screen.getByText("Argument (0%)")).toBeInTheDocument();
-    expect(screen.getByText("12/100 (0%)")).toBeInTheDocument();
+    expect(screen.getAllByText("Argument").length).toBeGreaterThan(0);
+    expect(screen.getByText("0% of total mark")).toBeInTheDocument();
+    expect(screen.getByText("12/100")).toBeInTheDocument();
+    expect(screen.getByText("12% achieved")).toBeInTheDocument();
     expect(container.textContent).not.toContain("NaN");
     expect(container.textContent).not.toContain("Infinity");
   });
@@ -459,7 +461,8 @@ describe("StudentGrades", () => {
     renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getByText("40/30 (100%)")).toBeInTheDocument();
+      expect(screen.getByText("40/30")).toBeInTheDocument();
+      expect(screen.getByText("100% achieved")).toBeInTheDocument();
     });
   });
 
@@ -484,7 +487,8 @@ describe("StudentGrades", () => {
     renderStudentGrades();
 
     await waitFor(() => {
-      expect(screen.getByText("-2/30 (0%)")).toBeInTheDocument();
+      expect(screen.getByText("-2/30")).toBeInTheDocument();
+      expect(screen.getByText("0% achieved")).toBeInTheDocument();
     });
   });
 

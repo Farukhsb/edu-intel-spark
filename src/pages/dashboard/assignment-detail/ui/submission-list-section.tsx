@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GradeSourceBadge } from "@/components/dashboard/GradeSourceBadge";
+import { CriterionBars } from "@/components/dashboard/CriterionBars";
 import { getSubmissionDisplayState } from "@/lib/assessmentWorkflow";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
@@ -112,6 +113,7 @@ const SubmissionCardItem = ({
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
+  sendToModeration,
   gradingRecoveryIssue,
 }: {
   submission: AssignmentDetailSubmission;
@@ -132,6 +134,7 @@ const SubmissionCardItem = ({
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
+  sendToModeration: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   gradingRecoveryIssue?: SubmissionGradingRecoveryIssue;
 }) => {
   const submissionDisplay = getSubmissionDisplayState({
@@ -251,15 +254,19 @@ const SubmissionCardItem = ({
             )}
 
             {(grade?.ai_breakdown?.length ?? 0) > 0 && (
-              <div className="flex flex-wrap gap-1 pt-1">
-                {(grade?.ai_breakdown ?? []).map((breakdown: AssignmentDetailBreakdown, index: number) => (
-                  <span key={index} className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
-                    {breakdown.criterion}: {breakdown.score}/{breakdown.max_score}
-                    {typeof breakdown.confidence_score === "number"
-                      ? ` - c${Math.round(breakdown.confidence_score * 100)}%`
-                      : ""}
-                  </span>
-                ))}
+              <div className="pt-1">
+                <CriterionBars
+                  compact
+                  items={(grade?.ai_breakdown ?? []).map((breakdown: AssignmentDetailBreakdown) => ({
+                    criterion: breakdown.criterion,
+                    score: breakdown.score,
+                    maxScore: breakdown.max_score,
+                    confidenceScore: breakdown.confidence_score ?? null,
+                    reviewRequired: breakdown.review_required ?? null,
+                    evidenceSnippet: breakdown.evidence_snippet ?? null,
+                    errorType: breakdown.error_type ?? null,
+                  }))}
+                />
               </div>
             )}
 
@@ -307,6 +314,16 @@ const SubmissionCardItem = ({
                   onClick={() => openReview(submission)}
                 >
                   <Edit className="mr-1 h-3 w-3" /> First review
+                </Button>
+              )}
+              {(submission.status === "first_review" || submission.status === "under_review") && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={isDemo}
+                  onClick={() => void sendToModeration(submission)}
+                >
+                  <Send className="mr-1 h-3 w-3" /> Send to moderation
                 </Button>
               )}
               {submissionDisplay.showApprove && (
@@ -394,6 +411,7 @@ export const SubmissionListSection = ({
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
+  sendToModeration,
   moderationReleaseHandoffState,
   activeQueueFocus,
   focusQueue,
@@ -420,6 +438,7 @@ export const SubmissionListSection = ({
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
+  sendToModeration: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   moderationReleaseHandoffState: ModerationReleaseHandoffState;
   activeQueueFocus: AssignmentQueueFocusValue | null;
   focusQueue: (focus: AssignmentQueueFocusValue) => void;
@@ -578,6 +597,7 @@ export const SubmissionListSection = ({
                 queueFeedbackSummary={queueFeedbackSummary}
                 queueGradeReleaseNotification={queueGradeReleaseNotification}
                 openReleasedResult={openReleasedResult}
+                sendToModeration={sendToModeration}
               />
             ))}
           </div>

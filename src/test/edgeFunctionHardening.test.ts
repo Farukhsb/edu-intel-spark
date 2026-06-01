@@ -179,7 +179,7 @@ describe("edge function hardening", () => {
   it("keeps explicit browser auth headers for direct edge-function fetch calls", () => {
     const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
     const automationHookSource = readRepoFile("src/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions.ts");
-    const explainGradeSource = readRepoFile("src/pages/dashboard/ExplainGrade.tsx");
+    const gradeChatSource = readRepoFile("src/components/dashboard/GradeChat.tsx");
 
     expect(automationHookSource).toContain("const env = getEnv();");
     expect(automationHookSource).toContain("const gradeSubmissionUrl = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;");
@@ -188,15 +188,18 @@ describe("edge function hardening", () => {
     expect(automationHookSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
     expect(automationHookSource).toContain("Authorization: `Bearer ${session.access_token}`");
 
-    expect(explainGradeSource).toContain("supabase.auth.getSession()");
-    expect(explainGradeSource).toContain("const env = getEnv();");
-    expect(explainGradeSource).toContain("const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;");
-    expect(explainGradeSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
-    expect(explainGradeSource).toContain("Authorization: `Bearer ${accessToken}`");
+    expect(gradeChatSource).toContain("supabase.auth.getSession()");
+    expect(gradeChatSource).toContain("const env = getEnv();");
+    expect(gradeChatSource).toContain("const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;");
+    expect(gradeChatSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
+    expect(gradeChatSource).toContain("Authorization: `Bearer ${accessToken}`");
   });
 
   it("keeps hybrid grade import backend-only and JWT protected", () => {
     const importSource = readRepoFile("supabase/functions/import-grades/index.ts");
+    const requestSource = readRepoFile("supabase/functions/import-grades/request.ts");
+    const imagesSource = readRepoFile("supabase/functions/import-grades/images.ts");
+    const confirmSource = readRepoFile("supabase/functions/import-grades/confirm.ts");
     const helperSource = readRepoFile("supabase/functions/_shared/grade-import.ts");
     const configSource = readRepoFile("supabase/config.toml");
 
@@ -204,17 +207,18 @@ describe("edge function hardening", () => {
     expect(configSource).toContain("verify_jwt = true");
     expect(importSource).toContain("requireLecturer(req)");
     expect(importSource).toContain("IMPORT_RATE_LIMIT_SCOPE");
-    expect(importSource).toContain("HYBRID_IMPORT_ENABLED");
-    expect(importSource).toContain('from("grade_imports").insert');
+    expect(requestSource).toContain("HYBRID_IMPORT_ENABLED");
+    expect(imagesSource).toContain("createChatCompletion({");
+    expect(confirmSource).toContain('from("grade_imports").insert');
     expect(helperSource).toContain('grade_source: "lecturer_uploaded"');
-    expect(importSource).toContain("source_metadata");
-    expect(importSource).toContain('.getAll("file")');
-    expect(importSource).toContain("createChatCompletion({");
-    expect(importSource).toContain('logInfo("import-grades completed"');
+    expect(confirmSource).toContain("source_metadata");
+    expect(requestSource).toContain('.getAll("file")');
+    expect(confirmSource).toContain('logInfo("import-grades completed"');
   });
 
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
-    const source = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
+    const source = readRepoFile("supabase/functions/check-plagiarism/core.ts");
+    const wrapperSource = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
     const entrySource = readRepoFile("supabase/functions/check-plagiarism/index.ts");
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const bootstrapSource = readRepoFile("supabase/functions/check-plagiarism/bootstrap.ts");
@@ -228,6 +232,7 @@ describe("edge function hardening", () => {
     expect(entrySource).toContain("registerCheckPlagiarismEntrypoint");
     expect(bootstrapSource).toContain("createCheckPlagiarismHandler");
     expect(bootstrapSource).toContain("serve:");
+    expect(wrapperSource.trim()).toBe('export { createCheckPlagiarismHandler } from "./core.ts";');
     expect(source).toContain('const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";');
     expect(source).toContain("shouldRunInternalProvider &&");
     expect(source).toContain("requestedAssignmentId &&");
@@ -283,7 +288,7 @@ describe("edge function hardening", () => {
   });
 
   it("keeps the optional MOSS bridge non-fatal and backend-only", () => {
-    const source = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
+    const source = readRepoFile("supabase/functions/check-plagiarism/core.ts");
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const runnerSource = readRepoFile("supabase/functions/_shared/integrity-provider-runners.ts");
 

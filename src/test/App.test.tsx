@@ -28,10 +28,6 @@ vi.mock("@/pages/dashboard/StudentGrades", () => ({
   default: () => <div>Student grades page</div>,
 }));
 
-vi.mock("@/pages/dashboard/ExplainGrade", () => ({
-  default: () => <div>Explain grade page</div>,
-}));
-
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
 

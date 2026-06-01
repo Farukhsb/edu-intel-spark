@@ -47,7 +47,6 @@ export const useAssignmentDetailController = ({
     assignment,
     submissions,
     grades,
-    integrityReviews,
     moderationCases,
     loadError,
     loading,
@@ -97,7 +96,6 @@ export const useAssignmentDetailController = ({
   const { automatedActions, lecturerActions } = useLecturerWorkflowController({
     assignment,
     grades,
-    integrityReviews,
     isDemo,
     moderationCases,
     reloadSubmissions,

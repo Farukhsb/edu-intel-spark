@@ -768,6 +768,24 @@ describe("AdminDashboard", () => {
     expect(screen.queryByRole("button", { name: /Release/i })).not.toBeInTheDocument();
   });
 
+  it("renders the compliance hub with tabbed governance views", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard?view=compliance"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Audit and governance views")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Data Access Log" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Academic Integrity Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Moderation Audit" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Policy Exceptions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Data access log/i })).toBeInTheDocument();
+  });
+
   it("renders the academic integrity overview from real integrity review data", async () => {
     render(
       <MemoryRouter

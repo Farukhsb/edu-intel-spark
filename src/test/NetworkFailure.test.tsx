@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import ExplainGrade from "@/pages/dashboard/ExplainGrade";
 import StudentProfile from "@/pages/dashboard/StudentProfile";
+import StudentGrades from "@/pages/dashboard/StudentGrades";
 
 const mocks = vi.hoisted(() => ({
   authState: {
@@ -263,14 +263,14 @@ describe("Network/API failure handling", () => {
     consoleError.mockRestore();
   });
 
-  it("shows a safe toast and no partial assistant reply when the ExplainGrade AI request fails", async () => {
+  it("shows a safe toast and no partial assistant reply when the StudentGrades AI request fails", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     setupExplainGradeSupabase();
     vi.mocked(fetch).mockRejectedValue(new Error("network down"));
 
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <ExplainGrade />
+        <StudentGrades />
       </MemoryRouter>
     );
 

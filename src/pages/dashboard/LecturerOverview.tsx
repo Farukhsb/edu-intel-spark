@@ -9,6 +9,8 @@ const LecturerOverview = () => {
     state: {
       loading,
       error,
+      loadWarning,
+      assignments,
       stats,
       recent,
       pipeline,
@@ -48,6 +50,8 @@ const LecturerOverview = () => {
       readiness={readiness}
       topAtRiskStudents={topAtRiskStudents}
       heroSummary={heroSummary}
+      loadWarning={loadWarning}
+      assignments={assignments}
       primaryWorkflowTarget={primaryWorkflowTarget}
       queueFocus={queueFocus}
     />

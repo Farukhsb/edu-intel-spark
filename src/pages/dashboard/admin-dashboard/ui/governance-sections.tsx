@@ -1,10 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { safeFormatDate } from "@/lib/date";
 
 import type {
   AdminDataAccessLogRow,
+  AdminComplianceTab,
   AdminGovernanceStatus,
   AdminIntegrityOverview,
   AdminModerationAuditRow,
@@ -316,6 +318,74 @@ export const PolicyExceptionsSection = ({
           ))}
         </div>
       ) : null}
-    </CardContent>
-  </Card>
+  </CardContent>
+</Card>
+);
+
+export const ComplianceHubSection = ({
+  activeTab,
+  dataAccessLog,
+  integrityOverview,
+  moderationAudit,
+  onTabChange,
+  policyExceptions,
+}: {
+  activeTab: AdminComplianceTab;
+  dataAccessLog: {
+    rows: AdminDataAccessLogRow[];
+    status: AdminGovernanceStatus;
+  };
+  integrityOverview: {
+    overview: AdminIntegrityOverview;
+  };
+  moderationAudit: {
+    rows: AdminModerationAuditRow[];
+    status: AdminGovernanceStatus;
+  };
+  onTabChange: (tab: AdminComplianceTab) => void;
+  policyExceptions: {
+    rows: AdminPolicyExceptionRow[];
+    status: AdminGovernanceStatus;
+  };
+}) => (
+  <div className="space-y-4">
+    <div className="rounded-2xl border bg-background p-5 shadow-sm">
+      <div className="space-y-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Compliance</p>
+        <h2 className="text-xl font-semibold font-display">Audit and governance views</h2>
+        <p className="text-sm text-muted-foreground">
+          Use one entry point for governance evidence. The old direct links still work, but the sidebar now collapses them into a single compliance hub.
+        </p>
+      </div>
+      <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as AdminComplianceTab)} className="mt-4 space-y-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 md:grid-cols-4">
+          <TabsTrigger value="data-access-log" className="justify-start rounded-xl border px-3 py-2 text-left">
+            Data Access Log
+          </TabsTrigger>
+          <TabsTrigger value="integrity-overview" className="justify-start rounded-xl border px-3 py-2 text-left">
+            Academic Integrity Overview
+          </TabsTrigger>
+          <TabsTrigger value="moderation-audit" className="justify-start rounded-xl border px-3 py-2 text-left">
+            Moderation Audit
+          </TabsTrigger>
+          <TabsTrigger value="policy-exceptions" className="justify-start rounded-xl border px-3 py-2 text-left">
+            Policy Exceptions
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="data-access-log" className="mt-0">
+          <DataAccessLogSection rows={dataAccessLog.rows} status={dataAccessLog.status} />
+        </TabsContent>
+        <TabsContent value="integrity-overview" className="mt-0">
+          <AcademicIntegrityOverviewSection overview={integrityOverview.overview} />
+        </TabsContent>
+        <TabsContent value="moderation-audit" className="mt-0">
+          <ModerationAuditSection rows={moderationAudit.rows} status={moderationAudit.status} />
+        </TabsContent>
+        <TabsContent value="policy-exceptions" className="mt-0">
+          <PolicyExceptionsSection rows={policyExceptions.rows} status={policyExceptions.status} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  </div>
 );

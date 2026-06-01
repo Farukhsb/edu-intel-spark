@@ -8,7 +8,6 @@ import type {
   AssignmentDetailAssignment,
   AssignmentDetailSubmission,
   Grade,
-  IntegrityReview,
   ModerationCase,
   PlagiarismFlag,
 } from "@/pages/dashboard/assignment-detail/types";
@@ -20,7 +19,6 @@ interface LecturerWorkflowUser {
 interface UseLecturerWorkflowControllerArgs {
   assignment: AssignmentDetailAssignment | null;
   grades: Record<string, Grade>;
-  integrityReviews: Record<string, IntegrityReview>;
   isDemo: boolean;
   moderationCases: Record<string, ModerationCase>;
   reloadSubmissions: () => Promise<void>;
@@ -40,7 +38,6 @@ interface UseLecturerWorkflowControllerArgs {
 export const useLecturerWorkflowController = ({
   assignment,
   grades,
-  integrityReviews,
   isDemo,
   moderationCases,
   reloadSubmissions,
@@ -72,7 +69,6 @@ export const useLecturerWorkflowController = ({
   const lecturerActions = useLecturerAssessmentActions({
     assignment,
     grades,
-    integrityReviews,
     isDemo,
     moderationCases,
     reloadSubmissions,

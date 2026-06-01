@@ -322,7 +322,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.08),transparent_28%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.28))]">
+    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.14),transparent_26%),radial-gradient(circle_at_top_right,hsl(var(--accent)/0.10),transparent_24%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.18))]">
       <LecturerOnboardingDialog open={showOnboarding} onDismiss={dismissOnboarding} />
 
       {sidebarOpen && (
@@ -346,7 +346,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-xl lg:px-8">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-primary/10 bg-background/72 px-4 backdrop-blur-xl lg:px-8">
           <Button variant="ghost" size="icon" className="rounded-xl lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>

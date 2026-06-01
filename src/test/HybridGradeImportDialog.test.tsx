@@ -238,4 +238,87 @@ describe("HybridGradeImportDialog", () => {
     expect(body.get("confirm")).toBe("false");
     expect(body.getAll("file")).toHaveLength(1);
   });
+
+  it("can import into a newly created assignment when no existing assignment is selected", async () => {
+    mocks.invoke.mockResolvedValueOnce({
+      data: {
+        success: true,
+        committed: false,
+        assignmentId: "",
+        importMethod: "csv",
+        summary: {
+          rowsProcessed: 1,
+          rowsAccepted: 1,
+          rowsRejected: 0,
+          matchedExistingSubmissions: 0,
+          createdSyntheticSubmissions: 1,
+          rowsWithWarnings: 0,
+        },
+        rows: [
+          {
+            rowNumber: 2,
+            studentName: "Jane Doe",
+            studentEmail: "jane@example.edu",
+            score: 18,
+            maxScore: 20,
+            submissionDate: "2026-05-15",
+            notes: "Great work",
+            rubricBreakdown: [],
+            normalizedScore: 90,
+            matchedSubmissionId: null,
+            submissionAction: "create",
+            accepted: true,
+            issues: [],
+          },
+        ],
+        rejectedRows: [],
+      },
+      error: null,
+    });
+
+    render(<HybridGradeImportDialog assignments={[]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Import Grades" }));
+    await waitFor(() => {
+      expect(document.getElementById("hybrid-grade-import-csv-text")).not.toBeNull();
+    });
+
+    fireEvent.change(document.getElementById("hybrid-grade-import-new-title") as HTMLInputElement, {
+      target: {
+        value: "Imported grades - 2026-06-01",
+      },
+    });
+    fireEvent.change(document.getElementById("hybrid-grade-import-new-module") as HTMLInputElement, {
+      target: {
+        value: "CS301",
+      },
+    });
+    fireEvent.change(document.getElementById("hybrid-grade-import-new-max-score") as HTMLInputElement, {
+      target: {
+        value: "20",
+      },
+    });
+    fireEvent.change(document.getElementById("hybrid-grade-import-csv-text") as HTMLTextAreaElement, {
+      target: {
+        value: "student_name,student_email,score,max_score\nJane Doe,jane@example.edu,18,20",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Preview import/i }));
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        "import-grades",
+        expect.objectContaining({
+          body: expect.objectContaining({
+            importScope: "new_assignment",
+            newAssignmentTitle: "Imported grades - 2026-06-01",
+            newAssignmentModuleCode: "CS301",
+            newAssignmentMaxScore: 20,
+            confirm: false,
+          }),
+        }),
+      );
+    });
+  });
 });

@@ -69,10 +69,6 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/StudentGrades"),
     paths: [],
   },
-  explainGrade: {
-    loader: () => import("@/pages/dashboard/ExplainGrade"),
-    paths: ["/dashboard/explain-grade"],
-  },
   improvementPlan: {
     loader: () => import("@/pages/dashboard/ImprovementPlan"),
     paths: ["/dashboard/improvements"],
@@ -142,7 +138,6 @@ export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {
   }
 
   if (role === "student") {
-    preloadRoute("/dashboard/explain-grade");
     preloadRoute("/dashboard/assignments");
   }
 };
