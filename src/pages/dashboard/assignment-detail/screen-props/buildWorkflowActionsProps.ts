@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { WorkflowActionsSection } from "@/pages/dashboard/assignment-detail/ui";
+import { WorkflowActionsSection as DemoWorkflowActionsSection } from "@/pages/dashboard/assignment-detail/ui/demo-workflow-actions-section";
 import type { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import type {
   useAutomatedAssessmentActions,
@@ -16,7 +17,6 @@ interface BuildWorkflowActionsPropsArgs {
   fileActions: ReturnType<typeof useSubmissionActions> & {
     openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
   };
-  isDemo: boolean;
   lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
   submissions: AssignmentDetailSubmission[];
   submissionsCount: number;
@@ -27,13 +27,11 @@ export const buildWorkflowActionsProps = ({
   automatedActions,
   currentUserId,
   fileActions,
-  isDemo,
   lecturerActions,
   submissions,
   submissionsCount,
   viewState,
 }: BuildWorkflowActionsPropsArgs): ComponentProps<typeof WorkflowActionsSection> => ({
-  isDemo,
   isLecturer: viewState.isLecturer,
   submissionFileAccept: SUBMISSION_FILE_ACCEPT,
   fileInputRef: fileActions.fileInputRef,
@@ -76,3 +74,13 @@ export const buildWorkflowActionsProps = ({
       }),
     ),
 });
+
+type BuildDemoWorkflowActionsPropsArgs = BuildWorkflowActionsPropsArgs;
+
+export const buildDemoWorkflowActionsProps = (
+  args: BuildDemoWorkflowActionsPropsArgs,
+): ComponentProps<typeof DemoWorkflowActionsSection> =>
+  ({
+    ...buildWorkflowActionsProps(args),
+    isDemo: true,
+  }) as ComponentProps<typeof DemoWorkflowActionsSection>;

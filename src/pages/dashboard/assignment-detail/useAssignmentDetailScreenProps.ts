@@ -8,6 +8,7 @@ import {
   buildReviewDialogProps,
   buildDemoSubmissionListProps,
   buildSubmissionListProps,
+  buildDemoWorkflowActionsProps,
   buildWorkflowActionsProps,
 } from "@/pages/dashboard/assignment-detail/screen-props";
 import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui/screen";
@@ -113,12 +114,11 @@ export const buildLiveAssignmentDetailScreenProps = ({
     automatedActions,
     currentUserId,
     fileActions,
-    isDemo,
     lecturerActions,
-      submissions,
-      submissionsCount: submissions.length,
-      viewState,
-    }),
+    submissions,
+    submissionsCount: submissions.length,
+    viewState,
+  }),
 });
 
 type BuildDemoAssignmentDetailScreenPropsArgs = BuildAssignmentDetailScreenPropsArgs & {
@@ -137,4 +137,13 @@ export const buildDemoAssignmentDetailScreenProps = ({
     lecturerActions: args.lecturerActions,
   }),
   submissionListProps: buildDemoSubmissionListProps(args),
+  workflowActionsProps: buildDemoWorkflowActionsProps({
+    automatedActions: args.automatedActions,
+    currentUserId: args.currentUserId,
+    fileActions: args.fileActions,
+    lecturerActions: args.lecturerActions,
+    submissions: args.submissions,
+    submissionsCount: args.submissions.length,
+    viewState: args.viewState,
+  }),
 });

@@ -82,7 +82,6 @@ const getStudentWorkflowJourney = (status: SubmissionStatus | null) => {
 };
 
 export const WorkflowActionsSection = ({
-  isDemo,
   isLecturer,
   submissionFileAccept,
   fileInputRef,
@@ -119,7 +118,6 @@ export const WorkflowActionsSection = ({
   handleStartManualReviewForFailed,
   lastGradingRunSummary,
 }: {
-  isDemo: boolean;
   isLecturer: boolean;
   submissionFileAccept: string;
   fileInputRef: RefObject<HTMLInputElement>;
