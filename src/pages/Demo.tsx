@@ -20,7 +20,7 @@ const Demo = () => {
 
   const openDemo = (role: "lecturer" | "student") => {
     enterDemo(role);
-    navigate("/dashboard");
+    navigate("/demo/dashboard");
   };
 
   return (

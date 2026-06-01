@@ -37,6 +37,11 @@ const routeDefinitions = {
       import("@/components/DashboardLayout").then((module) => ({ default: module.DashboardLayout })),
     paths: ["/dashboard"],
   },
+  demoDashboardLayout: {
+    loader: () =>
+      import("@/components/DemoDashboardLayout").then((module) => ({ default: module.DemoDashboardLayout })),
+    paths: ["/demo/dashboard"],
+  },
   lecturerOverview: {
     loader: () => import("@/pages/dashboard/LecturerOverview"),
     paths: [],

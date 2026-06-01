@@ -51,6 +51,6 @@ describe("Demo", () => {
     fireEvent.click(screen.getByRole("button", { name: /open lecturer demo/i }));
 
     expect(mocks.authState.enterDemo).toHaveBeenCalledWith("lecturer");
-    expect(mocks.navigate).toHaveBeenCalledWith("/dashboard");
+    expect(mocks.navigate).toHaveBeenCalledWith("/demo/dashboard");
   });
 });

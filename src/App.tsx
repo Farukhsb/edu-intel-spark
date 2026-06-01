@@ -26,6 +26,7 @@ const Terms = lazy(routeLoaders.terms);
 const ResetPassword = lazy(routeLoaders.resetPassword);
 const ForcePasswordChange = lazy(routeLoaders.forcePasswordChange);
 const DashboardLayout = lazy(routeLoaders.dashboardLayout);
+const DemoDashboardLayout = lazy(routeLoaders.demoDashboardLayout);
 const LecturerOverview = lazy(routeLoaders.lecturerOverview);
 const CohortAnalytics = lazy(routeLoaders.cohortAnalytics);
 const PerformanceTrends = lazy(routeLoaders.performanceTrends);
@@ -149,6 +150,24 @@ const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; 
   );
 };
 
+const DemoDashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
+  const location = useLocation();
+
+  return (
+    <ProtectedRoute>
+      <RoleGate allowedRole={allowedRole}>
+        <Suspense fallback={<DashboardSkeleton />}>
+          <DemoDashboardLayout>
+            <AppErrorBoundary title="Demo dashboard page failed to load" resetKey={location.pathname}>
+              <Suspense fallback={<DashboardSkeleton />}>{children}</Suspense>
+            </AppErrorBoundary>
+          </DemoDashboardLayout>
+        </Suspense>
+      </RoleGate>
+    </ProtectedRoute>
+  );
+};
+
 const AccessDeniedPage = () => (
   <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
     <Card className="w-full max-w-lg shadow-sm">
@@ -243,6 +262,7 @@ const App = () => (
                 }
               />
               <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
+              <Route path="/demo/dashboard" element={<DemoDashboardRoute><DashboardRouter /></DemoDashboardRoute>} />
               <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
               <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
               <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />

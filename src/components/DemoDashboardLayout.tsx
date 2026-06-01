@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Menu } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { NotificationDropdown } from "@/components/dashboard/NotificationDropdown";
-import { calculateRiskScore, getRiskLabel } from "@/lib/riskCalculator";
-import { isAdminRole, isLecturerEquivalentRole, isStudentRole } from "@/lib/roles";
+import { isStudentRole } from "@/lib/roles";
 import { getDashboardShellContext } from "@/lib/dashboardShell";
 import {
   getLecturerWorkflowNotificationDestination,
@@ -18,7 +18,6 @@ import {
   markCommunicationMessageRead,
   type CommunicationMessage,
 } from "@/lib/communications";
-import { LecturerOnboardingDialog } from "@/components/dashboard/LecturerOnboardingDialog";
 import { getStudentSupportNotificationDestination } from "@/lib/studentSupportWorkflow";
 import { preloadCommonRoleRoutes } from "@/lib/routePreloads";
 import {
@@ -27,18 +26,21 @@ import {
   lecturerSections,
   studentSections,
 } from "@/lib/dashboardNavigation";
+import {
+  DEMO_LECTURER_NOTIFICATIONS,
+  DEMO_STUDENT_NOTIFICATIONS,
+} from "@/lib/demoNotifications";
 
 const LECTURER_SIDEBAR_STATE_KEY = "gradeai:lecturer-sidebar-sections";
 const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 const STUDENT_SIDEBAR_STATE_KEY = "gradeai:student-sidebar-sections";
-const LECTURER_ONBOARDING_STATE_KEY = "gradeai:lecturer-onboarding-v1-dismissed";
 
-export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
-  const { profile, user, signOut } = useAuth();
+export const DemoDashboardLayout = ({ children }: { children: React.ReactNode }) => {
+  const { profile, user, signOut, isDemo } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const isAdmin = isAdminRole(profile?.role);
-  const isLecturerEquivalent = isLecturerEquivalentRole(profile?.role);
+  const isAdmin = profile?.role === "admin";
+  const isLecturerEquivalent = profile?.role === "lecturer";
   const roleSections = isAdmin ? adminSections : isLecturerEquivalent ? lecturerSections : studentSections;
   const defaultSectionState = getDefaultSectionState(roleSections);
   const sidebarStateKey = isAdmin
@@ -52,7 +54,6 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     return false;
   });
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [notifications, setNotifications] = useState<CommunicationMessage[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window === "undefined") return defaultSectionState;
@@ -82,6 +83,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   useEffect(() => {
     const syncNotifications = async () => {
+      if (isDemo) {
+        const demoNotifications = isStudentRole(profile?.role)
+          ? DEMO_STUDENT_NOTIFICATIONS
+          : DEMO_LECTURER_NOTIFICATIONS;
+        setNotifications(demoNotifications);
+        return;
+      }
+
       const visibleMessages = await loadVisibleCommunicationMessages({
         userId: user?.id ?? profile?.id ?? null,
         email: profile?.email ?? user?.email ?? null,
@@ -106,7 +115,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         window.removeEventListener("focus", handleFocus);
       };
     }
-  }, [profile?.email, profile?.id, profile?.role, user?.email, user?.id]);
+  }, [isDemo, profile?.email, profile?.id, profile?.role, user?.email, user?.id]);
 
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
@@ -115,6 +124,11 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     notification: CommunicationMessage,
   ) => {
     event.stopPropagation();
+
+    if (isDemo) {
+      setNotifications((current) => current.filter((item) => item.id !== notification.id));
+      return;
+    }
 
     const clearedNotification = await clearCommunicationMessage(notification.id);
 
@@ -126,7 +140,11 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const openNotification = async (notification: CommunicationMessage) => {
     setShowNotifications(false);
 
-    if (!notification.read) {
+    if (isDemo) {
+      setNotifications((current) =>
+        current.map((item) => (item.id === notification.id ? { ...item, read: true } : item)),
+      );
+    } else if (!notification.read) {
       const updatedNotification = await markCommunicationMessageRead(notification.id);
       if (updatedNotification) {
         setNotifications((current) =>
@@ -242,12 +260,13 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/auth");
+    navigate("/");
   };
 
   const isLinkActive = (to: string) => {
     const [path, query = ""] = to.split("?");
-    if (location.pathname !== path) return false;
+    const activePath = location.pathname === "/demo/dashboard" ? "/dashboard" : location.pathname;
+    if (activePath !== path) return false;
     return query ? location.search === `?${query}` : location.search === "";
   };
 
@@ -279,31 +298,12 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
     preloadCommonRoleRoutes(profile?.role);
   }, [profile?.role]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !isLecturerEquivalent || isAdmin) {
-      setShowOnboarding(false);
-      return;
-    }
-
-    const dismissed = window.localStorage.getItem(LECTURER_ONBOARDING_STATE_KEY) === "true";
-    setShowOnboarding(!dismissed);
-  }, [isAdmin, isLecturerEquivalent]);
-
   const toggleSection = (label: string) => {
     setOpenSections((current) => ({ ...current, [label]: !current[label] }));
   };
 
-  const dismissOnboarding = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(LECTURER_ONBOARDING_STATE_KEY, "true");
-    }
-    setShowOnboarding(false);
-  };
-
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.14),transparent_26%),radial-gradient(circle_at_top_right,hsl(var(--accent)/0.10),transparent_24%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.18))]">
-      <LecturerOnboardingDialog open={showOnboarding} onDismiss={dismissOnboarding} />
-
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
@@ -328,6 +328,9 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           <Button variant="ghost" size="icon" className="rounded-xl lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
+          <Badge variant="secondary" className="hidden text-xs md:inline-flex">
+            Demo Mode
+          </Badge>
           <DashboardHeader
             activeLabel={activeLink?.label || "Dashboard"}
             workspaceLabel={shellContext.workspaceLabel}
