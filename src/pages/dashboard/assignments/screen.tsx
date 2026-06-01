@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { HybridGradeImportDialog } from "@/components/dashboard/HybridGradeImportDialog";
 import { AssignmentFormDialog } from "@/pages/dashboard/assignments/assignment-form-dialog";
 import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
 import type { useAssignmentsController } from "@/pages/dashboard/assignments/useAssignmentsController";
@@ -92,7 +91,6 @@ export const AssignmentsScreen = ({
         actions={
           role === "lecturer" && !isDemo ? (
             <div className="flex flex-wrap gap-2">
-              <HybridGradeImportDialog assignments={assignments} />
               <AssignmentFormDialog
                 applyStarterTemplate={applyStarterTemplate}
                 creating={formState.creating}
