@@ -68,6 +68,8 @@ That makes GradeAI less about isolated grading automation and more about giving 
 - run AI-assisted grading through backend Edge Functions
 - return criterion-level feedback, scores, evidence, and confidence signals
 - keep educator review at the centre before approval and release
+- import existing grades from CSV or image on the lecturer dashboard, either into an existing assignment or into a new imported assignment
+- link imported grades to assignments so cohort analytics, performance trends, and grade distribution pages update from the same data model
 
 ### Academic integrity and moderation
 
