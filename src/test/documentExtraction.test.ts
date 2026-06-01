@@ -4,12 +4,24 @@ import { Buffer } from "node:buffer";
 import mammoth from "mammoth";
 import { strToU8, zipSync } from "fflate";
 import { jsPDF } from "jspdf";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
   extractDocumentText,
   MIN_EXTRACTED_TEXT_CHARS,
 } from "../../supabase/functions/_shared/document-extraction-core";
+import { extractSubmissionDocument } from "../../supabase/functions/_shared/document-extraction";
+
+const mammothMock = vi.hoisted(() => ({
+  extractRawText: vi.fn(async () => ({
+    value: "",
+    messages: [],
+  })),
+}));
+
+vi.mock("npm:mammoth", () => ({
+  default: mammothMock,
+}));
 
 function escapeXml(value: string) {
   return value
@@ -122,6 +134,32 @@ startxref
   return new TextEncoder().encode(pdf);
 }
 
+function buildBlankPdfBytes() {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>
+endobj
+xref
+0 4
+0000000000 65535 f 
+0000000010 00000 n 
+0000000060 00000 n 
+0000000117 00000 n 
+trailer
+<< /Root 1 0 R /Size 4 >>
+startxref
+180
+%%EOF`;
+
+  return new TextEncoder().encode(pdf);
+}
+
 function buildJsPdfBytes(text: string, options?: { compress?: boolean }) {
   const doc = new jsPDF({
     compress: options?.compress ?? false,
@@ -137,6 +175,38 @@ function buildJsPdfBytes(text: string, options?: { compress?: boolean }) {
   return new Uint8Array(doc.output("arraybuffer"));
 }
 
+function buildDoclingResponse(text: string) {
+  return new Response(
+    JSON.stringify({
+      success: true,
+      extraction_method: "docling",
+      file_type: "pdf",
+      extracted_text_length: text.length,
+      markdown: text,
+      page_count: 2,
+      ocr_used: false,
+      elapsed_ms: 42,
+      warnings: ["docling warning"],
+      errors: [],
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+}
+
+function restoreEnvValue(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
+
 const docxExtractor = async (bytes: Uint8Array) => {
   const result = await mammoth.extractRawText({ buffer: Buffer.from(bytes) });
   return {
@@ -145,7 +215,19 @@ const docxExtractor = async (bytes: Uint8Array) => {
   };
 };
 
+function snapshotDoclingEnv() {
+  return {};
+}
+
 describe("document extraction", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("extracts readable text from a DOCX student report", async () => {
     const reportText = "GradeAI student report. ".repeat(20);
     const result = await extractDocumentText({
@@ -204,6 +286,108 @@ ${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref
     expect(result.extractionQuality?.suspiciousPdfArtifactCount).toBeGreaterThan(0);
   });
 
+  it("does not call Docling fallback unless it is explicitly enabled", async () => {
+    const originalEnv = {
+      enabled: process.env.DOCLING_EXTRACTION_FALLBACK_ENABLED,
+      url: process.env.DOCLING_EXTRACTION_FALLBACK_URL,
+      secret: process.env.DOCLING_EXTRACTION_FALLBACK_SECRET,
+      timeout: process.env.DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS,
+    };
+    const fetchMock = vi.fn();
+    const originalFetch = global.fetch;
+    global.fetch = fetchMock as typeof fetch;
+
+    try {
+      delete process.env.DOCLING_EXTRACTION_FALLBACK_ENABLED;
+      delete process.env.DOCLING_EXTRACTION_FALLBACK_URL;
+      delete process.env.DOCLING_EXTRACTION_FALLBACK_SECRET;
+      delete process.env.DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS;
+
+      const pollutedPdf = `%PDF-1.4
+ReportLab Generated PDF document http://www.reportlab.com
+1 0 obj << /Type /Catalog >> endobj
+2 0 obj << /Length 123 >> stream
+xref
+trailer
+startxref
+endstream
+3 0 obj << /Type /Page >> endobj
+${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref trailer startxref stream endstream ".repeat(8)}`;
+
+      const result = await extractDocumentText({
+        fileName: "polluted.pdf",
+        mimeType: "application/pdf",
+        bytes: new TextEncoder().encode(pollutedPdf),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.extractionMethod).toBe("pdf_fallback");
+      expect(result.extractionFailureReason).toBe("unreadable_pdf");
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      global.fetch = originalFetch;
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_ENABLED", originalEnv.enabled);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_URL", originalEnv.url);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_SECRET", originalEnv.secret);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS", originalEnv.timeout);
+    }
+  });
+
+  it("uses Docling as a fallback for unreadable PDFs when the opt-in env is enabled", async () => {
+    const originalEnv = {
+      enabled: process.env.DOCLING_EXTRACTION_FALLBACK_ENABLED,
+      url: process.env.DOCLING_EXTRACTION_FALLBACK_URL,
+      secret: process.env.DOCLING_EXTRACTION_FALLBACK_SECRET,
+      timeout: process.env.DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS,
+    };
+    const fetchMock = vi.fn(async () =>
+      buildDoclingResponse(
+        "Docling extracted a readable PDF report discussing evidence, analysis, and conclusion in enough detail to grade safely. ".repeat(8),
+      ));
+    const originalFetch = global.fetch;
+    global.fetch = fetchMock as typeof fetch;
+
+    try {
+      process.env.DOCLING_EXTRACTION_FALLBACK_ENABLED = "true";
+      process.env.DOCLING_EXTRACTION_FALLBACK_URL = "https://docling.test/extract";
+      process.env.DOCLING_EXTRACTION_FALLBACK_SECRET = "fallback-secret";
+      process.env.DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS = "5000";
+
+      const pollutedPdf = `%PDF-1.4
+ReportLab Generated PDF document http://www.reportlab.com
+1 0 obj << /Type /Catalog >> endobj
+2 0 obj << /Length 123 >> stream
+xref
+trailer
+startxref
+endstream
+3 0 obj << /Type /Page >> endobj
+${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref trailer startxref stream endstream ".repeat(8)}`;
+
+      const result = await extractDocumentText({
+        fileName: "docling-fallback.pdf",
+        mimeType: "application/pdf",
+        bytes: new TextEncoder().encode(pollutedPdf),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.extractionMethod).toBe("pdf_docling_fallback");
+      expect(result.extractedText).toContain("Docling extracted a readable PDF report");
+      expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("https://docling.test/extract");
+      expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+        method: "POST",
+      });
+    } finally {
+      global.fetch = originalFetch;
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_ENABLED", originalEnv.enabled);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_URL", originalEnv.url);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_SECRET", originalEnv.secret);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS", originalEnv.timeout);
+    }
+  });
+
   it("rejects large garbled PDF extraction even when the text-length minimum is exceeded", async () => {
     const garbledPdf = `%PDF-1.4 ReportLab Generated PDF
 ${"A12B34C56D78EFGHIJKLmnopqrstuv 1 0 obj endobj xref trailer startxref ".repeat(30)}`;
@@ -235,6 +419,110 @@ ${"A12B34C56D78EFGHIJKLmnopqrstuv 1 0 obj endobj xref trailer startxref ".repeat
     expect(result.success).toBe(true);
     expect(result.extractionMethod).toBe("pdf_fallback");
     expect(result.extractedText).toContain("This fallback PDF still contains readable essay text");
+  });
+
+  it("uses the Docling fallback for an insufficient PDF when the service is configured", async () => {
+    class MockFormData {
+      private fields = new Map<string, unknown>();
+
+      append(name: string, value: unknown) {
+        this.fields.set(name, value);
+      }
+
+      get(name: string) {
+        return this.fields.get(name);
+      }
+    }
+
+    vi.stubGlobal("FormData", MockFormData as unknown as typeof FormData);
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          text: "Docling recovered a complete essay discussing artificial intelligence, university assessment, lecturers, student data, and human oversight. ".repeat(20),
+          markdown: "Docling recovered a complete essay discussing artificial intelligence, university assessment, lecturers, student data, and human oversight. ".repeat(20),
+          warnings: ["Converted via text-first fallback."],
+          errors: [],
+          extraction_mode: "text_first",
+          extracted_character_count: 2800,
+          extracted_word_count: 380,
+          processing_duration_ms: 1234,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(globalThis.fetch).toBe(fetchMock);
+
+    const result = await extractSubmissionDocument({
+      fileName: "insufficient-essay.pdf",
+      mimeType: "application/pdf",
+      fileData: new Blob([buildBlankPdfBytes()], { type: "application/pdf" }),
+      doclingFallbackConfig: {
+        enabled: true,
+        url: "https://docling.example",
+        secret: "docling-secret",
+        timeoutMs: 2500,
+      },
+    });
+
+    expect(result.fileType).toBe("pdf");
+    expect(result.extractionFailureReason).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+    expect(result.extractionMethod).toBe("docling_remote");
+    expect(result.extractedText).toContain("Docling recovered a complete essay");
+    expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
+    expect(result.extractionQuality?.isUsable).toBe(true);
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0];
+    expect(String(requestUrl)).toBe("https://docling.example/convert");
+    expect(new Headers(requestInit?.headers as HeadersInit).get("x-docling-extraction-secret")).toBe("docling-secret");
+    expect(requestInit?.method).toBe("POST");
+    const formData = requestInit?.body as FormData;
+    expect(formData.get("file")).toBeInstanceOf(Blob);
+  });
+
+  it("does not call Docling when the local PDF extraction is already usable", async () => {
+    class MockFormData {
+      private fields = new Map<string, unknown>();
+
+      append(name: string, value: unknown) {
+        this.fields.set(name, value);
+      }
+
+      get(name: string) {
+        return this.fields.get(name);
+      }
+    }
+
+    vi.stubGlobal("FormData", MockFormData as unknown as typeof FormData);
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          text: "Docling should not be called for this PDF.",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(globalThis.fetch).toBe(fetchMock);
+
+    const reportText = "This PDF report discusses the student's argument, evidence, method, and conclusion in enough detail to be graded safely. ".repeat(8);
+    const result = await extractSubmissionDocument({
+      fileName: "report.pdf",
+      mimeType: "application/pdf",
+      fileData: new Blob([buildJsPdfBytes(reportText)], { type: "application/pdf" }),
+      doclingFallbackConfig: {
+        enabled: true,
+        url: "https://docling.example",
+        secret: "docling-secret",
+        timeoutMs: 2500,
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.extractionMethod).toBe("pdf_fallback");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("keeps fallback parser output behind the same quality gate when parser failure exposes polluted text", async () => {

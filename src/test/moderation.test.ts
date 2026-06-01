@@ -40,6 +40,26 @@ describe("moderation signal evaluation", () => {
     expect(result.triggerFlags).toContain("boundary_score");
   });
 
+  it("skips boundary and low-confidence moderation triggers during lecturer review", () => {
+    const result = evaluateModerationSignals({
+      grade: {
+        ai_score: 39,
+        lecturer_score: 39,
+        lecturer_feedback: null,
+        grading_confidence: 0.5,
+        grading_metadata: null,
+        ai_breakdown: null,
+        ai_feedback: null,
+      },
+      integrityReview: null,
+      maxScore: 100,
+      context: "lecturer_review",
+    });
+
+    expect(result.needsModeration).toBe(false);
+    expect(result.triggerFlags).not.toEqual(expect.arrayContaining(["low_confidence", "boundary_score"]));
+  });
+
   it("triggers moderation for maths metadata concerns", () => {
     const result = evaluateModerationSignals({
       grade: {
@@ -58,6 +78,7 @@ describe("moderation signal evaluation", () => {
       },
       integrityReview: null,
       maxScore: 100,
+      context: "lecturer_review",
     });
 
     expect(result.triggerFlags).toContain("maths_concern");
@@ -81,6 +102,7 @@ describe("moderation signal evaluation", () => {
       },
       integrityReview: null,
       maxScore: 100,
+      context: "lecturer_review",
     });
 
     expect(result.triggerFlags).not.toContain("maths_concern");
