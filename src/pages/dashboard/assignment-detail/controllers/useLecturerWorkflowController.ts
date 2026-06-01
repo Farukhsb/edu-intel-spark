@@ -20,7 +20,6 @@ interface LecturerWorkflowUser {
 interface UseLecturerWorkflowControllerArgs {
   assignment: AssignmentDetailAssignment | null;
   grades: Record<string, Grade>;
-  isDemo: boolean;
   integrityReviews: Record<string, IntegrityReview>;
   moderationCases: Record<string, ModerationCase>;
   reloadSubmissions: () => Promise<void>;
@@ -40,7 +39,6 @@ interface UseLecturerWorkflowControllerArgs {
 export const useLecturerWorkflowController = ({
   assignment,
   grades,
-  isDemo,
   integrityReviews,
   moderationCases,
   reloadSubmissions,
@@ -71,7 +69,6 @@ export const useLecturerWorkflowController = ({
   const lecturerActions = useLecturerAssessmentActions({
     assignment,
     grades,
-    isDemo,
     integrityReviews,
     moderationCases,
     reloadSubmissions,

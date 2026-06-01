@@ -38,7 +38,6 @@ interface LecturerAssessmentUser {
 interface UseLecturerAssessmentActionsArgs {
   assignment: AssignmentDetailAssignment | null;
   grades: Record<string, Grade>;
-  isDemo: boolean;
   integrityReviews: Record<string, IntegrityReview>;
   moderationCases: Record<string, ModerationCase>;
   reloadSubmissions: () => Promise<void>;
@@ -71,7 +70,6 @@ const toGradeRow = (grade: Grade): GradeRow => ({
 export const useLecturerAssessmentActions = ({
   assignment,
   grades,
-  isDemo,
   integrityReviews,
   moderationCases,
   reloadSubmissions,
@@ -267,10 +265,6 @@ export const useLecturerAssessmentActions = ({
   };
 
   const sendToModeration = async (submission: AssignmentDetailSubmission) => {
-    if (isDemo) {
-      toast.info("Moderation handoff is disabled in demo mode");
-      return false;
-    }
     if (!assignment || !user) return false;
 
     const grade = grades[submission.id];
