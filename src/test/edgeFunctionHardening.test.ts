@@ -197,6 +197,9 @@ describe("edge function hardening", () => {
 
   it("keeps hybrid grade import backend-only and JWT protected", () => {
     const importSource = readRepoFile("supabase/functions/import-grades/index.ts");
+    const requestSource = readRepoFile("supabase/functions/import-grades/request.ts");
+    const imagesSource = readRepoFile("supabase/functions/import-grades/images.ts");
+    const confirmSource = readRepoFile("supabase/functions/import-grades/confirm.ts");
     const helperSource = readRepoFile("supabase/functions/_shared/grade-import.ts");
     const configSource = readRepoFile("supabase/config.toml");
 
@@ -204,13 +207,13 @@ describe("edge function hardening", () => {
     expect(configSource).toContain("verify_jwt = true");
     expect(importSource).toContain("requireLecturer(req)");
     expect(importSource).toContain("IMPORT_RATE_LIMIT_SCOPE");
-    expect(importSource).toContain("HYBRID_IMPORT_ENABLED");
-    expect(importSource).toContain('from("grade_imports").insert');
+    expect(requestSource).toContain("HYBRID_IMPORT_ENABLED");
+    expect(imagesSource).toContain("createChatCompletion({");
+    expect(confirmSource).toContain('from("grade_imports").insert');
     expect(helperSource).toContain('grade_source: "lecturer_uploaded"');
-    expect(importSource).toContain("source_metadata");
-    expect(importSource).toContain('.getAll("file")');
-    expect(importSource).toContain("createChatCompletion({");
-    expect(importSource).toContain('logInfo("import-grades completed"');
+    expect(confirmSource).toContain("source_metadata");
+    expect(requestSource).toContain('.getAll("file")');
+    expect(confirmSource).toContain('logInfo("import-grades completed"');
   });
 
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
