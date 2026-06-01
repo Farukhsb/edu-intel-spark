@@ -34,6 +34,7 @@ If the invite email does not arrive, check spam/junk first, then ask the admin t
 As a lecturer, you can use the platform to:
 
 - create and publish assignments
+- import existing grades from CSV or image on the lecturer overview page
 - define rubric criteria for structured marking
 - receive student submissions
 - run AI grading against the rubric
@@ -76,6 +77,17 @@ The main lecturer pages are:
   Use this to review assessment alignment and outcome visibility.
 - `Settings`
   Use this for account and system-level preferences.
+
+### Import Existing Grades
+
+Use `Import Grades` from the lecturer overview page when you already have marks in a CSV or image.
+
+You can:
+
+- map the import to an existing assignment
+- create a new imported assignment first, then write the grades against it
+
+After the import is confirmed, the linked grades flow into the same cohort analytics, performance trends, grade distribution, and lecturer overview data used elsewhere in the app.
 
 Institution-level reporting pages such as `Institutional Insights`, `Accreditation`, and `External Examiner` now sit under the admin reporting area, not the lecturer sidebar.
 

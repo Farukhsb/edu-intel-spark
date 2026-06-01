@@ -26,6 +26,7 @@ GradeAI supports different types of users:
 - **Lecturers / Teachers**
   - create assignments
   - define rubrics
+  - import existing grades from CSV or image on the lecturer overview page
   - review submissions
   - use AI-assisted marking
   - approve and release grades

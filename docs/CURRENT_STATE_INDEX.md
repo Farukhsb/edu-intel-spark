@@ -28,6 +28,8 @@ without having to guess which older notes are still relevant.
 - [`USER_GUIDE.md`](USER_GUIDE.md): cross-role product walkthrough
 - [`Lecturer-Guide.md`](Lecturer-Guide.md): lecturer workflow details
 
+Current lecturer workflow also includes `Import Grades` on the lecturer overview page for CSV and image imports.
+
 ## QA and support checklists
 
 - [`support/RELEASE_READINESS_CHECKLIST.md`](support/RELEASE_READINESS_CHECKLIST.md): pre-release checks
