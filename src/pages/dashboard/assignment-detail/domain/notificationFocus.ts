@@ -108,22 +108,6 @@ export const getAssignmentNotificationFocusState = (
       submission.status === "submitted" || submission.status === "ai_grading",
   );
 
-  if (releasedSubmissionIds.length > 0) {
-    return buildReleaseFollowUpState({
-      requestedFocus: focus,
-      submissionIds: releasedSubmissionIds,
-      statusFilter: "released",
-      title:
-        focus === "release-follow-up"
-          ? "Opened from release follow-up notice"
-          : "Opened from an earlier notice after release",
-      description:
-        focus === "release-follow-up"
-          ? "This assignment notification points to the released-grade follow-up state for this workflow."
-          : "The earlier workflow notice has already been overtaken by released results, so the list is focused on submissions already released to students.",
-    });
-  }
-
   if (releaseReadySubmissionIds.length > 0) {
     return buildReleaseFollowUpState({
       requestedFocus: focus,
@@ -179,6 +163,22 @@ export const getAssignmentNotificationFocusState = (
       title: "Opened from submission workflow notice",
       description: "This assignment notification points to the review queue for newly submitted work.",
     };
+  }
+
+  if (releasedSubmissionIds.length > 0) {
+    return buildReleaseFollowUpState({
+      requestedFocus: focus,
+      submissionIds: releasedSubmissionIds,
+      statusFilter: "released",
+      title:
+        focus === "release-follow-up"
+          ? "Opened from release follow-up notice"
+          : "Opened from an earlier notice after release",
+      description:
+        focus === "release-follow-up"
+          ? "This assignment notification points to the released-grade follow-up state for this workflow."
+          : "The earlier workflow notice has already been overtaken by released results, so the list is focused on submissions already released to students.",
+    });
   }
 
   if (focus === "release-follow-up") {

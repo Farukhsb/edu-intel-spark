@@ -9,24 +9,18 @@ import {
 } from "@/lib/communications";
 import {
   canReleaseStatus,
-  getApprovalBlockReason,
   resolveFinalGradeValues,
 } from "@/lib/assessmentWorkflow";
 import { executeGradeRelease, summarizeGradeReleaseBatch } from "@/lib/gradeReleaseWorkflow";
 import { log } from "@/lib/logger";
-import { evaluateModerationSignals } from "@/lib/moderation";
 import {
   buildModerationAuditPayload,
-  type GradeRow,
-  buildModerationCasePayload,
   insertModerationAuditEntry,
-  upsertModerationCase,
 } from "@/lib/moderationWorkflow";
 import type {
   AssignmentDetailAssignment,
   AssignmentDetailSubmission,
   Grade,
-  IntegrityReview,
   ModerationCase,
   SubmissionStatus,
 } from "@/pages/dashboard/assignment-detail/types";
@@ -38,7 +32,7 @@ interface LecturerAssessmentUser {
 interface UseLecturerAssessmentActionsArgs {
   assignment: AssignmentDetailAssignment | null;
   grades: Record<string, Grade>;
-  integrityReviews: Record<string, IntegrityReview>;
+  isDemo: boolean;
   moderationCases: Record<string, ModerationCase>;
   reloadSubmissions: () => Promise<void>;
   selected: Set<string>;
@@ -47,30 +41,12 @@ interface UseLecturerAssessmentActionsArgs {
   submissions: AssignmentDetailSubmission[];
   user: LecturerAssessmentUser | null;
 }
-
 const asJson = (value: unknown): Json => value as Json;
-const toGradeRow = (grade: Grade): GradeRow => ({
-  id: grade.id,
-  submission_id: grade.submission_id,
-  ai_score: grade.ai_score,
-  ai_feedback: grade.ai_feedback,
-  ai_breakdown: asJson(grade.ai_breakdown),
-  assignment_type: grade.assignment_type ?? null,
-  grading_confidence: grade.grading_confidence ?? null,
-  grading_metadata: asJson(grade.grading_metadata ?? {}),
-  lecturer_score: grade.lecturer_score,
-  lecturer_feedback: grade.lecturer_feedback,
-  final_score: grade.final_score,
-  final_feedback: grade.final_feedback,
-  created_at: "",
-  reviewed_at: null,
-  reviewed_by: null,
-});
 
 export const useLecturerAssessmentActions = ({
   assignment,
   grades,
-  integrityReviews,
+  isDemo,
   moderationCases,
   reloadSubmissions,
   selected,
@@ -129,61 +105,6 @@ export const useLecturerAssessmentActions = ({
     }
   };
 
-  const ensureModerationCase = async ({
-    submission,
-    grade,
-    status,
-  }: {
-    submission: AssignmentDetailSubmission;
-    grade: Grade;
-    status: ModerationCase["status"];
-  }) => {
-    if (!assignment || !user) return null;
-
-    const moderationResult = evaluateModerationSignals({
-      grade: toGradeRow(grade),
-      integrityReview: integrityReviews[submission.id] ?? null,
-      maxScore: assignment.max_score,
-    });
-
-    const existingCase = moderationCases[submission.id];
-    const { data, error } = await upsertModerationCase(
-      supabase,
-      buildModerationCasePayload({
-        submissionId: submission.id,
-        assignmentId: assignment.id,
-        gradeId: grade.id,
-        lecturerId: assignment.lecturer_id,
-        firstMarkerId: user.id,
-        status,
-        aiScoreSnapshot: grade.ai_score,
-        firstMarkerScore: grade.lecturer_score,
-        triggerFlags: moderationResult.triggerFlags,
-        triggerSummary: moderationResult.triggerSummary || null,
-        confidenceScore: moderationResult.confidenceScore,
-        integrityRiskScore: moderationResult.integrityRiskScore,
-        existingCase,
-      }),
-    );
-
-    if (error) {
-      throw error;
-    }
-
-    if (data) {
-      setModerationCases((current) => ({ ...current, [submission.id]: data }));
-    }
-    return data;
-  };
-
-  const shouldRequireModeration = (submissionId: string, grade: Grade) =>
-    !!assignment &&
-    evaluateModerationSignals({
-      grade: toGradeRow(grade),
-      integrityReview: integrityReviews[submissionId] ?? null,
-      maxScore: assignment.max_score,
-    }).needsModeration;
-
   const approveSubmission = async (submission: AssignmentDetailSubmission) => {
     if (!assignment || !user) return false;
 
@@ -194,36 +115,8 @@ export const useLecturerAssessmentActions = ({
     }
 
     const moderationCase = moderationCases[submission.id];
-    const needsModeration = shouldRequireModeration(submission.id, grade);
-    const approvalBlockReason = getApprovalBlockReason({
-      status: submission.status,
-      needsModeration,
-    });
-
-    if (approvalBlockReason === "moderation_in_progress") {
+    if (submission.status === "moderation_pending" || submission.status === "moderation_in_progress" || submission.status === "escalated") {
       toast.error("This submission is in the moderation workflow and cannot be approved yet.");
-      return false;
-    }
-
-    if (approvalBlockReason === "moderation_required") {
-      const createdCase = await ensureModerationCase({
-        submission,
-        grade,
-        status: "moderation_pending",
-      });
-      await supabase.from("submissions").update({ status: "moderation_pending" as const }).eq("id", submission.id);
-      await logModerationAuditEvent({
-        submissionId: submission.id,
-        gradeId: grade.id,
-        moderationCaseId: createdCase?.id ?? null,
-        eventType: "moderation_required",
-        actorRole: "lecturer",
-        previousValues: { status: submission.status },
-        newValues: { status: "moderation_pending", trigger_flags: createdCase?.trigger_flags ?? [] },
-        reason: "Approval blocked until moderation is completed.",
-      });
-      toast.warning("Moderation is required before approval.");
-      await reloadSubmissions();
       return false;
     }
 
@@ -259,12 +152,16 @@ export const useLecturerAssessmentActions = ({
       actorRole: "lecturer",
       previousValues: { status: submission.status, final_score: grade.final_score },
       newValues: { status: "approved", final_score: finalScore },
-      reason: moderationCase ? "Approved after moderation." : "Approved after first review.",
+      reason: moderationCase ? "Approved after moderation." : "Approved after lecturer review.",
     });
     return true;
   };
 
   const sendToModeration = async (submission: AssignmentDetailSubmission) => {
+    if (isDemo) {
+      toast.info("Moderation handoff is disabled in demo mode");
+      return false;
+    }
     if (!assignment || !user) return false;
 
     const grade = grades[submission.id];
@@ -676,6 +573,7 @@ Please review the feedback in the platform and let me know if you would like to 
           lecturer_feedback: nextFeedback,
         }
       : null;
+    let saveSucceeded = false;
 
     if (!grade) {
       toast.error("No grade record found");
@@ -684,64 +582,34 @@ Please review the feedback in the platform and let me know if you would like to 
 
     try {
       if (existingGrade?.id) {
-        await supabase
+        const { error: gradeUpdateError } = await supabase
           .from("grades")
           .update({
             lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
             lecturer_feedback: nextFeedback,
           })
           .eq("id", existingGrade.id);
-      }
 
-      const moderationCheck = evaluateModerationSignals({
-        grade: toGradeRow(grade),
-        integrityReview: integrityReviews[reviewSubmission.id] ?? null,
-        maxScore: assignment?.max_score ?? 100,
-      });
-
-      let nextStatus: SubmissionStatus = "first_review";
-      let moderationCaseId: string | null = null;
-      if (moderationCheck.needsModeration) {
-        const moderationCase = await ensureModerationCase({
-          submission: reviewSubmission,
-          grade,
-          status: "moderation_pending",
-        });
-        moderationCaseId = moderationCase?.id ?? null;
-
-        if (!moderationCase?.id) {
-          throw new Error("Moderation case could not be created");
+        if (gradeUpdateError) {
+          throw gradeUpdateError;
         }
-
-        await supabase.from("moderation_reviews").insert({
-          moderation_case_id: moderationCase.id,
-          submission_id: reviewSubmission.id,
-          reviewer_id: user.id,
-          reviewer_role: "first_marker",
-          action:
-            existingGrade.ai_score != null &&
-            Number.isFinite(nextScore) &&
-            existingGrade.ai_score === nextScore
-              ? "agree"
-              : "adjust",
-          proposed_score: Number.isFinite(nextScore) ? nextScore : null,
-          proposed_feedback: nextFeedback,
-          notes: nextFeedback,
-          snapshot: asJson({
-            ai_score: existingGrade.ai_score,
-            lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
-            confidence_score: grade.grading_confidence ?? null,
-            trigger_flags: moderationCheck.triggerFlags,
-          }),
-        });
-        nextStatus = "moderation_pending";
       }
 
-      await supabase.from("submissions").update({ status: nextStatus }).eq("id", reviewSubmission.id);
+      const nextStatus: SubmissionStatus = reviewSubmission.status === "under_review" ? "under_review" : "first_review";
+
+      const { error: submissionUpdateError } = await supabase
+        .from("submissions")
+        .update({ status: nextStatus })
+        .eq("id", reviewSubmission.id);
+
+      if (submissionUpdateError) {
+        throw submissionUpdateError;
+      }
+
       await logModerationAuditEvent({
         submissionId: reviewSubmission.id,
         gradeId: existingGrade.id,
-        moderationCaseId,
+        moderationCaseId: moderationCases[reviewSubmission.id]?.id ?? null,
         eventType: "first_review_saved",
         actorRole: "first_marker",
         previousValues: {
@@ -753,18 +621,12 @@ Please review the feedback in the platform and let me know if you would like to 
           lecturer_score: Number.isFinite(nextScore) ? nextScore : null,
           lecturer_feedback: nextFeedback,
           status: nextStatus,
-          trigger_flags: moderationCheck.triggerFlags,
         },
-        reason: moderationCheck.needsModeration
-          ? "First marker review routed into moderation."
-          : "First marker review saved.",
+        reason: "First marker review saved.",
       });
 
-      toast.success(
-        moderationCheck.needsModeration
-          ? "First marker review saved and sent to moderation."
-          : "First marker review saved.",
-      );
+      saveSucceeded = true;
+      toast.success("First marker review saved.");
       await reloadSubmissions();
     } catch (error) {
       log.error("Save review failed", error, {
@@ -772,8 +634,10 @@ Please review the feedback in the platform and let me know if you would like to 
       });
       toast.error("Failed to save review");
     }
-    setReviewOpen(false);
-    setReviewGradeOverride(null);
+    if (saveSucceeded) {
+      setReviewOpen(false);
+      setReviewGradeOverride(null);
+    }
   };
 
   return {

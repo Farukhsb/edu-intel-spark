@@ -328,16 +328,12 @@ export const WorkflowActionsSection = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="submitted">Submitted</SelectItem>
-                  <SelectItem value="ai_grading">AI grading</SelectItem>
-                  <SelectItem value="ai_graded">AI graded</SelectItem>
-                  <SelectItem value="first_review">First review</SelectItem>
-                  <SelectItem value="moderation_pending">Moderation pending</SelectItem>
-                  <SelectItem value="moderation_in_progress">Moderation in progress</SelectItem>
-                  <SelectItem value="moderated">Moderated</SelectItem>
-                  <SelectItem value="escalated">Escalated</SelectItem>
-                  <SelectItem value="under_review">Under review</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="submitted">Intake</SelectItem>
+                  <SelectItem value="ai_grading">AI in progress</SelectItem>
+                  <SelectItem value="ai_graded">AI graded / first review</SelectItem>
+                  <SelectItem value="under_review">Manual review</SelectItem>
+                  <SelectItem value="moderation_pending">Moderation</SelectItem>
+                  <SelectItem value="approved">Release ready</SelectItem>
                   <SelectItem value="released">Released</SelectItem>
                 </SelectContent>
               </Select>

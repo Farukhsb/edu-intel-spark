@@ -67,6 +67,7 @@ export const buildSubmissionListProps = ({
   queueFeedbackSummary: lecturerActions.queueFeedbackSummary,
   queueGradeReleaseNotification: lecturerActions.queueGradeReleaseNotification,
   openReleasedResult: viewState.openReleasedResult,
+  sendToModeration: lecturerActions.sendToModeration,
   moderationReleaseHandoffState: viewState.moderationReleaseHandoffState,
   activeQueueFocus: viewState.queueFocus,
   focusQueue: (focus) => navigate(`${searchPathname}?source=queue&focus=${focus}`, { replace: true }),
