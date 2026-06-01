@@ -147,6 +147,12 @@ export const useLecturerOverviewController = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
+  let loadedAssignments: LecturerOverviewAssignment[] = [];
+
+  const isGradeSourceSchemaError = (value: unknown) => {
+    if (!(value instanceof Error)) return false;
+    return /grade_source|column|schema/i.test(value.message);
+  };
 
   const fetchDashboard = async () => {
     if (!user) return;
@@ -162,9 +168,9 @@ export const useLecturerOverviewController = () => {
 
       if (assignmentsError) throw assignmentsError;
 
-      const assignments = assignmentsData || [];
-      setAssignments(assignments);
-      const assignmentIds = assignments.map((assignment) => assignment.id);
+      loadedAssignments = assignmentsData || [];
+      setAssignments(loadedAssignments);
+      const assignmentIds = loadedAssignments.map((assignment) => assignment.id);
 
       if (assignmentIds.length === 0) {
         setStats({ ...EMPTY_STATS, assignmentCount: 0 });
@@ -240,7 +246,7 @@ export const useLecturerOverviewController = () => {
       }
 
       const assignmentMap: Record<string, { title: string; max_score: number }> = {};
-      assignments.forEach((assignment) => {
+      loadedAssignments.forEach((assignment) => {
         assignmentMap[assignment.id] = { title: assignment.title, max_score: assignment.max_score };
       });
 
@@ -416,10 +422,22 @@ export const useLecturerOverviewController = () => {
       });
       setRecent(recentSubs);
     } catch (error) {
-      log.error("Lecturer overview fetch failed", error, {
-        userId: user.id,
-      });
-      setError("The lecturer overview could not be loaded right now.");
+      if (isGradeSourceSchemaError(error)) {
+        log.warn("Lecturer overview grade_source lookup failed; showing partial overview", {
+          userId: user.id,
+          error,
+        });
+        setLoadWarning("Some grade metadata is temporarily unavailable, but the teaching overview is still loading.");
+        setRecent([]);
+        setPipeline(EMPTY_PIPELINE);
+        setTopAtRiskStudents([]);
+        setStats({ ...EMPTY_STATS, assignmentCount: loadedAssignments.length });
+      } else {
+        log.error("Lecturer overview fetch failed", error, {
+          userId: user.id,
+        });
+        setError("The lecturer overview could not be loaded right now.");
+      }
     }
 
     setLoading(false);

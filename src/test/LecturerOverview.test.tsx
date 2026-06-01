@@ -268,7 +268,7 @@ describe("LecturerOverview", () => {
     expect(screen.getByText("Live teaching scope")).toBeInTheDocument();
     expect(screen.getByText("Next move")).toBeInTheDocument();
     expect(screen.getByText("No immediate blocker")).toBeInTheDocument();
-    expect(screen.getByText("Live delivery position")).toBeInTheDocument();
+    expect(screen.getByText("Setup position")).toBeInTheDocument();
     expect(screen.getByText("Track submissions from intake to release.")).toBeInTheDocument();
     expect(screen.getByText("Awaiting Review")).toBeInTheDocument();
     expect(screen.getByText("Average Grade")).toBeInTheDocument();
