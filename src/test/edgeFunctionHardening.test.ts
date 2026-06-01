@@ -129,6 +129,14 @@ describe("edge function hardening", () => {
     expect(blocked.allowed).toBe(false);
   });
 
+  it("uses Supabase RPC for shared rate limiting rather than an in-memory fallback", () => {
+    const source = readRepoFile("supabase/functions/_shared/rate-limit.ts");
+
+    expect(source).toContain('consume_edge_rate_limit');
+    expect(source).toContain('throw new Error("Shared rate limit check requires a Supabase client with rpc support")');
+    expect(source).not.toContain("return applyRateLimit(req, options);");
+  });
+
   it("keeps the existing workflow email request shape valid", () => {
     const result = WorkflowEmailRequestSchema.safeParse({
       category: "grade-released",

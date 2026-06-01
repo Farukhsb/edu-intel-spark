@@ -457,11 +457,16 @@ function createAdminSupabaseMock() {
   const integrityFindingUpsert = vi.fn(async () => ({ error: null }));
   const reviewUpsert = vi.fn(async () => ({ error: null }));
   const profileUpsert = vi.fn(async () => ({ error: null }));
+  const rateLimitRpc = vi.fn(async () => ({
+    data: [{ allowed: true, retry_after_seconds: 0 }],
+    error: null,
+  }));
 
   return {
     integrityFindingUpsert,
     reviewUpsert,
     profileUpsert,
+    rpc: rateLimitRpc,
     storage: {
       from: () => ({
         download: async (path: string) => ({
@@ -640,11 +645,16 @@ function createLargeCohortAdminSupabaseMock(cohortSize: number) {
   const integrityFindingUpsert = vi.fn(async () => ({ error: null }));
   const reviewUpsert = vi.fn(async () => ({ error: null }));
   const profileUpsert = vi.fn(async () => ({ error: null }));
+  const rateLimitRpc = vi.fn(async () => ({
+    data: [{ allowed: true, retry_after_seconds: 0 }],
+    error: null,
+  }));
 
   return {
     integrityFindingUpsert,
     reviewUpsert,
     profileUpsert,
+    rpc: rateLimitRpc,
     storage: {
       from: () => ({
         download: async (path: string) => ({
