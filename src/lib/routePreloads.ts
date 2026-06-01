@@ -16,6 +16,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/Privacy"),
     paths: ["/privacy"],
   },
+  demo: {
+    loader: () => import("@/pages/Demo"),
+    paths: ["/demo"],
+  },
   terms: {
     loader: () => import("@/pages/Terms"),
     paths: ["/terms"],
