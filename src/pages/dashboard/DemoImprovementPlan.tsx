@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Bell, Circle } from "lucide-react";
 import {
+  DashboardDemoBanner,
   DashboardEmptyState,
   DashboardErrorState,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
-import { useAuth } from "@/contexts/AuthContext";
 import { safeFormatDate } from "@/lib/date";
 import type { CommunicationMessage } from "@/lib/communications";
 import { getImprovementPlanReadiness } from "@/lib/improvementPlan";
@@ -19,18 +19,15 @@ import {
   ImprovementPlanModuleCard,
   ImprovementPlanResourcesSection,
 } from "@/pages/dashboard/improvement-plan/sections";
-import { useImprovementPlanData } from "@/pages/dashboard/improvement-plan/useImprovementPlanData";
+import { useDemoImprovementPlanData } from "@/pages/dashboard/improvement-plan/useDemoImprovementPlanData";
 
-const ImprovementPlan = () => {
+const DemoImprovementPlan = () => {
   const location = useLocation();
-  const { user } = useAuth();
   const [expandedCompletedModules, setExpandedCompletedModules] = useState<Record<string, boolean>>({});
   const [expandedCompletedCards, setExpandedCompletedCards] = useState<Record<string, boolean>>({});
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<"modules" | "completed" | "open">("modules");
   const notification = (location.state as { notification?: CommunicationMessage } | null)?.notification;
-  const { plan, resources, loading, error, overallTasks, toggleTask, refreshPlan } = useImprovementPlanData({
-    userId: user?.id,
-  });
+  const { plan, resources, loading, error, overallTasks, toggleTask, refreshPlan } = useDemoImprovementPlanData();
   const supportNotification =
     notification?.category === "at-risk-alert" || notification?.category === "intervention-follow-up"
       ? notification
@@ -83,21 +80,13 @@ const ImprovementPlan = () => {
 
   const showCompletedTasks = () => {
     setActiveWorkspaceView("completed");
-    setExpandedCompletedModules(
-      Object.fromEntries(
-        modulesWithCompletedTasks.map((module) => [module.module, true]),
-      ),
-    );
+    setExpandedCompletedModules(Object.fromEntries(modulesWithCompletedTasks.map((module) => [module.module, true])));
     if (firstModuleWithCompletedTasks) {
       setExpandedCompletedCards((current) => ({
         ...current,
         [firstModuleWithCompletedTasks.module]: true,
       }));
     }
-  };
-
-  const showOpenTasks = () => {
-    setActiveWorkspaceView("open");
   };
 
   const toggleCompletedSection = (moduleName: string) => {
@@ -143,6 +132,8 @@ const ImprovementPlan = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <DashboardDemoBanner label="Viewing demo improvement plan data" />
+
       {notification && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="flex gap-3 p-4">
@@ -306,4 +297,4 @@ const ImprovementPlan = () => {
   );
 };
 
-export default ImprovementPlan;
+export default DemoImprovementPlan;

@@ -31,6 +31,7 @@ const LecturerOverview = lazy(routeLoaders.lecturerOverview);
 const CohortAnalytics = lazy(routeLoaders.cohortAnalytics);
 const PerformanceTrends = lazy(routeLoaders.performanceTrends);
 const DemoPerformanceTrends = lazy(routeLoaders.demoPerformanceTrends);
+const DemoImprovementPlan = lazy(routeLoaders.demoImprovementPlan);
 const AcademicIntegrity = lazy(routeLoaders.academicIntegrity);
 const DemoAcademicIntegrity = lazy(routeLoaders.demoAcademicIntegrity);
 const DemoAccreditationDashboard = lazy(routeLoaders.demoAccreditationDashboard);
@@ -306,6 +307,7 @@ const App = () => (
               <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
               <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />
               <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
+              <Route path="/demo/dashboard/improvements" element={<DemoDashboardRoute allowedRole="student"><DemoImprovementPlan /></DemoDashboardRoute>} />
               <Route
                 path="*"
                 element={

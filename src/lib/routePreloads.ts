@@ -114,6 +114,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/ImprovementPlan"),
     paths: ["/dashboard/improvements"],
   },
+  demoImprovementPlan: {
+    loader: () => import("@/pages/dashboard/DemoImprovementPlan"),
+    paths: ["/demo/dashboard/improvements"],
+  },
   assignments: {
     loader: () => import("@/pages/dashboard/Assignments"),
     paths: ["/dashboard/assignments"],
