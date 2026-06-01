@@ -4,6 +4,7 @@ import {
   buildFocusStateProps,
   buildHeroCardProps,
   buildReadinessCardProps,
+  buildDemoReviewDialogProps,
   buildReviewDialogProps,
   buildDemoSubmissionListProps,
   buildSubmissionListProps,
@@ -73,7 +74,7 @@ export const buildLiveAssignmentDetailScreenProps = ({
     navigate,
     viewState,
   }),
-  integrityCardProps: integrityCard.shouldShowCard
+    integrityCardProps: integrityCard.shouldShowCard
     ? {
         integrityCard,
         onClear: viewState.onClearIntegrityCard,
@@ -92,7 +93,6 @@ export const buildLiveAssignmentDetailScreenProps = ({
   reviewDialogProps: buildReviewDialogProps({
     assignmentMaxScore: assignment.max_score,
     grades,
-    isDemo,
     lecturerActions,
   }),
   rubric: assignment.rubric ?? [],
@@ -131,5 +131,10 @@ export const buildDemoAssignmentDetailScreenProps = ({
 }: BuildDemoAssignmentDetailScreenPropsArgs): DemoAssignmentDetailScreenProps => ({
   demoAssignmentSet,
   ...buildLiveAssignmentDetailScreenProps(args),
+  reviewDialogProps: buildDemoReviewDialogProps({
+    assignmentMaxScore: args.assignment.max_score,
+    grades: args.grades,
+    lecturerActions: args.lecturerActions,
+  }),
   submissionListProps: buildDemoSubmissionListProps(args),
 });

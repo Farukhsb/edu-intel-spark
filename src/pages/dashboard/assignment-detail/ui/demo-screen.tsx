@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ComponentProps } from "react";
+import type { ComponentProps } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 import {
@@ -11,16 +11,11 @@ import {
   AssignmentReadinessCard,
   AssignmentRubricCard,
 } from "@/pages/dashboard/assignment-detail/ui/presentation";
+import { DemoSubmissionReviewDialog } from "@/pages/dashboard/assignment-detail/ui/demo-review-dialog";
 import { SubmissionListSection as DemoSubmissionListSection } from "@/pages/dashboard/assignment-detail/ui/demo-submission-list-section";
 import { WorkflowActionsSection as DemoWorkflowActionsSection } from "@/pages/dashboard/assignment-detail/ui/demo-workflow-actions-section";
-import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
+import type { DemoSubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/demo-review-dialog";
 import type { WorkflowRubricCriterion } from "@/types/academic";
-
-const SubmissionReviewDialog = lazy(() =>
-  import("@/pages/dashboard/assignment-detail/ui/review-dialog").then((module) => ({
-    default: module.SubmissionReviewDialog,
-  })),
-);
 
 type DemoAssignmentSet = {
   label: string;
@@ -45,7 +40,7 @@ export interface DemoAssignmentDetailScreenProps {
   onClearQueueFocus: () => void;
   onClearModerationFocus: () => void;
   onClearNotificationFocus: () => void;
-  reviewDialogProps: SubmissionReviewDialogProps;
+  reviewDialogProps: DemoSubmissionReviewDialogProps;
   rubric: WorkflowRubricCriterion[];
   submissionListProps: ComponentProps<typeof DemoSubmissionListSection>;
   workflowActionsProps: ComponentProps<typeof DemoWorkflowActionsSection>;
@@ -150,10 +145,6 @@ export const DemoAssignmentDetailScreen = ({
       </div>
     </div>
 
-    {reviewDialogProps.open ? (
-      <Suspense fallback={null}>
-        <SubmissionReviewDialog {...reviewDialogProps} />
-      </Suspense>
-    ) : null}
+    {reviewDialogProps.open ? <DemoSubmissionReviewDialog {...reviewDialogProps} /> : null}
   </div>
 );

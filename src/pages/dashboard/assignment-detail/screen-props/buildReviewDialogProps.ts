@@ -1,18 +1,17 @@
-import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui";
+import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
+import type { DemoSubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/demo-review-dialog";
 import type { useLecturerAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows";
 import type { Grade } from "@/pages/dashboard/assignment-detail/types";
 
 interface BuildReviewDialogPropsArgs {
   assignmentMaxScore: number;
   grades: Record<string, Grade>;
-  isDemo: boolean;
   lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
 }
 
 export const buildReviewDialogProps = ({
   assignmentMaxScore,
   grades,
-  isDemo,
   lecturerActions,
 }: BuildReviewDialogPropsArgs): SubmissionReviewDialogProps => ({
   assignmentMaxScore,
@@ -21,7 +20,6 @@ export const buildReviewDialogProps = ({
   grade:
     lecturerActions.reviewGradeOverride ??
     (lecturerActions.reviewSubmission ? grades[lecturerActions.reviewSubmission.id] ?? null : null),
-  isDemo,
   onEditFeedbackChange: lecturerActions.setEditFeedback,
   onEditScoreChange: lecturerActions.setEditScore,
   onOpenChange: lecturerActions.setReviewOpen,
@@ -29,3 +27,17 @@ export const buildReviewDialogProps = ({
   open: lecturerActions.reviewOpen,
   reviewSubmission: lecturerActions.reviewSubmission,
 });
+
+export const buildDemoReviewDialogProps = ({
+  assignmentMaxScore,
+  grades,
+  lecturerActions,
+}: BuildReviewDialogPropsArgs): DemoSubmissionReviewDialogProps =>
+  ({
+    ...buildReviewDialogProps({
+      assignmentMaxScore,
+      grades,
+      lecturerActions,
+    }),
+    isDemo: true,
+  }) as DemoSubmissionReviewDialogProps;

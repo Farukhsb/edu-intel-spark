@@ -23,7 +23,6 @@ export interface SubmissionReviewDialogProps {
   editFeedback: string;
   editScore: string;
   grade: Grade | null;
-  isDemo: boolean;
   onEditFeedbackChange: Dispatch<SetStateAction<string>>;
   onEditScoreChange: Dispatch<SetStateAction<string>>;
   onOpenChange: (open: boolean) => void;
@@ -37,7 +36,6 @@ export const SubmissionReviewDialog = ({
   editFeedback,
   editScore,
   grade,
-  isDemo,
   onEditFeedbackChange,
   onEditScoreChange,
   onOpenChange,
@@ -176,7 +174,7 @@ export const SubmissionReviewDialog = ({
             />
           </div>
           <div className="flex gap-2">
-            <Button data-testid="submission-review-save" onClick={onSave} disabled={isDemo} className="flex-1">
+            <Button data-testid="submission-review-save" onClick={onSave} className="flex-1">
               Save Review
             </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
