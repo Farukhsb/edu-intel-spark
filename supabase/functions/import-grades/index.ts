@@ -48,7 +48,7 @@ function readEnv(name: string) {
 
 function isHybridImportEnabled() {
   const value = readEnv("HYBRID_IMPORT_ENABLED");
-  if (!value) return false;
+  if (!value || value.trim() === "") return true;
   return HYBRID_IMPORT_ENABLED_VALUES.has(value.trim().toLowerCase());
 }
 

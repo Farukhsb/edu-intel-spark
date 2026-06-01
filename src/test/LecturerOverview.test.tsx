@@ -49,6 +49,7 @@ vi.mock("lucide-react", () => {
     Loader2: () => <svg data-testid="loading-spinner" />,
     Sparkles: Icon,
     Target: Icon,
+    X: Icon,
     Upload: Icon,
     Users: Icon,
   };
