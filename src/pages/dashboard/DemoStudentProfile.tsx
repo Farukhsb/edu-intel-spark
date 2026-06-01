@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StudentGradesTrendCard } from "@/pages/dashboard/student-profile/trend-card";
 import {
-  StudentInterventionFormCard,
   StudentInterventionHistoryCard,
   StudentMissedAssignmentsCard,
   StudentProfileBackButton,
@@ -15,6 +14,7 @@ import {
   StudentProfileSummaryCards,
   StudentRiskReasonsCard,
 } from "@/pages/dashboard/student-profile/sections";
+import { DemoStudentInterventionFormCard } from "@/pages/dashboard/student-profile/demo-intervention-form-card";
 import { type StudentInsightData } from "@/lib/studentProfile";
 import { type InterventionEntry, type ManualInterventionStatus, type ManualInterventionType } from "@/lib/interventions";
 import { getStudentInterventionReadiness } from "@/lib/interventions";
@@ -186,8 +186,8 @@ const DemoStudentProfile = () => {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <StudentMissedAssignmentsCard assignments={student.missedAssignments} />
-        <StudentInterventionFormCard
-          isDemo
+        <DemoStudentInterventionFormCard
+          isDemo={true}
           canSave
           interventionType={interventionType}
           interventionStatus={interventionStatus}

@@ -511,7 +511,6 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
       <div className="grid gap-6 lg:grid-cols-2">
         <StudentMissedAssignmentsCard assignments={student.missedAssignments} />
       <StudentInterventionFormCard
-          isDemo={false}
           canSave={Boolean(resolvedStudentRecordId)}
           interventionType={interventionType}
           interventionStatus={interventionStatus}

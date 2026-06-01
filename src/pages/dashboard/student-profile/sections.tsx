@@ -200,7 +200,6 @@ export const StudentMissedAssignmentsCard = ({ assignments }: { assignments: Stu
 );
 
 export const StudentInterventionFormCard = ({
-  isDemo,
   canSave,
   interventionType,
   interventionStatus,
@@ -212,7 +211,6 @@ export const StudentInterventionFormCard = ({
   onFollowUpDateChange,
   onSubmit,
 }: {
-  isDemo: boolean;
   canSave: boolean;
   interventionType: ManualInterventionType;
   interventionStatus: ManualInterventionStatus;
@@ -272,7 +270,7 @@ export const StudentInterventionFormCard = ({
           onChange={(event) => onInterventionNoteChange(event.target.value)}
           placeholder="Record what happened, what support was offered, and what to review next."
         />
-        {!isDemo && !canSave && (
+        {!canSave && (
           <p className="text-xs text-destructive">
             This student is missing a database ID, so interventions cannot be saved yet.
           </p>
@@ -284,7 +282,7 @@ export const StudentInterventionFormCard = ({
         <Input type="date" value={followUpDate} onChange={(event) => onFollowUpDateChange(event.target.value)} />
       </div>
 
-      <Button className="w-full" onClick={onSubmit} disabled={!interventionNote.trim() || (!isDemo && !canSave)}>
+      <Button className="w-full" onClick={onSubmit} disabled={!interventionNote.trim() || !canSave}>
         Log intervention
       </Button>
     </CardContent>
