@@ -18,7 +18,6 @@ import {
   type FlaggedIntegrityCase,
 } from "@/lib/integrityQueue";
 import { persistIntegrityDecision } from "@/lib/integrityDecisionPersistence";
-import { DEMO_INTEGRITY_CASES } from "./demoData";
 import type {
   IntegrityOverviewItem,
   IntegrityQueueFilter,
@@ -47,7 +46,7 @@ const withOverviewIcons = (items: ReturnType<typeof buildIntegrityOverview>): In
   }));
 
 export const useAcademicIntegrityController = () => {
-  const { user, isDemo } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<IntegrityOverviewItem[]>([]);
   const [flagged, setFlagged] = useState<FlaggedIntegrityCase[]>([]);
@@ -60,16 +59,6 @@ export const useAcademicIntegrityController = () => {
   const lastLoggedExpandedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isDemo) {
-      const drafts = buildIntegrityDrafts(DEMO_INTEGRITY_CASES);
-      setOverview(withOverviewIcons(buildIntegrityOverview({ submissionsScanned: 12, cases: DEMO_INTEGRITY_CASES })));
-      setFlagged(DEMO_INTEGRITY_CASES);
-      setDecisionDrafts(drafts.decisionDrafts);
-      setNoteDrafts(drafts.noteDrafts);
-      setLoading(false);
-      return;
-    }
-
     if (!user) {
       return;
     }
@@ -115,7 +104,7 @@ export const useAcademicIntegrityController = () => {
     };
 
     void fetchData();
-  }, [isDemo, user]);
+  }, [user]);
 
   const totals = useMemo(() => buildIntegrityTotals(flagged), [flagged]);
   const integrityReadiness = useMemo(
@@ -154,7 +143,7 @@ export const useAcademicIntegrityController = () => {
         : "No resolved integrity cases yet.";
 
   useEffect(() => {
-    if (isDemo || !user || !expandedId) {
+    if (!user || !expandedId) {
       return;
     }
 
@@ -182,31 +171,9 @@ export const useAcademicIntegrityController = () => {
         riskLevel: item.riskLevel,
       },
     });
-  }, [expandedId, flagged, isDemo, user]);
+  }, [expandedId, flagged, user]);
 
   const saveDecision = async (item: FlaggedIntegrityCase) => {
-    if (isDemo) {
-      const nextDecision = decisionDrafts[item.submissionId] || "pending";
-      const note = noteDrafts[item.submissionId]?.trim() || "";
-      const historyEntry = {
-        id: `demo-history-${Date.now()}`,
-        decision: nextDecision,
-        note: note || "Demo integrity review saved.",
-        createdAt: new Date().toISOString(),
-      };
-
-      setFlagged((current) =>
-        current.map((entry) =>
-          entry.submissionId === item.submissionId
-            ? { ...entry, decision: nextDecision, history: [historyEntry, ...entry.history] }
-            : entry,
-        ),
-      );
-      setNoteDrafts((current) => ({ ...current, [item.submissionId]: "" }));
-      toast.success("Demo integrity review saved.");
-      return;
-    }
-
     if (!user) return;
 
     const nextDecision = decisionDrafts[item.submissionId] || "pending";
@@ -256,7 +223,7 @@ export const useAcademicIntegrityController = () => {
     item.analysisLimited && item.riskLevel === "low" ? "analysis limited" : `${item.riskLevel} risk`;
 
   return {
-    isDemo,
+    isDemo: false,
     loading,
     overview,
     totals,
