@@ -4,21 +4,16 @@ import { DashboardErrorState, DashboardLoadingState } from "@/components/dashboa
 import { Button } from "@/components/ui/button";
 
 import { useAssignmentDetailController } from "@/pages/dashboard/assignment-detail/controllers";
-import { getDemoAssignmentSetById } from "@/pages/dashboard/demoAssignments";
 import { AssignmentDetailScreen } from "@/pages/dashboard/assignment-detail/ui";
 
 const AssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { role, user, profile, isDemo } = useAuth();
+  const { role, user, profile } = useAuth();
   const navigate = useNavigate();
-  const demoAssignmentSet = isDemo && id ? getDemoAssignmentSetById(id) : null;
-  const dashboardHref = isDemo ? "/demo/dashboard" : "/dashboard";
 
   const { assignment, loadError, loading, refreshData, screenProps } = useAssignmentDetailController({
-    demoAssignmentSet,
     hasUser: Boolean(user),
     id,
-    isDemo,
     profile,
     role,
     user,
@@ -46,7 +41,7 @@ const AssignmentDetail = () => {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Assignment not found or access denied</p>
-        <Button variant="link" onClick={() => navigate(`${dashboardHref}/assignments`)}>Back to assignments</Button>
+        <Button variant="link" onClick={() => navigate("/dashboard/assignments")}>Back to assignments</Button>
       </div>
     );
   }

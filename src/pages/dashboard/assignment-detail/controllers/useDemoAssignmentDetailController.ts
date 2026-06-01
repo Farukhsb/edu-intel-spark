@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { useAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useAssignmentDetailData";
 import { buildAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
 import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import { useLecturerWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useLecturerWorkflowController";
 import { useStudentWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useStudentWorkflowController";
+import { useDemoAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useDemoAssignmentDetailData";
 import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui";
 import type { Profile } from "@/contexts/AuthContext";
 import type { User } from "@supabase/supabase-js";
 
-type AssignmentDetailControllerArgs = {
+type DemoAssignmentDetailControllerArgs = {
+  demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
   hasUser: boolean;
   id: string | undefined;
   profile: Profile | null;
@@ -18,8 +19,8 @@ type AssignmentDetailControllerArgs = {
   user: User | null;
 };
 
-type AssignmentDetailControllerResult = {
-  assignment: ReturnType<typeof useAssignmentDetailData>["assignment"];
+type DemoAssignmentDetailControllerResult = {
+  assignment: ReturnType<typeof useDemoAssignmentDetailData>["assignment"];
   loadError: string | null;
   loading: boolean;
   navigate: ReturnType<typeof useNavigate>;
@@ -27,17 +28,18 @@ type AssignmentDetailControllerResult = {
   screenProps: AssignmentDetailScreenProps | null;
 };
 
-export const useAssignmentDetailController = ({
+export const useDemoAssignmentDetailController = ({
+  demoAssignmentSet,
   hasUser,
   id,
   profile,
   role,
   user,
-}: AssignmentDetailControllerArgs): AssignmentDetailControllerResult => {
+}: DemoAssignmentDetailControllerArgs): DemoAssignmentDetailControllerResult => {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
-  const backHref = searchParams.get("from") === "overview" ? "/dashboard" : "/dashboard/assignments";
+  const backHref = searchParams.get("from") === "overview" ? "/demo/dashboard" : "/demo/dashboard/assignments";
 
   const {
     assignment,
@@ -54,15 +56,14 @@ export const useAssignmentDetailController = ({
     setModerationCases,
     setPlagiarismFlags,
     setPlagiarismSummary,
-  } = useAssignmentDetailData({
+  } = useDemoAssignmentDetailData({
     id,
     role,
-    userId: user?.id,
     hasUser,
   });
 
-  const currentUserId = user?.id ?? null;
-  const currentUserEmail = user?.email ?? null;
+  const currentUserId = user?.id ?? profile?.id ?? null;
+  const currentUserEmail = user?.email ?? profile?.email ?? null;
   const [pinnedVisibleSubmissionIds, setPinnedVisibleSubmissionIds] = useState<string[]>([]);
 
   const viewState = useAssignmentDetailViewState({
@@ -82,7 +83,7 @@ export const useAssignmentDetailController = ({
   const studentWorkflow = useStudentWorkflowController({
     assignment,
     assignmentId: id ?? null,
-    isDemo: false,
+    isDemo: true,
     profile,
     reloadSubmissions,
     submissions,
@@ -93,7 +94,7 @@ export const useAssignmentDetailController = ({
     assignment,
     grades,
     integrityReviews,
-    isDemo: false,
+    isDemo: true,
     moderationCases,
     reloadSubmissions,
     role,
@@ -129,11 +130,11 @@ export const useAssignmentDetailController = ({
       automatedActions,
       backHref,
       currentUserId,
-      demoAssignmentSet: null,
+      demoAssignmentSet,
       fileActions: studentWorkflow,
       grades,
       integrityCard: viewState.integrityCard,
-      isDemo: false,
+      isDemo: true,
       lecturerActions,
       moderationCases,
       navigate,
