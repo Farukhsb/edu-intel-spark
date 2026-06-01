@@ -16,6 +16,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/Privacy"),
     paths: ["/privacy"],
   },
+  demo: {
+    loader: () => import("@/pages/Demo"),
+    paths: ["/demo"],
+  },
   terms: {
     loader: () => import("@/pages/Terms"),
     paths: ["/terms"],
@@ -32,6 +36,11 @@ const routeDefinitions = {
     loader: () =>
       import("@/components/DashboardLayout").then((module) => ({ default: module.DashboardLayout })),
     paths: ["/dashboard"],
+  },
+  demoDashboardLayout: {
+    loader: () =>
+      import("@/components/DemoDashboardLayout").then((module) => ({ default: module.DemoDashboardLayout })),
+    paths: ["/demo/dashboard"],
   },
   lecturerOverview: {
     loader: () => import("@/pages/dashboard/LecturerOverview"),
@@ -67,6 +76,10 @@ const routeDefinitions = {
   },
   studentGrades: {
     loader: () => import("@/pages/dashboard/StudentGrades"),
+    paths: [],
+  },
+  demoStudentGrades: {
+    loader: () => import("@/pages/dashboard/DemoStudentGrades"),
     paths: [],
   },
   improvementPlan: {

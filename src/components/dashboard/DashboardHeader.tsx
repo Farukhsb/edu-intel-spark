@@ -1,13 +1,10 @@
 import { Bell, Moon, Sun } from "lucide-react";
-
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 type Props = {
   activeLabel: string;
   workspaceLabel: string;
   workspaceHint: string;
-  isDemo: boolean;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
   unreadCount: number;
@@ -19,7 +16,6 @@ export const DashboardHeader = ({
   activeLabel,
   workspaceLabel,
   workspaceHint,
-  isDemo,
   darkMode,
   setDarkMode,
   unreadCount,
@@ -39,11 +35,6 @@ export const DashboardHeader = ({
       </p>
     </div>
     <div className="ml-auto flex items-center gap-2">
-      {isDemo && (
-        <Badge variant="secondary" className="text-xs">
-          Demo Mode
-        </Badge>
-      )}
       <Button
         variant="ghost"
         size="icon"

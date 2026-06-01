@@ -111,41 +111,39 @@ describe("edge function rate limiting", () => {
     const counters = new Map<string, { count: number; resetAt: number }>();
     let now = 1_000;
     const adminClient = {
-      schema: () => ({
-        rpc: async (_fn: string, args: Record<string, unknown>) => {
-          const scope = String(args.p_scope);
-          const identifier = String(args.p_identifier);
-          const limit = Number(args.p_limit);
-          const windowSeconds = Number(args.p_window_seconds);
-          const key = `${scope}:${identifier}`;
-          const current = counters.get(key);
+      rpc: async (_fn: string, args: Record<string, unknown>) => {
+        const scope = String(args.p_scope);
+        const identifier = String(args.p_identifier);
+        const limit = Number(args.p_limit);
+        const windowSeconds = Number(args.p_window_seconds);
+        const key = `${scope}:${identifier}`;
+        const current = counters.get(key);
 
-          if (!current || current.resetAt <= now) {
-            counters.set(key, {
-              count: 1,
-              resetAt: now + windowSeconds * 1_000,
-            });
-            return { data: [{ allowed: true, retry_after_seconds: 0 }], error: null };
-          }
-
-          current.count += 1;
-          counters.set(key, current);
-
-          if (current.count > limit) {
-            return {
-              data: [
-                {
-                  allowed: false,
-                  retry_after_seconds: Math.max(1, Math.ceil((current.resetAt - now) / 1_000)),
-                },
-              ],
-              error: null,
-            };
-          }
-
+        if (!current || current.resetAt <= now) {
+          counters.set(key, {
+            count: 1,
+            resetAt: now + windowSeconds * 1_000,
+          });
           return { data: [{ allowed: true, retry_after_seconds: 0 }], error: null };
-        },
-      }),
+        }
+
+        current.count += 1;
+        counters.set(key, current);
+
+        if (current.count > limit) {
+          return {
+            data: [
+              {
+                allowed: false,
+                retry_after_seconds: Math.max(1, Math.ceil((current.resetAt - now) / 1_000)),
+              },
+            ],
+            error: null,
+          };
+        }
+
+        return { data: [{ allowed: true, retry_after_seconds: 0 }], error: null };
+      },
     };
 
     const req = new Request("https://gradeai.test/functions/v1/explain-grade", {

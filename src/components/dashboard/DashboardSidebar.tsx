@@ -1,7 +1,6 @@
 import type { Profile } from "@/contexts/AuthContext";
 import type { SidebarLink, SidebarSection } from "@/lib/dashboardNavigation";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { preloadRoute } from "@/lib/routePreloads";
@@ -15,7 +14,6 @@ type Props = {
   roleSections: readonly SidebarSection[];
   openSections: Record<string, boolean>;
   toggleSection: (label: string) => void;
-  isDemo: boolean;
   isAdmin: boolean;
   isLecturerEquivalent: boolean;
   profile: Profile | null;
@@ -29,7 +27,6 @@ export const DashboardSidebar = ({
   roleSections,
   openSections,
   toggleSection,
-  isDemo,
   isAdmin,
   isLecturerEquivalent,
   profile,
@@ -89,11 +86,6 @@ export const DashboardSidebar = ({
               {isAdmin ? "Admin workspace" : isLecturerEquivalent ? "Academic workspace" : "Student workspace"}
             </p>
           </div>
-          {isDemo && (
-            <Badge variant="outline" className="ml-auto border-sidebar-border text-[10px] text-sidebar-foreground/60">
-              Demo
-            </Badge>
-          )}
         </div>
       </div>
 
@@ -167,7 +159,7 @@ export const DashboardSidebar = ({
             onClick={handleSignOut}
           >
             <LogOut className="mr-2 h-4 w-4" />
-            {isDemo ? "Exit Demo" : "Sign Out"}
+            Sign Out
           </Button>
         </div>
       </div>

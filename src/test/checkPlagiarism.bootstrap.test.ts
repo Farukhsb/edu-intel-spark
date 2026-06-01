@@ -28,6 +28,10 @@ describe("check-plagiarism bootstrap", () => {
     process.env.INTEGRITY_PROVIDER_MODE = "internal_text_similarity";
     const serve = vi.fn((handler: (req: Request) => Promise<Response> | Response) => handler);
     const createAdminClient = vi.fn(() => ({
+      rpc: async () => ({
+        data: [{ allowed: true, retry_after_seconds: 0 }],
+        error: null,
+      }),
       storage: {
         from: () => ({
           download: async () => ({

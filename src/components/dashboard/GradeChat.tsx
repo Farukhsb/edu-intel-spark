@@ -6,13 +6,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { getEnv } from "@/lib/env";
-import {
-  buildDemoGradeResponse,
-  type ExplainGradeBreakdown,
-} from "@/pages/dashboard/explain-grade/helpers";
+import type { ExplainGradeBreakdown } from "@/pages/dashboard/explain-grade/helpers";
 import { log } from "@/lib/logger";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -29,7 +25,6 @@ type GradeChatProps = {
 };
 
 export const GradeChat = ({ submissionId, gradeBreakdown }: GradeChatProps) => {
-  const { isDemo } = useAuth();
   const [messages, setMessages] = useState<ChatMsg[]>([INITIAL_ASSISTANT_MESSAGE]);
   const [inputValue, setInputValue] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
@@ -54,14 +49,6 @@ export const GradeChat = ({ submissionId, gradeBreakdown }: GradeChatProps) => {
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setInputValue("");
-
-    if (isDemo) {
-      setMessages([
-        ...updatedMessages,
-        { role: "assistant", content: buildDemoGradeResponse(userMsg.content, gradeBreakdown) },
-      ]);
-      return;
-    }
 
     setIsChatLoading(true);
     let assistantSoFar = "";

@@ -26,6 +26,18 @@ type SharedRateLimitAdminClient = {
     }> | null;
     error: { message?: string } | null;
   }>;
+  schema?: () => {
+    rpc?: (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{
+      data: Array<{
+        allowed: boolean;
+        retry_after_seconds: number;
+      }> | null;
+      error: { message?: string } | null;
+    }>;
+  };
 };
 
 type SharedRateLimitOptions = RateLimitOptions & {
@@ -126,7 +138,16 @@ async function applySharedScopeRateLimit(
   limit: number,
   windowMs: number,
 ): Promise<RateLimitResult> {
-  const { data, error } = await adminClient.rpc("consume_edge_rate_limit", {
+  const schemaClient = adminClient.schema?.();
+  const rpc = typeof adminClient.rpc === "function"
+    ? adminClient.rpc.bind(adminClient)
+    : schemaClient?.rpc?.bind(schemaClient);
+
+  if (typeof rpc !== "function") {
+    throw new Error("Shared rate limit check requires a Supabase client with rpc support");
+  }
+
+  const { data, error } = await rpc("consume_edge_rate_limit", {
       p_scope: scope,
       p_identifier: identityKey,
       p_limit: limit,
@@ -154,22 +175,6 @@ export async function applySharedRateLimit(
   req: Request,
   options: SharedRateLimitOptions,
 ): Promise<RateLimitResult> {
-  if (typeof adminClient.rpc !== "function") {
-    const globalResult = applyRateLimit(req, {
-      scope: GLOBAL_EDGE_RATE_LIMIT_SCOPE,
-      limit: options.globalLimit ?? 20,
-      windowMs: options.globalWindowMs ?? 60_000,
-      userId: options.userId,
-      now: options.now,
-    });
-
-    if (!globalResult.allowed) {
-      return globalResult;
-    }
-
-    return applyRateLimit(req, options);
-  }
-
   const identity = getRateLimitIdentity(req, options.userId);
   const globalLimit = options.globalLimit ?? 20;
   const globalWindowMs = options.globalWindowMs ?? 60_000;
