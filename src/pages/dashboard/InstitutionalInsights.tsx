@@ -17,24 +17,23 @@ import {
   type LowPerformingAssessment,
 } from "@/lib/institutionalInsights";
 import {
-  DashboardDemoBanner,
   DashboardEmptyState,
   DashboardLiveBanner,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 
 const InstitutionalInsights = () => {
-  const { isDemo } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [moduleStats, setModuleStats] = useState<ModuleStat[]>([]);
   const [lowPerforming, setLowPerforming] = useState<LowPerformingAssessment[]>([]);
   const [accreditation, setAccreditation] = useState<AccreditationMetric[]>(EMPTY_ACCREDITATION);
-  const [loading, setLoading] = useState(!isDemo);
+  const [loading, setLoading] = useState(true);
   const [hasRealData, setHasRealData] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    if (isDemo) {
+    if (!user) {
       setLoading(false);
       return;
     }
@@ -76,7 +75,7 @@ const InstitutionalInsights = () => {
     };
 
     void fetchData();
-  }, [isDemo]);
+  }, [user]);
 
   if (loading) {
     return <DashboardLoadingState />;
@@ -91,7 +90,7 @@ const InstitutionalInsights = () => {
     );
   }
 
-  if (!isDemo && !hasRealData) {
+  if (!hasRealData) {
     return (
       <DashboardEmptyState
         title="No institutional data yet"
@@ -155,11 +154,7 @@ const InstitutionalInsights = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {isDemo ? (
-        <DashboardDemoBanner label="Viewing demo institutional data" />
-      ) : (
-        <DashboardLiveBanner label="Viewing live institutional reporting data derived from assignment, submission, and grading records." />
-      )}
+      <DashboardLiveBanner label="Viewing live institutional reporting data derived from assignment, submission, and grading records." />
 
       <div className="flex items-center justify-end">
         <Button variant="outline" size="sm" onClick={exportInsightsSnapshot}>
@@ -297,7 +292,7 @@ const InstitutionalInsights = () => {
           <CardDescription>Cross-module comparison from your live marking data</CardDescription>
         </CardHeader>
         <CardContent>
-            {moduleStats.length === 0 && !isDemo ? (
+            {moduleStats.length === 0 ? (
             <DashboardEmptyState
               title="No module performance data yet"
               description="Module-level comparisons appear here once graded submissions exist in the system."
@@ -337,7 +332,7 @@ const InstitutionalInsights = () => {
             <CardDescription>Assessments currently scoring lowest in live grading data</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {lowPerforming.length === 0 && !isDemo ? (
+            {lowPerforming.length === 0 ? (
               <DashboardEmptyState
                 title="No low-performing assessments yet"
                 description="This view fills in after submissions have been graded and score patterns can be compared."
@@ -368,7 +363,7 @@ const InstitutionalInsights = () => {
             <CardDescription>Live compliance indicators based on uploaded marking activity</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!isDemo && !hasRealData ? (
+            {!hasRealData ? (
               <DashboardEmptyState
                 title="No accreditation metrics yet"
                 description="Compliance indicators appear here once assignments, submissions, and grading data start building up."
