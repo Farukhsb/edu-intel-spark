@@ -1,4 +1,4 @@
-import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createAdminClient, jsonError, requireLecturer, HttpError, getEnv } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import { createChatCompletion, getModel, parseJsonText } from "../_shared/openai.ts";
@@ -34,20 +34,8 @@ const DEFAULT_TEMP_IMAGE_RETENTION_DAYS = 7;
 const TEMP_IMAGE_BUCKET = "grade-import-temp";
 const HYBRID_IMPORT_ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 
-function readEnv(name: string) {
-  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
-    return Deno.env.get(name);
-  }
-
-  if (typeof process !== "undefined" && process.env) {
-    return process.env[name];
-  }
-
-  return undefined;
-}
-
 function isHybridImportEnabled() {
-  const value = readEnv("HYBRID_IMPORT_ENABLED");
+  const value = getEnv("HYBRID_IMPORT_ENABLED");
   if (!value || value.trim() === "") return true;
   return HYBRID_IMPORT_ENABLED_VALUES.has(value.trim().toLowerCase());
 }
@@ -78,14 +66,14 @@ function chunkArray<T>(items: T[], size: number) {
 }
 
 function getImportBatchSize() {
-  const raw = readEnv("HYBRID_IMPORT_BATCH_SIZE");
+  const raw = getEnv("HYBRID_IMPORT_BATCH_SIZE");
   const parsed = raw ? Number(raw) : DEFAULT_IMPORT_BATCH_SIZE;
   if (!Number.isFinite(parsed)) return DEFAULT_IMPORT_BATCH_SIZE;
   return Math.max(1, Math.min(250, Math.trunc(parsed)));
 }
 
 function getTempImageRetentionDays() {
-  const raw = readEnv("HYBRID_IMPORT_TEMP_RETENTION_DAYS");
+  const raw = getEnv("HYBRID_IMPORT_TEMP_RETENTION_DAYS");
   const parsed = raw ? Number(raw) : DEFAULT_TEMP_IMAGE_RETENTION_DAYS;
   if (!Number.isFinite(parsed)) return DEFAULT_TEMP_IMAGE_RETENTION_DAYS;
   return Math.max(1, Math.min(90, Math.trunc(parsed)));
