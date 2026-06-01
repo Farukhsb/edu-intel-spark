@@ -318,7 +318,6 @@ const SubmissionCardItem = ({
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={isDemo}
                   onClick={() => void sendToModeration(submission)}
                 >
                   <Send className="mr-1 h-3 w-3" /> Send to moderation

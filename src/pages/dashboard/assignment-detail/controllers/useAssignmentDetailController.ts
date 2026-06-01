@@ -90,7 +90,7 @@ export const useAssignmentDetailController = ({
   const { automatedActions, lecturerActions } = useLecturerWorkflowController({
     assignment,
     grades,
-    isDemo,
+    isDemo: false,
     moderationCases,
     reloadSubmissions,
     role,
