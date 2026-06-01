@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { buildAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
+import { buildDemoAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
 import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import { useDemoAutomatedAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoAutomatedAssessmentActions";
 import { useDemoLecturerAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoLecturerAssessmentActions";
@@ -110,7 +110,7 @@ export const useDemoAssignmentDetailController = ({
     loading,
     navigate,
     refreshData,
-    screenProps: buildAssignmentDetailScreenProps({
+    screenProps: buildDemoAssignmentDetailScreenProps({
       assignment,
       automatedActions,
       backHref,
@@ -122,7 +122,6 @@ export const useDemoAssignmentDetailController = ({
       },
       grades,
       integrityCard: viewState.integrityCard,
-      isDemo: true,
       lecturerActions,
       moderationCases,
       navigate,

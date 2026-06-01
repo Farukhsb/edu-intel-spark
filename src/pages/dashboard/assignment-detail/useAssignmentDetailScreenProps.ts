@@ -113,13 +113,27 @@ export const buildAssignmentDetailScreenProps = ({
     viewState,
   }),
   workflowActionsProps: buildWorkflowActionsProps({
-    automatedActions,
-    currentUserId,
-    fileActions,
-    isDemo,
-    lecturerActions,
-    submissions,
-    submissionsCount: submissions.length,
-    viewState,
-  }),
+      automatedActions,
+      currentUserId,
+      fileActions,
+      isDemo,
+      lecturerActions,
+      submissions,
+      submissionsCount: submissions.length,
+      viewState,
+    }),
 });
+
+type BuildLiveAssignmentDetailScreenPropsArgs = Omit<BuildAssignmentDetailScreenPropsArgs, "isDemo">;
+
+export const buildLiveAssignmentDetailScreenProps = (args: BuildLiveAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps =>
+  buildAssignmentDetailScreenProps({
+    ...args,
+    isDemo: false,
+  });
+
+export const buildDemoAssignmentDetailScreenProps = (args: BuildLiveAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps =>
+  buildAssignmentDetailScreenProps({
+    ...args,
+    isDemo: true,
+  });

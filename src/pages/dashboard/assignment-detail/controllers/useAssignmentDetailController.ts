@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useAssignmentDetailData";
-import { buildAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
+import { buildLiveAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
 import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import { useLecturerWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useLecturerWorkflowController";
 import { useStudentWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useStudentWorkflowController";
@@ -63,7 +63,6 @@ export const useAssignmentDetailController = ({
 
   const currentUserId = user?.id ?? null;
   const currentUserEmail = user?.email ?? null;
-  const isDemo = false;
   const [pinnedVisibleSubmissionIds, setPinnedVisibleSubmissionIds] = useState<string[]>([]);
 
   const viewState = useAssignmentDetailViewState({
@@ -92,7 +91,7 @@ export const useAssignmentDetailController = ({
   const { automatedActions, lecturerActions } = useLecturerWorkflowController({
     assignment,
     grades,
-    isDemo,
+    isDemo: false,
     integrityReviews,
     moderationCases,
     reloadSubmissions,
@@ -124,7 +123,7 @@ export const useAssignmentDetailController = ({
     loading,
     navigate,
     refreshData,
-    screenProps: buildAssignmentDetailScreenProps({
+    screenProps: buildLiveAssignmentDetailScreenProps({
       assignment,
       automatedActions,
       backHref,
@@ -133,7 +132,6 @@ export const useAssignmentDetailController = ({
       fileActions: studentWorkflow,
       grades,
       integrityCard: viewState.integrityCard,
-      isDemo: false,
       lecturerActions,
       moderationCases,
       navigate,
