@@ -66,6 +66,9 @@ const rewriteDashboardLinkForDemo = (to: string) => {
   if (to.startsWith("/dashboard/institutional")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
+  if (to.startsWith("/dashboard/assignments/")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
   return to;
 };
 
@@ -273,7 +276,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
 
       if (destination) {
         navigate(
-          `/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}?source=notification&focus=${destination.focus}`,
+          `/demo/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}?source=notification&focus=${destination.focus}`,
           destination.redirected
             ? {
                 state: {
@@ -286,7 +289,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
         return;
       }
 
-      navigate(`/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}`);
+      navigate(`/demo/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}`);
       return;
     }
 

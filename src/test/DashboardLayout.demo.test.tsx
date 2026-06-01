@@ -135,7 +135,7 @@ describe("DashboardLayout demo mode", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Synthetic AI grading ready/i }));
 
     expect(mocks.navigate).toHaveBeenCalledWith(
-      "/dashboard/assignments/demo-assignment-policy-brief?source=notification&focus=release-follow-up",
+      "/demo/dashboard/assignments/demo-assignment-policy-brief?source=notification&focus=release-follow-up",
       expect.objectContaining({
         state: expect.objectContaining({
           redirectedFromNotification: expect.objectContaining({

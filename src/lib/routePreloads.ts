@@ -134,6 +134,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/AssignmentDetail"),
     paths: [],
   },
+  demoAssignmentDetail: {
+    loader: () => import("@/pages/dashboard/DemoAssignmentDetail"),
+    paths: [],
+  },
   studentProfile: {
     loader: () => import("@/pages/dashboard/StudentProfile"),
     paths: [],

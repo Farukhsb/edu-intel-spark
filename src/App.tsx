@@ -49,6 +49,7 @@ const StudentGrades = lazy(routeLoaders.studentGrades);
 const DemoStudentGrades = lazy(routeLoaders.demoStudentGrades);
 const Assignments = lazy(routeLoaders.assignments);
 const AssignmentDetail = lazy(routeLoaders.assignmentDetail);
+const DemoAssignmentDetail = lazy(routeLoaders.demoAssignmentDetail);
 const StudentProfile = lazy(routeLoaders.studentProfile);
 const AccreditationDashboard = lazy(routeLoaders.accreditationDashboard);
 const ExternalExaminerExport = lazy(routeLoaders.externalExaminerExport);
@@ -289,6 +290,7 @@ const App = () => (
               <Route path="/demo/dashboard/moderation" element={<DemoDashboardRoute allowedRole="lecturer"><DemoModerationDashboard /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/external-examiner" element={<DemoDashboardRoute><DemoExternalExaminerExport /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/institutional" element={<DemoDashboardRoute><DemoInstitutionalInsights /></DemoDashboardRoute>} />
+              <Route path="/demo/dashboard/assignments/:id" element={<DemoDashboardRoute><DemoAssignmentDetail /></DemoDashboardRoute>} />
               <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
               <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
               <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />

@@ -41,7 +41,8 @@ export const useAssignmentDetailController = ({
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
-  const backHref = searchParams.get("from") === "overview" ? "/dashboard" : "/dashboard/assignments";
+  const dashboardBaseHref = isDemo ? "/demo/dashboard" : "/dashboard";
+  const backHref = searchParams.get("from") === "overview" ? dashboardBaseHref : `${dashboardBaseHref}/assignments`;
 
   const {
     assignment,
