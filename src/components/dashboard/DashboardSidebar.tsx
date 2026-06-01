@@ -74,18 +74,18 @@ export const DashboardSidebar = ({
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-sidebar-border/80 bg-sidebar/95 text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none",
+        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-sidebar-border/80 bg-[linear-gradient(180deg,hsl(var(--sidebar-background)),hsl(var(--sidebar-background)/0.96)_38%,hsl(var(--sidebar-background)/0.99))] text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none",
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
       )}
     >
-      <div className="border-b border-sidebar-border/80 px-6 py-5">
+      <div className="border-b border-sidebar-border/80 bg-[linear-gradient(135deg,hsl(var(--sidebar-accent)/0.7),hsl(var(--sidebar-background))_70%)] px-6 py-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent/60 shadow-sm">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sidebar-border bg-[linear-gradient(135deg,hsl(var(--sidebar-primary)/0.22),hsl(var(--sidebar-accent)/0.8))] shadow-sm">
             <Brain className="h-5 w-5 text-sidebar-primary" />
           </div>
           <div className="min-w-0">
             <p className="font-display text-lg font-bold tracking-tight text-sidebar-primary-foreground">GradeAI</p>
-            <p className="text-xs text-sidebar-foreground/60">
+            <p className="text-xs text-sidebar-foreground/65">
               {isAdmin ? "Admin workspace" : isLecturerEquivalent ? "Academic workspace" : "Student workspace"}
             </p>
           </div>
@@ -108,13 +108,13 @@ export const DashboardSidebar = ({
                   key={section.label}
                   className={cn(
                     "space-y-2 rounded-2xl border border-transparent px-1 py-1 transition-colors",
-                    isExpanded && "border-sidebar-border/60 bg-sidebar-accent/15",
+                    isExpanded && "border-sidebar-border/60 bg-sidebar-accent/20 shadow-[inset_0_1px_0_hsl(var(--sidebar-primary)/0.12)]",
                   )}
                 >
                   <button
                     type="button"
                     onClick={() => toggleSection(section.label)}
-                    className="flex w-full items-start justify-between rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/30"
+                    className="flex w-full items-start justify-between rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/35"
                     aria-expanded={isExpanded}
                   >
                     <div className="min-w-0">
@@ -150,7 +150,7 @@ export const DashboardSidebar = ({
       </nav>
 
       <div className="border-t border-sidebar-border/80 p-4">
-        <div className="rounded-2xl border border-sidebar-border/80 bg-sidebar-accent/35 p-3">
+        <div className="rounded-2xl border border-sidebar-border/80 bg-[linear-gradient(180deg,hsl(var(--sidebar-accent)/0.6),hsl(var(--sidebar-accent)/0.34))] p-3">
           <div className="flex items-center gap-3 px-1 pb-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground shadow-sm">
               {profile?.full_name?.[0]?.toUpperCase() || "U"}
