@@ -106,7 +106,6 @@ export const useDemoAcademicIntegrityController = () => {
     item.analysisLimited && item.riskLevel === "low" ? "analysis limited" : `${item.riskLevel} risk`;
 
   return {
-    isDemo: true,
     loading,
     overview,
     totals,
