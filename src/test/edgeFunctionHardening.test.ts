@@ -217,7 +217,8 @@ describe("edge function hardening", () => {
   });
 
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
-    const source = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
+    const source = readRepoFile("supabase/functions/check-plagiarism/core.ts");
+    const wrapperSource = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
     const entrySource = readRepoFile("supabase/functions/check-plagiarism/index.ts");
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const bootstrapSource = readRepoFile("supabase/functions/check-plagiarism/bootstrap.ts");
@@ -231,6 +232,7 @@ describe("edge function hardening", () => {
     expect(entrySource).toContain("registerCheckPlagiarismEntrypoint");
     expect(bootstrapSource).toContain("createCheckPlagiarismHandler");
     expect(bootstrapSource).toContain("serve:");
+    expect(wrapperSource.trim()).toBe('export { createCheckPlagiarismHandler } from "./core.ts";');
     expect(source).toContain('const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";');
     expect(source).toContain("shouldRunInternalProvider &&");
     expect(source).toContain("requestedAssignmentId &&");
@@ -286,7 +288,7 @@ describe("edge function hardening", () => {
   });
 
   it("keeps the optional MOSS bridge non-fatal and backend-only", () => {
-    const source = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
+    const source = readRepoFile("supabase/functions/check-plagiarism/core.ts");
     const storeSource = readRepoFile("supabase/functions/_shared/integrity-findings-store.ts");
     const runnerSource = readRepoFile("supabase/functions/_shared/integrity-provider-runners.ts");
 
