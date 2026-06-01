@@ -43,11 +43,11 @@ export const SubmissionReviewDialog = ({
   open,
   reviewSubmission,
 }: SubmissionReviewDialogProps) => {
-  const { user, profile, isDemo: sessionIsDemo } = useAuth();
+  const { user, profile } = useAuth();
   const lastLoggedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!open || !reviewSubmission || sessionIsDemo) {
+    if (!open || !reviewSubmission) {
       return;
     }
 
@@ -84,7 +84,7 @@ export const SubmissionReviewDialog = ({
         hasAiDraft: Boolean(grade?.ai_score != null),
       },
     });
-  }, [grade?.ai_score, grade?.id, open, profile?.role, reviewSubmission, sessionIsDemo, user?.id]);
+  }, [grade?.ai_score, grade?.id, open, profile?.role, reviewSubmission, user?.id]);
 
   return (
   <Dialog open={open} onOpenChange={onOpenChange}>
