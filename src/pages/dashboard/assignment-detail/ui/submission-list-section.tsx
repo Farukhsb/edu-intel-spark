@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GradeSourceBadge } from "@/components/dashboard/GradeSourceBadge";
+import { CriterionBars } from "@/components/dashboard/CriterionBars";
 import { getSubmissionDisplayState } from "@/lib/assessmentWorkflow";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
@@ -251,15 +252,19 @@ const SubmissionCardItem = ({
             )}
 
             {(grade?.ai_breakdown?.length ?? 0) > 0 && (
-              <div className="flex flex-wrap gap-1 pt-1">
-                {(grade?.ai_breakdown ?? []).map((breakdown: AssignmentDetailBreakdown, index: number) => (
-                  <span key={index} className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
-                    {breakdown.criterion}: {breakdown.score}/{breakdown.max_score}
-                    {typeof breakdown.confidence_score === "number"
-                      ? ` - c${Math.round(breakdown.confidence_score * 100)}%`
-                      : ""}
-                  </span>
-                ))}
+              <div className="pt-1">
+                <CriterionBars
+                  compact
+                  items={(grade?.ai_breakdown ?? []).map((breakdown: AssignmentDetailBreakdown) => ({
+                    criterion: breakdown.criterion,
+                    score: breakdown.score,
+                    maxScore: breakdown.max_score,
+                    confidenceScore: breakdown.confidence_score ?? null,
+                    reviewRequired: breakdown.review_required ?? null,
+                    evidenceSnippet: breakdown.evidence_snippet ?? null,
+                    errorType: breakdown.error_type ?? null,
+                  }))}
+                />
               </div>
             )}
 

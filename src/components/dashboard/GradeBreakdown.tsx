@@ -3,7 +3,7 @@ import { Download, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { clampPercentage, getGradeTone, normalizeMaxScore } from "@/lib/gradePresentation";
+import { CriterionBars } from "@/components/dashboard/CriterionBars";
 
 type GradeBreakdownComponent = {
   name: string;
@@ -36,9 +36,6 @@ type BreakdownProps = {
   selectedDownloadError: string | null;
   onDownloadSubmission: () => void;
 };
-
-const getCriterionCommentary = (breakdownItem: { feedback?: string; comment?: string }) =>
-  breakdownItem.feedback ?? breakdownItem.comment ?? null;
 
 export const GradeBreakdown = ({
   assessment,
@@ -79,45 +76,22 @@ export const GradeBreakdown = ({
           </div>
         ) : null}
 
-        <div className="space-y-3">
-          {components.map((component) => {
+        <CriterionBars
+          items={components.map((component) => {
             const rawBreakdownItem = selectedGrade.breakdown?.find((item) => item.criterion === component.name);
-            const percent =
-              rawBreakdownItem != null
-                ? clampPercentage(rawBreakdownItem.score, rawBreakdownItem.max_score)
-                : component.score;
-            const commentary = rawBreakdownItem ? getCriterionCommentary(rawBreakdownItem) : null;
-            const criterionMax = rawBreakdownItem ? normalizeMaxScore(rawBreakdownItem.max_score) : 100;
 
-            return (
-              <div key={component.name} className="space-y-2 rounded-lg border bg-background p-3">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium">
-                    {component.name} ({component.weight}%)
-                  </span>
-                  <span className="font-medium">
-                    {rawBreakdownItem ? `${rawBreakdownItem.score}/${criterionMax}` : `${component.score}%`} ({percent}%)
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full ${
-                      getGradeTone(percent) === "success"
-                        ? "bg-success"
-                        : getGradeTone(percent) === "primary"
-                          ? "bg-primary"
-                          : "bg-destructive"
-                    }`}
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {commentary ?? "No criterion-level commentary was provided for this part of the rubric."}
-                </p>
-              </div>
-            );
+            return {
+              criterion: component.name,
+              score: rawBreakdownItem ? rawBreakdownItem.score : component.score,
+              maxScore: rawBreakdownItem ? rawBreakdownItem.max_score : 100,
+              weightPercent: component.weight,
+              detail:
+                rawBreakdownItem?.feedback ??
+                rawBreakdownItem?.comment ??
+                "No criterion-level commentary was provided for this part of the rubric.",
+            };
           })}
-        </div>
+        />
 
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-xl border bg-background p-3">
