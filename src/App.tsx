@@ -28,6 +28,7 @@ const ForcePasswordChange = lazy(routeLoaders.forcePasswordChange);
 const DashboardLayout = lazy(routeLoaders.dashboardLayout);
 const DemoDashboardLayout = lazy(routeLoaders.demoDashboardLayout);
 const LecturerOverview = lazy(routeLoaders.lecturerOverview);
+const DemoCohortAnalytics = lazy(routeLoaders.demoCohortAnalytics);
 const CohortAnalytics = lazy(routeLoaders.cohortAnalytics);
 const PerformanceTrends = lazy(routeLoaders.performanceTrends);
 const DemoPerformanceTrends = lazy(routeLoaders.demoPerformanceTrends);
@@ -280,6 +281,7 @@ const App = () => (
               <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
               <Route path="/demo/dashboard" element={<DemoDashboardRoute><DemoDashboardRouter /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/performance" element={<DemoDashboardRoute allowedRole="lecturer"><DemoPerformanceTrends /></DemoDashboardRoute>} />
+              <Route path="/demo/dashboard/cohort-analytics" element={<DemoDashboardRoute allowedRole="lecturer"><DemoCohortAnalytics /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/learning-outcomes" element={<DemoDashboardRoute allowedRole="lecturer"><DemoLearningOutcomes /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/integrity" element={<DemoDashboardRoute allowedRole="lecturer"><DemoAcademicIntegrity /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/accreditation" element={<DemoDashboardRoute><DemoAccreditationDashboard /></DemoDashboardRoute>} />

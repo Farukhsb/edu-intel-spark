@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { fetchCohortAnalyticsDataset } from "@/lib/data/cohort";
 import { computeRisk, type AtRiskStudent, type StudentTrajectory } from "@/lib/studentRisk";
 import {
@@ -20,7 +20,7 @@ import { getIntegrityReviewSummary } from "@/lib/integrityReviews";
 import { log } from "@/lib/logger";
 import { buildAbsoluteAppUrl, copyTextToClipboard } from "@/lib/clipboard";
 import { toast } from "sonner";
-import { DEMO_ASSIGNMENTS, DEMO_RECOMMENDATIONS, EMPTY_GRADE_DIST } from "./demoData";
+import { EMPTY_GRADE_DIST } from "./demoData";
 import type {
   AssignmentAnalytics,
   BadgeVariant,
@@ -29,7 +29,7 @@ import type {
   StudentDirectoryEntry,
 } from "./types";
 
-const buildGradeDistribution = (scores: number[]): GradeBand[] => [
+export const buildGradeDistribution = (scores: number[]): GradeBand[] => [
   { band: "1st (70+)", count: scores.filter((score) => score >= 70).length, fill: "hsl(152, 56%, 45%)" },
   { band: "2:1 (60-69)", count: scores.filter((score) => score >= 60 && score < 70).length, fill: "hsl(205, 80%, 55%)" },
   { band: "2:2 (50-59)", count: scores.filter((score) => score >= 50 && score < 60).length, fill: "hsl(38, 92%, 60%)" },
@@ -132,28 +132,26 @@ const normalizeCriterionBreakdown = (value: unknown): CriterionBreakdownItem[] =
     .map((item) => ({
       criterion: typeof item.criterion === "string" ? item.criterion : "Criterion",
       score: typeof item.score === "number" ? item.score : 0,
-      max_score: typeof item.max_score === "number" ? item.max_score : 0,
+  max_score: typeof item.max_score === "number" ? item.max_score : 0,
     }))
     .filter((item) => item.max_score > 0);
 };
 
 export const useCohortAnalyticsController = () => {
-  const { isDemo, user } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [moduleFilter, setModuleFilter] = useState("all");
-  const [modules, setModules] = useState<AssignmentAnalytics[]>(isDemo ? DEMO_ASSIGNMENTS : []);
+  const [modules, setModules] = useState<AssignmentAnalytics[]>([]);
   const [allScores, setAllScores] = useState<Array<{ assignmentId: string; score: number }>>([]);
-  const [recommendations, setRecommendations] = useState<CohortRecommendation[]>(
-    isDemo ? DEMO_RECOMMENDATIONS : [],
-  );
+  const [recommendations, setRecommendations] = useState<CohortRecommendation[]>([]);
   const [studentDirectory, setStudentDirectory] = useState<Record<string, StudentDirectoryEntry>>({});
-  const [loading, setLoading] = useState(!isDemo);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [actingId, setActingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isDemo || !user) return;
+    if (!user) return;
 
     const fetchData = async () => {
       setLoading(true);
@@ -347,21 +345,15 @@ export const useCohortAnalyticsController = () => {
     };
 
     void fetchData();
-  }, [isDemo, reloadKey, user]);
+  }, [reloadKey, user]);
 
   const gradeDistChart = useMemo(() => {
-    if (isDemo) {
-      return buildGradeDistribution(
-        moduleFilter === "all" ? [72, 69, 65, 61, 58, 54, 49, 43, 35] : [66, 61, 58, 49, 45, 39, 32],
-      );
-    }
-
     const relevantScores =
       moduleFilter === "all"
         ? allScores.map((item) => item.score)
         : allScores.filter((item) => item.assignmentId === moduleFilter).map((item) => item.score);
     return relevantScores.length > 0 ? buildGradeDistribution(relevantScores) : EMPTY_GRADE_DIST;
-  }, [allScores, isDemo, moduleFilter]);
+  }, [allScores, moduleFilter]);
 
   const filteredModules = useMemo(
     () => (moduleFilter === "all" ? modules : modules.filter((module) => module.id === moduleFilter)),
@@ -398,7 +390,7 @@ export const useCohortAnalyticsController = () => {
 
   const handleReview = async (recommendation: CohortRecommendation) => {
     setActingId(recommendation.id);
-    if (!isDemo && user) {
+    if (user) {
       try {
         await persistRecommendationAction({
           lecturerId: user.id,
@@ -422,7 +414,7 @@ export const useCohortAnalyticsController = () => {
 
   const handleDismiss = async (recommendation: CohortRecommendation) => {
     setActingId(recommendation.id);
-    if (!isDemo && user) {
+    if (user) {
       try {
         await persistRecommendationAction({
           lecturerId: user.id,
@@ -458,7 +450,7 @@ export const useCohortAnalyticsController = () => {
       return;
     }
 
-    if (targetIds.length > 0 && !isDemo) {
+    if (targetIds.length > 0) {
       const interventionTargets = targetIds
         .slice(0, 5)
         .map((studentId) => studentDirectory[studentId])
@@ -492,22 +484,20 @@ export const useCohortAnalyticsController = () => {
       }
     }
 
-    if (!isDemo) {
-      try {
-        await persistRecommendationAction({
-          lecturerId: user.id,
-          recommendation,
-          actionType: "create_intervention",
-          nextStatus: "actioned",
-        });
-      } catch (error) {
-        log.error("Failed to persist intervention action", error, {
-          recommendationId: recommendation.id,
-        });
-        toast.error("Intervention was created, but recommendation status could not be updated.");
-        setActingId(null);
-        return;
-      }
+    try {
+      await persistRecommendationAction({
+        lecturerId: user.id,
+        recommendation,
+        actionType: "create_intervention",
+        nextStatus: "actioned",
+      });
+    } catch (error) {
+      log.error("Failed to persist intervention action", error, {
+        recommendationId: recommendation.id,
+      });
+      toast.error("Intervention was created, but recommendation status could not be updated.");
+      setActingId(null);
+      return;
     }
 
     updateRecommendationStatus(recommendation, "actioned");

@@ -50,6 +50,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/CohortAnalytics"),
     paths: ["/dashboard/cohort-analytics"],
   },
+  demoCohortAnalytics: {
+    loader: () => import("@/pages/dashboard/DemoCohortAnalytics"),
+    paths: ["/demo/dashboard/cohort-analytics"],
+  },
   performanceTrends: {
     loader: () => import("@/pages/dashboard/PerformanceTrends"),
     paths: ["/dashboard/performance"],

@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import CohortAnalytics from "@/pages/dashboard/CohortAnalytics";
+import DemoCohortAnalytics from "@/pages/dashboard/DemoCohortAnalytics";
 
 const mocks = vi.hoisted(() => ({
   authState: {
@@ -40,7 +40,7 @@ vi.mock("recharts", () => ({
   Cell: () => <div />,
 }));
 
-describe("CohortAnalytics demo mode", () => {
+describe("DemoCohortAnalytics", () => {
   beforeEach(() => {
     mocks.authState.isDemo = true;
     mocks.authState.user = null;
@@ -54,7 +54,7 @@ describe("CohortAnalytics demo mode", () => {
   it("renders demo cohort insights with a reporting-readiness summary and skips Supabase reads", async () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <CohortAnalytics />
+        <DemoCohortAnalytics />
       </MemoryRouter>,
     );
 
