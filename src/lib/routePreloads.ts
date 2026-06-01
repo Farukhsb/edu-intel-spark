@@ -78,6 +78,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/StudentGrades"),
     paths: [],
   },
+  demoStudentGrades: {
+    loader: () => import("@/pages/dashboard/DemoStudentGrades"),
+    paths: [],
+  },
   improvementPlan: {
     loader: () => import("@/pages/dashboard/ImprovementPlan"),
     paths: ["/dashboard/improvements"],

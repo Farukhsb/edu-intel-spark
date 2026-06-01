@@ -36,6 +36,7 @@ const AdminDashboard = lazy(routeLoaders.adminDashboard);
 const InstitutionalInsights = lazy(routeLoaders.institutionalInsights);
 const LearningOutcomes = lazy(routeLoaders.learningOutcomes);
 const StudentGrades = lazy(routeLoaders.studentGrades);
+const DemoStudentGrades = lazy(routeLoaders.demoStudentGrades);
 const Assignments = lazy(routeLoaders.assignments);
 const AssignmentDetail = lazy(routeLoaders.assignmentDetail);
 const StudentProfile = lazy(routeLoaders.studentProfile);
@@ -130,6 +131,13 @@ const DashboardRouter = () => {
   if (isAdminRole(role)) return <AdminDashboard />;
   if (role === "lecturer") return <LecturerOverview />;
   return <StudentGrades />;
+};
+
+const DemoDashboardRouter = () => {
+  const { role } = useAuth();
+  if (isAdminRole(role)) return <AdminDashboard />;
+  if (role === "lecturer") return <LecturerOverview />;
+  return <DemoStudentGrades />;
 };
 
 const DashboardRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole?: AppRole }) => {
@@ -262,7 +270,7 @@ const App = () => (
                 }
               />
               <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
-              <Route path="/demo/dashboard" element={<DemoDashboardRoute><DashboardRouter /></DemoDashboardRoute>} />
+              <Route path="/demo/dashboard" element={<DemoDashboardRoute><DemoDashboardRouter /></DemoDashboardRoute>} />
               <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
               <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
               <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
