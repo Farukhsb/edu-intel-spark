@@ -21,6 +21,7 @@ import {
   DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
 } from "@/pages/dashboard/demoAssignments";
 import { GradeBreakdown } from "@/components/dashboard/GradeBreakdown";
+import { DemoGradeChat } from "@/components/dashboard/DemoGradeChat";
 import { GradeChat } from "@/components/dashboard/GradeChat";
 
 interface StudentGrade {
@@ -456,7 +457,15 @@ const StudentGrades = () => {
             onDownloadSubmission={() => void handleDownloadSubmission()}
           />
 
-          <GradeChat key={selectedRelease.submissionId} submissionId={selectedRelease.submissionId} gradeBreakdown={gradeBreakdown} />
+          {isDemo ? (
+            <DemoGradeChat
+              key={selectedRelease.submissionId}
+              submissionId={selectedRelease.submissionId}
+              gradeBreakdown={gradeBreakdown}
+            />
+          ) : (
+            <GradeChat key={selectedRelease.submissionId} submissionId={selectedRelease.submissionId} gradeBreakdown={gradeBreakdown} />
+          )}
         </>
       ) : null}
     </div>
