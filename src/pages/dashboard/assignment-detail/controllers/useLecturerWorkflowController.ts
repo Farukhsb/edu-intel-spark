@@ -54,7 +54,6 @@ export const useLecturerWorkflowController = ({
   const automatedActions = useAutomatedAssessmentActions({
     assignment,
     grades,
-    isDemo,
     reloadSubmissions,
     role,
     selected,

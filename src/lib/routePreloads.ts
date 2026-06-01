@@ -46,9 +46,17 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/LecturerOverview"),
     paths: [],
   },
+  demoLecturerOverview: {
+    loader: () => import("@/pages/dashboard/DemoLecturerOverview"),
+    paths: [],
+  },
   cohortAnalytics: {
     loader: () => import("@/pages/dashboard/CohortAnalytics"),
     paths: ["/dashboard/cohort-analytics"],
+  },
+  demoCohortAnalytics: {
+    loader: () => import("@/pages/dashboard/DemoCohortAnalytics"),
+    paths: ["/demo/dashboard/cohort-analytics"],
   },
   performanceTrends: {
     loader: () => import("@/pages/dashboard/PerformanceTrends"),
@@ -122,12 +130,24 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/Assignments"),
     paths: ["/dashboard/assignments"],
   },
+  demoAssignments: {
+    loader: () => import("@/pages/dashboard/DemoAssignmentsPage"),
+    paths: ["/demo/dashboard/assignments"],
+  },
   assignmentDetail: {
     loader: () => import("@/pages/dashboard/AssignmentDetail"),
     paths: [],
   },
+  demoAssignmentDetail: {
+    loader: () => import("@/pages/dashboard/DemoAssignmentDetail"),
+    paths: [],
+  },
   studentProfile: {
     loader: () => import("@/pages/dashboard/StudentProfile"),
+    paths: [],
+  },
+  demoStudentProfile: {
+    loader: () => import("@/pages/dashboard/DemoStudentProfile"),
     paths: [],
   },
   accreditationDashboard: {
@@ -184,5 +204,32 @@ export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {
 
   if (role === "student") {
     preloadRoute("/dashboard/assignments");
+  }
+};
+
+export const preloadDemoRoleRoutes = (role: AppRole | null | undefined) => {
+  if (role === "lecturer") {
+    void routeLoaders.demoLecturerOverview();
+    void routeLoaders.demoPerformanceTrends();
+    void routeLoaders.demoCohortAnalytics();
+    void routeLoaders.demoLearningOutcomes();
+    void routeLoaders.demoModerationDashboard();
+    void routeLoaders.demoAcademicIntegrity();
+    void routeLoaders.demoAssignments();
+    void routeLoaders.demoStudentProfile();
+    return;
+  }
+
+  if (role === "admin") {
+    void routeLoaders.demoInstitutionalInsights();
+    void routeLoaders.demoAccreditationDashboard();
+    void routeLoaders.demoExternalExaminerExport();
+    return;
+  }
+
+  if (role === "student") {
+    void routeLoaders.demoStudentGrades();
+    void routeLoaders.demoImprovementPlan();
+    void routeLoaders.demoAssignments();
   }
 };

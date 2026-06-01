@@ -106,10 +106,6 @@ export const useLecturerAssessmentActions = ({
   };
 
   const approveSubmission = async (submission: AssignmentDetailSubmission) => {
-    if (isDemo) {
-      toast.info("Approval is disabled in demo mode");
-      return false;
-    }
     if (!assignment || !user) return false;
 
     const grade = grades[submission.id];
@@ -217,10 +213,6 @@ export const useLecturerAssessmentActions = ({
   };
 
   const handleBulkApprove = async () => {
-    if (isDemo) {
-      toast.info("Approval is disabled in demo mode");
-      return;
-    }
     const toApprove = submissions.filter(
       (submission) =>
         selected.has(submission.id) &&
@@ -248,10 +240,6 @@ export const useLecturerAssessmentActions = ({
   };
 
   const queueFeedbackSummary = async (submission: AssignmentDetailSubmission) => {
-    if (isDemo) {
-      toast.info("Feedback summary export is disabled in demo mode");
-      return;
-    }
     const grade = grades[submission.id];
     if (!grade) {
       toast.error("No grade available to summarise");
@@ -290,10 +278,6 @@ Please review the feedback in the platform and let me know if you would like to 
   };
 
   const queueGradeReleaseNotification = async (submission: AssignmentDetailSubmission) => {
-    if (isDemo) {
-      toast.info("Release notes are disabled in demo mode");
-      return;
-    }
     if (!assignment) {
       toast.error("Could not save release note");
       return;
@@ -387,10 +371,6 @@ Please review the feedback in the platform and let me know if you would like to 
   };
 
   const handleReleaseGrades = async () => {
-    if (isDemo) {
-      toast.info("Grade release is disabled in demo mode");
-      return;
-    }
     const toRelease = submissions.filter(
       (submission) => selected.has(submission.id) && canReleaseStatus(submission.status),
     );
@@ -440,10 +420,6 @@ Please review the feedback in the platform and let me know if you would like to 
   };
 
   const handleSingleRelease = async (submission: AssignmentDetailSubmission) => {
-    if (isDemo) {
-      toast.info("Grade release is disabled in demo mode");
-      return;
-    }
     if (!assignment) {
       toast.error("Failed to release grade");
       return;
@@ -490,11 +466,6 @@ Please review the feedback in the platform and let me know if you would like to 
   ) => {
     const shouldOpenReview = options?.openReview ?? true;
     const shouldSkipReload = options?.skipReload ?? false;
-
-    if (isDemo) {
-      toast.info("Manual review is disabled in demo mode");
-      return false;
-    }
     if (!user) return false;
 
     try {
@@ -589,10 +560,6 @@ Please review the feedback in the platform and let me know if you would like to 
   };
 
   const saveReview = async () => {
-    if (isDemo) {
-      toast.info("Saving review is disabled in demo mode");
-      return;
-    }
     if (!reviewSubmission || !user) return;
     const existingGrade = reviewGradeOverride ?? grades[reviewSubmission.id] ?? null;
     const previousSubmission = submissions.find((submission) => submission.id === reviewSubmission.id);

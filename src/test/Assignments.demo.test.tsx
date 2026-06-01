@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { STARTER_ASSIGNMENT_TEMPLATES, SYNTHETIC_ASSIGNMENT_SETS } from "@/data/assignmentSets";
-import Assignments from "@/pages/dashboard/Assignments";
+import DemoAssignmentsPage from "@/pages/dashboard/DemoAssignmentsPage";
 import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
 const mocks = vi.hoisted(() => ({
@@ -48,14 +48,14 @@ describe("Assignments demo data isolation", () => {
   it("renders shared demo assignments without querying Supabase", async () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Assignments />
+        <DemoAssignmentsPage />
       </MemoryRouter>,
     );
 
     expect(await screen.findByText(DEMO_ASSIGNMENTS[0].title)).toBeInTheDocument();
     expect(screen.getByText("Demo Mode — synthetic sample data")).toBeInTheDocument();
-    expect(screen.getByText("Draft preparation position")).toBeInTheDocument();
-    expect(screen.getByText("Publish the next draft assignment when the brief and rubric are ready")).toBeInTheDocument();
+    expect(screen.getByText("Active marking position")).toBeInTheDocument();
+    expect(screen.getByText("Open the review queue and clear grading, approval, or release blockers")).toBeInTheDocument();
     expect(screen.getByText("Create assignment")).toBeInTheDocument();
     expect(screen.getByText("Review marking and integrity")).toBeInTheDocument();
     expect(screen.getByText("Reusable assignment sets")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("Assignments demo data isolation", () => {
     try {
       render(
         <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Assignments />
+          <DemoAssignmentsPage />
         </MemoryRouter>,
       );
 
@@ -116,7 +116,7 @@ describe("Assignments demo data isolation", () => {
 
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Assignments />
+        <DemoAssignmentsPage />
       </MemoryRouter>,
     );
 

@@ -1,8 +1,6 @@
 import { DashboardLoadingState } from "@/components/dashboard/PageStates";
-import {
-  AcademicIntegrityScreen,
-  decisionOptions,
-} from "./academic-integrity";
+import { decisionOptions } from "./academic-integrity";
+import { DemoAcademicIntegrityScreen } from "./academic-integrity/demo-screen";
 import { useDemoAcademicIntegrityController } from "./academic-integrity/useDemoAcademicIntegrityController";
 
 const DemoAcademicIntegrity = () => {
@@ -12,7 +10,7 @@ const DemoAcademicIntegrity = () => {
     return <DashboardLoadingState />;
   }
 
-  return <AcademicIntegrityScreen {...controller} decisionOptions={decisionOptions} />;
+  return <DemoAcademicIntegrityScreen {...controller} decisionOptions={decisionOptions} />;
 };
 
 export default DemoAcademicIntegrity;

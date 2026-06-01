@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import AssignmentDetail from "@/pages/dashboard/AssignmentDetail";
+import DemoAssignmentDetail from "@/pages/dashboard/DemoAssignmentDetail";
 import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
 const mocks = vi.hoisted(() => ({
@@ -53,11 +53,11 @@ describe("AssignmentDetail demo data isolation", () => {
   it("renders shared demo assignment workflow data without querying Supabase", async () => {
     render(
       <MemoryRouter
-        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
+        initialEntries={[`/demo/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+          <Route path="/demo/dashboard/assignments/:id" element={<DemoAssignmentDetail />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -90,11 +90,11 @@ describe("AssignmentDetail demo data isolation", () => {
 
     render(
       <MemoryRouter
-        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
+        initialEntries={[`/demo/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+          <Route path="/demo/dashboard/assignments/:id" element={<DemoAssignmentDetail />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -115,11 +115,11 @@ describe("AssignmentDetail demo data isolation", () => {
   it("falls forward to released submissions when an older moderation handoff has already completed", async () => {
     render(
       <MemoryRouter
-        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=moderation&focus=release-ready`]}
+        initialEntries={[`/demo/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=moderation&focus=release-ready`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+          <Route path="/demo/dashboard/assignments/:id" element={<DemoAssignmentDetail />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -140,11 +140,11 @@ describe("AssignmentDetail demo data isolation", () => {
   it("shows a lecturer notification-focus banner when opened from a workflow notice", async () => {
     render(
       <MemoryRouter
-        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=release-follow-up`]}
+        initialEntries={[`/demo/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=release-follow-up`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+          <Route path="/demo/dashboard/assignments/:id" element={<DemoAssignmentDetail />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -162,11 +162,11 @@ describe("AssignmentDetail demo data isolation", () => {
   it("falls forward from an older lecturer notice into the latest released workflow stage", async () => {
     render(
       <MemoryRouter
-        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=submission-review`]}
+        initialEntries={[`/demo/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=submission-review`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+          <Route path="/demo/dashboard/assignments/:id" element={<DemoAssignmentDetail />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -184,11 +184,11 @@ describe("AssignmentDetail demo data isolation", () => {
   it("does not offer stale approval actions on AI-graded submissions before first review", async () => {
     render(
       <MemoryRouter
-        initialEntries={[`/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
+        initialEntries={[`/demo/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}`]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+          <Route path="/demo/dashboard/assignments/:id" element={<DemoAssignmentDetail />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -202,13 +202,13 @@ describe("AssignmentDetail demo data isolation", () => {
     render(
       <MemoryRouter
         initialEntries={[
-          `/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=submission-review&from=overview`,
+          `/demo/dashboard/assignments/${DEMO_ASSIGNMENTS[0].id}?source=notification&focus=submission-review&from=overview`,
         ]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/dashboard" element={<div>Dashboard overview</div>} />
-          <Route path="/dashboard/assignments/:id" element={<AssignmentDetail />} />
+          <Route path="/demo/dashboard" element={<div>Demo dashboard overview</div>} />
+          <Route path="/demo/dashboard/assignments/:id" element={<DemoAssignmentDetail />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -217,6 +217,6 @@ describe("AssignmentDetail demo data isolation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
 
-    expect(await screen.findByText("Dashboard overview")).toBeInTheDocument();
+    expect(await screen.findByText("Demo dashboard overview")).toBeInTheDocument();
   });
 });

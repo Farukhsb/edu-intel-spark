@@ -19,7 +19,7 @@ import {
   type CommunicationMessage,
 } from "@/lib/communications";
 import { getStudentSupportNotificationDestination } from "@/lib/studentSupportWorkflow";
-import { preloadCommonRoleRoutes } from "@/lib/routePreloads";
+import { preloadDemoRoleRoutes } from "@/lib/routePreloads";
 import {
   adminSections,
   getDefaultSectionState,
@@ -36,7 +36,13 @@ const ADMIN_SIDEBAR_STATE_KEY = "gradeai:admin-sidebar-sections";
 const STUDENT_SIDEBAR_STATE_KEY = "gradeai:student-sidebar-sections";
 
 const rewriteDashboardLinkForDemo = (to: string) => {
+  if (to === "/dashboard" || to.startsWith("/dashboard?")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
   if (to.startsWith("/dashboard/performance")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/cohort-analytics")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
   if (to.startsWith("/dashboard/improvements")) {
@@ -58,6 +64,9 @@ const rewriteDashboardLinkForDemo = (to: string) => {
     return to.replace("/dashboard", "/demo/dashboard");
   }
   if (to.startsWith("/dashboard/institutional")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
+  if (to.startsWith("/dashboard/assignments")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
   return to;
@@ -202,7 +211,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
             params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
           }
           params.set("source", "support-notification");
-          navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
+          navigate(`/demo/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
             state: {
               notification: supportDestination.targetNotification ?? notification,
               redirectedFromSupportNotification: notification,
@@ -212,7 +221,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
         }
 
         if (supportDestination.kind === "assignments") {
-          navigate("/dashboard/assignments?source=support-notification", {
+          navigate("/demo/dashboard/assignments?source=support-notification", {
             state: {
               notification: supportDestination.targetNotification ?? notification,
               redirectedFromSupportNotification: notification,
@@ -226,7 +235,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
           params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
         }
         params.set("source", "support-notification");
-        navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
+        navigate(`/demo/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
           state: {
             notification: supportDestination.targetNotification ?? notification,
             redirectedFromSupportNotification: notification,
@@ -244,17 +253,17 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
           params.set("assignment", notification.relatedAssignmentId);
         }
         params.set("source", "notification");
-        navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`);
+        navigate(`/demo/dashboard${params.toString() ? `?${params.toString()}` : ""}`);
         return;
       }
 
       if (notification.category === "assignment-published") {
-        navigate("/dashboard/assignments");
+        navigate("/demo/dashboard/assignments");
         return;
       }
 
       if (notification.relatedAssignmentId) {
-        navigate("/dashboard/assignments");
+        navigate("/demo/dashboard/assignments");
         return;
       }
     }
@@ -267,7 +276,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
 
       if (destination) {
         navigate(
-          `/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}?source=notification&focus=${destination.focus}`,
+          `/demo/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}?source=notification&focus=${destination.focus}`,
           destination.redirected
             ? {
                 state: {
@@ -280,16 +289,16 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
         return;
       }
 
-      navigate(`/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}`);
+      navigate(`/demo/dashboard/assignments/${encodeURIComponent(notification.relatedAssignmentId)}`);
       return;
     }
 
     if (isLecturerEquivalent && notification.relatedStudentId) {
-      navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
+      navigate(`/demo/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
       return;
     }
 
-    navigate("/dashboard");
+    navigate("/demo/dashboard");
   };
 
   const links = roleSections.flatMap((section) => [...section.links]);
@@ -334,7 +343,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
   }, [openSections, sidebarStateKey]);
 
   useEffect(() => {
-    preloadCommonRoleRoutes(profile?.role);
+    preloadDemoRoleRoutes(profile?.role);
   }, [profile?.role]);
 
   const toggleSection = (label: string) => {

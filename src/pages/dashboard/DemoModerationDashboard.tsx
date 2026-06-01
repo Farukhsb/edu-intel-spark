@@ -1,5 +1,5 @@
 import { DashboardLoadingState } from "@/components/dashboard/PageStates";
-import { ModerationDashboardScreen } from "./moderation-dashboard";
+import { DemoModerationDashboardScreen } from "./moderation-dashboard/ui/demo-screen";
 import { useDemoModerationDashboardController } from "./moderation-dashboard/useDemoModerationDashboardController";
 
 const DemoModerationDashboard = () => {
@@ -8,7 +8,7 @@ const DemoModerationDashboard = () => {
   if (loading) {
     return <DashboardLoadingState />;
   }
-  return <ModerationDashboardScreen {...screenProps} />;
+  return <DemoModerationDashboardScreen {...screenProps} />;
 };
 
 export default DemoModerationDashboard;

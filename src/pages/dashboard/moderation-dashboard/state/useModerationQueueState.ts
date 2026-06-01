@@ -20,21 +20,15 @@ import {
 } from "@/lib/moderationWorkflow";
 import { toast } from "sonner";
 
-import {
-  buildDemoModeratorDrafts,
-  DEMO_LECTURERS,
-  DEMO_MODERATION_CASES,
-} from "../demoData";
+import { buildDemoModeratorDrafts } from "../demoData";
 
 type Profile = Tables<"profiles">;
 
 type UseModerationQueueStateArgs = {
-  isDemo: boolean;
   userId: string | undefined;
 };
 
 export const useModerationQueueState = ({
-  isDemo,
   userId,
 }: UseModerationQueueStateArgs) => {
   const [loading, setLoading] = useState(true);
@@ -59,15 +53,6 @@ export const useModerationQueueState = ({
   );
 
   const fetchCases = async () => {
-    if (isDemo) {
-      setLoadError(null);
-      setLecturers(DEMO_LECTURERS);
-      setCases(DEMO_MODERATION_CASES);
-      setModeratorDrafts(buildDemoModeratorDrafts(DEMO_MODERATION_CASES));
-      setLoading(false);
-      return;
-    }
-
     if (!userId) {
       setLoading(false);
       return;
@@ -90,7 +75,7 @@ export const useModerationQueueState = ({
 
   useEffect(() => {
     void fetchCases();
-  }, [isDemo, userId]);
+  }, [userId]);
 
   useEffect(() => {
     if (!selectedCase) return;

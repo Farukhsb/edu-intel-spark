@@ -13,11 +13,6 @@ import {
   insertModerationAuditEntry,
   type ModerationCaseView,
 } from "@/lib/moderationWorkflow";
-import {
-  createDemoGradeAuditLog,
-  createDemoModerationReview,
-  DEMO_LECTURERS,
-} from "@/pages/dashboard/moderation-dashboard/demoData";
 import { toast } from "sonner";
 
 const actionLabel = (action: ModerationAction) => formatSubmissionStatus(action);
@@ -28,7 +23,6 @@ type UseModerationActionsArgs = {
   bulkModeratorId: string;
   feedbackDraft: string;
   fetchCases: () => Promise<void>;
-  isDemo: boolean;
   moderatorDrafts: Record<string, string>;
   noteDraft: string;
   profileRole: string | null | undefined;
@@ -49,7 +43,6 @@ export const useModerationActions = ({
   bulkModeratorId,
   feedbackDraft,
   fetchCases,
-  isDemo,
   moderatorDrafts,
   noteDraft,
   profileRole,
@@ -99,30 +92,6 @@ export const useModerationActions = ({
 
   const assignModerator = async (item: ModerationCaseView | null) => {
     if (!item) return;
-
-    if (isDemo) {
-      const moderatorId = moderatorDrafts[item.moderationCase.id];
-      setCases((current) =>
-        current.map((entry) =>
-          entry.moderationCase.id === item.moderationCase.id
-            ? {
-                ...entry,
-                moderationCase: {
-                  ...entry.moderationCase,
-                  moderator_id: moderatorId,
-                  status: "moderation_in_progress",
-                },
-                moderator: DEMO_LECTURERS.find((lecturer) => lecturer.id === moderatorId) || entry.moderator,
-                submission: entry.submission
-                  ? { ...entry.submission, status: "moderation_in_progress" }
-                  : entry.submission,
-              }
-            : entry,
-        ),
-      );
-      toast.success("Demo moderator assigned.");
-      return;
-    }
 
     if (!item.submission) {
       toast.error("This case is missing its linked submission details, so moderator assignment cannot continue.");
@@ -205,34 +174,6 @@ export const useModerationActions = ({
       return;
     }
 
-    if (isDemo) {
-      setCases((current) =>
-        current.map((entry) =>
-          selectedCaseIds.includes(entry.moderationCase.id) &&
-          canBulkAssignModerator({
-            item: entry,
-            userId,
-          })
-            ? {
-                ...entry,
-                moderationCase: {
-                  ...entry.moderationCase,
-                  moderator_id: bulkModeratorId,
-                  status: "moderation_in_progress",
-                },
-                moderator: DEMO_LECTURERS.find((lecturer) => lecturer.id === bulkModeratorId) || entry.moderator,
-                submission: entry.submission
-                  ? { ...entry.submission, status: "moderation_in_progress" }
-                  : entry.submission,
-              }
-            : entry,
-        ),
-      );
-      setSelectedCaseIds([]);
-      toast.success(`${eligibleCases.length} moderation case(s) assigned in demo mode.`);
-      return;
-    }
-
     setSaving(true);
     try {
       for (const item of eligibleCases) {
@@ -279,47 +220,6 @@ export const useModerationActions = ({
     const eligibleCases = selectedBulkApprovalCases;
     if (eligibleCases.length === 0) {
       toast.error("Select at least one moderated case that you own before bulk approval.");
-      return;
-    }
-
-    if (isDemo) {
-      setCases((current) =>
-        current.map((entry) =>
-          selectedCaseIds.includes(entry.moderationCase.id) &&
-          canBulkApproveModeration({
-            item: entry,
-            userId,
-          })
-            ? {
-                ...entry,
-                moderationCase: {
-                  ...entry.moderationCase,
-                  approved_at: new Date().toISOString(),
-                },
-                submission: entry.submission ? { ...entry.submission, status: "approved" } : entry.submission,
-                grade: entry.grade
-                  ? {
-                      ...entry.grade,
-                      final_score:
-                        entry.moderationCase.final_agreed_score ??
-                        entry.grade.final_score ??
-                        entry.grade.lecturer_score ??
-                        entry.grade.ai_score ??
-                        null,
-                      final_feedback:
-                        entry.moderationCase.final_agreed_feedback ??
-                        entry.grade.final_feedback ??
-                        entry.grade.lecturer_feedback ??
-                        entry.grade.ai_feedback ??
-                        null,
-                    }
-                  : entry.grade,
-              }
-            : entry,
-        ),
-      );
-      setSelectedCaseIds([]);
-      toast.success(`${eligibleCases.length} moderation case(s) approved in demo mode.`);
       return;
     }
 
@@ -392,129 +292,6 @@ export const useModerationActions = ({
   };
 
   const saveAction = async (action: ModerationAction) => {
-    if (isDemo) {
-      if (!selectedCase) return;
-
-      const nextSubmissionStatus =
-        action === "approve"
-          ? "approved"
-          : action === "return"
-            ? "first_review"
-            : action === "escalate"
-              ? "escalated"
-              : "moderated";
-
-      setCases((current) =>
-        current.map((entry) => {
-          if (entry.moderationCase.id !== selectedCase.moderationCase.id) return entry;
-
-          const nextReview =
-            action === "approve"
-              ? entry.reviews
-              : [
-                  createDemoModerationReview({
-                    id: `demo-review-${Date.now()}`,
-                    moderation_case_id: entry.moderationCase.id,
-                    submission_id: entry.moderationCase.submission_id,
-                    reviewer_role: entry.moderationCase.lecturer_id === userId ? "lecturer" : "moderator",
-                    action,
-                    proposed_score:
-                      scoreDraft === ""
-                        ? entry.moderationCase.final_agreed_score ??
-                          entry.grade?.lecturer_score ??
-                          entry.grade?.ai_score ??
-                          null
-                        : Number(scoreDraft),
-                    proposed_feedback:
-                      feedbackDraft ||
-                      entry.moderationCase.final_agreed_feedback ||
-                      entry.grade?.lecturer_feedback ||
-                      entry.grade?.ai_feedback ||
-                      null,
-                    notes: noteDraft || null,
-                    created_at: new Date().toISOString(),
-                  }),
-                  ...entry.reviews,
-                ];
-
-          return {
-            ...entry,
-            moderationCase: {
-              ...entry.moderationCase,
-              status:
-                action === "approve"
-                  ? entry.moderationCase.status
-                  : action === "return"
-                    ? "first_review"
-                    : action === "escalate"
-                      ? "escalated"
-                      : "moderated",
-              final_agreed_score:
-                action === "return"
-                  ? entry.moderationCase.final_agreed_score
-                  : scoreDraft === ""
-                    ? entry.moderationCase.final_agreed_score ??
-                      entry.grade?.lecturer_score ??
-                      entry.grade?.ai_score ??
-                      null
-                    : Number(scoreDraft),
-              final_agreed_feedback:
-                action === "return"
-                  ? entry.moderationCase.final_agreed_feedback
-                  : feedbackDraft ||
-                    entry.moderationCase.final_agreed_feedback ||
-                    entry.grade?.lecturer_feedback ||
-                    entry.grade?.ai_feedback ||
-                    null,
-              moderator_score:
-                action === "return"
-                  ? entry.moderationCase.moderator_score
-                  : scoreDraft === ""
-                    ? entry.moderationCase.moderator_score ??
-                      entry.grade?.lecturer_score ??
-                      entry.grade?.ai_score ??
-                      null
-                    : Number(scoreDraft),
-              moderated_at:
-                action === "agree" || action === "adjust" ? new Date().toISOString() : entry.moderationCase.moderated_at,
-              approved_at: action === "approve" ? new Date().toISOString() : entry.moderationCase.approved_at,
-            },
-            submission: entry.submission ? { ...entry.submission, status: nextSubmissionStatus } : entry.submission,
-            grade:
-              action === "approve" && entry.grade
-                ? {
-                    ...entry.grade,
-                    final_score:
-                      scoreDraft === ""
-                        ? entry.grade.final_score ?? entry.grade.lecturer_score ?? entry.grade.ai_score ?? null
-                        : Number(scoreDraft),
-                    final_feedback:
-                      feedbackDraft ||
-                      entry.grade.final_feedback ||
-                      entry.grade.lecturer_feedback ||
-                      entry.grade.ai_feedback ||
-                      null,
-                  }
-                : entry.grade,
-            reviews: nextReview,
-            auditLog: [
-              createDemoGradeAuditLog({
-                id: `demo-audit-${Date.now()}`,
-                event_type: `moderation_${action}`,
-                reason: noteDraft || `Demo moderation action recorded: ${action}.`,
-                created_at: new Date().toISOString(),
-                submission_id: entry.moderationCase.submission_id,
-              }),
-              ...entry.auditLog,
-            ],
-          };
-        }),
-      );
-      toast.success(`${actionLabel(action)} saved in demo mode.`);
-      setSelectedCaseId(null);
-      return;
-    }
-
     if (!selectedCase || !userId) return;
     if (!selectedCase.submission) {
       toast.error("This case is missing its linked submission details, so moderation actions are unavailable.");

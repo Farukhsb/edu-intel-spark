@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { DashboardDemoBanner } from "@/components/dashboard/PageStates";
 import { safeFormatDate } from "@/lib/date";
 import { type IntegrityDecision } from "@/lib/integrityReviews";
 import type { useAcademicIntegrityController, decisionOptions } from "./useAcademicIntegrityController";
@@ -24,7 +23,6 @@ type AcademicIntegrityScreenProps = ReturnType<typeof useAcademicIntegrityContro
 };
 
 export const AcademicIntegrityScreen = ({
-  isDemo,
   overview,
   totals,
   integrityReadiness,
@@ -49,8 +47,6 @@ export const AcademicIntegrityScreen = ({
   decisionOptions,
 }: AcademicIntegrityScreenProps) => (
   <div className="space-y-6 animate-fade-in">
-    {isDemo && <DashboardDemoBanner label="Viewing demo academic integrity data" />}
-
     <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
       <CardHeader>
         <CardTitle className="text-base">Integrity Focus</CardTitle>

@@ -76,6 +76,9 @@ export const AssignmentsScreen = ({
 }: AssignmentsScreenProps) => {
   if (loading) return <DashboardLoadingState />;
 
+  const dashboardBaseHref = isDemo ? "/demo/dashboard" : "/dashboard";
+  const assignmentsBaseHref = isDemo ? "/demo/dashboard/assignments" : "/dashboard/assignments";
+
   return (
     <div className="space-y-6 animate-fade-in">
       {isDemo && <DashboardDemoBanner label="Demo Mode — synthetic sample data" />}
@@ -431,14 +434,24 @@ export const AssignmentsScreen = ({
                       {role === "student" && studentState && isStudentGradeVisible(studentState.status) && (
                         <Button size="sm" asChild>
                           <Link
-                            to={`/dashboard?assignment=${encodeURIComponent(assignment.id)}&submission=${encodeURIComponent(studentState.submissionId)}&source=assignment-detail`}
+                            to={`${dashboardBaseHref}?assignment=${encodeURIComponent(assignment.id)}&submission=${encodeURIComponent(studentState.submissionId)}&source=assignment-detail`}
                           >
                             Open Released Result
                           </Link>
                         </Button>
                       )}
                       <Button size="sm" variant="outline" asChild>
-                        <Link to={role === "lecturer" ? lecturerWorkflowTarget?.href ?? `/dashboard/assignments/${assignment.id}` : `/dashboard/assignments/${assignment.id}`}>
+                        <Link
+                          to={
+                            role === "lecturer"
+                              ? lecturerWorkflowTarget?.href
+                                ? (isDemo
+                                    ? lecturerWorkflowTarget.href.replace("/dashboard", "/demo/dashboard")
+                                    : lecturerWorkflowTarget.href)
+                                : `${assignmentsBaseHref}/${assignment.id}`
+                              : `${assignmentsBaseHref}/${assignment.id}`
+                          }
+                        >
                           {role === "lecturer"
                             ? lecturerWorkflowTarget?.label ?? "Open Workflow"
                             : studentState

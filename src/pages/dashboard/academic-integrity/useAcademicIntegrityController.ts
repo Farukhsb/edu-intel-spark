@@ -223,7 +223,6 @@ export const useAcademicIntegrityController = () => {
     item.analysisLimited && item.riskLevel === "low" ? "analysis limited" : `${item.riskLevel} risk`;
 
   return {
-    isDemo: false,
     loading,
     overview,
     totals,
