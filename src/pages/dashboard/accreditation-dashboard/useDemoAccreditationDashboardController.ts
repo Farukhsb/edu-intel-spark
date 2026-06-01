@@ -25,7 +25,6 @@ type DemoAccreditationDashboardSummary = {
 };
 
 type DemoAccreditationDashboardController = {
-  isDemo: true;
   activeTab: string;
   setActiveTab: (value: string) => void;
   loading: false;
@@ -77,7 +76,6 @@ export const useDemoAccreditationDashboardController = (): DemoAccreditationDash
   }, [nssMetrics, qaaMetrics, tefIndicators]);
 
   return {
-    isDemo: true,
     activeTab,
     setActiveTab,
     loading: false,

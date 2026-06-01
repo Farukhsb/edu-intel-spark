@@ -26,7 +26,6 @@ const MetricBar = ({ value, className = "h-2" }: { value: number; className?: st
 type AccreditationDashboardScreenProps = ReturnType<typeof useDemoAccreditationDashboardController>;
 
 export const AccreditationDashboardScreen = ({
-  isDemo,
   activeTab,
   setActiveTab,
   loadError,
@@ -44,9 +43,9 @@ export const AccreditationDashboardScreen = ({
   openAssignmentOversight,
 }: AccreditationDashboardScreenProps) => (
   <div className="space-y-6 animate-fade-in">
-    {isDemo && <DashboardDemoBanner label="Viewing demo accreditation data" />}
+    <DashboardDemoBanner label="Viewing demo accreditation data" />
 
-    {!isDemo && qaaMetrics.length === 0 && (
+    {qaaMetrics.length === 0 && (
       <DashboardEmptyState
         title={loadError ? "Accreditation data unavailable" : "No accreditation data yet"}
         description={
