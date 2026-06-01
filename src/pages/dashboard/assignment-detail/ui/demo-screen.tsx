@@ -11,10 +11,8 @@ import {
   AssignmentReadinessCard,
   AssignmentRubricCard,
 } from "@/pages/dashboard/assignment-detail/ui/presentation";
-import {
-  SubmissionListSection,
-  WorkflowActionsSection,
-} from "@/pages/dashboard/assignment-detail/ui/sections";
+import { SubmissionListSection } from "@/pages/dashboard/assignment-detail/ui/sections";
+import { WorkflowActionsSection as DemoWorkflowActionsSection } from "@/pages/dashboard/assignment-detail/ui/demo-workflow-actions-section";
 import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
 import type { WorkflowRubricCriterion } from "@/types/academic";
 
@@ -50,7 +48,7 @@ export interface DemoAssignmentDetailScreenProps {
   reviewDialogProps: SubmissionReviewDialogProps;
   rubric: WorkflowRubricCriterion[];
   submissionListProps: ComponentProps<typeof SubmissionListSection>;
-  workflowActionsProps: ComponentProps<typeof WorkflowActionsSection>;
+  workflowActionsProps: ComponentProps<typeof DemoWorkflowActionsSection>;
   heroCardProps: ComponentProps<typeof AssignmentHeroCard>;
   readinessCardProps: ComponentProps<typeof AssignmentReadinessCard>;
 }
@@ -89,7 +87,7 @@ export const DemoAssignmentDetailScreen = ({
 
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
       <div className="space-y-6">
-        <WorkflowActionsSection {...workflowActionsProps} />
+        <DemoWorkflowActionsSection {...workflowActionsProps} />
         <SubmissionListSection {...submissionListProps} />
 
         {moderationReleaseFocus && isLecturer && (

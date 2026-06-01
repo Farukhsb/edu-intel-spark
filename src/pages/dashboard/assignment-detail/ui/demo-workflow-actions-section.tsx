@@ -181,6 +181,11 @@ export const WorkflowActionsSection = ({
         <CardTitle className="text-base">Workflow Actions</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isDemo && isLecturer && (
+          <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+            Action controls stay visible so reviewers can follow the real lecturer workflow. In demo mode they are read-only, and the synthetic submissions below already cover AI grading, moderation, release, and integrity-review examples.
+          </div>
+        )}
         {!isLecturer ? (
           <>
             <input ref={fileInputRef} type="file" accept={submissionFileAccept} className="hidden" onChange={handleStudentSubmit} />
@@ -218,7 +223,7 @@ export const WorkflowActionsSection = ({
                 </div>
                 <Button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading || !studentSubmissionAvailability.canSubmit || !currentUserId}
+                  disabled={isDemo || uploading || !studentSubmissionAvailability.canSubmit || !currentUserId}
                   className="w-full sm:w-fit"
                 >
                   {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
@@ -238,14 +243,14 @@ export const WorkflowActionsSection = ({
               onChange={handleBulkUpload}
             />
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <Button onClick={() => bulkInputRef.current?.click()} disabled={uploading} className="justify-start">
+              <Button onClick={() => bulkInputRef.current?.click()} disabled={isDemo || uploading} className="justify-start">
                 <Upload className="mr-2 h-4 w-4" />
                 {uploading ? "Uploading..." : "Upload submissions"}
               </Button>
               <Button
                 variant="outline"
                 onClick={handlePlagiarismCheck}
-                disabled={checkingPlagiarism || submissionsCount < 1}
+                disabled={isDemo || checkingPlagiarism || submissionsCount < 1}
                 className="justify-start"
               >
                 {checkingPlagiarism ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />}
@@ -254,7 +259,7 @@ export const WorkflowActionsSection = ({
               <Button
                 variant="secondary"
                 onClick={handleAIGrade}
-                disabled={!selectedWorkflowState.hasRegradable || grading || selectedSize === 0}
+                disabled={isDemo || !selectedWorkflowState.hasRegradable || grading || selectedSize === 0}
                 className="justify-start"
               >
                 {grading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
@@ -264,6 +269,7 @@ export const WorkflowActionsSection = ({
                 variant="default"
                 onClick={selectedWorkflowState.hasReleaseReady ? handleReleaseGrades : handleBulkApprove}
                 disabled={
+                  isDemo ||
                   selectedSize === 0 ||
                   (!selectedWorkflowState.hasReleaseReady && !selectedWorkflowState.hasApprovable)
                 }
