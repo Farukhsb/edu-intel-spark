@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { buildAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
 import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
-import { useLecturerWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useLecturerWorkflowController";
-import { useStudentWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useStudentWorkflowController";
+import { useDemoAutomatedAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoAutomatedAssessmentActions";
+import { useDemoLecturerAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoLecturerAssessmentActions";
+import { useDemoSubmissionActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoSubmissionActions";
+import { useSubmissionFileActions } from "@/pages/dashboard/assignment-detail/workflows/useSubmissionFileActions";
 import { useDemoAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useDemoAssignmentDetailData";
 import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui";
 import type { Profile } from "@/contexts/AuthContext";
@@ -12,7 +14,6 @@ import type { User } from "@supabase/supabase-js";
 
 type DemoAssignmentDetailControllerArgs = {
   demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
-  hasUser: boolean;
   id: string | undefined;
   profile: Profile | null;
   role: string | null;
@@ -30,7 +31,6 @@ type DemoAssignmentDetailControllerResult = {
 
 export const useDemoAssignmentDetailController = ({
   demoAssignmentSet,
-  hasUser,
   id,
   profile,
   role,
@@ -54,12 +54,9 @@ export const useDemoAssignmentDetailController = ({
     refreshData,
     reloadSubmissions,
     setModerationCases,
-    setPlagiarismFlags,
-    setPlagiarismSummary,
   } = useDemoAssignmentDetailData({
     id,
     role,
-    hasUser,
   });
 
   const currentUserId = user?.id ?? profile?.id ?? null;
@@ -80,32 +77,20 @@ export const useDemoAssignmentDetailController = ({
     submissions,
   });
 
-  const studentWorkflow = useStudentWorkflowController({
-    assignment,
-    assignmentId: id ?? null,
-    isDemo: true,
-    profile,
-    reloadSubmissions,
-    submissions,
-    user,
-  });
-
-  const { automatedActions, lecturerActions } = useLecturerWorkflowController({
+  const studentWorkflow = useDemoSubmissionActions({ assignmentId: id ?? null });
+  const submissionFileActions = useSubmissionFileActions();
+  const automatedActions = useDemoAutomatedAssessmentActions();
+  const lecturerActions = useDemoLecturerAssessmentActions({
     assignment,
     grades,
     integrityReviews,
-    isDemo: true,
     moderationCases,
     reloadSubmissions,
-    role,
     selected: viewState.selected,
     setModerationCases,
-    setPlagiarismFlags,
-    setPlagiarismSummary,
-    setPinnedVisibleSubmissionIds,
     setSelected: viewState.setSelected,
     submissions,
-    user,
+    user: user ? { id: user.id } : null,
   });
 
   if (!assignment) {
@@ -131,7 +116,10 @@ export const useDemoAssignmentDetailController = ({
       backHref,
       currentUserId,
       demoAssignmentSet,
-      fileActions: studentWorkflow,
+      fileActions: {
+        ...studentWorkflow,
+        ...submissionFileActions,
+      },
       grades,
       integrityCard: viewState.integrityCard,
       isDemo: true,

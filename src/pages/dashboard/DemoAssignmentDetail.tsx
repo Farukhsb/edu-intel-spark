@@ -15,7 +15,6 @@ const DemoAssignmentDetail = () => {
 
   const { assignment, loadError, loading, refreshData, screenProps } = useDemoAssignmentDetailController({
     demoAssignmentSet,
-    hasUser: Boolean(user),
     id,
     profile,
     role,

@@ -21,7 +21,6 @@ interface UseLecturerWorkflowControllerArgs {
   assignment: AssignmentDetailAssignment | null;
   grades: Record<string, Grade>;
   integrityReviews: Record<string, IntegrityReview>;
-  isDemo: boolean;
   moderationCases: Record<string, ModerationCase>;
   reloadSubmissions: () => Promise<void>;
   role: string | null;
@@ -41,7 +40,6 @@ export const useLecturerWorkflowController = ({
   assignment,
   grades,
   integrityReviews,
-  isDemo,
   moderationCases,
   reloadSubmissions,
   role,
@@ -57,7 +55,6 @@ export const useLecturerWorkflowController = ({
   const automatedActions = useAutomatedAssessmentActions({
     assignment,
     grades,
-    isDemo,
     reloadSubmissions,
     role,
     selected,
@@ -73,7 +70,6 @@ export const useLecturerWorkflowController = ({
     assignment,
     grades,
     integrityReviews,
-    isDemo,
     moderationCases,
     reloadSubmissions,
     selected,

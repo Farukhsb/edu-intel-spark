@@ -18,7 +18,6 @@ interface StudentWorkflowProfile {
 interface UseStudentWorkflowControllerArgs {
   assignment: AssignmentDetailAssignment | null;
   assignmentId: string | null;
-  isDemo: boolean;
   profile: StudentWorkflowProfile | null;
   reloadSubmissions: () => Promise<void>;
   submissions: AssignmentDetailSubmission[];
@@ -28,7 +27,6 @@ interface UseStudentWorkflowControllerArgs {
 export const useStudentWorkflowController = ({
   assignment,
   assignmentId,
-  isDemo,
   profile,
   reloadSubmissions,
   submissions,
@@ -37,7 +35,6 @@ export const useStudentWorkflowController = ({
   const submissionActions = useSubmissionActions({
     assignment,
     assignmentId,
-    isDemo,
     user,
     profile,
     submissions,

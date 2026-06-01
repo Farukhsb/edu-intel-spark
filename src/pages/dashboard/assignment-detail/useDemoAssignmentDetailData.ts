@@ -31,10 +31,9 @@ const toAssignmentDetailBreakdown = (value: unknown): AssignmentDetailBreakdown[
 interface UseDemoAssignmentDetailDataArgs {
   id?: string;
   role: string | null | undefined;
-  hasUser: boolean;
 }
 
-export const useDemoAssignmentDetailData = ({ id, role, hasUser }: UseDemoAssignmentDetailDataArgs) => {
+export const useDemoAssignmentDetailData = ({ id, role }: UseDemoAssignmentDetailDataArgs) => {
   const [assignment, setAssignment] = useState<AssignmentDetailAssignment | null>(null);
   const [submissions, setSubmissions] = useState<AssignmentDetailSubmission[]>([]);
   const [grades, setGrades] = useState<Record<string, Grade>>({});
@@ -88,7 +87,7 @@ export const useDemoAssignmentDetailData = ({ id, role, hasUser }: UseDemoAssign
   }, [id, role]);
 
   const loadAssignment = useCallback(async () => {
-    if (!id || !hasUser) return;
+    if (!id) return;
 
     setLoading(true);
     setLoadError(null);
@@ -117,7 +116,7 @@ export const useDemoAssignmentDetailData = ({ id, role, hasUser }: UseDemoAssign
     setPlagiarismFlags(DEMO_ASSIGNMENT_INTEGRITY_FLAGS[id] ?? []);
     setPlagiarismSummary(DEMO_ASSIGNMENT_INTEGRITY_SUMMARIES[id] ?? "");
     setLoading(false);
-  }, [hasUser, id, role]);
+  }, [id, role]);
 
   useEffect(() => {
     void loadAssignment();

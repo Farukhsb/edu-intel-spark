@@ -28,17 +28,15 @@ interface SubmissionActionProfile {
 interface UseSubmissionActionsArgs {
   assignment: AssignmentDetailAssignment | null;
   assignmentId: string | null;
-  isDemo: boolean;
   user: SubmissionActionUser | null;
   profile: SubmissionActionProfile | null;
-  submissions: AssignmentDetailSubmission[];
+  submissions: AssignmentDetailSubmission[]; 
   reloadSubmissions: () => Promise<void>;
 }
 
 export const useSubmissionActions = ({
   assignment,
   assignmentId,
-  isDemo,
   user,
   profile,
   submissions,
@@ -50,11 +48,6 @@ export const useSubmissionActions = ({
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
   const handleStudentSubmit = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (isDemo) {
-      toast.info("Submission upload is disabled in demo mode");
-      e.target.value = "";
-      return;
-    }
     const file = e.target.files?.[0];
     if (!file || !assignmentId || !assignment || !user?.id) {
       e.target.value = "";
@@ -117,11 +110,6 @@ export const useSubmissionActions = ({
   };
 
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    if (isDemo) {
-      toast.info("Bulk upload is disabled in demo mode");
-      e.target.value = "";
-      return;
-    }
     const files = e.target.files;
     if (!files || !assignment || !user?.id) return;
     setUploading(true);

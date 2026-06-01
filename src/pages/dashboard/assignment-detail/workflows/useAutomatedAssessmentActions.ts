@@ -46,7 +46,6 @@ export { persistGradedSubmissionResult } from "./automatedAssessmentShared";
 interface UseAutomatedAssessmentActionsArgs {
   assignment: AssignmentDetailAssignment | null;
   grades: Record<string, Grade>;
-  isDemo: boolean;
   reloadSubmissions: () => Promise<void>;
   role: string | null;
   selected: Set<string>;
@@ -61,7 +60,6 @@ interface UseAutomatedAssessmentActionsArgs {
 export const useAutomatedAssessmentActions = ({
   assignment,
   grades,
-  isDemo,
   reloadSubmissions,
   role,
   selected,
@@ -84,10 +82,6 @@ export const useAutomatedAssessmentActions = ({
 
   const runAIGrade = async (selectedSubmissionIds: Set<string>) => {
     const selectedAtActionTime = new Set(selectedSubmissionIds);
-    if (isDemo) {
-      toast.info("AI grading is disabled in demo mode");
-      return;
-    }
     const toGrade = submissions.filter(
       (submission) => selectedAtActionTime.has(submission.id) && isRegradableWorkflowStatus(submission.status),
     );
@@ -417,10 +411,6 @@ export const useAutomatedAssessmentActions = ({
   };
 
   const handlePlagiarismCheck = async () => {
-    if (isDemo) {
-      toast.info("Integrity checks are disabled in demo mode");
-      return;
-    }
     if (!assignment) return;
     setCheckingPlagiarism(true);
     try {

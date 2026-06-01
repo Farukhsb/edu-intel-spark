@@ -82,7 +82,6 @@ export const useAssignmentDetailController = ({
   const studentWorkflow = useStudentWorkflowController({
     assignment,
     assignmentId: id ?? null,
-    isDemo: false,
     profile,
     reloadSubmissions,
     submissions,
@@ -93,7 +92,6 @@ export const useAssignmentDetailController = ({
     assignment,
     grades,
     integrityReviews,
-    isDemo: false,
     moderationCases,
     reloadSubmissions,
     role,
