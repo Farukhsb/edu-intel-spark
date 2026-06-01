@@ -3,6 +3,13 @@ export {
   buildHeroCardProps,
   buildReadinessCardProps,
 } from "@/pages/dashboard/assignment-detail/screen-props/buildHeaderCardProps";
-export { buildReviewDialogProps } from "@/pages/dashboard/assignment-detail/screen-props/buildReviewDialogProps";
+export {
+  buildDemoReviewDialogProps,
+  buildReviewDialogProps,
+} from "@/pages/dashboard/assignment-detail/screen-props/buildReviewDialogProps";
 export { buildSubmissionListProps } from "@/pages/dashboard/assignment-detail/screen-props/buildSubmissionListProps";
-export { buildWorkflowActionsProps } from "@/pages/dashboard/assignment-detail/screen-props/buildWorkflowActionsProps";
+export { buildDemoSubmissionListProps } from "@/pages/dashboard/assignment-detail/screen-props/buildSubmissionListProps";
+export {
+  buildDemoWorkflowActionsProps,
+  buildWorkflowActionsProps,
+} from "@/pages/dashboard/assignment-detail/screen-props/buildWorkflowActionsProps";

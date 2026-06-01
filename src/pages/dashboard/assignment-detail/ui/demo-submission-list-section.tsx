@@ -112,7 +112,6 @@ const SubmissionCardItem = ({
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
-  sendToModeration,
   gradingRecoveryIssue,
 }: {
   submission: AssignmentDetailSubmission;
@@ -132,7 +131,6 @@ const SubmissionCardItem = ({
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
-  sendToModeration: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   gradingRecoveryIssue?: SubmissionGradingRecoveryIssue;
 }) => {
   const submissionDisplay = getSubmissionDisplayState({
@@ -300,7 +298,7 @@ const SubmissionCardItem = ({
           {isLecturer && (
             <div className="flex flex-wrap gap-2 lg:justify-end">
               {submissionDisplay.showFeedbackSummary && (
-                <Button size="sm" variant="ghost" onClick={() => void queueFeedbackSummary(submission)}>
+                <Button size="sm" variant="ghost" disabled={false} onClick={() => void queueFeedbackSummary(submission)}>
                   <Sparkles className="mr-1 h-3 w-3" /> Feedback summary
                 </Button>
               )}
@@ -314,21 +312,12 @@ const SubmissionCardItem = ({
                   <Edit className="mr-1 h-3 w-3" /> First review
                 </Button>
               )}
-              {(submission.status === "first_review" || submission.status === "under_review") && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={isDemo}
-                  onClick={() => void sendToModeration(submission)}
-                >
-                  <Send className="mr-1 h-3 w-3" /> Send to moderation
-                </Button>
-              )}
               {submissionDisplay.showApprove && (
                 <Button
                   data-testid={`submission-approve-${submission.id}`}
                   size="sm"
                   variant="outline"
+                  disabled={false}
                   onClick={async () => {
                     try {
                       const approved = await approveSubmission(submission);
@@ -350,6 +339,7 @@ const SubmissionCardItem = ({
                   data-testid={`submission-release-${submission.id}`}
                   size="sm"
                   variant="default"
+                  disabled={false}
                   onClick={async () => {
                     try {
                       await releaseSubmission(submission);
@@ -366,6 +356,7 @@ const SubmissionCardItem = ({
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={false}
                   onClick={() => void queueGradeReleaseNotification(submission)}
                 >
                   <Send className="mr-1 h-3 w-3" /> Send release note
@@ -405,7 +396,6 @@ export const SubmissionListSection = ({
   queueFeedbackSummary,
   queueGradeReleaseNotification,
   openReleasedResult,
-  sendToModeration,
   moderationReleaseHandoffState,
   activeQueueFocus,
   focusQueue,
@@ -431,12 +421,11 @@ export const SubmissionListSection = ({
   queueFeedbackSummary: (submission: AssignmentDetailSubmission) => Promise<void>;
   queueGradeReleaseNotification: (submission: AssignmentDetailSubmission) => Promise<void>;
   openReleasedResult: (submission: AssignmentDetailSubmission) => void;
-  sendToModeration: (submission: AssignmentDetailSubmission) => Promise<boolean>;
   moderationReleaseHandoffState: ModerationReleaseHandoffState;
   activeQueueFocus: AssignmentQueueFocusValue | null;
   focusQueue: (focus: AssignmentQueueFocusValue) => void;
   clearQueueFocus: () => void;
-  }) => {
+}) => {
   const manualReviewSubmissions = submissions.filter((submission) => submission.status === "under_review");
   const visibleManualReviewCount = filteredSubmissions.filter(
     (submission) => submission.status === "under_review",
@@ -589,7 +578,6 @@ export const SubmissionListSection = ({
                 queueFeedbackSummary={queueFeedbackSummary}
                 queueGradeReleaseNotification={queueGradeReleaseNotification}
                 openReleasedResult={openReleasedResult}
-                sendToModeration={sendToModeration}
               />
             ))}
           </div>

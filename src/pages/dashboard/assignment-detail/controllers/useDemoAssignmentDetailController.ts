@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { buildAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
+import { buildDemoAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
 import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import { useDemoAutomatedAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoAutomatedAssessmentActions";
 import { useDemoLecturerAssessmentActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoLecturerAssessmentActions";
 import { useDemoSubmissionActions } from "@/pages/dashboard/assignment-detail/workflows/useDemoSubmissionActions";
 import { useSubmissionFileActions } from "@/pages/dashboard/assignment-detail/workflows/useSubmissionFileActions";
 import { useDemoAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useDemoAssignmentDetailData";
-import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui";
+import type { DemoAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui/demo-screen";
 import type { Profile } from "@/contexts/AuthContext";
 import type { User } from "@supabase/supabase-js";
 
 type DemoAssignmentDetailControllerArgs = {
-  demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
+  demoAssignmentSet: DemoAssignmentDetailScreenProps["demoAssignmentSet"];
   id: string | undefined;
   profile: Profile | null;
   role: string | null;
@@ -26,7 +26,7 @@ type DemoAssignmentDetailControllerResult = {
   loading: boolean;
   navigate: ReturnType<typeof useNavigate>;
   refreshData: () => Promise<void>;
-  screenProps: AssignmentDetailScreenProps | null;
+  screenProps: DemoAssignmentDetailScreenProps | null;
 };
 
 export const useDemoAssignmentDetailController = ({
@@ -110,7 +110,7 @@ export const useDemoAssignmentDetailController = ({
     loading,
     navigate,
     refreshData,
-    screenProps: buildAssignmentDetailScreenProps({
+    screenProps: buildDemoAssignmentDetailScreenProps({
       assignment,
       automatedActions,
       backHref,
@@ -122,7 +122,6 @@ export const useDemoAssignmentDetailController = ({
       },
       grades,
       integrityCard: viewState.integrityCard,
-      isDemo: true,
       lecturerActions,
       moderationCases,
       navigate,

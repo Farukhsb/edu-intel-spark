@@ -1,25 +1,21 @@
-import { Suspense, lazy, type ComponentProps } from "react";
+import type { ComponentProps } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 import {
+  AssignmentDemoBanner,
+  AssignmentDemoSetCard,
+  AssignmentDemoWorkflowCard,
   AssignmentFocusCard,
   AssignmentHeroCard,
   AssignmentIntegrityCard,
   AssignmentReadinessCard,
   AssignmentRubricCard,
 } from "@/pages/dashboard/assignment-detail/ui/presentation";
-import {
-  SubmissionListSection,
-  WorkflowActionsSection,
-} from "@/pages/dashboard/assignment-detail/ui/sections";
-import type { SubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/review-dialog";
+import { DemoSubmissionReviewDialog } from "@/pages/dashboard/assignment-detail/ui/demo-review-dialog";
+import { SubmissionListSection as DemoSubmissionListSection } from "@/pages/dashboard/assignment-detail/ui/demo-submission-list-section";
+import { WorkflowActionsSection as DemoWorkflowActionsSection } from "@/pages/dashboard/assignment-detail/ui/demo-workflow-actions-section";
+import type { DemoSubmissionReviewDialogProps } from "@/pages/dashboard/assignment-detail/ui/demo-review-dialog";
 import type { WorkflowRubricCriterion } from "@/types/academic";
-
-const SubmissionReviewDialog = lazy(() =>
-  import("@/pages/dashboard/assignment-detail/ui/review-dialog").then((module) => ({
-    default: module.SubmissionReviewDialog,
-  })),
-);
 
 type DemoAssignmentSet = {
   label: string;
@@ -32,8 +28,9 @@ type FocusState = {
   title: string;
 };
 
-export interface AssignmentDetailScreenProps {
+export interface DemoAssignmentDetailScreenProps {
   assignmentNotificationFocusState: FocusState | null;
+  demoAssignmentSet: DemoAssignmentSet | null;
   integrityCardProps: ComponentProps<typeof AssignmentIntegrityCard> | null;
   isLecturer: boolean;
   moderationReleaseFocus: boolean;
@@ -43,16 +40,17 @@ export interface AssignmentDetailScreenProps {
   onClearQueueFocus: () => void;
   onClearModerationFocus: () => void;
   onClearNotificationFocus: () => void;
-  reviewDialogProps: SubmissionReviewDialogProps;
+  reviewDialogProps: DemoSubmissionReviewDialogProps;
   rubric: WorkflowRubricCriterion[];
-  submissionListProps: ComponentProps<typeof SubmissionListSection>;
-  workflowActionsProps: ComponentProps<typeof WorkflowActionsSection>;
+  submissionListProps: ComponentProps<typeof DemoSubmissionListSection>;
+  workflowActionsProps: ComponentProps<typeof DemoWorkflowActionsSection>;
   heroCardProps: ComponentProps<typeof AssignmentHeroCard>;
   readinessCardProps: ComponentProps<typeof AssignmentReadinessCard>;
 }
 
-export const AssignmentDetailScreen = ({
+export const DemoAssignmentDetailScreen = ({
   assignmentNotificationFocusState,
+  demoAssignmentSet,
   integrityCardProps,
   isLecturer,
   moderationReleaseFocus,
@@ -68,14 +66,24 @@ export const AssignmentDetailScreen = ({
   workflowActionsProps,
   heroCardProps,
   readinessCardProps,
-}: AssignmentDetailScreenProps) => (
+}: DemoAssignmentDetailScreenProps) => (
   <div className="space-y-6 animate-fade-in">
+    <AssignmentDemoBanner />
+    {demoAssignmentSet && isLecturer && (
+      <AssignmentDemoSetCard
+        label={demoAssignmentSet.label}
+        name={demoAssignmentSet.name}
+        reviewerSummary={demoAssignmentSet.reviewerSummary}
+      />
+    )}
+    {isLecturer && <AssignmentDemoWorkflowCard />}
+
     <AssignmentHeroCard {...heroCardProps} />
 
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
       <div className="space-y-6">
-        <WorkflowActionsSection {...workflowActionsProps} />
-        <SubmissionListSection {...submissionListProps} />
+        <DemoWorkflowActionsSection {...workflowActionsProps} />
+        <DemoSubmissionListSection {...submissionListProps} />
 
         {moderationReleaseFocus && isLecturer && (
           <AssignmentFocusCard
@@ -137,10 +145,6 @@ export const AssignmentDetailScreen = ({
       </div>
     </div>
 
-    {reviewDialogProps.open ? (
-      <Suspense fallback={null}>
-        <SubmissionReviewDialog {...reviewDialogProps} />
-      </Suspense>
-    ) : null}
+    {reviewDialogProps.open ? <DemoSubmissionReviewDialog {...reviewDialogProps} /> : null}
   </div>
 );

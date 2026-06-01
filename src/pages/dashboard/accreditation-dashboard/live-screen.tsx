@@ -9,13 +9,14 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DashboardDemoBanner, DashboardEmptyState } from "@/components/dashboard/PageStates";
-import { DemoProgrammeReports } from "./demo-programmeReports";
-import { useDemoAccreditationDashboardController } from "./useDemoAccreditationDashboardController";
+import { DashboardEmptyState } from "@/components/dashboard/PageStates";
+import { ProgrammeReports } from "./programmeReports";
+import { useAccreditationDashboardController } from "./useAccreditationDashboardController";
 
 const MetricBar = ({ value, className = "h-2" }: { value: number; className?: string }) => (
   <div className={`overflow-hidden rounded-full bg-muted ${className}`}>
@@ -23,9 +24,9 @@ const MetricBar = ({ value, className = "h-2" }: { value: number; className?: st
   </div>
 );
 
-type AccreditationDashboardScreenProps = ReturnType<typeof useDemoAccreditationDashboardController>;
+type AccreditationDashboardScreenProps = ReturnType<typeof useAccreditationDashboardController>;
 
-export const AccreditationDashboardScreen = ({
+export const LiveAccreditationDashboardScreen = ({
   activeTab,
   setActiveTab,
   loadError,
@@ -43,16 +44,17 @@ export const AccreditationDashboardScreen = ({
   openAssignmentOversight,
 }: AccreditationDashboardScreenProps) => (
   <div className="space-y-6 animate-fade-in">
-    <DashboardDemoBanner label="Viewing demo accreditation data" />
-
-    {qaaMetrics.length === 0 && (
+    {!loadError && qaaMetrics.length === 0 && (
       <DashboardEmptyState
-        title={loadError ? "Accreditation data unavailable" : "No accreditation data yet"}
-        description={
-          loadError
-            ? "Accreditation metrics could not be loaded right now. Try again later."
-            : "Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading."
-        }
+        title="No accreditation data yet"
+        description="Accreditation metrics will auto-populate once you create assignments, upload submissions, and complete grading."
+      />
+    )}
+
+    {loadError && qaaMetrics.length === 0 && (
+      <DashboardEmptyState
+        title="Accreditation data unavailable"
+        description="Accreditation metrics could not be loaded right now. Try again later."
       />
     )}
 
@@ -352,7 +354,7 @@ export const AccreditationDashboardScreen = ({
       </TabsContent>
 
       <TabsContent value="programme" className="space-y-4">
-        {activeTab === "programme" ? <DemoProgrammeReports /> : null}
+        <ProgrammeReports />
       </TabsContent>
     </Tabs>
   </div>

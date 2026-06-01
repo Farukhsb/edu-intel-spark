@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 import { useDemoAssignmentDetailController } from "@/pages/dashboard/assignment-detail/controllers/useDemoAssignmentDetailController";
 import { getDemoAssignmentSetById } from "@/pages/dashboard/demoAssignments";
-import { AssignmentDetailScreen } from "@/pages/dashboard/assignment-detail/ui";
+import { DemoAssignmentDetailScreen } from "@/pages/dashboard/assignment-detail/ui/demo-screen";
 
 const DemoAssignmentDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -48,7 +48,7 @@ const DemoAssignmentDetail = () => {
     );
   }
 
-  return screenProps ? <AssignmentDetailScreen {...screenProps} /> : null;
+  return screenProps ? <DemoAssignmentDetailScreen {...screenProps} /> : null;
 };
 
 export default DemoAssignmentDetail;

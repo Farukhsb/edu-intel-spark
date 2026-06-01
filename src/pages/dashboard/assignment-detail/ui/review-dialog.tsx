@@ -23,7 +23,6 @@ export interface SubmissionReviewDialogProps {
   editFeedback: string;
   editScore: string;
   grade: Grade | null;
-  isDemo: boolean;
   onEditFeedbackChange: Dispatch<SetStateAction<string>>;
   onEditScoreChange: Dispatch<SetStateAction<string>>;
   onOpenChange: (open: boolean) => void;
@@ -37,7 +36,6 @@ export const SubmissionReviewDialog = ({
   editFeedback,
   editScore,
   grade,
-  isDemo,
   onEditFeedbackChange,
   onEditScoreChange,
   onOpenChange,
@@ -45,11 +43,11 @@ export const SubmissionReviewDialog = ({
   open,
   reviewSubmission,
 }: SubmissionReviewDialogProps) => {
-  const { user, profile, isDemo: sessionIsDemo } = useAuth();
+  const { user, profile } = useAuth();
   const lastLoggedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!open || !reviewSubmission || sessionIsDemo) {
+    if (!open || !reviewSubmission) {
       return;
     }
 
@@ -86,7 +84,7 @@ export const SubmissionReviewDialog = ({
         hasAiDraft: Boolean(grade?.ai_score != null),
       },
     });
-  }, [grade?.ai_score, grade?.id, open, profile?.role, reviewSubmission, sessionIsDemo, user?.id]);
+  }, [grade?.ai_score, grade?.id, open, profile?.role, reviewSubmission, user?.id]);
 
   return (
   <Dialog open={open} onOpenChange={onOpenChange}>
@@ -176,7 +174,7 @@ export const SubmissionReviewDialog = ({
             />
           </div>
           <div className="flex gap-2">
-            <Button data-testid="submission-review-save" onClick={onSave} disabled={isDemo} className="flex-1">
+            <Button data-testid="submission-review-save" onClick={onSave} className="flex-1">
               Save Review
             </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">

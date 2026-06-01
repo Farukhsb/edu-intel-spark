@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAssignmentDetailData } from "@/pages/dashboard/assignment-detail/useAssignmentDetailData";
-import { buildAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
+import { buildLiveAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/useAssignmentDetailScreenProps";
 import { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import { useLecturerWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useLecturerWorkflowController";
 import { useStudentWorkflowController } from "@/pages/dashboard/assignment-detail/controllers/useStudentWorkflowController";
@@ -121,16 +121,14 @@ export const useAssignmentDetailController = ({
     loading,
     navigate,
     refreshData,
-    screenProps: buildAssignmentDetailScreenProps({
+    screenProps: buildLiveAssignmentDetailScreenProps({
       assignment,
       automatedActions,
       backHref,
       currentUserId,
-      demoAssignmentSet: null,
       fileActions: studentWorkflow,
       grades,
       integrityCard: viewState.integrityCard,
-      isDemo: false,
       lecturerActions,
       moderationCases,
       navigate,

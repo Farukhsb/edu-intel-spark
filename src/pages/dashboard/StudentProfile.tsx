@@ -118,7 +118,7 @@ const getSupportNotificationToastCopy = (
 const StudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
-  const { user, isDemo } = useAuth();
+  const { user } = useAuth();
 
   const decodedStudentId = decodeURIComponent(studentId || "");
   const [loading, setLoading] = useState(true);
@@ -139,41 +139,6 @@ const StudentProfile = () => {
     const loadStudent = async () => {
       setLoading(true);
       setLoadError(null);
-
-      if (isDemo) {
-        setStudent({
-          name: "David Lee",
-          email: "david.lee@example.edu",
-          studentId: decodedStudentId,
-          studentRecordId: decodedStudentId,
-          modules: ["CS301", "CS205"],
-          averageGrade: 38,
-          latestGrade: 32,
-          riskScore: 78,
-          riskLevel: "critical",
-          reasons: ["Average below 40%", "Steep grade decline", "Predicted next: 29%"],
-          recommendation: "Urgent: schedule a 1-on-1 meeting, review fundamentals, and refer to support services.",
-          missedAssignments: [
-            {
-              id: "demo-missed",
-              title: "Algorithms Lab Reflection",
-              module_code: "CS205",
-              due_date: new Date().toISOString(),
-              max_score: 20,
-            },
-          ],
-          submissions: [],
-          chart: [
-            { assessment: "Assignment 1", grade: 65 },
-            { assessment: "Midterm", grade: 58 },
-            { assessment: "Assignment 2", grade: 45 },
-            { assessment: "Lab Report", grade: 38 },
-            { assessment: "Assignment 3", grade: 32 },
-          ],
-        });
-        setLoading(false);
-        return;
-      }
 
       try {
         const { assignments, submissions: allSubmissions, grades } = await fetchLecturerStudentProfileDataset(user.id);
@@ -251,7 +216,7 @@ const StudentProfile = () => {
     };
 
     void loadStudent();
-  }, [decodedStudentId, isDemo, reloadKey, user]);
+  }, [decodedStudentId, reloadKey, user]);
 
   const riskBadgeVariant = useMemo(() => {
     if (!student) return "outline";
@@ -270,7 +235,7 @@ const StudentProfile = () => {
   }, [student]);
 
   useEffect(() => {
-    if (!user?.id || !resolvedStudentRecordId || isDemo) return;
+    if (!user?.id || !resolvedStudentRecordId) return;
 
     const loadInterventions = async () => {
       const { data, error } = await fetchStudentInterventions(supabase, user.id, resolvedStudentRecordId);
@@ -287,7 +252,7 @@ const StudentProfile = () => {
     };
 
     void loadInterventions();
-  }, [decodedStudentId, isDemo, resolvedStudentRecordId, user?.id]);
+  }, [decodedStudentId, resolvedStudentRecordId, user?.id]);
 
   const handleAddIntervention = async () => {
     if (!interventionNote.trim()) return;
@@ -299,24 +264,6 @@ const StudentProfile = () => {
 
     if (!resolvedStudentRecordId) {
       toast.error("This student record is missing a database ID, so the intervention cannot be saved yet");
-      return;
-    }
-
-    if (isDemo) {
-      const nextEntry: InterventionEntry = {
-        id: `${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        type: interventionType,
-        note: interventionNote.trim(),
-        followUpDate: followUpDate || null,
-        status: interventionStatus,
-      };
-
-      setInterventions((current) => [nextEntry, ...current]);
-      setInterventionNote("");
-      setFollowUpDate("");
-      setInterventionType("email");
-      setInterventionStatus("in_progress");
       return;
     }
 
@@ -388,11 +335,6 @@ ${followUpDate ? `Follow-up date: ${safeFormatDate(followUpDate, "MMM d, yyyy")}
   };
 
   const queueAtRiskAlert = async () => {
-    if (isDemo) {
-      toast.success("Demo at-risk alert queued.");
-      return;
-    }
-
     if (!student || !resolvedStudentRecordId) {
       toast.error("Student record is not linked, so the alert cannot be saved correctly yet");
       return;
@@ -421,11 +363,6 @@ Please reply to arrange a short meeting so we can agree the most useful support 
   };
 
   const queueFollowUpReminder = async () => {
-    if (isDemo) {
-      toast.success("Demo follow-up reminder queued.");
-      return;
-    }
-
     if (!student || !resolvedStudentRecordId) {
       toast.error("Student record is not linked, so the reminder cannot be saved correctly yet");
       return;
@@ -455,14 +392,6 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
     interventionId: string,
     nextStatus: ManualInterventionStatus,
   ) => {
-    if (isDemo) {
-      setInterventions((current) =>
-        current.map((entry) => (entry.id === interventionId ? { ...entry, status: nextStatus } : entry)),
-      );
-      toast.success(nextStatus === "resolved" ? "Demo intervention resolved." : "Demo intervention reopened.");
-      return;
-    }
-
     const { data, error } = await updateStudentInterventionStatus(supabase, interventionId, nextStatus);
 
     if (error) {
@@ -581,8 +510,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
 
       <div className="grid gap-6 lg:grid-cols-2">
         <StudentMissedAssignmentsCard assignments={student.missedAssignments} />
-        <StudentInterventionFormCard
-          isDemo={isDemo}
+      <StudentInterventionFormCard
           canSave={Boolean(resolvedStudentRecordId)}
           interventionType={interventionType}
           interventionStatus={interventionStatus}

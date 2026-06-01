@@ -359,7 +359,6 @@ export const useAssignmentsController = ({
   return {
     loading,
     role,
-    isDemo: false,
     assignments,
     sortedAssignments,
     submissionStats,

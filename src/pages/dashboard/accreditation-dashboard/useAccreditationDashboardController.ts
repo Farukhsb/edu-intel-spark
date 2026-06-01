@@ -208,7 +208,6 @@ export const useAccreditationDashboardController = () => {
   };
 
   return {
-    isDemo: false,
     activeTab,
     setActiveTab,
     loading,

@@ -4,11 +4,15 @@ import {
   buildFocusStateProps,
   buildHeroCardProps,
   buildReadinessCardProps,
+  buildDemoReviewDialogProps,
   buildReviewDialogProps,
+  buildDemoSubmissionListProps,
   buildSubmissionListProps,
+  buildDemoWorkflowActionsProps,
   buildWorkflowActionsProps,
 } from "@/pages/dashboard/assignment-detail/screen-props";
-import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui";
+import type { AssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui/screen";
+import type { DemoAssignmentDetailScreenProps } from "@/pages/dashboard/assignment-detail/ui/demo-screen";
 import type { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import type {
   useAutomatedAssessmentActions,
@@ -26,7 +30,6 @@ interface BuildAssignmentDetailScreenPropsArgs {
   assignment: AssignmentDetailAssignment;
   backHref: string;
   currentUserId: string | null;
-  demoAssignmentSet: AssignmentDetailScreenProps["demoAssignmentSet"];
   fileActions: ReturnType<typeof useSubmissionActions> & {
     openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
   };
@@ -34,7 +37,6 @@ interface BuildAssignmentDetailScreenPropsArgs {
   integrityCard: {
     shouldShowCard: boolean;
   } & NonNullable<AssignmentDetailScreenProps["integrityCardProps"]>["integrityCard"];
-  isDemo: boolean;
   lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
   moderationCases: Record<string, ModerationCase>;
   navigate: NavigateFunction;
@@ -47,16 +49,14 @@ interface BuildAssignmentDetailScreenPropsArgs {
   automatedActions: ReturnType<typeof useAutomatedAssessmentActions>;
 }
 
-export const buildAssignmentDetailScreenProps = ({
+export const buildLiveAssignmentDetailScreenProps = ({
   assignment,
   automatedActions,
   backHref,
   currentUserId,
-  demoAssignmentSet,
   fileActions,
   grades,
   integrityCard,
-  isDemo,
   lecturerActions,
   moderationCases,
   navigate,
@@ -67,14 +67,13 @@ export const buildAssignmentDetailScreenProps = ({
   submissions,
   viewState,
 }: BuildAssignmentDetailScreenPropsArgs): AssignmentDetailScreenProps => ({
-  demoAssignmentSet,
   heroCardProps: buildHeroCardProps({
     assignment,
     backHref,
     navigate,
     viewState,
   }),
-  integrityCardProps: integrityCard.shouldShowCard
+    integrityCardProps: integrityCard.shouldShowCard
     ? {
         integrityCard,
         onClear: viewState.onClearIntegrityCard,
@@ -82,7 +81,6 @@ export const buildAssignmentDetailScreenProps = ({
         plagiarismSummary,
       }
     : null,
-  isDemo,
   ...buildFocusStateProps({
     navigate,
     searchPathname,
@@ -94,7 +92,6 @@ export const buildAssignmentDetailScreenProps = ({
   reviewDialogProps: buildReviewDialogProps({
     assignmentMaxScore: assignment.max_score,
     grades,
-    isDemo,
     lecturerActions,
   }),
   rubric: assignment.rubric ?? [],
@@ -103,7 +100,6 @@ export const buildAssignmentDetailScreenProps = ({
     automatedActions,
     fileActions,
     grades,
-    isDemo,
     lecturerActions,
     moderationCases,
     navigate,
@@ -116,10 +112,36 @@ export const buildAssignmentDetailScreenProps = ({
     automatedActions,
     currentUserId,
     fileActions,
-    isDemo,
     lecturerActions,
     submissions,
     submissionsCount: submissions.length,
     viewState,
+  }),
+});
+
+type BuildDemoAssignmentDetailScreenPropsArgs = BuildAssignmentDetailScreenPropsArgs & {
+  demoAssignmentSet: DemoAssignmentDetailScreenProps["demoAssignmentSet"];
+};
+
+export const buildDemoAssignmentDetailScreenProps = ({
+  demoAssignmentSet,
+  ...args
+}: BuildDemoAssignmentDetailScreenPropsArgs): DemoAssignmentDetailScreenProps => ({
+  demoAssignmentSet,
+  ...buildLiveAssignmentDetailScreenProps(args),
+  reviewDialogProps: buildDemoReviewDialogProps({
+    assignmentMaxScore: args.assignment.max_score,
+    grades: args.grades,
+    lecturerActions: args.lecturerActions,
+  }),
+  submissionListProps: buildDemoSubmissionListProps(args),
+  workflowActionsProps: buildDemoWorkflowActionsProps({
+    automatedActions: args.automatedActions,
+    currentUserId: args.currentUserId,
+    fileActions: args.fileActions,
+    lecturerActions: args.lecturerActions,
+    submissions: args.submissions,
+    submissionsCount: args.submissions.length,
+    viewState: args.viewState,
   }),
 });

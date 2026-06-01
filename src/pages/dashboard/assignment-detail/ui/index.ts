@@ -1,5 +1,7 @@
 export { AssignmentDetailScreen } from "./screen";
 export type { AssignmentDetailScreenProps } from "./screen";
+export { DemoAssignmentDetailScreen } from "./demo-screen";
+export type { DemoAssignmentDetailScreenProps } from "./demo-screen";
 export {
   AssignmentDemoBanner,
   AssignmentDemoSetCard,

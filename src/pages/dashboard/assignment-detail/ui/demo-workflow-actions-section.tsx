@@ -179,6 +179,11 @@ export const WorkflowActionsSection = ({
         <CardTitle className="text-base">Workflow Actions</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isLecturer && (
+          <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+            Action controls stay visible so reviewers can follow the real lecturer workflow. In demo mode they are read-only, and the synthetic submissions below already cover AI grading, moderation, release, and integrity-review examples.
+          </div>
+        )}
         {!isLecturer ? (
           <>
             <input ref={fileInputRef} type="file" accept={submissionFileAccept} className="hidden" onChange={handleStudentSubmit} />
@@ -261,10 +266,7 @@ export const WorkflowActionsSection = ({
               <Button
                 variant="default"
                 onClick={selectedWorkflowState.hasReleaseReady ? handleReleaseGrades : handleBulkApprove}
-                disabled={
-                  selectedSize === 0 ||
-                  (!selectedWorkflowState.hasReleaseReady && !selectedWorkflowState.hasApprovable)
-                }
+                disabled={selectedSize === 0 || (!selectedWorkflowState.hasReleaseReady && !selectedWorkflowState.hasApprovable)}
                 className="justify-start"
               >
                 {selectedWorkflowState.hasReleaseReady ? <Send className="mr-2 h-4 w-4" /> : <CheckCheck className="mr-2 h-4 w-4" />}
@@ -328,12 +330,16 @@ export const WorkflowActionsSection = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="submitted">Intake</SelectItem>
-                  <SelectItem value="ai_grading">AI in progress</SelectItem>
-                  <SelectItem value="ai_graded">AI graded / first review</SelectItem>
-                  <SelectItem value="under_review">Manual review</SelectItem>
-                  <SelectItem value="moderation_pending">Moderation</SelectItem>
-                  <SelectItem value="approved">Release ready</SelectItem>
+                  <SelectItem value="submitted">Submitted</SelectItem>
+                  <SelectItem value="ai_grading">AI grading</SelectItem>
+                  <SelectItem value="ai_graded">AI graded</SelectItem>
+                  <SelectItem value="first_review">First review</SelectItem>
+                  <SelectItem value="moderation_pending">Moderation pending</SelectItem>
+                  <SelectItem value="moderation_in_progress">Moderation in progress</SelectItem>
+                  <SelectItem value="moderated">Moderated</SelectItem>
+                  <SelectItem value="escalated">Escalated</SelectItem>
+                  <SelectItem value="under_review">Under review</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="released">Released</SelectItem>
                 </SelectContent>
               </Select>
