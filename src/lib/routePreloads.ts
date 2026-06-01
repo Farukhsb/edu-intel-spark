@@ -90,6 +90,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/LearningOutcomes"),
     paths: ["/dashboard/learning-outcomes"],
   },
+  demoLearningOutcomes: {
+    loader: () => import("@/pages/dashboard/DemoLearningOutcomes"),
+    paths: ["/demo/dashboard/learning-outcomes"],
+  },
   studentGrades: {
     loader: () => import("@/pages/dashboard/StudentGrades"),
     paths: [],

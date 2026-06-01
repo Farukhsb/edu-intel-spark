@@ -39,6 +39,7 @@ const ModerationDashboard = lazy(routeLoaders.moderationDashboard);
 const AdminDashboard = lazy(routeLoaders.adminDashboard);
 const InstitutionalInsights = lazy(routeLoaders.institutionalInsights);
 const LearningOutcomes = lazy(routeLoaders.learningOutcomes);
+const DemoLearningOutcomes = lazy(routeLoaders.demoLearningOutcomes);
 const StudentGrades = lazy(routeLoaders.studentGrades);
 const DemoStudentGrades = lazy(routeLoaders.demoStudentGrades);
 const Assignments = lazy(routeLoaders.assignments);
@@ -276,6 +277,7 @@ const App = () => (
               <Route path="/dashboard" element={<DashboardRoute><DashboardRouter /></DashboardRoute>} />
               <Route path="/demo/dashboard" element={<DemoDashboardRoute><DemoDashboardRouter /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/performance" element={<DemoDashboardRoute allowedRole="lecturer"><DemoPerformanceTrends /></DemoDashboardRoute>} />
+              <Route path="/demo/dashboard/learning-outcomes" element={<DemoDashboardRoute allowedRole="lecturer"><DemoLearningOutcomes /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/integrity" element={<DemoDashboardRoute allowedRole="lecturer"><DemoAcademicIntegrity /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/accreditation" element={<DemoDashboardRoute><DemoAccreditationDashboard /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/moderation" element={<DemoDashboardRoute allowedRole="lecturer"><DemoModerationDashboard /></DemoDashboardRoute>} />
