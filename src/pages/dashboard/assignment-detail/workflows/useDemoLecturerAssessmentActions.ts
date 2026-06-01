@@ -32,6 +32,7 @@ export const useDemoLecturerAssessmentActions = (_args: UseDemoLecturerAssessmen
   handleReleaseGrades: async () => undefined,
   handleSingleRelease: async () => undefined,
   openReview: () => undefined,
+  sendToModeration: async () => false,
   queueFeedbackSummary: async () => undefined,
   queueGradeReleaseNotification: async () => undefined,
   reviewOpen: false,

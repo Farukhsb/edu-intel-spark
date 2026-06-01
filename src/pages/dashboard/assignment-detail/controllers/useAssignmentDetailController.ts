@@ -63,6 +63,7 @@ export const useAssignmentDetailController = ({
 
   const currentUserId = user?.id ?? null;
   const currentUserEmail = user?.email ?? null;
+  const isDemo = false;
   const [pinnedVisibleSubmissionIds, setPinnedVisibleSubmissionIds] = useState<string[]>([]);
 
   const viewState = useAssignmentDetailViewState({
@@ -91,6 +92,7 @@ export const useAssignmentDetailController = ({
   const { automatedActions, lecturerActions } = useLecturerWorkflowController({
     assignment,
     grades,
+    isDemo,
     integrityReviews,
     moderationCases,
     reloadSubmissions,

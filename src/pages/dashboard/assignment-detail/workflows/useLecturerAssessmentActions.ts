@@ -38,6 +38,7 @@ interface LecturerAssessmentUser {
 interface UseLecturerAssessmentActionsArgs {
   assignment: AssignmentDetailAssignment | null;
   grades: Record<string, Grade>;
+  isDemo: boolean;
   integrityReviews: Record<string, IntegrityReview>;
   moderationCases: Record<string, ModerationCase>;
   reloadSubmissions: () => Promise<void>;
@@ -70,6 +71,7 @@ const toGradeRow = (grade: Grade): GradeRow => ({
 export const useLecturerAssessmentActions = ({
   assignment,
   grades,
+  isDemo,
   integrityReviews,
   moderationCases,
   reloadSubmissions,
@@ -262,6 +264,61 @@ export const useLecturerAssessmentActions = ({
       reason: moderationCase ? "Approved after moderation." : "Approved after first review.",
     });
     return true;
+  };
+
+  const sendToModeration = async (submission: AssignmentDetailSubmission) => {
+    if (isDemo) {
+      toast.info("Moderation handoff is disabled in demo mode");
+      return false;
+    }
+    if (!assignment || !user) return false;
+
+    const grade = grades[submission.id];
+    if (!grade) {
+      toast.error("No grade found to hand off");
+      return false;
+    }
+
+    if (submission.status === "moderation_pending" || submission.status === "moderation_in_progress" || submission.status === "escalated") {
+      toast.info("This submission is already in moderation");
+      return false;
+    }
+
+    try {
+      const { data, error } = await (supabase as any).rpc("send_submission_to_moderation", {
+        submission_id: submission.id,
+      });
+
+      if (error) throw error;
+
+      const moderationCase = data as ModerationCase | null;
+
+      if (moderationCase) {
+        setModerationCases((current) => ({ ...current, [submission.id]: moderationCase }));
+      }
+
+      await logModerationAuditEvent({
+        submissionId: submission.id,
+        gradeId: grade.id,
+        moderationCaseId: moderationCase?.id ?? null,
+        eventType: "moderation_handoff",
+        actorRole: "lecturer",
+        previousValues: { status: submission.status, lecturer_score: grade.lecturer_score },
+        newValues: { status: "moderation_pending", lecturer_score: grade.lecturer_score },
+        reason: "Lecturer sent the submission to moderation.",
+      });
+
+      toast.success("Submission sent to moderation");
+      setReviewOpen(false);
+      await reloadSubmissions();
+      return true;
+    } catch (error) {
+      log.error("Moderation handoff failed", error, {
+        submissionId: submission.id,
+      });
+      toast.error("Could not send to moderation");
+      return false;
+    }
   };
 
   const handleBulkApprove = async () => {
@@ -733,6 +790,7 @@ Please review the feedback in the platform and let me know if you would like to 
     handleReleaseGrades,
     handleSingleRelease,
     openReview,
+    sendToModeration,
     queueFeedbackSummary,
     queueGradeReleaseNotification,
     reviewOpen,
