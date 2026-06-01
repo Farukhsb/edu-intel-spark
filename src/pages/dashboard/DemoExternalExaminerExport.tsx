@@ -1,40 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, FileText, Shield, Users } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import { fetchExternalExaminerDataset } from "@/lib/data/academic";
-import { safeFormatDate } from "@/lib/date";
+import { DashboardDemoBanner } from "@/components/dashboard/PageStates";
 import { buildDetailedExternalExaminerCsv, buildExternalExaminerCsv } from "@/lib/externalExaminerExport";
-import { log } from "@/lib/logger";
+import { toast } from "sonner";
 import {
-  DashboardEmptyState,
-  DashboardLiveBanner,
-  DashboardLoadingState,
-} from "@/components/dashboard/PageStates";
-import type {
-  ExternalExaminerAssignmentRow,
-  ExternalExaminerGradeRow,
-  ExternalExaminerExportRow,
-} from "@/types/academic";
+  DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS,
+  DEMO_EXTERNAL_EXAMINER_EXPORT_DATA,
+} from "@/pages/dashboard/external-examiner-export/demoData";
 
-const EXPORTABLE_STATUSES = new Set(["moderated", "approved", "released"]);
-const MISSING_FIELD_LABEL = "Not recorded";
-
-const getClassification = (score: number | null): string => {
-  if (score == null) return "Not classified";
-  if (score >= 70) return "1st";
-  if (score >= 60) return "2:1";
-  if (score >= 50) return "2:2";
-  if (score >= 40) return "3rd";
-  return "Fail";
-};
-
-const getExportSummary = (rows: ExternalExaminerExportRow[]) => {
+const getExportSummary = (rows: typeof DEMO_EXTERNAL_EXAMINER_EXPORT_DATA) => {
   const scores = rows.map((row) => row.finalScore).filter((score): score is number => score != null);
   const averageScore = scores.length > 0 ? Math.round(scores.reduce((left, right) => left + right, 0) / scores.length) : 0;
   const passRate = scores.length > 0 ? Math.round((scores.filter((score) => score >= 40).length / scores.length) * 100) : 0;
@@ -50,15 +29,9 @@ const getExportSummary = (rows: ExternalExaminerExportRow[]) => {
   };
 };
 
-const ExternalExaminerExport = () => {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+const DemoExternalExaminerExport = () => {
   const [exporting, setExporting] = useState(false);
-  const [assignments, setAssignments] = useState<Array<{ id: string; title: string; moduleCode: string }>>([]);
   const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
-  const [exportData, setExportData] = useState<ExternalExaminerExportRow[]>([]);
-  const [hasSourceData, setHasSourceData] = useState(false);
-  const [loadError, setLoadError] = useState(false);
   const [includeOptions, setIncludeOptions] = useState({
     scores: true,
     feedback: true,
@@ -67,102 +40,12 @@ const ExternalExaminerExport = () => {
     studentIdentity: true,
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { assignments: assignmentRows, submissions: submissionRows, grades: gradeRows, profiles: profileRows } =
-          await fetchExternalExaminerDataset();
-        setHasSourceData(
-          assignmentRows.length > 0 || submissionRows.length > 0 || gradeRows.length > 0 || profileRows.length > 0,
-        );
-        setLoadError(false);
-
-        setAssignments(
-          assignmentRows.map((row) => ({
-            id: row.id,
-            title: row.title,
-            moduleCode: row.module_code || MISSING_FIELD_LABEL,
-          })),
-        );
-
-        const userMap = Object.fromEntries(
-          profileRows.map((row) => [row.id, row.full_name || row.email || "Unknown student"]),
-        ) as Record<string, string>;
-
-        const gradeMap = Object.fromEntries(
-          gradeRows.map((row) => [row.submission_id, row]),
-        ) as Record<string, ExternalExaminerGradeRow>;
-
-        const assignmentMap = Object.fromEntries(
-          assignmentRows.map((row) => [row.id, row]),
-        ) as Record<string, ExternalExaminerAssignmentRow>;
-
-        const data: ExternalExaminerExportRow[] = submissionRows
-          .filter((submission) => EXPORTABLE_STATUSES.has(submission.status || ""))
-          .map((row) => {
-            const grade = gradeMap[row.id];
-            const assignment = row.assignment_id ? assignmentMap[row.assignment_id] : undefined;
-            const finalScore = grade?.final_score ?? grade?.lecturer_score ?? grade?.ai_score ?? null;
-
-            return {
-              studentName: row.student_name || userMap[row.student_id || ""] || "Unknown",
-              studentEmail: row.student_email || MISSING_FIELD_LABEL,
-              assignmentTitle: assignment?.title || "Untitled assignment",
-              moduleCode: assignment?.module_code || MISSING_FIELD_LABEL,
-              aiScore: grade?.ai_score ?? null,
-              lecturerScore: grade?.lecturer_score ?? null,
-              finalScore,
-              gradeSource: grade?.grade_source ?? null,
-              aiFeedback: grade?.ai_feedback || "",
-              lecturerFeedback: grade?.lecturer_feedback || "",
-              finalFeedback: grade?.final_feedback || "",
-              status: row.status || "Status not recorded",
-              submittedAt: safeFormatDate(row.submitted_at, "yyyy-MM-dd", MISSING_FIELD_LABEL),
-              reviewedAt: safeFormatDate(grade?.reviewed_at, "yyyy-MM-dd", MISSING_FIELD_LABEL),
-              reviewedBy: grade?.reviewed_by ? userMap[grade.reviewed_by] || grade.reviewed_by : MISSING_FIELD_LABEL,
-              classification: getClassification(finalScore),
-            };
-          });
-
-        setExportData(data);
-      } catch (err) {
-        log.error("Failed to generate external examiner export", err);
-        setAssignments([]);
-        setExportData([]);
-        setHasSourceData(false);
-        setLoadError(true);
-      }
-      setLoading(false);
-    };
-
-    void fetchData();
-  }, [user?.id]);
-
   const filteredData = selectedAssignment === "all"
-    ? exportData
-    : exportData.filter((row) => row.assignmentTitle === assignments.find((assignment) => assignment.id === selectedAssignment)?.title);
+    ? DEMO_EXTERNAL_EXAMINER_EXPORT_DATA
+    : DEMO_EXTERNAL_EXAMINER_EXPORT_DATA.filter((row) =>
+        row.assignmentTitle === DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS.find((assignment) => assignment.id === selectedAssignment)?.title,
+      );
   const exportSummary = getExportSummary(filteredData);
-
-  const handleExport = (format: "csv" | "detailed") => {
-    setExporting(true);
-    try {
-      const csv = buildExternalExaminerCsv(filteredData, includeOptions);
-
-      if (format === "detailed") {
-        downloadCSV(
-          buildDetailedExternalExaminerCsv(filteredData, includeOptions),
-          `external_examiner_report_detailed_${new Date().toISOString().slice(0, 10)}.csv`,
-        );
-      } else {
-        downloadCSV(csv, `external_examiner_export_${new Date().toISOString().slice(0, 10)}.csv`);
-      }
-
-      toast.success("Export downloaded successfully");
-    } catch {
-      toast.error("Failed to generate export");
-    }
-    setExporting(false);
-  };
 
   const downloadCSV = (content: string, filename: string) => {
     const blob = new Blob([content], { type: "text/csv" });
@@ -174,31 +57,28 @@ const ExternalExaminerExport = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return <DashboardLoadingState />;
-  }
-
-  if (loadError) {
-    return (
-      <DashboardEmptyState
-        title="External examiner export unavailable"
-        description="External examiner data could not be loaded right now. Try again later."
-      />
-    );
-  }
-
-  if (!hasSourceData) {
-    return (
-      <DashboardEmptyState
-        title="No external examiner data yet"
-        description="This report populates after assignments, submissions, and grading records exist in the live dataset."
-      />
-    );
-  }
+  const handleExport = (format: "csv" | "detailed") => {
+    setExporting(true);
+    try {
+      const csv = buildExternalExaminerCsv(filteredData, includeOptions);
+      if (format === "detailed") {
+        downloadCSV(
+          buildDetailedExternalExaminerCsv(filteredData, includeOptions),
+          `external_examiner_report_detailed_${new Date().toISOString().slice(0, 10)}.csv`,
+        );
+      } else {
+        downloadCSV(csv, `external_examiner_export_${new Date().toISOString().slice(0, 10)}.csv`);
+      }
+      toast.success("Export downloaded successfully");
+    } catch {
+      toast.error("Failed to generate export");
+    }
+    setExporting(false);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <DashboardLiveBanner label="Viewing live examiner export records assembled from assignments, submissions, and grading data." />
+      <DashboardDemoBanner label="Viewing demo export data" />
 
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardContent className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
@@ -240,7 +120,7 @@ const ExternalExaminerExport = () => {
             <p className="mt-1 text-xs text-muted-foreground">
               {selectedAssignment === "all"
                 ? "All assignments"
-                : assignments.find((assignment) => assignment.id === selectedAssignment)?.title || "Filtered assignment"} | {filteredData.length} records ready for export
+                : DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS.find((assignment) => assignment.id === selectedAssignment)?.title || "Filtered assignment"} | {filteredData.length} records ready for export
             </p>
           </div>
         </CardContent>
@@ -259,7 +139,7 @@ const ExternalExaminerExport = () => {
                 <SelectTrigger><SelectValue placeholder="All assignments" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Assignments</SelectItem>
-                  {assignments.map((assignment) => (
+                  {DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS.map((assignment) => (
                     <SelectItem key={assignment.id} value={assignment.id}>
                       {assignment.title} ({assignment.moduleCode})
                     </SelectItem>
@@ -330,12 +210,12 @@ const ExternalExaminerExport = () => {
                       <td className="py-2">{row.studentName}</td>
                       <td className="max-w-[150px] truncate py-2">{row.assignmentTitle}</td>
                       <td className="py-2">{row.moduleCode}</td>
-                      <td className="py-2 text-right">{row.aiScore ?? MISSING_FIELD_LABEL}</td>
-                      <td className="py-2 text-right">{row.lecturerScore ?? MISSING_FIELD_LABEL}</td>
-                      <td className="py-2 text-right font-medium">{row.finalScore ?? MISSING_FIELD_LABEL}</td>
+                      <td className="py-2 text-right">{row.aiScore ?? "Not recorded"}</td>
+                      <td className="py-2 text-right">{row.lecturerScore ?? "Not recorded"}</td>
+                      <td className="py-2 text-right font-medium">{row.finalScore ?? "Not recorded"}</td>
                       <td className="py-2">
                         <Badge variant={row.gradeSource === "lecturer_uploaded" ? "outline" : row.gradeSource === "lecturer_reviewed" ? "default" : "secondary"} className="text-xs">
-                          {row.gradeSource ?? MISSING_FIELD_LABEL}
+                          {row.gradeSource ?? "Not recorded"}
                         </Badge>
                       </td>
                       <td className="py-2"><Badge variant="outline" className="text-xs">{row.classification}</Badge></td>
@@ -362,4 +242,4 @@ const ExternalExaminerExport = () => {
   );
 };
 
-export default ExternalExaminerExport;
+export default DemoExternalExaminerExport;

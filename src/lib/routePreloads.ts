@@ -74,6 +74,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/DemoModerationDashboard"),
     paths: ["/demo/dashboard/moderation"],
   },
+  demoExternalExaminerExport: {
+    loader: () => import("@/pages/dashboard/DemoExternalExaminerExport"),
+    paths: ["/demo/dashboard/external-examiner"],
+  },
   moderationDashboard: {
     loader: () => import("@/pages/dashboard/ModerationDashboard"),
     paths: ["/dashboard/moderation"],
