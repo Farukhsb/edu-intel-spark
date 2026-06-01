@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { log } from "@/lib/logger";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   getAssignmentWorkflowTargetFromStats,
   type AssignmentWorkflowStatsLike,
 } from "@/lib/assignmentWorkflowNavigation";
 import { deriveAccreditationMetrics, type NSSMetric, type QAAMetric, type TEFIndicator } from "@/lib/accreditationMetrics";
 import { fetchAccreditationDataset } from "@/lib/data/academic";
-import {
-  DEMO_FEEDBACK_TURNAROUND,
-  DEMO_NSS_METRICS,
-  DEMO_QAA_METRICS,
-  DEMO_TEF_INDICATORS,
-} from "./demoData";
 
 const exportQAAReport = (qaaMetrics: QAAMetric[], summary: { overallCompliance: number; metCount: number; atRiskCount: number; belowCount: number }) => {
   const lines = ["QAA Compliance Report - GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
@@ -129,10 +122,9 @@ const buildAccreditationWorkflowTarget = ({
 };
 
 export const useAccreditationDashboardController = () => {
-  const { isDemo } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("qaa");
-  const [loading, setLoading] = useState(!isDemo);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [qaaMetrics, setQaaMetrics] = useState<QAAMetric[]>([]);
   const [nssMetrics, setNssMetrics] = useState<NSSMetric[]>([]);
@@ -141,18 +133,8 @@ export const useAccreditationDashboardController = () => {
   const [pendingWorkflowTarget, setPendingWorkflowTarget] = useState<AccreditationWorkflowTarget>(null);
 
   useEffect(() => {
-    if (isDemo) {
-      setQaaMetrics(DEMO_QAA_METRICS);
-      setNssMetrics(DEMO_NSS_METRICS);
-      setTefIndicators(DEMO_TEF_INDICATORS);
-      setFeedbackTurnaround(DEMO_FEEDBACK_TURNAROUND);
-      setPendingWorkflowTarget(null);
-      setLoadError(false);
-      setLoading(false);
-      return;
-    }
-
     const fetchData = async () => {
+      setLoading(true);
       try {
         const { grades, submissions, assignments, profiles } = await fetchAccreditationDataset();
 
@@ -187,7 +169,7 @@ export const useAccreditationDashboardController = () => {
     };
 
     void fetchData();
-  }, [isDemo]);
+  }, []);
 
   const summary = useMemo(() => {
     const overallCompliance =
@@ -226,7 +208,7 @@ export const useAccreditationDashboardController = () => {
   };
 
   return {
-    isDemo,
+    isDemo: false,
     activeTab,
     setActiveTab,
     loading,

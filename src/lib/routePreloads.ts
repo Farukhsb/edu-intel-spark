@@ -66,6 +66,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/DemoAcademicIntegrity"),
     paths: ["/demo/dashboard/integrity"],
   },
+  demoAccreditationDashboard: {
+    loader: () => import("@/pages/dashboard/DemoAccreditationDashboard"),
+    paths: ["/demo/dashboard/accreditation"],
+  },
   moderationDashboard: {
     loader: () => import("@/pages/dashboard/ModerationDashboard"),
     paths: ["/dashboard/moderation"],

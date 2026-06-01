@@ -42,6 +42,9 @@ const rewriteDashboardLinkForDemo = (to: string) => {
   if (to.startsWith("/dashboard/integrity")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
+  if (to.startsWith("/dashboard/accreditation")) {
+    return to.replace("/dashboard", "/demo/dashboard");
+  }
   return to;
 };
 
