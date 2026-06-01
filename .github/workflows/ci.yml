@@ -35,6 +35,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check Supabase migration consistency
+        # Requires GitHub secrets: SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD.
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          npx supabase link --project-ref huncjayakgnqdgizzfjx --password "$SUPABASE_DB_PASSWORD"
+
+          diff_file="$(mktemp)"
+          npx supabase db diff --linked --schema public > "$diff_file"
+
+          if grep -Eq '^[[:space:]]*(ALTER|CREATE|COMMENT|DROP|GRANT|REVOKE|DO|INSERT|UPDATE|DELETE|TRUNCATE)\b' "$diff_file"; then
+            echo "Supabase migration diff detected. Commit the missing migration(s) before merging."
+            cat "$diff_file"
+            exit 1
+          fi
+
       - name: Run lint
         run: npm run lint
 
