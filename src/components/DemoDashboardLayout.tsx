@@ -66,7 +66,7 @@ const rewriteDashboardLinkForDemo = (to: string) => {
   if (to.startsWith("/dashboard/institutional")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
-  if (to.startsWith("/dashboard/assignments/")) {
+  if (to.startsWith("/dashboard/assignments")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
   return to;
@@ -211,7 +211,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
             params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
           }
           params.set("source", "support-notification");
-          navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
+          navigate(`/demo/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
             state: {
               notification: supportDestination.targetNotification ?? notification,
               redirectedFromSupportNotification: notification,
@@ -221,7 +221,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
         }
 
         if (supportDestination.kind === "assignments") {
-          navigate("/dashboard/assignments?source=support-notification", {
+          navigate("/demo/dashboard/assignments?source=support-notification", {
             state: {
               notification: supportDestination.targetNotification ?? notification,
               redirectedFromSupportNotification: notification,
@@ -235,7 +235,7 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
           params.set("assignment", supportDestination.targetNotification.relatedAssignmentId);
         }
         params.set("source", "support-notification");
-        navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
+        navigate(`/demo/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
           state: {
             notification: supportDestination.targetNotification ?? notification,
             redirectedFromSupportNotification: notification,
@@ -253,17 +253,17 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
           params.set("assignment", notification.relatedAssignmentId);
         }
         params.set("source", "notification");
-        navigate(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`);
+        navigate(`/demo/dashboard${params.toString() ? `?${params.toString()}` : ""}`);
         return;
       }
 
       if (notification.category === "assignment-published") {
-        navigate("/dashboard/assignments");
+        navigate("/demo/dashboard/assignments");
         return;
       }
 
       if (notification.relatedAssignmentId) {
-        navigate("/dashboard/assignments");
+        navigate("/demo/dashboard/assignments");
         return;
       }
     }
@@ -294,11 +294,11 @@ export const DemoDashboardLayout = ({ children }: { children: React.ReactNode })
     }
 
     if (isLecturerEquivalent && notification.relatedStudentId) {
-      navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
+      navigate(`/demo/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
       return;
     }
 
-    navigate("/dashboard");
+    navigate("/demo/dashboard");
   };
 
   const links = roleSections.flatMap((section) => [...section.links]);

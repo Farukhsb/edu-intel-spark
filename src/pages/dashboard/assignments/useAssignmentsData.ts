@@ -14,11 +14,6 @@ import {
 } from "@/lib/assignmentCatalog";
 import { log } from "@/lib/logger";
 import { isAssignmentVisibleToStudent } from "@/lib/assignmentVisibility";
-import {
-  DEMO_ASSIGNMENTS,
-  DEMO_STUDENT_ASSIGNMENTS,
-  DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
-} from "@/pages/dashboard/demoAssignments";
 
 export interface AssignmentDataItem {
   id: string;
@@ -72,11 +67,9 @@ const buildLatestStudentWorkflowMap = (
 export const useAssignmentsData = ({
   role,
   userId,
-  isDemo,
 }: {
   role: string | null | undefined;
   userId: string | undefined;
-  isDemo: boolean;
 }) => {
   const [assignments, setAssignments] = useState<AssignmentDataItem[]>([]);
   const [submissionStats, setSubmissionStats] = useState<Record<string, AssignmentSubmissionStats>>({});
@@ -84,28 +77,6 @@ export const useAssignmentsData = ({
   const [loading, setLoading] = useState(true);
 
   const fetchAssignments = async () => {
-    if (isDemo) {
-      const demoAssignments = role === "student" ? DEMO_STUDENT_ASSIGNMENTS : DEMO_ASSIGNMENTS;
-      setAssignments((demoAssignments ?? []).map(normalizeAssignment));
-      setSubmissionStats({});
-      setStudentWorkflow(
-        role === "student"
-          ? buildLatestStudentWorkflowMap(
-              Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
-                .flat()
-                .map((submission) => ({
-                  id: submission.id,
-                  assignment_id: submission.assignment_id,
-                  status: submission.status,
-                  submitted_at: submission.submitted_at,
-                })),
-            )
-          : {},
-      );
-      setLoading(false);
-      return;
-    }
-
     if (!userId) {
       setStudentWorkflow({});
       setLoading(false);
@@ -226,7 +197,7 @@ export const useAssignmentsData = ({
 
   useEffect(() => {
     void fetchAssignments();
-  }, [role, userId, isDemo]);
+  }, [role, userId]);
 
   return {
     assignments,

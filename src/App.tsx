@@ -48,9 +48,11 @@ const DemoLearningOutcomes = lazy(routeLoaders.demoLearningOutcomes);
 const StudentGrades = lazy(routeLoaders.studentGrades);
 const DemoStudentGrades = lazy(routeLoaders.demoStudentGrades);
 const Assignments = lazy(routeLoaders.assignments);
+const DemoAssignments = lazy(routeLoaders.demoAssignments);
 const AssignmentDetail = lazy(routeLoaders.assignmentDetail);
 const DemoAssignmentDetail = lazy(routeLoaders.demoAssignmentDetail);
 const StudentProfile = lazy(routeLoaders.studentProfile);
+const DemoStudentProfile = lazy(routeLoaders.demoStudentProfile);
 const AccreditationDashboard = lazy(routeLoaders.accreditationDashboard);
 const ExternalExaminerExport = lazy(routeLoaders.externalExaminerExport);
 const Settings = lazy(routeLoaders.settings);
@@ -291,6 +293,7 @@ const App = () => (
               <Route path="/demo/dashboard/external-examiner" element={<DemoDashboardRoute><DemoExternalExaminerExport /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/institutional" element={<DemoDashboardRoute><DemoInstitutionalInsights /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/assignments/:id" element={<DemoDashboardRoute><DemoAssignmentDetail /></DemoDashboardRoute>} />
+              <Route path="/demo/dashboard/assignments" element={<DemoDashboardRoute><DemoAssignments /></DemoDashboardRoute>} />
               <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
               <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
               <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
@@ -311,6 +314,7 @@ const App = () => (
               <Route path="/dashboard/assignments" element={<DashboardRoute><Assignments /></DashboardRoute>} />
               <Route path="/dashboard/assignments/:id" element={<DashboardRoute><AssignmentDetail /></DashboardRoute>} />
               <Route path="/dashboard/student/:studentId" element={<DashboardRoute allowedRole="lecturer"><StudentProfile /></DashboardRoute>} />
+              <Route path="/demo/dashboard/student/:studentId" element={<DemoDashboardRoute allowedRole="lecturer"><DemoStudentProfile /></DemoDashboardRoute>} />
               <Route path="/dashboard/settings" element={<DashboardRoute><Settings /></DashboardRoute>} />
               <Route path="/demo/dashboard/improvements" element={<DemoDashboardRoute allowedRole="student"><DemoImprovementPlan /></DemoDashboardRoute>} />
               <Route

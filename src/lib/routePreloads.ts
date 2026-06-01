@@ -130,6 +130,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/Assignments"),
     paths: ["/dashboard/assignments"],
   },
+  demoAssignments: {
+    loader: () => import("@/pages/dashboard/DemoAssignmentsPage"),
+    paths: ["/demo/dashboard/assignments"],
+  },
   assignmentDetail: {
     loader: () => import("@/pages/dashboard/AssignmentDetail"),
     paths: [],
@@ -140,6 +144,10 @@ const routeDefinitions = {
   },
   studentProfile: {
     loader: () => import("@/pages/dashboard/StudentProfile"),
+    paths: [],
+  },
+  demoStudentProfile: {
+    loader: () => import("@/pages/dashboard/DemoStudentProfile"),
     paths: [],
   },
   accreditationDashboard: {
@@ -207,6 +215,8 @@ export const preloadDemoRoleRoutes = (role: AppRole | null | undefined) => {
     void routeLoaders.demoLearningOutcomes();
     void routeLoaders.demoModerationDashboard();
     void routeLoaders.demoAcademicIntegrity();
+    void routeLoaders.demoAssignments();
+    void routeLoaders.demoStudentProfile();
     return;
   }
 
@@ -220,5 +230,6 @@ export const preloadDemoRoleRoutes = (role: AppRole | null | undefined) => {
   if (role === "student") {
     void routeLoaders.demoStudentGrades();
     void routeLoaders.demoImprovementPlan();
+    void routeLoaders.demoAssignments();
   }
 };

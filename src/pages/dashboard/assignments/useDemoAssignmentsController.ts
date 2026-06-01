@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 
-import type { RubricCriterion } from "@/components/RubricBuilder";
 import { STARTER_ASSIGNMENT_TEMPLATES } from "@/data/assignmentSets";
 import {
   filterAssignments,
@@ -16,14 +14,10 @@ import {
 import { isStudentGradeVisible } from "@/lib/assessmentWorkflow";
 import { safeFormatDate } from "@/lib/date";
 import { parseAssignmentsSearchState } from "@/lib/schemas/navigation";
-import { useAssignmentsData, type AssignmentDataItem } from "@/pages/dashboard/assignments/useAssignmentsData";
 
-import {
-  ASSIGNMENT_TARGET_COHORTS,
-  ASSIGNMENT_TARGET_DEPARTMENTS,
-  type AssignmentFormState,
-} from "./types";
-import { publishAssignment, saveAssignmentDraft, setAssignmentStatus } from "./workflows";
+import { useDemoAssignmentsData } from "./useDemoAssignmentsData";
+import type { AssignmentDataItem } from "./useAssignmentsData";
+import type { AssignmentFormState } from "./types";
 
 const buildInitialFormState = (): AssignmentFormState => ({
   dialogOpen: false,
@@ -106,43 +100,20 @@ const formatDueDateForInput = (dueDate: string | null) =>
         .slice(0, 16)
     : "";
 
-export const useAssignmentsController = ({
-  role,
-  userId,
-}: {
-  role: string | null | undefined;
-  userId: string | undefined;
-}) => {
+export const useDemoAssignmentsController = (role: string | null | undefined) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const assignmentSearchState = parseAssignmentsSearchState(searchParams);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | AssignmentDataItem["status"]>("all");
   const [formState, setFormState] = useState<AssignmentFormState>(buildInitialFormState);
-  const {
-    assignments,
-    submissionStats,
-    studentWorkflow,
-    loading,
-    refreshAssignments,
-  } = useAssignmentsData({
-    role,
-    userId,
-  });
+  const { assignments, submissionStats, studentWorkflow, loading, refreshAssignments } = useDemoAssignmentsData(role);
 
   useEffect(() => {
     setStatusFilter(assignmentSearchState.statusFilter);
   }, [assignmentSearchState.statusFilter]);
 
-  const resetAssignmentForm = () => {
-    setFormState(buildInitialFormState());
-  };
-
-  const openCreateDialog = () => {
-    resetAssignmentForm();
-    setFormState((current) => ({ ...current, dialogOpen: true }));
-  };
-
-  const openEditDialog = (assignment: AssignmentDataItem) => {
+  const openCreateDialog = () => setFormState((current) => ({ ...current, dialogOpen: true }));
+  const openEditDialog = (assignment: AssignmentCatalogItem) => {
     setFormState({
       dialogOpen: true,
       creating: false,
@@ -161,31 +132,9 @@ export const useAssignmentsController = ({
 
   const applyStarterTemplate = (templateId: string) => {
     setFormState((current) => {
-      if (templateId === "none") {
-        if (!current.editingAssignmentId) {
-          return {
-            ...current,
-            selectedTemplateId: "none",
-            title: "",
-            description: "",
-            moduleCode: "",
-            maxScore: "100",
-            dueDate: "",
-            rubric: [],
-            selectedCohorts: [],
-            selectedDepartments: [],
-          };
-        }
-
-        return {
-          ...current,
-          selectedTemplateId: "none",
-        };
-      }
-
+      if (templateId === "none") return current;
       const template = STARTER_ASSIGNMENT_TEMPLATES.find((entry) => entry.id === templateId);
       if (!template) return current;
-
       return {
         ...current,
         selectedTemplateId: templateId,
@@ -220,120 +169,14 @@ export const useAssignmentsController = ({
   };
 
   const updateFormField = <Key extends keyof AssignmentFormState>(field: Key, value: AssignmentFormState[Key]) => {
-    setFormState((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setFormState((current) => ({ ...current, [field]: value }));
   };
 
   const handleSaveAssignment = async () => {
-    if (!formState.title.trim() || !userId) {
-      toast.error("Title is required");
-      return;
-    }
-
-    setFormState((current) => ({ ...current, creating: true }));
-
-    try {
-      await saveAssignmentDraft({
-        assignmentId: formState.editingAssignmentId,
-        userId,
-        title: formState.title,
-        description: formState.description,
-        moduleCode: formState.moduleCode,
-        maxScore: formState.maxScore,
-        dueDate: formState.dueDate,
-        rubric: formState.rubric as RubricCriterion[],
-        selectedCohorts: formState.selectedCohorts,
-        selectedDepartments: formState.selectedDepartments,
-      });
-
-      toast.success(formState.editingAssignmentId ? "Assignment updated" : "Assignment created");
-      resetAssignmentForm();
-      refreshAssignments();
-    } catch {
-      toast.error(formState.editingAssignmentId ? "Failed to update assignment" : "Failed to create assignment");
-      setFormState((current) => ({ ...current, creating: false }));
-    }
+    refreshAssignments();
   };
 
-  const handlePublish = async (assignmentId: string) => {
-    const assignmentToPublish = assignments.find((assignment) => assignment.id === assignmentId);
-    if (!assignmentToPublish) return;
-
-    try {
-      const publishFeedback = await publishAssignment({
-        assignmentId,
-        assignment: assignmentToPublish,
-        shouldPersistNotifications: Boolean(userId),
-      });
-
-      if (publishFeedback.warnings.length > 0) {
-        toast.warning(`Assignment published. ${publishFeedback.warnings.join("; ")}.`);
-      } else {
-        toast.success("Assignment published - students can now submit");
-      }
-
-      refreshAssignments();
-    } catch {
-      toast.error("Failed to publish");
-    }
-  };
-
-  const handleSetAssignmentStatus = async (
-    assignmentId: string,
-    nextStatus: AssignmentDataItem["status"],
-    successMessage: string,
-    failureMessage: string,
-  ) => {
-    try {
-      await setAssignmentStatus(assignmentId, nextStatus);
-      toast.success(successMessage);
-      refreshAssignments();
-    } catch {
-      toast.error(failureMessage);
-    }
-  };
-
-  const isPendingReviewView = assignmentSearchState.view === "needs-review";
-
-  const sortedAssignments = useMemo(() => {
-    const filteredAssignments = filterAssignments({
-      assignments: assignments as AssignmentCatalogItem[],
-      searchQuery,
-      statusFilter,
-      role,
-      isPendingReviewView,
-      submissionStats,
-    }) as AssignmentDataItem[];
-
-    return sortAssignmentsForView({
-      assignments: filteredAssignments as AssignmentCatalogItem[],
-      isPendingReviewView,
-      submissionStats,
-    }) as AssignmentDataItem[];
-  }, [assignments, isPendingReviewView, role, searchQuery, statusFilter, submissionStats]);
-
-  const overviewStats = useMemo(
-    () => getAssignmentOverviewStats(assignments as AssignmentCatalogItem[]),
-    [assignments],
-  );
-
-  const catalogReadiness = useMemo(
-    () =>
-      role === "lecturer"
-        ? getLecturerAssignmentCatalogReadiness({
-            assignments: assignments as AssignmentCatalogItem[],
-            submissionStats,
-          })
-        : getStudentAssignmentCatalogReadiness({
-            assignments: assignments as AssignmentCatalogItem[],
-            studentWorkflow,
-          }),
-    [assignments, role, studentWorkflow, submissionStats],
-  );
-
-  const openAssignmentSearch = (nextStatus: "all" | AssignmentDataItem["status"]) => {
+  const openAssignmentSearch = (nextStatus: "all" | AssignmentCatalogItem["status"]) => {
     setStatusFilter(nextStatus);
     const next = new URLSearchParams(searchParams);
     if (nextStatus === "all") next.delete("status");
@@ -353,13 +196,45 @@ export const useAssignmentsController = ({
     setSearchParams(new URLSearchParams());
   };
 
+  const isPendingReviewView = assignmentSearchState.view === "needs-review";
+  const sortedAssignments = useMemo(() => {
+    const filteredAssignments = filterAssignments({
+      assignments: assignments as AssignmentCatalogItem[],
+      searchQuery,
+      statusFilter,
+      role,
+      isPendingReviewView,
+      submissionStats,
+    });
+    return sortAssignmentsForView({
+      assignments: filteredAssignments,
+      isPendingReviewView,
+      submissionStats,
+    });
+  }, [assignments, isPendingReviewView, role, searchQuery, statusFilter, submissionStats]);
+
+  const overviewStats = useMemo(() => getAssignmentOverviewStats(assignments as AssignmentCatalogItem[]), [assignments]);
+  const catalogReadiness = useMemo(
+    () =>
+      role === "lecturer"
+        ? getLecturerAssignmentCatalogReadiness({
+            assignments: assignments as AssignmentCatalogItem[],
+            submissionStats,
+          })
+        : getStudentAssignmentCatalogReadiness({
+            assignments: assignments as AssignmentCatalogItem[],
+            studentWorkflow,
+          }),
+    [assignments, role, studentWorkflow, submissionStats],
+  );
+
   const hasActiveFilters =
     searchQuery.trim().length > 0 || statusFilter !== "all" || isPendingReviewView;
 
   return {
     loading,
     role,
-    isDemo: false,
+    isDemo: true,
     assignments,
     sortedAssignments,
     submissionStats,
@@ -383,15 +258,20 @@ export const useAssignmentsController = ({
     toggleDepartment,
     updateFormField,
     handleSaveAssignment,
-    handlePublish,
-    handleSetAssignmentStatus,
+    handlePublish: async () => undefined,
+    handleSetAssignmentStatus: async () => undefined,
     openAssignmentSearch,
     clearPendingReviewView,
-    resetAssignmentForm,
+    resetAssignmentForm: () => setFormState(buildInitialFormState()),
     resetFilters,
     setSearchQuery,
     setFormDialogOpen: (open: boolean) => updateFormField("dialogOpen", open),
-    targetCohorts: ASSIGNMENT_TARGET_COHORTS,
-    departments: ASSIGNMENT_TARGET_DEPARTMENTS,
+    targetCohorts: [
+      { value: "100", label: "Level 100" },
+      { value: "200", label: "Level 200" },
+      { value: "300", label: "Level 300" },
+      { value: "400", label: "Level 400" },
+    ] as const,
+    departments: [],
   };
 };

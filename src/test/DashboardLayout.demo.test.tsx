@@ -270,7 +270,7 @@ describe("DashboardLayout demo mode", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Study plan reminder/i }));
 
     expect(mocks.navigate).toHaveBeenCalledWith(
-      "/dashboard?assignment=demo-assignment-1&source=support-notification",
+      "/demo/dashboard?assignment=demo-assignment-1&source=support-notification",
       expect.objectContaining({
         state: expect.objectContaining({
           redirectedFromSupportNotification: expect.objectContaining({
