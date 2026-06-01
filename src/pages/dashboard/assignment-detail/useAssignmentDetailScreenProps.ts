@@ -5,6 +5,7 @@ import {
   buildHeroCardProps,
   buildReadinessCardProps,
   buildReviewDialogProps,
+  buildDemoSubmissionListProps,
   buildSubmissionListProps,
   buildWorkflowActionsProps,
 } from "@/pages/dashboard/assignment-detail/screen-props";
@@ -100,7 +101,6 @@ export const buildLiveAssignmentDetailScreenProps = ({
     automatedActions,
     fileActions,
     grades,
-    isDemo,
     lecturerActions,
     moderationCases,
     navigate,
@@ -131,4 +131,5 @@ export const buildDemoAssignmentDetailScreenProps = ({
 }: BuildDemoAssignmentDetailScreenPropsArgs): DemoAssignmentDetailScreenProps => ({
   demoAssignmentSet,
   ...buildLiveAssignmentDetailScreenProps(args),
+  submissionListProps: buildDemoSubmissionListProps(args),
 });

@@ -100,6 +100,7 @@ const SubmissionCardItem = ({
   grade,
   moderationCase,
   isLecturer,
+  isDemo,
   isSelected,
   toggleSelect,
   openSubmissionFile,
@@ -119,6 +120,7 @@ const SubmissionCardItem = ({
   grade: Grade | undefined;
   moderationCase: ModerationCase | undefined;
   isLecturer: boolean;
+  isDemo: boolean;
   isSelected: boolean;
   toggleSelect: (submissionId: string) => void;
   openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
@@ -298,7 +300,7 @@ const SubmissionCardItem = ({
           {isLecturer && (
             <div className="flex flex-wrap gap-2 lg:justify-end">
               {submissionDisplay.showFeedbackSummary && (
-                <Button size="sm" variant="ghost" onClick={() => void queueFeedbackSummary(submission)}>
+                <Button size="sm" variant="ghost" disabled={isDemo} onClick={() => void queueFeedbackSummary(submission)}>
                   <Sparkles className="mr-1 h-3 w-3" /> Feedback summary
                 </Button>
               )}
@@ -317,6 +319,7 @@ const SubmissionCardItem = ({
                   data-testid={`submission-approve-${submission.id}`}
                   size="sm"
                   variant="outline"
+                  disabled={isDemo}
                   onClick={async () => {
                     try {
                       const approved = await approveSubmission(submission);
@@ -338,6 +341,7 @@ const SubmissionCardItem = ({
                   data-testid={`submission-release-${submission.id}`}
                   size="sm"
                   variant="default"
+                  disabled={isDemo}
                   onClick={async () => {
                     try {
                       await releaseSubmission(submission);
@@ -354,6 +358,7 @@ const SubmissionCardItem = ({
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={isDemo}
                   onClick={() => void queueGradeReleaseNotification(submission)}
                 >
                   <Send className="mr-1 h-3 w-3" /> Send release note
@@ -382,6 +387,7 @@ export const SubmissionListSection = ({
   grades,
   moderationCases,
   assignment,
+  isDemo,
   gradingRecoveryIssues,
   openSubmissionFile,
   openModeration,
@@ -407,6 +413,7 @@ export const SubmissionListSection = ({
   grades: Record<string, Grade>;
   moderationCases: Record<string, ModerationCase>;
   assignment: AssignmentDetailAssignment;
+  isDemo: boolean;
   gradingRecoveryIssues: Record<string, SubmissionGradingRecoveryIssue>;
   openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
   openModeration: () => void;
@@ -422,7 +429,7 @@ export const SubmissionListSection = ({
   activeQueueFocus: AssignmentQueueFocusValue | null;
   focusQueue: (focus: AssignmentQueueFocusValue) => void;
   clearQueueFocus: () => void;
-  }) => {
+}) => {
   const manualReviewSubmissions = submissions.filter((submission) => submission.status === "under_review");
   const visibleManualReviewCount = filteredSubmissions.filter(
     (submission) => submission.status === "under_review",
@@ -563,6 +570,7 @@ export const SubmissionListSection = ({
                 gradingRecoveryIssue={gradingRecoveryIssues[submission.id]}
                 moderationCase={moderationCases[submission.id]}
                 isLecturer={isLecturer}
+                isDemo={isDemo}
                 isSelected={selected.has(submission.id)}
                 toggleSelect={toggleSelect}
                 openSubmissionFile={openSubmissionFile}

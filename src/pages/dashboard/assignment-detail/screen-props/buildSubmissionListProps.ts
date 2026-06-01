@@ -1,7 +1,8 @@
 import type { ComponentProps } from "react";
 import type { NavigateFunction } from "react-router-dom";
 
-import { SubmissionListSection } from "@/pages/dashboard/assignment-detail/ui";
+import { SubmissionListSection } from "@/pages/dashboard/assignment-detail/ui/submission-list-section";
+import { SubmissionListSection as DemoSubmissionListSection } from "@/pages/dashboard/assignment-detail/ui/demo-submission-list-section";
 import type { useAssignmentDetailViewState } from "@/pages/dashboard/assignment-detail/state";
 import type {
   useLecturerAssessmentActions,
@@ -22,7 +23,6 @@ interface BuildSubmissionListPropsArgs {
     openSubmissionFile: (submission: AssignmentDetailSubmission) => Promise<void>;
   };
   grades: Record<string, Grade>;
-  isDemo: boolean;
   lecturerActions: ReturnType<typeof useLecturerAssessmentActions>;
   moderationCases: Record<string, ModerationCase>;
   navigate: NavigateFunction;
@@ -37,7 +37,6 @@ export const buildSubmissionListProps = ({
   automatedActions,
   fileActions,
   grades,
-  isDemo,
   lecturerActions,
   moderationCases,
   navigate,
@@ -55,7 +54,6 @@ export const buildSubmissionListProps = ({
   grades,
   moderationCases,
   assignment,
-  isDemo,
   gradingRecoveryIssues: automatedActions.lastSubmissionRecoveryIssues,
   openSubmissionFile: fileActions.openSubmissionFile,
   openModeration: () => navigate("/dashboard/moderation"),
@@ -74,3 +72,13 @@ export const buildSubmissionListProps = ({
   focusQueue: (focus) => navigate(`${searchPathname}?source=queue&focus=${focus}`, { replace: true }),
   clearQueueFocus: () => navigate(searchPathname, { replace: true }),
 });
+
+type BuildDemoSubmissionListPropsArgs = BuildSubmissionListPropsArgs;
+
+export const buildDemoSubmissionListProps = (
+  args: BuildDemoSubmissionListPropsArgs,
+): ComponentProps<typeof DemoSubmissionListSection> =>
+  ({
+    ...buildSubmissionListProps(args),
+    isDemo: true,
+  }) as ComponentProps<typeof DemoSubmissionListSection>;
