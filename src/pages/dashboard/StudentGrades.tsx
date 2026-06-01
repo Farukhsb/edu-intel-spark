@@ -1,36 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import { Brain, Download, Loader2, Send, Sparkles } from "lucide-react";
-import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { safeToLocaleDate } from "@/lib/date";
+import { supabase } from "@/integrations/supabase/client";
 import { log } from "@/lib/logger";
 import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
 import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
 import { getFirstName } from "@/lib/formatters";
-import { clampPercentage, getGradeTone, normalizeMaxScore } from "@/lib/gradePresentation";
 import { DashboardDemoBanner, DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
-import { getEnv } from "@/lib/env";
 import { parseExplainGradeSearchState } from "@/lib/schemas/navigation";
 import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
-import {
-  buildDemoGradeResponse,
-  buildSubmissionOptionsFromProjection,
-  type SubmissionOption,
-} from "@/pages/dashboard/explain-grade/helpers";
+import { buildSubmissionOptionsFromProjection, type SubmissionOption } from "@/pages/dashboard/explain-grade/helpers";
 import {
   DEMO_STUDENT_ASSIGNMENTS,
   DEMO_STUDENT_ASSIGNMENT_GRADES,
   DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS,
 } from "@/pages/dashboard/demoAssignments";
+import { GradeBreakdown } from "@/components/dashboard/GradeBreakdown";
+import { GradeChat } from "@/components/dashboard/GradeChat";
 
 interface StudentGrade {
   id: string;
@@ -52,14 +43,6 @@ interface StudentGrade {
   fileName: string | null;
   fileUrl: string | null;
 }
-
-type ChatMsg = { role: "user" | "assistant"; content: string };
-
-const INITIAL_ASSISTANT_MESSAGE: ChatMsg = {
-  role: "assistant",
-  content:
-    "Hello! I'm your AI Grade Assistant. I can help you understand your grades, identify improvement areas, and provide specific guidance on raising your marks. What would you like to know?",
-};
 
 const DEMO_GRADES: StudentGrade[] = Object.values(DEMO_STUDENT_ASSIGNMENT_SUBMISSIONS)
   .flat()
@@ -103,11 +86,6 @@ export const calculateGradeStats = (scores: number[]) => {
   };
 };
 
-const getCriterionCommentary = (breakdownItem: {
-  feedback?: string;
-  comment?: string;
-}) => breakdownItem.feedback ?? breakdownItem.comment ?? null;
-
 const StudentGrades = () => {
   const { user, profile, isDemo } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -120,11 +98,7 @@ const StudentGrades = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [stats, setStats] = useState({ avg: 0, count: 0, highest: 0, lowest: 0 });
-  const [messages, setMessages] = useState<ChatMsg[]>([INITIAL_ASSISTANT_MESSAGE]);
-  const [inputValue, setInputValue] = useState("");
-  const [isChatLoading, setIsChatLoading] = useState(false);
   const [downloadErrorBySubmission, setDownloadErrorBySubmission] = useState<Record<string, string>>({});
-  const scrollRef = useRef<HTMLDivElement>(null);
   const lastLoggedGradeDetailsRef = useRef<string | null>(null);
   const { assignmentId: focusAssignmentId, submissionId: focusSubmissionId, source: focusSource } =
     parseExplainGradeSearchState(searchParams);
@@ -228,17 +202,10 @@ const StudentGrades = () => {
 
     if (focusedSubmission && focusedSubmission.gradeId !== selectedId) {
       setSelectedId(focusedSubmission.gradeId);
-      setMessages([INITIAL_ASSISTANT_MESSAGE]);
     } else if (!selectedId) {
       setSelectedId(releasedResults[0].gradeId);
     }
   }, [focusAssignmentId, focusSubmissionId, releasedResults, selectedId]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   const releasedGrades = grades.filter((grade) => grade.score != null);
   const pendingGrades = grades.filter((grade) => grade.score == null);
@@ -253,7 +220,8 @@ const StudentGrades = () => {
     latestReleasedAssignmentTitle: releasedGrades[0]?.assignmentTitle ?? null,
     latestPendingStatus: pendingGrades[0]?.status ?? null,
   });
-  const primaryStrength = [...(gradeBreakdown?.components ?? [])].sort((left, right) => right.score - left.score)[0];
+  const primaryStrengthName = [...(gradeBreakdown?.components ?? [])].sort((left, right) => right.score - left.score)[0]
+    ?.name ?? null;
   const selectedDownloadError = selectedGrade ? downloadErrorBySubmission[selectedGrade.id] ?? null : null;
 
   useEffect(() => {
@@ -282,125 +250,6 @@ const StudentGrades = () => {
       },
     });
   }, [focusSource, isDemo, selectedRelease, user]);
-
-  const handleSend = async () => {
-    if (!inputValue.trim() || isChatLoading || !gradeBreakdown || !selectedRelease) return;
-
-    const userMsg: ChatMsg = { role: "user", content: inputValue };
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
-    setInputValue("");
-
-    if (isDemo) {
-      setMessages([
-        ...updatedMessages,
-        { role: "assistant", content: buildDemoGradeResponse(userMsg.content, gradeBreakdown) },
-      ]);
-      return;
-    }
-
-    setIsChatLoading(true);
-    let assistantSoFar = "";
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) throw new Error("Not signed in");
-      const env = getEnv();
-
-      const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;
-      const response = await fetch(chatUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          submissionId: selectedRelease.submissionId,
-          messages: updatedMessages.map((message) => ({ role: message.role, content: message.content })),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ error: "AI service error" }));
-        toast.error(errorBody.error || "Something went wrong");
-        setIsChatLoading(false);
-        return;
-      }
-
-      if (!response.body) throw new Error("No response body");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let textBuffer = "";
-      let streamDone = false;
-
-      const upsert = (chunk: string) => {
-        assistantSoFar += chunk;
-        setMessages((previous) => {
-          const last = previous[previous.length - 1];
-          if (last?.role === "assistant" && previous.length === updatedMessages.length + 1) {
-            return previous.map((message, index) =>
-              index === previous.length - 1 ? { ...message, content: assistantSoFar } : message,
-            );
-          }
-          return [...previous, { role: "assistant", content: assistantSoFar }];
-        });
-      };
-
-      while (!streamDone) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") {
-            streamDone = true;
-            break;
-          }
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) upsert(content);
-          } catch {
-            textBuffer = `${line}\n${textBuffer}`;
-            break;
-          }
-        }
-      }
-
-      if (textBuffer.trim()) {
-        for (let raw of textBuffer.split("\n")) {
-          if (!raw) continue;
-          if (raw.endsWith("\r")) raw = raw.slice(0, -1);
-          if (raw.startsWith(":") || raw.trim() === "") continue;
-          if (!raw.startsWith("data: ")) continue;
-          const jsonStr = raw.slice(6).trim();
-          if (jsonStr === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) upsert(content);
-          } catch {
-            // Ignore trailing partial chunks after stream completion.
-          }
-        }
-      }
-    } catch (error) {
-      log.error("Failed to get AI response", error);
-      toast.error("Failed to get AI response");
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
 
   const handleDownloadSubmission = async () => {
     if (!selectedGrade?.fileUrl) {
@@ -548,7 +397,6 @@ const StudentGrades = () => {
             value={selectedRelease?.gradeId ?? ""}
             onValueChange={(value) => {
               setSelectedId(value);
-              setMessages([INITIAL_ASSISTANT_MESSAGE]);
             }}
           >
             <SelectTrigger className="w-full">
@@ -595,203 +443,20 @@ const StudentGrades = () => {
 
       {gradeBreakdown && selectedGrade ? (
         <>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base">Grade Breakdown</CardTitle>
-              </div>
-              <CardDescription>{gradeBreakdown.assessment}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-4xl font-bold font-display">{gradeBreakdown.totalGrade}%</span>
-                <Badge>{gradeBreakdown.band}</Badge>
-                <Badge variant="outline">Released grade</Badge>
-                {selectedGrade.fileUrl ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto"
-                    onClick={() => void handleDownloadSubmission()}
-                  >
-                    <Download className="mr-1.5 h-3.5 w-3.5" /> Download submission
-                  </Button>
-                ) : null}
-              </div>
+          <GradeBreakdown
+            assessment={gradeBreakdown.assessment}
+            totalGrade={gradeBreakdown.totalGrade}
+            band={gradeBreakdown.band}
+            components={gradeBreakdown.components}
+            improvementAreas={gradeBreakdown.improvementAreas}
+            readinessBestNextAction={readiness.bestNextAction}
+            primaryStrengthName={primaryStrengthName}
+            selectedGrade={selectedGrade}
+            selectedDownloadError={selectedDownloadError}
+            onDownloadSubmission={() => void handleDownloadSubmission()}
+          />
 
-              {selectedDownloadError ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                  {selectedDownloadError}
-                </div>
-              ) : null}
-
-              <div className="space-y-3">
-                {gradeBreakdown.components.map((component) => {
-                  const rawBreakdownItem = selectedGrade.breakdown?.find(
-                    (item) => item.criterion === component.name,
-                  );
-                  const percent =
-                    rawBreakdownItem != null
-                      ? clampPercentage(rawBreakdownItem.score, rawBreakdownItem.max_score)
-                      : component.score;
-                  const commentary = rawBreakdownItem ? getCriterionCommentary(rawBreakdownItem) : null;
-                  const criterionMax = rawBreakdownItem ? normalizeMaxScore(rawBreakdownItem.max_score) : 100;
-
-                  return (
-                    <div key={component.name} className="space-y-2 rounded-lg border bg-background p-3">
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="font-medium">
-                          {component.name} ({component.weight}%)
-                        </span>
-                        <span className="font-medium">
-                          {rawBreakdownItem ? `${rawBreakdownItem.score}/${criterionMax}` : `${component.score}%`} ({percent}%)
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full ${
-                            getGradeTone(percent) === "success"
-                              ? "bg-success"
-                              : getGradeTone(percent) === "primary"
-                                ? "bg-primary"
-                                : "bg-destructive"
-                          }`}
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {commentary ?? "No criterion-level commentary was provided for this part of the rubric."}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border bg-background p-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Strongest Areas
-                  </p>
-                  <div className="mt-2 space-y-1">
-                    {[...gradeBreakdown.components]
-                      .sort((left, right) => right.score - left.score)
-                      .slice(0, 2)
-                      .map((item) => (
-                        <p key={item.name} className="text-sm">
-                          {item.name} <span className="text-muted-foreground">({item.score}%)</span>
-                        </p>
-                      ))}
-                  </div>
-                </div>
-                <div className="rounded-xl border bg-background p-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Focus Areas
-                  </p>
-                  <div className="mt-2 space-y-1">
-                    {[...gradeBreakdown.components]
-                      .sort((left, right) => left.score - right.score)
-                      .slice(0, 2)
-                      .map((item) => (
-                        <p key={item.name} className="text-sm">
-                          {item.name} <span className="text-muted-foreground">({item.score}%)</span>
-                        </p>
-                      ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-muted/20 p-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <p className="text-sm font-semibold">Best Improvement Route</p>
-                </div>
-                {gradeBreakdown.improvementAreas[0] ? (
-                  <>
-                    <p className="mt-3 text-sm font-medium">{gradeBreakdown.improvementAreas[0].area}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      +{gradeBreakdown.improvementAreas[0].pointsNeeded} points to move toward {gradeBreakdown.improvementAreas[0].nextBand}
-                    </p>
-                    <p className="mt-3 text-sm">{readiness.bestNextAction}</p>
-                    <div className="mt-3 space-y-2">
-                      {gradeBreakdown.improvementAreas[0].tips.slice(0, 3).map((tip) => (
-                        <div key={tip} className="flex items-start gap-2 text-sm">
-                          <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                          {tip}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <p className="mt-3 text-sm">
-                    {primaryStrength
-                      ? `${primaryStrength.name} is currently your clearest strength. Keep it steady while you improve consistency across the rest of the rubric.`
-                      : "No single weak criterion stands out, so focus on improving consistency across the whole rubric."}
-                  </p>
-                )}
-              </div>
-
-              {selectedGrade.feedback ? (
-                <div className="rounded-xl border bg-background p-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Lecturer Feedback
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">{selectedGrade.feedback}</p>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Brain className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base">Ask About Your Grade</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-80 flex-col">
-                <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto pr-2">
-                  {messages.map((message, index) => (
-                    <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-                          message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                        }`}
-                      >
-                        {message.role === "assistant" ? (
-                          <div className="prose prose-sm dark:prose-invert max-w-none">
-                            <ReactMarkdown>{message.content}</ReactMarkdown>
-                          </div>
-                        ) : (
-                          message.content
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {isChatLoading && messages[messages.length - 1]?.role === "user" ? (
-                    <div className="flex justify-start">
-                      <div className="rounded-2xl bg-muted px-4 py-2.5">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <Input
-                    value={inputValue}
-                    onChange={(event) => setInputValue(event.target.value)}
-                    placeholder="Ask about your grade..."
-                    onKeyDown={(event) => event.key === "Enter" && void handleSend()}
-                    disabled={isChatLoading}
-                  />
-                  <Button size="icon" onClick={() => void handleSend()} disabled={isChatLoading}>
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <GradeChat key={selectedRelease.submissionId} submissionId={selectedRelease.submissionId} gradeBreakdown={gradeBreakdown} />
         </>
       ) : null}
     </div>

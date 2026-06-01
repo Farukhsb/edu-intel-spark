@@ -179,7 +179,7 @@ describe("edge function hardening", () => {
   it("keeps explicit browser auth headers for direct edge-function fetch calls", () => {
     const assignmentDetailSource = readRepoFile("src/pages/dashboard/AssignmentDetail.tsx");
     const automationHookSource = readRepoFile("src/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions.ts");
-    const studentGradesSource = readRepoFile("src/pages/dashboard/StudentGrades.tsx");
+    const gradeChatSource = readRepoFile("src/components/dashboard/GradeChat.tsx");
 
     expect(automationHookSource).toContain("const env = getEnv();");
     expect(automationHookSource).toContain("const gradeSubmissionUrl = `${env.VITE_SUPABASE_URL}/functions/v1/grade-submission`;");
@@ -188,11 +188,11 @@ describe("edge function hardening", () => {
     expect(automationHookSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
     expect(automationHookSource).toContain("Authorization: `Bearer ${session.access_token}`");
 
-    expect(studentGradesSource).toContain("supabase.auth.getSession()");
-    expect(studentGradesSource).toContain("const env = getEnv();");
-    expect(studentGradesSource).toContain("const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;");
-    expect(studentGradesSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
-    expect(studentGradesSource).toContain("Authorization: `Bearer ${accessToken}`");
+    expect(gradeChatSource).toContain("supabase.auth.getSession()");
+    expect(gradeChatSource).toContain("const env = getEnv();");
+    expect(gradeChatSource).toContain("const chatUrl = `${env.VITE_SUPABASE_URL}/functions/v1/explain-grade`;");
+    expect(gradeChatSource).toContain("apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY");
+    expect(gradeChatSource).toContain("Authorization: `Bearer ${accessToken}`");
   });
 
   it("keeps hybrid grade import backend-only and JWT protected", () => {
