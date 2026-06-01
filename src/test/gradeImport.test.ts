@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGradeImportPreview,
   buildImportedGradePayload,
+  calculateWeightedRubricScore,
   normalizeImportedScore,
   parseGradeImportCsv,
   summarizeRejectedRows,
@@ -59,6 +60,33 @@ describe("hybrid grade import", () => {
       matchedSubmissionId: null,
       normalizedScore: 72,
     });
+  });
+
+  it("uses rubric columns to compute the weighted score when rubric overrides are present", () => {
+    const rows = parseGradeImportCsv(
+      `student_name,student_email,score,max_score,rubric_analysis_score,rubric_analysis_max_score,rubric_analysis_weight,rubric_structure_score,rubric_structure_max_score,rubric_structure_weight\nJane Doe,jane@example.edu,12,20,8,10,60,4,10,40`,
+      20,
+    );
+
+    expect(rows[0].rubricBreakdown).toHaveLength(2);
+    expect(calculateWeightedRubricScore(rows[0].rubricBreakdown, 20)).toBe(12.8);
+
+    const preview = buildGradeImportPreview({
+      rows,
+      submissions: [
+        {
+          id: "submission-1",
+          student_name: "Jane Doe",
+          student_email: "jane@example.edu",
+          submitted_at: "2026-06-01T12:00:00.000Z",
+        },
+      ],
+      assignmentMaxScore: 20,
+    });
+
+    expect(preview.rows[0].normalizedScore).toBe(12.8);
+    expect(preview.rows[0].accepted).toBe(true);
+    expect(preview.rows[0].rubricBreakdown).toHaveLength(2);
   });
 
   it("can be configured to reject unmatched rows instead of creating synthetic submissions", () => {

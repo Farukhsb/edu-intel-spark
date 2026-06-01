@@ -311,6 +311,7 @@ const handleFunctionInvoke = async (route: Route, state: MockSupabaseState) => {
           maxScore: 20,
           submissionDate: "2026-05-15",
           notes: "Great work",
+          rubricBreakdown: [],
           normalizedScore: 90,
           matchedSubmissionId: "submission-1",
           submissionAction: "match",

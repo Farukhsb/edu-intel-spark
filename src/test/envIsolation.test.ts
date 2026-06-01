@@ -43,7 +43,7 @@ describe("environment bootstrap isolation", () => {
     await expect(import("@/lib/posthog")).resolves.toHaveProperty("initPostHog");
     await expect(import("@/lib/sentry")).resolves.toHaveProperty("initSentry");
     await expect(import("@/components/BulkStudentUpload")).resolves.toHaveProperty("BulkStudentUpload");
-    await expect(import("@/pages/dashboard/ExplainGrade")).resolves.toHaveProperty("default");
+    await expect(import("@/pages/dashboard/StudentGrades")).resolves.toHaveProperty("default");
     await expect(
       import("@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions"),
     ).resolves.toHaveProperty("useAutomatedAssessmentActions");

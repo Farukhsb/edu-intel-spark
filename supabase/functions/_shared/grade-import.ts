@@ -2,6 +2,16 @@ import { z } from "npm:zod";
 
 export type GradeImportMethod = "csv" | "image";
 
+export type GradeImportRubricItem = {
+  key: string;
+  label: string;
+  score: number;
+  maxScore: number;
+  weight: number;
+  normalizedScore: number;
+  raw: Record<string, string>;
+};
+
 export type GradeImportSourceRow = {
   rowNumber: number;
   studentName: string;
@@ -10,6 +20,7 @@ export type GradeImportSourceRow = {
   maxScore: number;
   submissionDate: string | null;
   notes: string | null;
+  rubricBreakdown: GradeImportRubricItem[];
   raw: Record<string, string>;
 };
 
@@ -66,6 +77,7 @@ const SCORE_KEYS = ["score", "grade", "mark", "awarded_score", "obtained_score"]
 const MAX_SCORE_KEYS = ["max_score", "maximum_score", "max", "total", "total_score"];
 const DATE_KEYS = ["submission_date", "submitted_at", "date", "timestamp"];
 const NOTE_KEYS = ["notes", "note", "feedback", "comment", "remarks"];
+const RUBRIC_PREFIXES = ["rubric", "criterion"];
 
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "_");
@@ -86,6 +98,12 @@ function parseNumericValue(value: string | null | undefined) {
   if (!cleaned) return null;
   const numeric = Number(cleaned);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function isRubricHeader(header: string) {
+  return RUBRIC_PREFIXES.some((prefix) =>
+    header === prefix || header.startsWith(`${prefix}_`) || header.startsWith(`${prefix}-`)
+  );
 }
 
 function parseDelimitedText(text: string) {
@@ -152,6 +170,129 @@ function makeStableRowKey(row: { studentName: string; studentEmail: string | nul
   return row.studentEmail ? `email:${row.studentEmail}` : `name:${normalizeName(row.studentName)?.toLowerCase() ?? ""}`;
 }
 
+function parseRubricBreakdown(raw: Record<string, string>, fallbackMaxScore: number): GradeImportRubricItem[] {
+  const rubricItems = new Map<string, GradeImportRubricItem>();
+  const suffixes: Array<{ suffix: string; field: "label" | "score" | "weight" | "max_score" }> = [
+    { suffix: "_max_score", field: "max_score" },
+    { suffix: "_maxscore", field: "max_score" },
+    { suffix: "_weight", field: "weight" },
+    { suffix: "_score", field: "score" },
+    { suffix: "_name", field: "label" },
+    { suffix: "_label", field: "label" },
+  ];
+
+  for (const [header, value] of Object.entries(raw)) {
+    const normalizedHeader = normalizeHeader(header);
+    if (!isRubricHeader(normalizedHeader)) continue;
+
+    const prefixMatch = RUBRIC_PREFIXES.find((prefix) =>
+      normalizedHeader === prefix || normalizedHeader.startsWith(`${prefix}_`) || normalizedHeader.startsWith(`${prefix}-`)
+    );
+    if (!prefixMatch) continue;
+
+    const remainder = normalizedHeader.slice(prefixMatch.length).replace(/^[_-]+/, "");
+    if (!remainder) continue;
+
+    let field: "label" | "score" | "weight" | "max_score" = "label";
+    let key = remainder;
+    for (const candidate of suffixes) {
+      if (remainder === candidate.suffix.slice(1)) {
+        field = candidate.field;
+        key = `criterion_${rubricItems.size + 1}`;
+        break;
+      }
+      if (remainder.endsWith(candidate.suffix)) {
+        field = candidate.field;
+        key = remainder.slice(0, -candidate.suffix.length).replace(/^[_-]+/, "");
+        break;
+      }
+    }
+    if (!key) {
+      key = `criterion_${rubricItems.size + 1}`;
+    }
+
+    const existing = rubricItems.get(key) ?? {
+      key,
+      label: "",
+      score: Number.NaN,
+      maxScore: fallbackMaxScore,
+      weight: 1,
+      normalizedScore: Number.NaN,
+      raw: {},
+    };
+
+    existing.raw[header] = value;
+
+    if (field === "label") {
+      existing.label = value.trim();
+    } else if (field === "score") {
+      const score = parseNumericValue(value);
+      if (score != null) existing.score = score;
+    } else if (field === "weight") {
+      const weight = parseNumericValue(value);
+      if (weight != null && weight >= 0) existing.weight = weight;
+    } else if (field === "max_score") {
+      const maxScore = parseNumericValue(value);
+      if (maxScore != null && maxScore > 0) existing.maxScore = maxScore;
+    }
+
+    rubricItems.set(key, existing);
+  }
+
+  return Array.from(rubricItems.values())
+    .map((item, index) => {
+      const label = item.label.trim() || item.key.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+      const maxScore = Number.isFinite(item.maxScore) && item.maxScore > 0 ? item.maxScore : fallbackMaxScore;
+      const score = Number.isFinite(item.score) ? item.score : Number.NaN;
+      const normalizedScore = Number.isFinite(score) && maxScore > 0
+        ? Math.round(((score / maxScore) * 100) * 100) / 100
+        : Number.NaN;
+
+      return {
+        ...item,
+        key: item.key || `criterion_${index + 1}`,
+        label,
+        maxScore,
+        normalizedScore,
+      };
+    })
+    .filter((item) => item.label.length > 0 || Number.isFinite(item.score) || Number.isFinite(item.weight));
+}
+
+export function calculateWeightedRubricScore(
+  rubricBreakdown: GradeImportRubricItem[],
+  assignmentMaxScore: number,
+) {
+  if (!Array.isArray(rubricBreakdown) || rubricBreakdown.length === 0) {
+    return null;
+  }
+
+  const usableItems = rubricBreakdown.filter((item) =>
+    Number.isFinite(item.score) &&
+    Number.isFinite(item.maxScore) &&
+    item.maxScore > 0 &&
+    Number.isFinite(item.weight) &&
+    item.weight >= 0,
+  );
+
+  if (usableItems.length === 0) {
+    return null;
+  }
+
+  const totalWeight = usableItems.reduce((sum, item) => sum + item.weight, 0);
+  if (totalWeight <= 0) {
+    return null;
+  }
+
+  const normalizedPercent = usableItems.reduce((sum, item) => {
+    const itemPercent = (item.score / item.maxScore) * 100;
+    return sum + (itemPercent * item.weight);
+  }, 0) / totalWeight;
+
+  const scaled = (normalizedPercent / 100) * assignmentMaxScore;
+  return Math.round(scaled * 100) / 100;
+}
+
 export function parseGradeImportCsv(text: string, fallbackMaxScore: number) {
   const rows = parseDelimitedText(text);
   if (rows.length === 0) return [];
@@ -178,6 +319,7 @@ export function parseGradeImportCsv(text: string, fallbackMaxScore: number) {
     for (let i = 0; i < headers.length; i++) {
       raw[headers[i]] = cols[i] ?? "";
     }
+    const rubricBreakdown = parseRubricBreakdown(raw, fallbackMaxScore);
 
     return {
       rowNumber: index + 2,
@@ -187,6 +329,7 @@ export function parseGradeImportCsv(text: string, fallbackMaxScore: number) {
       maxScore,
       submissionDate,
       notes,
+      rubricBreakdown,
       raw,
     };
   });
@@ -247,6 +390,8 @@ export function buildGradeImportPreview(params: {
   for (const row of params.rows) {
     const issues: GradeImportIssue[] = [];
     const validation = GradeImportSourceRowSchema.safeParse(row);
+    const weightedRubricScore = calculateWeightedRubricScore(row.rubricBreakdown, params.assignmentMaxScore);
+    const hasRubricEvidence = row.rubricBreakdown.length > 0 && weightedRubricScore != null;
 
     if (!row.studentName.trim()) {
       issues.push(buildIssue("missing_name", "Missing student name", "error"));
@@ -254,7 +399,7 @@ export function buildGradeImportPreview(params: {
     if (!row.studentEmail && !row.studentName.trim()) {
       issues.push(buildIssue("missing_identity", "Missing student name or email", "error"));
     }
-    if (!Number.isFinite(row.score)) {
+    if (!Number.isFinite(row.score) && !hasRubricEvidence) {
       issues.push(buildIssue("invalid_score", "Score is missing or invalid", "error"));
     }
     if (!Number.isFinite(row.maxScore) || row.maxScore <= 0) {
@@ -275,7 +420,9 @@ export function buildGradeImportPreview(params: {
     }
     seenKeys.add(duplicateKey);
 
-    const normalizedScore = normalizeImportedScore(row.score, row.maxScore, params.assignmentMaxScore);
+    const normalizedScore = hasRubricEvidence
+      ? weightedRubricScore
+      : normalizeImportedScore(row.score, row.maxScore, params.assignmentMaxScore);
     if (normalizedScore == null) {
       issues.push(buildIssue("score_normalization_failed", "Score could not be normalized", "error"));
     }
@@ -284,6 +431,9 @@ export function buildGradeImportPreview(params: {
       if (normalizedScore < 0 || normalizedScore > params.assignmentMaxScore) {
         issues.push(buildIssue("score_out_of_range", "Score is outside the assignment max score", "error"));
       }
+    }
+    if (row.rubricBreakdown.length > 0 && weightedRubricScore == null) {
+      issues.push(buildIssue("rubric_weighting_failed", "Rubric column scores could not be weighted", "error"));
     }
 
     const match = matchSubmission(row, params.submissions);
@@ -372,6 +522,7 @@ export function buildImportedGradePayload(params: {
     submission_action: params.row.submissionAction,
     matched_submission_id: params.row.matchedSubmissionId,
     notes: params.row.notes,
+    rubric_breakdown: params.row.rubricBreakdown,
   };
 
   const existingGrade = params.existingGrade ?? null;
