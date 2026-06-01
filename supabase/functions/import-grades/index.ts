@@ -11,6 +11,7 @@ import {
   buildSyntheticSubmissionFileUrl,
   parseGradeImportCsv,
   type GradeImportMethod,
+  type GradeImportRubricItem,
   type GradeImportSourceRow,
   type SubmissionCandidate,
   summarizeRejectedRows,
@@ -28,6 +29,9 @@ type ParsedImportRequest = {
 
 const IMPORT_RATE_LIMIT_SCOPE = "import-grades";
 const DEFAULT_IMPORT_MODEL = "gpt-4o-mini";
+const DEFAULT_IMPORT_BATCH_SIZE = 50;
+const DEFAULT_TEMP_IMAGE_RETENTION_DAYS = 7;
+const TEMP_IMAGE_BUCKET = "grade-import-temp";
 const HYBRID_IMPORT_ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 
 function readEnv(name: string) {
@@ -62,6 +66,157 @@ function sanitizeFilePathSegment(value: string) {
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "import";
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function getImportBatchSize() {
+  const raw = readEnv("HYBRID_IMPORT_BATCH_SIZE");
+  const parsed = raw ? Number(raw) : DEFAULT_IMPORT_BATCH_SIZE;
+  if (!Number.isFinite(parsed)) return DEFAULT_IMPORT_BATCH_SIZE;
+  return Math.max(1, Math.min(250, Math.trunc(parsed)));
+}
+
+function getTempImageRetentionDays() {
+  const raw = readEnv("HYBRID_IMPORT_TEMP_RETENTION_DAYS");
+  const parsed = raw ? Number(raw) : DEFAULT_TEMP_IMAGE_RETENTION_DAYS;
+  if (!Number.isFinite(parsed)) return DEFAULT_TEMP_IMAGE_RETENTION_DAYS;
+  return Math.max(1, Math.min(90, Math.trunc(parsed)));
+}
+
+function normalizeRubricItems(
+  value: unknown,
+  fallbackMaxScore: number,
+): GradeImportRubricItem[] {
+  const candidateRows = Array.isArray(value) ? value : [];
+  return candidateRows.map((entry, index) => {
+    const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+    const label = typeof record.label === "string"
+      ? record.label
+      : typeof record.name === "string"
+        ? record.name
+        : typeof record.criterion === "string"
+          ? record.criterion
+          : `Criterion ${index + 1}`;
+    const scoreRaw = typeof record.score === "number" ? record.score : Number(record.score);
+    const maxRaw = typeof record.max_score === "number" ? record.max_score : Number(record.max_score);
+    const weightRaw = typeof record.weight === "number" ? record.weight : Number(record.weight);
+    const maxScore = Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : fallbackMaxScore;
+    const score = Number.isFinite(scoreRaw) ? scoreRaw : Number.NaN;
+    const weight = Number.isFinite(weightRaw) && weightRaw >= 0 ? weightRaw : 1;
+    const normalizedScore = Number.isFinite(score) && maxScore > 0 ? Math.round(((score / maxScore) * 100) * 100) / 100 : Number.NaN;
+
+    return {
+      key: typeof record.key === "string" && record.key.trim() ? record.key.trim() : `criterion_${index + 1}`,
+      label: label.trim(),
+      score,
+      maxScore,
+      weight,
+      normalizedScore,
+      raw: Object.fromEntries(
+        Object.entries(record).map(([key, itemValue]) => [key, typeof itemValue === "string" ? itemValue : JSON.stringify(itemValue)]),
+      ),
+    };
+  }).filter((item) => item.label.length > 0);
+}
+
+async function uploadTempImageFiles(params: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  importId: string;
+  files: File[];
+}) {
+  const uploadedPaths: string[] = [];
+  try {
+    for (const [index, file] of params.files.entries()) {
+      if (!file.type.startsWith("image/")) {
+        throw new HttpError(400, "Image imports only accept image files");
+      }
+
+      const fileName = `${index + 1}-${sanitizeFilePathSegment(file.name || "image")}`;
+      const path = `grade-imports/${sanitizeFilePathSegment(params.importId)}/temp/${fileName}`;
+      const { error } = await params.supabaseAdmin.storage.from(TEMP_IMAGE_BUCKET).upload(path, file, {
+        contentType: file.type || "application/octet-stream",
+        upsert: true,
+      });
+      if (error) {
+        throw new Error(error.message || "Failed to upload a temporary image for processing");
+      }
+      uploadedPaths.push(path);
+    }
+    return uploadedPaths;
+  } catch (error) {
+    if (uploadedPaths.length > 0) {
+      await removeTempImageFiles({ supabaseAdmin: params.supabaseAdmin, paths: uploadedPaths });
+    }
+    throw error;
+  }
+}
+
+async function removeTempImageFiles(params: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  paths: string[];
+}) {
+  const uniquePaths = Array.from(new Set(params.paths.filter(Boolean)));
+  if (uniquePaths.length === 0) return;
+  const { error } = await params.supabaseAdmin.storage.from(TEMP_IMAGE_BUCKET).remove(uniquePaths);
+  if (error) {
+    logWarn("import-grades temp image cleanup failed", {
+      bucket: TEMP_IMAGE_BUCKET,
+      paths: uniquePaths.length,
+      error,
+    });
+  }
+}
+
+async function purgeExpiredTempImportArtifacts(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+) {
+  const cutoff = new Date(Date.now() - getTempImageRetentionDays() * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("grade_imports")
+    .select("id, file_path, source_metadata, created_at")
+    .eq("import_method", "image")
+    .lt("created_at", cutoff);
+
+  if (error) {
+    logWarn("import-grades stale temp cleanup query failed", { error });
+    return;
+  }
+
+  const paths = new Set<string>();
+  for (const row of data ?? []) {
+    if (typeof row.file_path === "string" && row.file_path.trim()) {
+      paths.add(row.file_path);
+    }
+    const sourceMetadata = row.source_metadata && typeof row.source_metadata === "object"
+      ? row.source_metadata as Record<string, unknown>
+      : null;
+    const tempPaths = sourceMetadata && Array.isArray(sourceMetadata.temp_image_paths)
+      ? sourceMetadata.temp_image_paths
+      : [];
+    for (const tempPath of tempPaths) {
+      if (typeof tempPath === "string" && tempPath.trim()) {
+        paths.add(tempPath);
+      }
+    }
+  }
+
+  if (paths.size === 0) return;
+  const { error: cleanupError } = await supabaseAdmin.storage.from(TEMP_IMAGE_BUCKET).remove(Array.from(paths));
+  if (cleanupError) {
+    logWarn("import-grades stale temp cleanup failed", {
+      bucket: TEMP_IMAGE_BUCKET,
+      paths: paths.size,
+      error: cleanupError,
+    });
+  }
 }
 
 async function sha256Hex(value: string) {
@@ -182,6 +337,7 @@ function buildImageExtractionPrompt(maxScore: number) {
     "Extract the grade table from this image as JSON.",
     "Return a JSON object with a rows array.",
     "Each row must include student_name, student_email if visible, score, max_score, submission_date if visible, and notes if visible.",
+    "If the image shows rubric columns or a per-criterion breakdown, include rubric_breakdown as an array of objects with key, label, score, max_score, and weight when visible.",
     `Use ${maxScore} as the default max_score when the image does not show one clearly.`,
     "Return only valid JSON.",
   ].join(" ");
@@ -237,6 +393,10 @@ async function extractRowsFromImageFile(file: File, maxScore: number) {
     const maxScoreRaw = typeof row.max_score === "number" ? row.max_score : Number(row.max_score);
     const submissionDate = typeof row.submission_date === "string" ? row.submission_date : null;
     const notes = typeof row.notes === "string" ? row.notes : null;
+    const rubricBreakdown = normalizeRubricItems(
+      row.rubric_breakdown ?? row.rubric ?? row.criteria ?? row.breakdown,
+      Number.isFinite(maxScoreRaw) && maxScoreRaw > 0 ? maxScoreRaw : maxScore,
+    );
     return {
       rowNumber: index + 1,
       studentName,
@@ -245,6 +405,7 @@ async function extractRowsFromImageFile(file: File, maxScore: number) {
       maxScore: Number.isFinite(maxScoreRaw) && maxScoreRaw > 0 ? maxScoreRaw : maxScore,
       submissionDate,
       notes,
+      rubricBreakdown,
       raw: Object.fromEntries(
         Object.entries(row).map(([key, value]) => [key, typeof value === "string" ? value : JSON.stringify(value)]),
       ),
@@ -374,6 +535,8 @@ Deno.serve(async (req) => {
       });
     }
 
+    await purgeExpiredTempImportArtifacts(supabaseAdmin);
+
     const request = await readImportRequest(req);
     if (!request.assignmentId) {
       throw new HttpError(400, "Missing assignmentId");
@@ -465,160 +628,205 @@ Deno.serve(async (req) => {
     const sourceFileName = request.sourceFileName ?? request.files[0]?.name ?? (request.importMethod === "csv" ? "grades.csv" : "grades-image");
     const sourceFileHash = await hashFiles(request.importMethod, request.files, request.csvText);
     const importId = crypto.randomUUID();
-    const sourceFilePath = `grade-imports/${sanitizeFilePathSegment(importId)}/${sanitizeFilePathSegment(sourceFileName)}`;
-    const importMetadata = {
-      status: "in_progress",
-      assignment_id: request.assignmentId,
-      assignment_title: assignment.title,
-      import_method: request.importMethod,
-      create_missing_submissions: request.createMissingSubmissions,
-      source_file_name: sourceFileName,
-      source_file_hash: sourceFileHash,
-      rows_processed: preview.summary.rowsProcessed,
-      rows_accepted: preview.summary.rowsAccepted,
-      rows_rejected: preview.summary.rowsRejected,
-      rows_with_warnings: preview.summary.rowsWithWarnings,
-      preview_only: false,
-      created_missing_submissions: preview.summary.createdSyntheticSubmissions,
-      matched_existing_submissions: preview.summary.matchedExistingSubmissions,
-    };
+    const batchSize = getImportBatchSize();
+    const tempImagePaths: string[] = [];
 
-    const { error: importInsertError } = await supabaseAdmin.from("grade_imports").insert({
-      id: importId,
-      imported_by: user.id,
-      import_method: request.importMethod,
-      file_path: sourceFilePath,
-      rows_processed: preview.summary.rowsProcessed,
-      rows_accepted: preview.summary.rowsAccepted,
-      source_metadata: importMetadata,
-    });
-
-    if (importInsertError) {
-      logError("import-grades import log insert failed", importInsertError, {
-        assignmentId: request.assignmentId,
-        importId,
-      });
-      throw new Error("Failed to create the import audit record");
-    }
-
-    const submissionRowsToCreate = acceptedRows.filter((row) => row.submissionAction === "create");
-    for (const row of submissionRowsToCreate) {
-      const submissionInsert = await supabaseAdmin.from("submissions").insert({
-        assignment_id: request.assignmentId,
-        student_name: row.studentName || null,
-        student_email: row.studentEmail,
-        file_name: `Imported grade ${row.rowNumber}`,
-        file_url: buildSyntheticSubmissionFileUrl(importId, row.rowNumber),
-        file_type: "import",
-        status: "approved",
-        submitted_at: row.submissionDate || new Date().toISOString(),
-        uploaded_by: user.id,
-      }).select("id");
-
-      if (submissionInsert.error || !submissionInsert.data?.[0]?.id) {
-        throw new Error(submissionInsert.error?.message || "Failed to create an imported submission record");
-      }
-      row.matchedSubmissionId = submissionInsert.data[0].id;
-    }
-
-    const submissionIds = acceptedRows
-      .map((row) => row.matchedSubmissionId)
-      .filter((value): value is string => Boolean(value));
-
-    const existingGradesBySubmission = await loadExistingGrades(supabaseAdmin, submissionIds);
-
-    for (const row of acceptedRows) {
-      const submissionId = row.matchedSubmissionId;
-      if (!submissionId) {
-        throw new Error(`Missing submission linkage for row ${row.rowNumber}`);
-      }
-
-      const existingGrade = existingGradesBySubmission.get(submissionId) ?? null;
-      const payload = buildImportedGradePayload({
-        importId,
-        row,
-        submissionId,
-        lecturerId: user.id,
-        sourceFileName,
-        sourceFileHash,
-        importMethod: request.importMethod,
-        existingGrade,
-      });
-
-      const { error: gradeUpsertError } = await supabaseAdmin.from("grades").upsert(
-        {
-          ...payload,
-          submission_id: submissionId,
-        },
-        { onConflict: "submission_id" },
-      );
-
-      if (gradeUpsertError) {
-        throw new Error(gradeUpsertError.message || "Failed to save an imported grade");
-      }
-
-      const { error: submissionUpdateError } = await supabaseAdmin
-        .from("submissions")
-        .update({
-          status: "approved",
-          student_name: row.studentName || null,
-          student_email: row.studentEmail,
-        })
-        .eq("id", submissionId);
-
-      if (submissionUpdateError) {
-        logWarn("import-grades submission update failed", {
-          assignmentId: request.assignmentId,
+    try {
+      if (request.importMethod === "image") {
+        tempImagePaths.push(...await uploadTempImageFiles({
+          supabaseAdmin,
           importId,
-          submissionId,
-          error: submissionUpdateError,
-        });
+          files: request.files,
+        }));
       }
-    }
 
-    const { error: importUpdateError } = await supabaseAdmin
-      .from("grade_imports")
-      .update({
+      const sourceFilePath = request.importMethod === "image"
+        ? (tempImagePaths[0] ?? `grade-imports/${sanitizeFilePathSegment(importId)}/${sanitizeFilePathSegment(sourceFileName)}`)
+        : `grade-imports/${sanitizeFilePathSegment(importId)}/${sanitizeFilePathSegment(sourceFileName)}`;
+      const hasRubricColumns = preview.rows.some((row) => row.rubricBreakdown.length > 0);
+      const importMetadata = {
+        status: "in_progress",
+        assignment_id: request.assignmentId,
+        assignment_title: assignment.title,
+        import_method: request.importMethod,
+        create_missing_submissions: request.createMissingSubmissions,
+        source_file_name: sourceFileName,
+        source_file_hash: sourceFileHash,
         rows_processed: preview.summary.rowsProcessed,
         rows_accepted: preview.summary.rowsAccepted,
-        source_metadata: {
-          ...importMetadata,
-          status: "completed",
-          import_id: importId,
-        },
-      })
-      .eq("id", importId);
+        rows_rejected: preview.summary.rowsRejected,
+        rows_with_warnings: preview.summary.rowsWithWarnings,
+        preview_only: false,
+        created_missing_submissions: preview.summary.createdSyntheticSubmissions,
+        matched_existing_submissions: preview.summary.matchedExistingSubmissions,
+        batch_size: batchSize,
+        batch_count: Math.max(1, Math.ceil(acceptedRows.length / batchSize)),
+        temp_image_paths: tempImagePaths,
+        rubric_columns_present: hasRubricColumns,
+      };
 
-    if (importUpdateError) {
-      logWarn("import-grades import log update failed", {
-        assignmentId: request.assignmentId,
-        importId,
-        error: importUpdateError,
+      const { error: importInsertError } = await supabaseAdmin.from("grade_imports").insert({
+        id: importId,
+        imported_by: user.id,
+        import_method: request.importMethod,
+        file_path: sourceFilePath,
+        rows_processed: preview.summary.rowsProcessed,
+        rows_accepted: preview.summary.rowsAccepted,
+        source_metadata: importMetadata,
       });
+
+      if (importInsertError) {
+        logError("import-grades import log insert failed", importInsertError, {
+          assignmentId: request.assignmentId,
+          importId,
+        });
+        throw new Error("Failed to create the import audit record");
+      }
+
+      const submissionRowsToCreate = acceptedRows.filter((row) => row.submissionAction === "create");
+      for (const row of submissionRowsToCreate) {
+        const submissionInsert = await supabaseAdmin.from("submissions").insert({
+          assignment_id: request.assignmentId,
+          student_name: row.studentName || null,
+          student_email: row.studentEmail,
+          file_name: `Imported grade ${row.rowNumber}`,
+          file_url: buildSyntheticSubmissionFileUrl(importId, row.rowNumber),
+          file_type: "import",
+          status: "approved",
+          submitted_at: row.submissionDate || new Date().toISOString(),
+          uploaded_by: user.id,
+        }).select("id");
+
+        if (submissionInsert.error || !submissionInsert.data?.[0]?.id) {
+          throw new Error(submissionInsert.error?.message || "Failed to create an imported submission record");
+        }
+        row.matchedSubmissionId = submissionInsert.data[0].id;
+      }
+
+      const submissionIds = acceptedRows
+        .map((row) => row.matchedSubmissionId)
+        .filter((value): value is string => Boolean(value));
+
+      const existingGradesBySubmission = await loadExistingGrades(supabaseAdmin, submissionIds);
+      const acceptedBatches = chunkArray(acceptedRows, batchSize);
+
+      for (const [batchIndex, batch] of acceptedBatches.entries()) {
+        logInfo("import-grades batch started", {
+          function: "import-grades",
+          assignmentId: request.assignmentId,
+          importId,
+          batchIndex: batchIndex + 1,
+          batchCount: acceptedBatches.length,
+          batchSize: batch.length,
+        });
+
+        await Promise.all(batch.map(async (row) => {
+          const submissionId = row.matchedSubmissionId;
+          if (!submissionId) {
+            throw new Error(`Missing submission linkage for row ${row.rowNumber}`);
+          }
+
+          const existingGrade = existingGradesBySubmission.get(submissionId) ?? null;
+          const payload = buildImportedGradePayload({
+            importId,
+            row,
+            submissionId,
+            lecturerId: user.id,
+            sourceFileName,
+            sourceFileHash,
+            importMethod: request.importMethod,
+            existingGrade,
+          });
+
+          const { error: gradeUpsertError } = await supabaseAdmin.from("grades").upsert(
+            {
+              ...payload,
+              submission_id: submissionId,
+            },
+            { onConflict: "submission_id" },
+          );
+
+          if (gradeUpsertError) {
+            throw new Error(gradeUpsertError.message || "Failed to save an imported grade");
+          }
+
+          const { error: submissionUpdateError } = await supabaseAdmin
+            .from("submissions")
+            .update({
+              status: "approved",
+              student_name: row.studentName || null,
+              student_email: row.studentEmail,
+            })
+            .eq("id", submissionId);
+
+          if (submissionUpdateError) {
+            logWarn("import-grades submission update failed", {
+              assignmentId: request.assignmentId,
+              importId,
+              submissionId,
+              error: submissionUpdateError,
+            });
+          }
+        }));
+
+        logInfo("import-grades batch completed", {
+          function: "import-grades",
+          assignmentId: request.assignmentId,
+          importId,
+          batchIndex: batchIndex + 1,
+          batchCount: acceptedBatches.length,
+          batchSize: batch.length,
+        });
+      }
+
+      const { error: importUpdateError } = await supabaseAdmin
+        .from("grade_imports")
+        .update({
+          rows_processed: preview.summary.rowsProcessed,
+          rows_accepted: preview.summary.rowsAccepted,
+          source_metadata: {
+            ...importMetadata,
+            status: "completed",
+            import_id: importId,
+          },
+        })
+        .eq("id", importId);
+
+      if (importUpdateError) {
+        logWarn("import-grades import log update failed", {
+          assignmentId: request.assignmentId,
+          importId,
+          error: importUpdateError,
+        });
+      }
+
+      logInfo("import-grades completed", {
+        function: "import-grades",
+        assignmentId: request.assignmentId,
+        importMethod: request.importMethod,
+        rowsProcessed: preview.summary.rowsProcessed,
+        rowsAccepted: preview.summary.rowsAccepted,
+        rowsRejected: preview.summary.rowsRejected,
+        createdSyntheticSubmissions: preview.summary.createdSyntheticSubmissions,
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        committed: true,
+        importId,
+        assignmentId: request.assignmentId,
+        importMethod: request.importMethod,
+        summary: preview.summary,
+        rows: preview.rows,
+        rejectedRows: summarizeRejectedRows(preview.rows),
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } finally {
+      if (tempImagePaths.length > 0) {
+        await removeTempImageFiles({ supabaseAdmin, paths: tempImagePaths });
+      }
     }
-
-    logInfo("import-grades completed", {
-      function: "import-grades",
-      assignmentId: request.assignmentId,
-      importMethod: request.importMethod,
-      rowsProcessed: preview.summary.rowsProcessed,
-      rowsAccepted: preview.summary.rowsAccepted,
-      rowsRejected: preview.summary.rowsRejected,
-      createdSyntheticSubmissions: preview.summary.createdSyntheticSubmissions,
-    });
-
-    return new Response(JSON.stringify({
-      success: true,
-      committed: true,
-      importId,
-      assignmentId: request.assignmentId,
-      importMethod: request.importMethod,
-      summary: preview.summary,
-      rows: preview.rows,
-      rejectedRows: summarizeRejectedRows(preview.rows),
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   } catch (error) {
     logError("import-grades error", error);
     return jsonError(error, corsHeaders);

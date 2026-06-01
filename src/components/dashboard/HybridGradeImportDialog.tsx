@@ -42,6 +42,7 @@ type GradeImportPreviewRow = {
   maxScore: number;
   submissionDate: string | null;
   notes: string | null;
+  rubricBreakdown: Array<Record<string, unknown>>;
   normalizedScore: number;
   matchedSubmissionId: string | null;
   submissionAction: "match" | "create";
@@ -346,7 +347,11 @@ export const HybridGradeImportDialog = ({
                     <div className="space-y-1">
                       <p className="font-medium">{row.normalizedScore.toFixed(2)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {row.score}/{row.maxScore}
+                        {Number.isFinite(row.score)
+                          ? `${row.score}/${row.maxScore}`
+                          : row.rubricBreakdown.length > 0
+                            ? "Weighted from rubric columns"
+                            : "No raw score provided"}
                       </p>
                     </div>
                   </TableCell>
@@ -480,7 +485,7 @@ export const HybridGradeImportDialog = ({
                           id="hybrid-grade-import-csv-text"
                           value={draft.csvText}
                           onChange={(event) => setDraft((current) => ({ ...current, csvText: event.target.value }))}
-                          placeholder="student_name,student_email,score,max_score,submission_date,notes"
+                          placeholder="student_name,student_email,score,max_score,submission_date,notes,rubric_analysis_score,rubric_analysis_weight"
                           className="min-h-[180px]"
                         />
                       </div>
@@ -535,6 +540,7 @@ export const HybridGradeImportDialog = ({
 
               <div className="rounded-xl border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
                 CSV is the primary path. Images are a convenience path with best-effort extraction and mandatory review.
+                Rubric columns are supported for weighted imports when you need criterion-level scores.
               </div>
             </CardContent>
           </Card>
