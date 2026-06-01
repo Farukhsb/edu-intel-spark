@@ -23,6 +23,8 @@ const EXTERNAL_EXAMINER_SUBMISSION_FIELDS =
   "id, assignment_id, student_id, student_name, student_email, status, submitted_at";
 const EXTERNAL_EXAMINER_GRADE_FIELDS =
   "submission_id, ai_score, lecturer_score, final_score, grade_source, ai_feedback, lecturer_feedback, final_feedback, reviewed_at, reviewed_by";
+const EXTERNAL_EXAMINER_GRADE_FIELDS_NO_SOURCE =
+  "submission_id, ai_score, lecturer_score, final_score, ai_feedback, lecturer_feedback, final_feedback, reviewed_at, reviewed_by";
 const EXTERNAL_EXAMINER_PROFILE_FIELDS = "id, full_name, email";
 
 const STUDENT_GRADE_SUBMISSION_FIELDS = "id, assignment_id, file_name, file_url, status, submitted_at, student_id";
@@ -43,6 +45,13 @@ export class ExternalExaminerDatasetError extends Error {
     this.cause = cause;
   }
 }
+
+const isGradeSourceLookupError = (error: unknown) => {
+  if (!error || typeof error !== "object") return false;
+
+  const value = error as { message?: string };
+  return /grade_source|column|schema/i.test(value.message ?? "");
+};
 
 export const fetchAccreditationDataset = async () => {
   const [
@@ -121,6 +130,27 @@ export const fetchExternalExaminerDataset = async () => {
 
   const results = await Promise.allSettled(stages.map((stage) => stage.promise));
 
+  const gradesStageIndex = stages.findIndex((stage) => stage.key === "grades");
+  const gradesStageResult = results[gradesStageIndex];
+  if (
+    gradesStageResult?.status === "fulfilled" &&
+    gradesStageResult.value.error &&
+    isGradeSourceLookupError(gradesStageResult.value.error)
+  ) {
+    const fallbackGrades = await supabase.from("grades").select(EXTERNAL_EXAMINER_GRADE_FIELDS_NO_SOURCE);
+    if (fallbackGrades.error) {
+      throw new ExternalExaminerDatasetError("grades", fallbackGrades.error);
+    }
+
+    results[gradesStageIndex] = {
+      status: "fulfilled",
+      value: {
+        data: fallbackGrades.data,
+        error: null,
+      },
+    };
+  }
+
   for (const [index, result] of results.entries()) {
     const stage = stages[index].key;
     if (result.status === "rejected") {
@@ -131,12 +161,10 @@ export const fetchExternalExaminerDataset = async () => {
     }
   }
 
-  const [assignmentsResult, submissionsResult, gradesResult, profilesResult] = results.map((result) => {
-    if (result.status === "fulfilled") {
-      return result.value;
-    }
-    return { data: null, error: null };
-  });
+  const normalizedResults: Array<{ data: unknown[] | null; error: unknown | null }> = results.map((result) =>
+    result.status === "fulfilled" ? result.value : { data: null, error: null },
+  );
+  const [assignmentsResult, submissionsResult, gradesResult, profilesResult] = normalizedResults;
 
   return {
     assignments: (assignmentsResult.data ?? []) as ExternalExaminerAssignmentRow[],

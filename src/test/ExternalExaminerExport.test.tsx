@@ -143,6 +143,7 @@ const setupSupabase = ({
   submissionsError,
   gradesError,
   profilesError,
+  gradesFallback,
 }: {
   assignments?: AssignmentRow[];
   submissions?: SubmissionRow[];
@@ -153,9 +154,10 @@ const setupSupabase = ({
   submissionsError?: Error;
   gradesError?: Error;
   profilesError?: Error;
+  gradesFallback?: GradeRow[];
 } = {}) => {
   mocks.supabase.from.mockImplementation((table: string) => ({
-    select: vi.fn(() => {
+    select: vi.fn((fields: string) => {
       if (table === "assignments") {
         if (assignmentsError) {
           return Promise.resolve({ data: null, error: assignmentsError });
@@ -173,6 +175,9 @@ const setupSupabase = ({
       }
       if (table === "grades") {
         if (gradesError) {
+          if (!fields.includes("grade_source") && gradesFallback) {
+            return Promise.resolve({ data: gradesFallback, error: null });
+          }
           return Promise.resolve({ data: null, error: gradesError });
         }
         return Promise.resolve({ data: grades, error: null });
@@ -370,6 +375,23 @@ describe("ExternalExaminerExport", () => {
 
     expect(await screen.findByText("External examiner export unavailable")).toBeInTheDocument();
     expect(screen.getByText("External examiner data could not be loaded right now. Failed to load grades. Try again later.")).toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+
+  it("falls back when the grades query cannot read grade_source", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    setupSupabase({
+      gradesError: new Error("column grade_source does not exist"),
+      gradesFallback: defaultGrades,
+    });
+
+    render(<ExternalExaminerExport />);
+
+    expect(await screen.findByText("Export Preview")).toBeInTheDocument();
+    expect(screen.getByText("Sam Student")).toBeInTheDocument();
+    expect(screen.getByText("Not recorded")).toBeInTheDocument();
+    expect(screen.queryByText("External examiner export unavailable")).not.toBeInTheDocument();
 
     consoleError.mockRestore();
   });
