@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { CriterionBars } from "@/components/dashboard/CriterionBars";
 import { useAuth } from "@/contexts/AuthContext";
 import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 
@@ -138,34 +139,20 @@ export const SubmissionReviewDialog = ({
                 </p>
               </div>
               {(grade.ai_breakdown?.length ?? 0) > 0 && (
-                <div className="space-y-1 pt-2">
+                <div className="space-y-2 pt-2">
                   <p className="text-xs font-medium text-muted-foreground">Breakdown</p>
-                  <div className="max-h-48 space-y-1 overflow-y-auto rounded-md bg-background/80 p-3">
-                    {(grade.ai_breakdown ?? []).map((breakdownItem, index) => (
-                      <div key={index} className="space-y-1 rounded-md border bg-background p-2 text-xs">
-                        <div className="flex justify-between gap-3">
-                          <span>{breakdownItem.criterion}</span>
-                          <span className="font-medium">
-                            {breakdownItem.score}/{breakdownItem.max_score}
-                          </span>
-                        </div>
-                        {typeof breakdownItem.confidence_score === "number" && (
-                          <p className="text-muted-foreground">
-                            Confidence {Math.round(breakdownItem.confidence_score * 100)}%
-                            {breakdownItem.review_required ? " - lecturer review" : ""}
-                          </p>
-                        )}
-                        {breakdownItem.evidence_snippet && (
-                          <p className="text-muted-foreground">Evidence: {breakdownItem.evidence_snippet}</p>
-                        )}
-                        {breakdownItem.error_type && breakdownItem.error_type !== "none" && (
-                          <p className="text-muted-foreground">
-                            Error type: {String(breakdownItem.error_type).replace("_", " ")}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <CriterionBars
+                    compact
+                    items={(grade.ai_breakdown ?? []).map((breakdownItem) => ({
+                      criterion: breakdownItem.criterion,
+                      score: breakdownItem.score,
+                      maxScore: breakdownItem.max_score,
+                      confidenceScore: breakdownItem.confidence_score ?? null,
+                      reviewRequired: breakdownItem.review_required ?? null,
+                      evidenceSnippet: breakdownItem.evidence_snippet ?? null,
+                      errorType: breakdownItem.error_type ?? null,
+                    }))}
+                  />
                 </div>
               )}
             </CardContent>

@@ -89,6 +89,7 @@ describe("navigation schemas", () => {
     const valid = parseAdminDashboardSearchState(
       new URLSearchParams("view=moderation-audit&filter=lecturer"),
     );
+    const compliance = parseAdminDashboardSearchState(new URLSearchParams("view=compliance"));
     const invalid = parseAdminDashboardSearchState(
       new URLSearchParams("view=unknown&filter=staff"),
     );
@@ -96,6 +97,10 @@ describe("navigation schemas", () => {
     expect(valid).toEqual({
       view: "moderation-audit",
       userFilter: "lecturer",
+    });
+    expect(compliance).toEqual({
+      view: "compliance",
+      userFilter: null,
     });
     expect(invalid).toEqual({
       view: "overview",
