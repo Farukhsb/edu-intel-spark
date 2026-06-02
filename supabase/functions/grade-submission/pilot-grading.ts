@@ -1,6 +1,6 @@
-import { getEnv } from "../_shared/auth.ts";
 import type { AssignmentType } from "../_shared/text-analysis.ts";
 import type { RubricCriterion } from "./prompting.ts";
+import { getEnv } from "../_shared/env.ts";
 
 function normalizeShortText(value: string | null | undefined, maxLength: number) {
   const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";

@@ -1,4 +1,3 @@
-import { getEnv } from "../_shared/auth.ts";
 import { logInfo } from "../_shared/log.ts";
 import { classifyAssignmentType } from "../_shared/text-analysis.ts";
 import {
@@ -65,6 +64,7 @@ import type {
   FetchSubmissionContentForGrading,
   SubmissionForGrading,
 } from "./types.ts";
+import { getEnv } from "../_shared/env.ts";
 
 export const PDF_EVIDENCE_INADEQUATE_MESSAGE =
   "We could not extract enough reliable text from this PDF for AI-assisted marking. Please upload a DOCX version or continue with manual review.";

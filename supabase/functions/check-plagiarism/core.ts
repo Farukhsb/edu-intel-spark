@@ -1,6 +1,6 @@
 import { z } from "npm:zod";
-import { getEnv } from "../_shared/auth.ts";
 import type { createAdminClient, requireLecturer } from "../_shared/auth.ts";
+import { getEnv } from "../_shared/env.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,

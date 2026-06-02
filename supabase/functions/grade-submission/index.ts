@@ -1,4 +1,5 @@
-import { createAdminClient, getEnv, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { getEnv } from "../_shared/env.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {

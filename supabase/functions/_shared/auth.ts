@@ -1,12 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-export function getEnv(name: string) {
-  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
-    return Deno.env.get(name);
-  }
-
-  return undefined;
-}
+import { getEnv } from "./env.ts";
 
 export class HttpError extends Error {
   status: number;
