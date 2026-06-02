@@ -1,7 +1,5 @@
 import { useEffect } from "react";
 
-import { env } from "@/lib/env";
-
 const DEFAULT_SITE_NAME = "GradeAI";
 const DEFAULT_OG_IMAGE_PATH = "/pwa-512x512.png";
 
@@ -17,8 +15,10 @@ export interface PageMetadata {
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
 export const getSiteUrl = () => {
-  if (env.VITE_APP_URL) {
-    return trimTrailingSlash(env.VITE_APP_URL);
+  const configuredAppUrl = import.meta.env?.VITE_APP_URL;
+
+  if (typeof configuredAppUrl === "string" && configuredAppUrl.trim()) {
+    return trimTrailingSlash(configuredAppUrl);
   }
 
   if (typeof window !== "undefined" && window.location.origin) {
