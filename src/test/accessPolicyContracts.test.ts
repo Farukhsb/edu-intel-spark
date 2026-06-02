@@ -152,6 +152,20 @@ describe("access policy contracts", () => {
     expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from authenticated");
   });
 
+  it("keeps remaining admin mutators on invoker semantics with narrow admin policies", () => {
+    const source = readRepoFile("supabase/migrations/20260602133000_move_remaining_admin_mutators_to_invoker.sql");
+
+    expect(source).toContain("create policy \"Admins can select institutions for provisioning\"");
+    expect(source).toContain("create policy \"Admins can create institutions\"");
+    expect(source).toContain("create policy \"Admins can update managed profiles\"");
+    expect(source).toContain("create policy \"Admins can manage user roles\"");
+    expect(source).toContain("create policy \"Admins can insert admin audit log\"");
+    expect(source).toContain("security invoker");
+    expect(source).toContain("create or replace function public.admin_assign_user_to_institution(");
+    expect(source).toContain("create or replace function public.admin_create_institution(");
+    expect(source).toContain("create or replace function public.admin_update_user_profile(");
+  });
+
   it("keeps admin oversight RPCs filtered by private.is_admin()", () => {
     const assignmentOversight = readRepoFile("supabase/migrations/20260503122000_add_admin_assignment_oversight_rpc.sql");
     const moderationOverview = readRepoFile("supabase/migrations/20260503123500_add_admin_moderation_overview_rpc.sql");
