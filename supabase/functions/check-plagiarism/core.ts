@@ -1,5 +1,6 @@
 import { z } from "npm:zod";
 import type { createAdminClient, requireLecturer } from "../_shared/auth.ts";
+import { getEnv } from "../_shared/env.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
   DOCUMENT_EXTRACTION_ERROR_MESSAGE,
@@ -56,18 +57,6 @@ const ExistingReviewNoteSchema = z.object({
   history: z.array(z.unknown()).catch([]),
 });
 
-function readEnv(name: string) {
-  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
-    return Deno.env.get(name);
-  }
-
-  if (typeof process !== "undefined" && process.env) {
-    return process.env[name];
-  }
-
-  return undefined;
-}
-
 const MAX_SINGLE_TEXT_CHARS = 12000;
 const MAX_MULTI_TEXT_CHARS = 3500;
 const EXTRACTION_CONCURRENCY = 4;
@@ -88,7 +77,7 @@ const CheckPlagiarismRequestSchema = z
     message: "assignmentId is required",
     path: ["assignmentId"],
   });
-const includeValidationDetails = readEnv("ENV") === "development";
+const includeValidationDetails = getEnv("ENV") === "development";
 
 type IntegrityProviderMode = "llm_legacy" | "internal_text_similarity" | "both";
 
@@ -210,7 +199,7 @@ function countWords(value: string) {
 }
 
 function resolveIntegrityProviderMode(rawBody: Record<string, unknown> | null): IntegrityProviderMode {
-  const envProvider = readEnv("INTEGRITY_PROVIDER_MODE")?.trim().toLowerCase() || "";
+  const envProvider = getEnv("INTEGRITY_PROVIDER_MODE")?.trim().toLowerCase() || "";
   if (envProvider === "llm_legacy" || envProvider === "internal_text_similarity" || envProvider === "both") {
     return envProvider;
   }
@@ -218,10 +207,10 @@ function resolveIntegrityProviderMode(rawBody: Record<string, unknown> | null): 
 }
 
 function resolveMossRunnerConfig(): MossRunnerConfig | null {
-  const isEnabled = readEnv("MOSS_PROVIDER_ENABLED")?.trim().toLowerCase() === "true";
+  const isEnabled = getEnv("MOSS_PROVIDER_ENABLED")?.trim().toLowerCase() === "true";
   if (!isEnabled) return null;
 
-  const runnerUrl = readEnv("MOSS_RUNNER_URL")?.trim() || "";
+  const runnerUrl = getEnv("MOSS_RUNNER_URL")?.trim() || "";
   if (!runnerUrl) {
     logWarn("moss_runner_config_missing_url", {
       function: "check-plagiarism",
@@ -229,11 +218,11 @@ function resolveMossRunnerConfig(): MossRunnerConfig | null {
     return null;
   }
 
-  const timeoutMs = Number(readEnv("MOSS_RUNNER_TIMEOUT_MS") || "20000");
+  const timeoutMs = Number(getEnv("MOSS_RUNNER_TIMEOUT_MS") || "20000");
 
   return {
     runnerUrl,
-    apiKey: readEnv("MOSS_RUNNER_API_SECRET")?.trim() || null,
+    apiKey: getEnv("MOSS_RUNNER_API_SECRET")?.trim() || null,
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 20_000,
   };
 }
@@ -1100,7 +1089,7 @@ export function createCheckPlagiarismHandler(deps: CheckPlagiarismHandlerDeps) {
       );
     }
 
-    const integrityModel = readEnv("OPENAI_INTEGRITY_MODEL") || "gpt-4o-mini";
+    const integrityModel = getEnv("OPENAI_INTEGRITY_MODEL") || "gpt-4o-mini";
     const providerMode = resolveIntegrityProviderMode(rawBody);
     const shouldRunLegacy = providerMode === "llm_legacy";
     const shouldRunInternalProvider = providerMode === "internal_text_similarity" || providerMode === "both";
