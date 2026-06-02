@@ -350,6 +350,7 @@ export const buildAdminDashboardData = ({
     model: string | null;
     retry_count: number;
     failure_category: string | null;
+    details: Record<string, unknown> | null;
   }> = [];
   let latestGradeRun: string | null = null;
   let aiGradingFailures: number | null = null;
@@ -422,6 +423,7 @@ export const buildAdminDashboardData = ({
       model: row.model ?? null,
       retry_count: row.retry_count ?? 0,
       failure_category: row.failure_category ?? null,
+      details: row.details && typeof row.details === "object" ? (row.details as Record<string, unknown>) : null,
     }));
   } catch {
     log.warn("Workflow run telemetry is unavailable to admin dashboard", { view: "system" });
@@ -551,7 +553,14 @@ export const buildAdminDashboardData = ({
       status: row.status,
       provider: row.provider,
       model: row.model,
-      retryCount: row.retry_count,
+      providerRetryCount:
+        typeof row.details?.["provider_retry_count"] === "number"
+          ? (row.details?.["provider_retry_count"] as number)
+          : row.retry_count,
+      gradingPassCount:
+        typeof row.details?.["grading_pass_count"] === "number"
+          ? (row.details?.["grading_pass_count"] as number)
+          : null,
       failureCategory: row.failure_category,
     })),
     latestGradeRun,

@@ -13,7 +13,7 @@ const ACADEMIC_ACCESS_EVENT_FIELDS =
 const WORKFLOW_NOTIFICATION_FIELDS =
   "id, created_at, delivery_status, sent_at, last_error";
 const WORKFLOW_RUN_FIELDS =
-  "id, created_at, started_at, finished_at, duration_ms, workflow_name, status, provider, model, retry_count, failure_category";
+  "id, created_at, started_at, finished_at, duration_ms, workflow_name, status, provider, model, retry_count, failure_category, details";
 const LATEST_GRADE_FIELDS = "id, created_at";
 const INTEGRITY_REVIEW_FIELDS = "id, submission_id, decision, lecturer_note, review_type, created_at, updated_at";
 

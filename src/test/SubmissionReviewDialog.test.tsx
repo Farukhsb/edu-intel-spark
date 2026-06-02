@@ -32,7 +32,6 @@ describe("SubmissionReviewDialog", () => {
           final_score: null,
           final_feedback: null,
         }}
-        isDemo={false}
         onEditFeedbackChange={vi.fn()}
         onEditScoreChange={vi.fn()}
         onOpenChange={vi.fn()}

@@ -17,7 +17,6 @@ const buildSubmission = (
   file_url: "student-1/assignment-1/essay.pdf",
   status,
   submitted_at: "2026-05-03T10:00:00.000Z",
-  uploaded_by: "student-1",
 });
 
 describe("moderation release handoff", () => {

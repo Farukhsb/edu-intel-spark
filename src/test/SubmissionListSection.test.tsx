@@ -21,6 +21,7 @@ function renderSection(recoveryIssue?: SubmissionGradingRecoveryIssue) {
   const submission = buildSubmission("submission-1");
   const toggleSelect = vi.fn();
   const startManualReview = vi.fn().mockResolvedValue(undefined);
+  const sendToModeration = vi.fn().mockResolvedValue(false);
 
   render(
     <SubmissionListSection
@@ -43,11 +44,9 @@ function renderSection(recoveryIssue?: SubmissionGradingRecoveryIssue) {
         status: "published",
         lecturer_id: "lecturer-1",
         rubric: [],
-        created_at: "2026-05-01T00:00:00.000Z",
-        updated_at: "2026-05-01T00:00:00.000Z",
       }}
-      isDemo={false}
       openSubmissionFile={vi.fn().mockResolvedValue(undefined)}
+      sendToModeration={sendToModeration}
       openModeration={vi.fn()}
       openReview={vi.fn()}
       startManualReview={startManualReview}
@@ -166,11 +165,9 @@ describe("SubmissionListSection", () => {
           status: "published",
           lecturer_id: "lecturer-1",
           rubric: [],
-          created_at: "2026-05-01T00:00:00.000Z",
-          updated_at: "2026-05-01T00:00:00.000Z",
         }}
-        isDemo={false}
         openSubmissionFile={vi.fn().mockResolvedValue(undefined)}
+        sendToModeration={vi.fn().mockResolvedValue(false)}
         openModeration={vi.fn()}
         openReview={vi.fn()}
         startManualReview={vi.fn().mockResolvedValue(undefined)}
@@ -224,11 +221,9 @@ describe("SubmissionListSection", () => {
           status: "published",
           lecturer_id: "lecturer-1",
           rubric: [],
-          created_at: "2026-05-01T00:00:00.000Z",
-          updated_at: "2026-05-01T00:00:00.000Z",
         }}
-        isDemo={false}
         openSubmissionFile={vi.fn().mockResolvedValue(undefined)}
+        sendToModeration={vi.fn().mockResolvedValue(false)}
         openModeration={vi.fn()}
         openReview={vi.fn()}
         startManualReview={vi.fn().mockResolvedValue(undefined)}
@@ -280,11 +275,9 @@ describe("SubmissionListSection", () => {
           status: "published",
           lecturer_id: "lecturer-1",
           rubric: [],
-          created_at: "2026-05-01T00:00:00.000Z",
-          updated_at: "2026-05-01T00:00:00.000Z",
         }}
-        isDemo={false}
         openSubmissionFile={vi.fn().mockResolvedValue(undefined)}
+        sendToModeration={vi.fn().mockResolvedValue(false)}
         openModeration={vi.fn()}
         openReview={vi.fn()}
         startManualReview={vi.fn().mockResolvedValue(undefined)}

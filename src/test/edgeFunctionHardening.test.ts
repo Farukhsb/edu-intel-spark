@@ -343,6 +343,8 @@ describe("edge function hardening", () => {
     expect(gradingSource).toContain('status: "running"');
     expect(gradingSource).toContain('status: "failed"');
     expect(gradingSource).toContain('workflowRunFailureCount > 0 ? "failed" : "succeeded"');
+    expect(gradingSource).toContain("grading_pass_count:");
+    expect(gradingSource).toContain('providerRetryCount');
   });
 
   it("stores only short safe grading error telemetry messages", () => {

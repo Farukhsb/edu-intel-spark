@@ -6,12 +6,18 @@ import { STARTER_ASSIGNMENT_TEMPLATES, SYNTHETIC_ASSIGNMENT_SETS } from "@/data/
 import DemoAssignmentsPage from "@/pages/dashboard/DemoAssignmentsPage";
 import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
+type DemoAuthState = {
+  isDemo: boolean;
+  role: "lecturer" | "student";
+  user: { id: string; email: string | null } | null;
+};
+
 const mocks = vi.hoisted(() => ({
   authState: {
     isDemo: true,
     role: "lecturer",
     user: null,
-  },
+  } as DemoAuthState,
   supabase: {
     from: vi.fn(),
   },

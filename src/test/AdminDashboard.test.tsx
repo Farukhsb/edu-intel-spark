@@ -196,8 +196,17 @@ const workflowRuns = [
     status: "failed",
     provider: "openai",
     model: "gpt-4o-mini",
-    retry_count: 2,
+    retry_count: 0,
     failure_category: "service_failure",
+    details: {
+      grading_pass_count: 3,
+      provider_retry_count: 0,
+      submission_count: 1,
+      workflow: "grade-submission",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "failed",
+    },
   },
 ];
 

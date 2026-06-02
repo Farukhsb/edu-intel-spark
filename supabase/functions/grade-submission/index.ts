@@ -236,7 +236,8 @@ async function recordGradingWorkflowRun({
   triggeredBy,
   model,
   status,
-  retryCount,
+  providerRetryCount,
+  gradingPassCount,
   failureCategory,
   startedAt,
   finishedAt,
@@ -252,7 +253,8 @@ async function recordGradingWorkflowRun({
   triggeredBy: string | null;
   model: string;
   status: WorkflowRunTelemetryStatus;
-  retryCount: number;
+  providerRetryCount: number;
+  gradingPassCount: number;
   failureCategory?: string | null;
   startedAt: string;
   finishedAt?: string | null;
@@ -269,13 +271,15 @@ async function recordGradingWorkflowRun({
     provider,
     model,
     status,
-    retry_count: Math.max(0, Math.trunc(retryCount)),
+    retry_count: Math.max(0, Math.trunc(providerRetryCount)),
     failure_category: failureCategory ?? null,
     started_at: startedAt,
     finished_at: finishedAt ?? null,
     duration_ms: durationMs ?? null,
     details: {
       submission_count: submissionCount,
+      grading_pass_count: Math.max(1, Math.trunc(gradingPassCount)),
+      provider_retry_count: Math.max(0, Math.trunc(providerRetryCount)),
       workflow: "grade-submission",
       provider,
       model,
@@ -322,8 +326,8 @@ async function recordGradingWorkflowRun({
   return data.id as string;
 }
 
-function getWorkflowRunRetryCount(gradingPasses: number) {
-  return Math.max(0, gradingPasses - 1);
+function getWorkflowRunGradingPassCount(gradingPasses: number) {
+  return Math.max(1, Math.trunc(gradingPasses));
 }
 
 async function fetchSubmissionContent(
@@ -465,7 +469,8 @@ Deno.serve(async (req) => {
   let workflowRunSubmissionId: string | null = null;
   let workflowRunSubmissionCount = 0;
   let workflowRunModel = "";
-  let workflowRunRetryCount = 0;
+  let workflowRunProviderRetryCount = 0;
+  let workflowRunGradingPassCount = 0;
   let actorUserId: string | null = null;
 
   try {
@@ -546,7 +551,8 @@ Deno.serve(async (req) => {
     workflowRunSubmissionId = requestedSubmissionIds[0] ?? null;
     workflowRunSubmissionCount = requestedSubmissionIds.length;
     workflowRunModel = gradingModel;
-    workflowRunRetryCount = getWorkflowRunRetryCount(gradingPasses);
+    workflowRunProviderRetryCount = 0;
+    workflowRunGradingPassCount = getWorkflowRunGradingPassCount(gradingPasses);
     if (!workflowRunInstitutionId) {
       logWarn("grade-submission workflow run telemetry skipped because assignment has no institution", {
         assignmentId: requestedAssignmentId,
@@ -560,7 +566,8 @@ Deno.serve(async (req) => {
         triggeredBy: user.id,
         model: workflowRunModel,
         status: "running",
-        retryCount: workflowRunRetryCount,
+        providerRetryCount: workflowRunProviderRetryCount,
+        gradingPassCount: workflowRunGradingPassCount,
         startedAt: workflowRunStartedAt,
         submissionCount: workflowRunSubmissionCount,
       });
@@ -738,7 +745,8 @@ Deno.serve(async (req) => {
         triggeredBy: actorUserId,
         model: workflowRunModel,
         status: workflowRunStatus,
-        retryCount: workflowRunRetryCount,
+        providerRetryCount: workflowRunProviderRetryCount,
+        gradingPassCount: workflowRunGradingPassCount,
         failureCategory: workflowRunFailureCount > 0 ? workflowRunFailureCategory : null,
         startedAt: workflowRunStartedAt,
         finishedAt: new Date().toISOString(),
@@ -764,7 +772,8 @@ Deno.serve(async (req) => {
         triggeredBy: actorUserId,
         model: workflowRunModel || "gpt-4o-mini",
         status: "failed",
-        retryCount: workflowRunRetryCount,
+        providerRetryCount: workflowRunProviderRetryCount,
+        gradingPassCount: workflowRunGradingPassCount,
         failureCategory,
         startedAt: workflowRunStartedAt,
         finishedAt: new Date().toISOString(),

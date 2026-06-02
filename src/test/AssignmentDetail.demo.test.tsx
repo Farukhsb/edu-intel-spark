@@ -5,13 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import DemoAssignmentDetail from "@/pages/dashboard/DemoAssignmentDetail";
 import { DEMO_ASSIGNMENTS } from "@/pages/dashboard/demoAssignments";
 
+type DemoAuthState = {
+  isDemo: boolean;
+  role: "lecturer" | "student";
+  user: { id: string; email: string | null } | null;
+  profile: { id: string; email: string | null; role: "lecturer" | "student" } | null;
+};
+
 const mocks = vi.hoisted(() => ({
   authState: {
     isDemo: true,
     role: "lecturer",
     user: null,
     profile: null,
-  },
+  } as DemoAuthState,
   supabase: {
     from: vi.fn(),
     storage: {

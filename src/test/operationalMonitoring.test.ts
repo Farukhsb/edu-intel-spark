@@ -15,7 +15,8 @@ describe("operationalMonitoring", () => {
           workflowName: "grade-submission",
           provider: "openai",
           model: "gpt-4o-mini",
-          retryCount: 2,
+          providerRetryCount: 0,
+          gradingPassCount: 3,
           failureCategory: "service_failure",
         },
       ],
@@ -138,6 +139,10 @@ describe("operationalMonitoring", () => {
         }),
       ]),
     );
+
+    expect(snapshot.healthItems.find((item) => item.label === "AI grading workflow signal")?.detail).toContain(
+      "across 3 grading passes",
+    );
   });
 
   it("keeps placeholder language when direct telemetry is unavailable", () => {
@@ -202,7 +207,8 @@ describe("operationalMonitoring", () => {
           workflowName: "grade-submission",
           provider: "openai",
           model: "gpt-4o-mini",
-          retryCount: 0,
+          providerRetryCount: 0,
+          gradingPassCount: 1,
           failureCategory: null,
         },
       ],
@@ -260,6 +266,10 @@ describe("operationalMonitoring", () => {
         }),
       ]),
     );
+
+    expect(snapshot.healthItems.find((item) => item.label === "AI grading workflow signal")?.detail).toContain(
+      "across 1 grading pass",
+    );
   });
 
   it("shows warning grading telemetry when one or more failures are recorded", () => {
@@ -274,7 +284,8 @@ describe("operationalMonitoring", () => {
           workflowName: "grade-submission",
           provider: "openai",
           model: "gpt-4o-mini",
-          retryCount: 1,
+          providerRetryCount: 1,
+          gradingPassCount: 2,
           failureCategory: null,
         },
       ],

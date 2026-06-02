@@ -7,6 +7,7 @@ import {
   filterAtRiskStudents,
   getPerformanceReportingReadiness,
 } from "@/lib/performanceAnalytics";
+import type { AtRiskStudent } from "@/lib/studentRisk";
 
 describe("performanceAnalytics", () => {
   it("builds cohort projections from assignment, submission, and grade data", () => {
@@ -22,7 +23,7 @@ describe("performanceAnalytics", () => {
       riskLevel: "critical" as const,
       flags: ["Average below 40%"],
       recommendation: "Intervene now",
-      sparkline: trajectory.scores.map((entry) => entry.score),
+      sparkline: trajectory.scores.map((entry: { score: number }) => entry.score),
     }));
 
     const projection = buildPerformanceProjection({
@@ -65,11 +66,50 @@ describe("performanceAnalytics", () => {
   });
 
   it("filters at-risk students by risk and score bands", () => {
-    const students = [
-      { studentId: "1", avgGrade: 35, riskLevel: "critical" as const },
-      { studentId: "2", avgGrade: 45, riskLevel: "high" as const },
-      { studentId: "3", avgGrade: 62, riskLevel: "moderate" as const },
-    ] as const;
+    const students: AtRiskStudent[] = [
+      {
+        name: "Student One",
+        email: "one@example.edu",
+        studentId: "1",
+        riskScore: 90,
+        riskLevel: "critical" as const,
+        avgGrade: 35,
+        lastGrade: 30,
+        trend: "declining" as const,
+        flags: ["Average below 40%"],
+        sparkline: [40, 35, 30],
+        recommendation: "Intervene now",
+        predictedNext: 28,
+      },
+      {
+        name: "Student Two",
+        email: "two@example.edu",
+        studentId: "2",
+        riskScore: 60,
+        riskLevel: "high" as const,
+        avgGrade: 45,
+        lastGrade: 44,
+        trend: "stable-low" as const,
+        flags: ["Average below 50%"],
+        sparkline: [48, 45, 44],
+        recommendation: "Monitor closely",
+        predictedNext: 42,
+      },
+      {
+        name: "Student Three",
+        email: "three@example.edu",
+        studentId: "3",
+        riskScore: 40,
+        riskLevel: "moderate" as const,
+        avgGrade: 62,
+        lastGrade: 60,
+        trend: "volatile" as const,
+        flags: [],
+        sparkline: [61, 62, 60],
+        recommendation: "Continue monitoring",
+        predictedNext: 61,
+      },
+    ];
 
     expect(filterAtRiskStudents({ students: [...students], riskFilter: "high-plus", scoreBandFilter: "lt40" })).toHaveLength(1);
     expect(filterAtRiskStudents({ students: [...students], riskFilter: "all", scoreBandFilter: "40-49" })).toHaveLength(1);

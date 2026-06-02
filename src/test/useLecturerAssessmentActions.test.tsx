@@ -64,8 +64,6 @@ const buildAssignment = (): AssignmentDetailAssignment => ({
   status: "published",
   lecturer_id: "lecturer-1",
   rubric: [],
-  created_at: "2026-05-01T00:00:00.000Z",
-  updated_at: "2026-05-01T00:00:00.000Z",
 });
 
 const buildSubmission = (status: AssignmentDetailSubmission["status"]): AssignmentDetailSubmission => ({

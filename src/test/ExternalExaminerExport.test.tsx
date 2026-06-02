@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+let capturedBlob: Blob | null = null;
+
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mocks.authState,
 }));
@@ -212,8 +214,8 @@ describe("ExternalExaminerExport", () => {
       writable: true,
       value: URL.revokeObjectURL ?? vi.fn(),
     });
-    createObjectURLSpy = vi.spyOn(URL, "createObjectURL").mockImplementation((blob: Blob) => {
-      capturedBlob = blob;
+    createObjectURLSpy = vi.spyOn(URL, "createObjectURL").mockImplementation((blob: Blob | MediaSource) => {
+      capturedBlob = blob instanceof Blob ? blob : null;
       return "blob:export-url";
     });
     revokeObjectURLSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);

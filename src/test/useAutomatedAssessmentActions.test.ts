@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import { persistGradedSubmissionResult } from "@/pages/dashboard/assignment-detail/workflows/useAutomatedAssessmentActions";
 import {
   buildExtractionFailureRecoveryIssue,
-  GradePersistenceError,
 } from "@/pages/dashboard/assignment-detail/workflows/automatedAssessmentShared";
 
 describe("persistGradedSubmissionResult", () => {
@@ -64,7 +63,7 @@ describe("persistGradedSubmissionResult", () => {
           grading_confidence: 0.84,
         },
       }),
-    ).rejects.toMatchObject<Partial<GradePersistenceError>>({
+    ).rejects.toMatchObject({
       name: "GradePersistenceError",
       message: "grade write failed",
       step: "grade_write",

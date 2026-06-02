@@ -17,7 +17,8 @@ export interface OperationalMonitoringWorkflowRunLike {
   workflowName: string;
   provider: string;
   model: string | null;
-  retryCount: number;
+  providerRetryCount: number;
+  gradingPassCount: number | null;
   failureCategory: string | null;
 }
 
@@ -126,6 +127,12 @@ export const buildOperationalMonitoringSnapshot = ({
   const staleWorkflowRun = latestWorkflowRun
     ? isOlderThanDays(latestWorkflowRun.finishedAt ?? latestWorkflowRun.startedAt, 1, now)
     : false;
+  const latestWorkflowRunPassText = latestWorkflowRun?.gradingPassCount != null
+    ? ` across ${latestWorkflowRun.gradingPassCount} grading pass${latestWorkflowRun.gradingPassCount === 1 ? "" : "es"}`
+    : "";
+  const latestWorkflowRunRetryText = latestWorkflowRun?.providerRetryCount
+    ? ` with ${latestWorkflowRun.providerRetryCount} provider retry attempt${latestWorkflowRun.providerRetryCount === 1 ? "" : "s"}`
+    : "";
   const workflowNotificationCounts = workflowNotificationRows.reduce(
     (counts, row) => {
       if (row.deliveryStatus === "sent") {
@@ -176,10 +183,10 @@ export const buildOperationalMonitoringSnapshot = ({
       detail: workflowRunTelemetryAvailable
         ? latestWorkflowRun
           ? latestWorkflowRun.status === "failed"
-            ? `Latest ${latestWorkflowRun.workflowName} run failed on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.durationMs != null ? ` after ${(latestWorkflowRun.durationMs / 1000).toFixed(1)}s` : ""}${latestWorkflowRun.retryCount > 0 ? ` with ${latestWorkflowRun.retryCount} retry attempt(s)` : ""}${latestWorkflowRun.failureCategory ? `. Failure category: ${latestWorkflowRun.failureCategory}.` : "."}`
+            ? `Latest ${latestWorkflowRun.workflowName} run failed on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.durationMs != null ? ` after ${(latestWorkflowRun.durationMs / 1000).toFixed(1)}s` : ""}${latestWorkflowRunPassText}${latestWorkflowRunRetryText}${latestWorkflowRun.failureCategory ? `. Failure category: ${latestWorkflowRun.failureCategory}.` : "."}`
             : latestWorkflowRun.status === "running"
               ? `Latest ${latestWorkflowRun.workflowName} run is still running on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.startedAt ? `; started at ${latestWorkflowRun.startedAt}.` : "."}`
-              : `Latest ${latestWorkflowRun.workflowName} run succeeded on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.durationMs != null ? ` in ${(latestWorkflowRun.durationMs / 1000).toFixed(1)}s` : ""}${latestWorkflowRun.retryCount > 0 ? ` after ${latestWorkflowRun.retryCount} retry attempt(s)` : ""}.`
+              : `Latest ${latestWorkflowRun.workflowName} run succeeded on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.durationMs != null ? ` in ${(latestWorkflowRun.durationMs / 1000).toFixed(1)}s` : ""}${latestWorkflowRunPassText}${latestWorkflowRunRetryText}.`
           : "Workflow run telemetry is visible, but no run records were captured for the current window."
         : "Workflow run telemetry is not yet exposed here, so this remains a placeholder signal.",
     },

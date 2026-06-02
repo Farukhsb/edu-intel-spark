@@ -7,6 +7,7 @@ const createState = (activeView: AdminView): AdminDashboardState => ({
   loading: false,
   refreshing: true,
   loadError: null,
+  institution: null,
   metrics: {
     totalUsers: 3,
     activeLecturers: 1,

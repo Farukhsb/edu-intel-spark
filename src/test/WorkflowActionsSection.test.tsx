@@ -11,7 +11,6 @@ describe("WorkflowActionsSection", () => {
 
     render(
       <WorkflowActionsSection
-        isDemo={false}
         isLecturer
         submissionFileAccept=".pdf,.docx,.txt"
         fileInputRef={createRef<HTMLInputElement>()}

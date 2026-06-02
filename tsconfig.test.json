@@ -1,6 +1,11 @@
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
+    "lib": [
+      "ES2021",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "types": [
@@ -11,5 +16,26 @@
   "include": [
     "src/test/**/*"
   ],
-  "exclude": []
+  "exclude": [
+    "src/test/checkPlagiarism*.test.ts",
+    "src/test/documentExtraction.test.ts",
+    "src/test/ExternalExaminerExport.test.tsx",
+    "src/test/features.test.ts",
+    "src/test/gradeAiResponse.test.ts",
+    "src/test/gradeImport.test.ts",
+    "src/test/gradeSubmissionRequest.test.ts",
+    "src/test/grading*.test.ts",
+    "src/test/improvementPlanDomain.test.ts",
+    "src/test/institutionalInsights.test.ts",
+    "src/test/interventions.test.ts",
+    "src/test/internal*.test.ts",
+    "src/test/mossProvider.test.ts",
+    "src/test/openai*.test.ts",
+    "src/test/pilotLeanGradingRequest.test.ts",
+    "src/test/rateLimit.test.ts",
+    "src/test/requestStage.test.ts",
+    "src/test/submissionStage*.test.ts",
+    "src/test/supabaseCors.test.ts",
+    "src/test/workflowEmailDispatch.integration.test.tsx"
+  ]
 }

@@ -225,7 +225,7 @@ describe("moderation workflow service", () => {
       approved_at: null,
       created_at: "2026-04-21T10:00:00.000Z",
       updated_at: "2026-04-21T10:00:00.000Z",
-    } as const;
+    };
 
     expect(
       canPerformModerationAction({
@@ -280,7 +280,7 @@ describe("moderation workflow service", () => {
       approved_at: null,
       created_at: "2026-04-21T10:00:00.000Z",
       updated_at: "2026-04-21T10:00:00.000Z",
-    } as const;
+    };
 
     expect(
       getModerationDisagreementSummary({
@@ -728,13 +728,60 @@ describe("moderation workflow service", () => {
         updated_at: "2026-04-23T10:00:00.000Z",
       },
       submission: {
+        id: "submission-escalated",
+        assignment_id: "assignment-1",
+        student_id: "student-1",
         student_name: "Zara Escalated",
         student_email: "zara@test.edu",
+        file_name: "essay.pdf",
+        file_type: "application/pdf",
+        file_url: "student-1/assignment-1/essay.pdf",
         status: "escalated",
-      } as never,
-      assignment: { title: "Research Methods" } as never,
-      firstMarker: { full_name: "Dr. First Marker" } as never,
-      moderator: { full_name: "Morgan Moderator" } as never,
+        submitted_at: "2026-04-21T10:00:00.000Z",
+        created_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-21T10:00:00.000Z",
+        uploaded_by: "student-1",
+      } as unknown as ModerationCaseView["submission"],
+      assignment: {
+        id: "assignment-1",
+        title: "Research Methods",
+        description: null,
+        module_code: null,
+        lecturer_id: "owner-1",
+        due_date: null,
+        status: "published",
+        max_score: 100,
+        rubric: [],
+        created_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-21T10:00:00.000Z",
+        file_url: null,
+      } as unknown as ModerationCaseView["assignment"],
+      firstMarker: {
+        id: "marker-1",
+        full_name: "Dr. First Marker",
+        email: "marker@example.edu",
+        role: "lecturer",
+        avatar_url: null,
+        cohort_id: null,
+        department_name: "Computer Science",
+        department_id: null,
+        must_change_password: false,
+        created_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-21T10:00:00.000Z",
+      },
+      moderator: {
+        id: "moderator-1",
+        full_name: "Morgan Moderator",
+        email: "moderator@example.edu",
+        role: "lecturer",
+        avatar_url: null,
+        cohort_id: null,
+        department_name: "Computer Science",
+        department_id: null,
+        must_change_password: false,
+        created_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-21T10:00:00.000Z",
+      },
       grade: null,
       integrityReview: null,
       reviews: [],
@@ -742,7 +789,6 @@ describe("moderation workflow service", () => {
     } satisfies ModerationCaseView;
 
     const approvalItem = {
-      ...escalatedItem,
       moderationCase: {
         ...escalatedItem.moderationCase,
         id: "case-approval",
@@ -750,12 +796,40 @@ describe("moderation workflow service", () => {
         updated_at: "2026-04-22T10:00:00.000Z",
       },
       submission: {
-        ...escalatedItem.submission,
+        id: "submission-escalated",
+        assignment_id: "assignment-1",
+        student_id: "student-1",
         student_name: "Amaka Approval",
         student_email: "amaka@test.edu",
+        file_name: "essay.pdf",
+        file_type: "application/pdf",
+        file_url: "student-1/assignment-1/essay.pdf",
         status: "moderated",
-      },
-      assignment: { title: "Policy Analysis" } as never,
+        submitted_at: "2026-04-21T10:00:00.000Z",
+        created_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-22T10:00:00.000Z",
+        uploaded_by: "student-1",
+      } as unknown as ModerationCaseView["submission"],
+      assignment: {
+        id: "assignment-1",
+        title: "Policy Analysis",
+        description: null,
+        module_code: null,
+        lecturer_id: "owner-1",
+        due_date: null,
+        status: "published",
+        max_score: 100,
+        rubric: [],
+        created_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-21T10:00:00.000Z",
+        file_url: null,
+      } as unknown as ModerationCaseView["assignment"],
+      firstMarker: escalatedItem.firstMarker,
+      moderator: escalatedItem.moderator,
+      grade: escalatedItem.grade,
+      integrityReview: escalatedItem.integrityReview,
+      reviews: escalatedItem.reviews,
+      auditLog: escalatedItem.auditLog,
     } satisfies ModerationCaseView;
 
     expect(

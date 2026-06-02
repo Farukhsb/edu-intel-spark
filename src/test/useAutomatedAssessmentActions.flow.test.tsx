@@ -57,8 +57,6 @@ const buildAssignment = (): AssignmentDetailAssignment => ({
   status: "published",
   lecturer_id: "lecturer-1",
   rubric: [],
-  created_at: "2026-05-01T00:00:00.000Z",
-  updated_at: "2026-05-01T00:00:00.000Z",
 });
 
 const buildSubmission = (
@@ -132,7 +130,6 @@ describe("useAutomatedAssessmentActions workflow behavior", () => {
       useAutomatedAssessmentActions({
         assignment: buildAssignment(),
         grades: {},
-        isDemo: false,
         reloadSubmissions,
         role: "lecturer",
         selected: new Set(["submission-1"]),
@@ -189,7 +186,6 @@ describe("useAutomatedAssessmentActions workflow behavior", () => {
       useAutomatedAssessmentActions({
         assignment: buildAssignment(),
         grades: {},
-        isDemo: false,
         reloadSubmissions,
         role: "lecturer",
         selected: new Set(["submission-1", "submission-2"]),
@@ -244,7 +240,6 @@ describe("useAutomatedAssessmentActions workflow behavior", () => {
       useAutomatedAssessmentActions({
         assignment: buildAssignment(),
         grades: {},
-        isDemo: false,
         reloadSubmissions,
         role: "lecturer",
         selected: new Set(["submission-1"]),
