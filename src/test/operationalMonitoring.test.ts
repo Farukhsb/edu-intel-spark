@@ -8,6 +8,7 @@ describe("operationalMonitoring", () => {
       workflowRunTelemetryAvailable: true,
       workflowRunRows: [
         {
+          id: "workflow-run-failure-1",
           status: "failed",
           startedAt: "2026-05-04T08:00:00.000Z",
           finishedAt: "2026-05-04T08:00:06.000Z",
@@ -200,6 +201,7 @@ describe("operationalMonitoring", () => {
       workflowRunTelemetryAvailable: true,
       workflowRunRows: [
         {
+          id: "workflow-run-success-1",
           status: "succeeded",
           startedAt: "2026-05-04T08:00:00.000Z",
           finishedAt: "2026-05-04T08:00:03.000Z",
@@ -343,6 +345,7 @@ describe("operationalMonitoring", () => {
       workflowRunTelemetryAvailable: true,
       workflowRunRows: [
         {
+          id: "workflow-run-success-2",
           status: "succeeded",
           startedAt: "2026-05-04T08:00:00.000Z",
           finishedAt: "2026-05-04T08:00:03.000Z",

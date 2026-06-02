@@ -163,6 +163,7 @@ describe("workflow performance harness", () => {
           workflowRunTelemetryAvailable: true,
           workflowRunRows: [
             {
+              id: "workflow-run-performance-1",
               status: "succeeded",
               startedAt: "2026-05-04T08:00:00.000Z",
               finishedAt: "2026-05-04T08:00:02.000Z",

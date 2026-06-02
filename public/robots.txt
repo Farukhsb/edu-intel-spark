@@ -5,4 +5,4 @@ Disallow: /reset-password
 Disallow: /force-password-change
 Disallow: /dashboard
 
-Sitemap: https://edu-intel-spark.example.com/sitemap.xml
+Sitemap: https://gradeai.pages.dev/sitemap.xml
