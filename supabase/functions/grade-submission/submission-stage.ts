@@ -1,3 +1,4 @@
+import { getEnv } from "../_shared/auth.ts";
 import { logInfo } from "../_shared/log.ts";
 import { classifyAssignmentType } from "../_shared/text-analysis.ts";
 import {
@@ -68,18 +69,6 @@ import type {
 export const PDF_EVIDENCE_INADEQUATE_MESSAGE =
   "We could not extract enough reliable text from this PDF for AI-assisted marking. Please upload a DOCX version or continue with manual review.";
 
-function readEnv(name: string) {
-  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
-    return Deno.env.get(name);
-  }
-
-  if (typeof process !== "undefined" && process.env) {
-    return process.env[name];
-  }
-
-  return undefined;
-}
-
 type PdfEvidenceAdequacyTelemetry = {
   file_type: string;
   extraction_method: string;
@@ -112,7 +101,7 @@ export class PdfEvidenceAdequacyError extends Error {
 }
 
 function isPilotSinglePassMode() {
-  return readEnv("OPENAI_PILOT_SINGLE_PASS_MODE") !== "false";
+  return getEnv("OPENAI_PILOT_SINGLE_PASS_MODE") !== "false";
 }
 
 export function isPilotLeanGradingModeEnabled() {

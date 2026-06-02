@@ -1,4 +1,4 @@
-import { createAdminClient, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
+import { createAdminClient, getEnv, jsonError, requireLecturer, HttpError } from "../_shared/auth.ts";
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import {
@@ -38,20 +38,8 @@ const PASS_SPREAD_REVIEW_THRESHOLD_MIN = 8;
 const EXTRACTION_FAILURE_TELEMETRY_MESSAGE = "Document extraction failed before grading.";
 const EXTRACTION_QUALITY_FAILURE_TELEMETRY_MESSAGE = "Extracted document text was not reliable enough for grading.";
 
-function readEnv(name: string) {
-  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
-    return Deno.env.get(name);
-  }
-
-  if (typeof process !== "undefined" && process.env) {
-    return process.env[name];
-  }
-
-  return undefined;
-}
-
 function getConfiguredGradingPasses() {
-  const configured = Number(readEnv("OPENAI_GRADING_PASSES") || DEFAULT_GRADING_PASSES);
+  const configured = Number(getEnv("OPENAI_GRADING_PASSES") || DEFAULT_GRADING_PASSES);
   if (!Number.isFinite(configured)) return DEFAULT_GRADING_PASSES;
 
   const normalized = Math.trunc(configured);

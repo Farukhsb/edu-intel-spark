@@ -1,17 +1,6 @@
+import { getEnv } from "../_shared/auth.ts";
 import type { AssignmentType } from "../_shared/text-analysis.ts";
 import type { RubricCriterion } from "./prompting.ts";
-
-function readEnv(name: string) {
-  if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
-    return Deno.env.get(name);
-  }
-
-  if (typeof process !== "undefined" && process.env) {
-    return process.env[name];
-  }
-
-  return undefined;
-}
 
 function normalizeShortText(value: string | null | undefined, maxLength: number) {
   const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
@@ -23,7 +12,7 @@ export const PILOT_LEAN_GRADING_EVIDENCE_MAX_CHARS = 4_000;
 export const PILOT_LEAN_CRITERION_EVIDENCE_MAX_CHARS = 800;
 
 export function isPilotLeanGradingMode() {
-  return readEnv("OPENAI_PILOT_LEAN_GRADING_MODE") !== "false";
+  return getEnv("OPENAI_PILOT_LEAN_GRADING_MODE") !== "false";
 }
 
 function buildCompactRubricSummary(rubric: RubricCriterion[]) {
