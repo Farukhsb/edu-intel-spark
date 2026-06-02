@@ -181,4 +181,64 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("update public.user_roles");
     expect(source).toContain("'user_reassigned_institution'");
   });
+
+  it("grants authenticated users the institutions privileges needed by the invoker provisioning path", () => {
+    const source = readRepoFile("supabase/migrations/20260602141000_grant_authenticated_institution_table_access.sql");
+
+    expect(source).toContain("grant select, insert on public.institutions to authenticated;");
+  });
+
+  it("grants authenticated users the audit-log insert needed by the invoker provisioning path", () => {
+    const source = readRepoFile("supabase/migrations/20260602141500_grant_authenticated_admin_audit_log_insert.sql");
+
+    expect(source).toContain("grant insert on public.admin_audit_log to authenticated;");
+  });
+
+  it("fixes the reassignment RPC parameter ambiguity while keeping invoker semantics", () => {
+    const source = readRepoFile("supabase/migrations/20260602142000_fix_admin_assign_user_to_institution_ambiguity.sql");
+
+    expect(source).toContain("drop function if exists public.admin_assign_user_to_institution(uuid, text);");
+    expect(source).toContain("create function public.admin_assign_user_to_institution(");
+    expect(source).toContain("p_target_user_id uuid");
+    expect(source).toContain("where id = p_target_user_id");
+    expect(source).toContain("where a.lecturer_id = p_target_user_id");
+    expect(source).toContain("where user_id = p_target_user_id");
+    expect(source).toContain("security invoker");
+  });
+
+  it("allows default admins to update managed profiles and roles across institutions", () => {
+    const source = readRepoFile("supabase/migrations/20260602143000_allow_default_admin_cross_institution_profile_updates.sql");
+
+    expect(source).toContain('drop policy if exists "Admins can update managed profiles" on public.profiles;');
+    expect(source).toContain('drop policy if exists "Admins can manage user roles" on public.user_roles;');
+    expect(source).toContain("private.current_institution_slug() = 'default'");
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
+
+  it("extends the base profile self-update policy to cover default admins", () => {
+    const source = readRepoFile("supabase/migrations/20260602144000_allow_default_admin_profile_self_update_path.sql");
+
+    expect(source).toContain('drop policy if exists "Users can update own profile" on public.profiles;');
+    expect(source).toContain('create policy "Users can update own profile"');
+    expect(source).toContain("private.current_institution_slug() = 'default'");
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
+
+  it("moves the actual institution reassignment writes into a private definer helper", () => {
+    const source = readRepoFile("supabase/migrations/20260602145000_add_private_institution_reassignment_helper.sql");
+
+    expect(source).toContain("create or replace function private.reassign_user_institution(");
+    expect(source).toContain("security definer");
+    expect(source).toContain("perform private.reassign_user_institution(p_target_user_id, _target_institution.id)");
+    expect(source).toContain("grant execute on function private.reassign_user_institution(uuid, uuid) to authenticated");
+  });
+
+  it("lets default admins read profiles needed to complete institution reassignment round-trips", () => {
+    const source = readRepoFile("supabase/migrations/20260602150000_allow_default_admin_profile_read_access.sql");
+
+    expect(source).toContain('drop policy if exists "Users can view own profile" on public.profiles;');
+    expect(source).toContain('create policy "Users can view own profile"');
+    expect(source).toContain("private.current_institution_slug() = 'default'");
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
 });
