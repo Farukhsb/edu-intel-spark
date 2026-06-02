@@ -37,6 +37,7 @@ Priority areas for policy-oriented testing:
 - submission file reads from `storage.objects`
 - profile visibility for lecturers, moderators, students, and admins
 - workflow notification email deduplication and retry behavior
+- workflow notification log, workflow run telemetry, and grading error event admin reads
 - moderation-linked access to submissions, grades, and integrity reviews
 
 ## Dependency and Security Checks
@@ -71,8 +72,14 @@ For routine changes, the minimum practical release baseline is:
 
 ## Edge Function Security Note
 
-The local Supabase function config still uses `verify_jwt = false` for several
-edge functions, while the handlers enforce auth internally. After each function
-has been rechecked for request validation and auth handling, plan a follow-up
-migration toward `verify_jwt = true` to tighten the platform boundary at the
-gateway as well as in application code.
+The current local Supabase function config uses `verify_jwt = true` for the
+main shipped functions:
+
+- `check-plagiarism`
+- `grade-submission`
+- `explain-grade`
+- `bulk-create-students`
+- `import-grades`
+
+Keep the contract test in `src/test/edgeFunctionHardening.test.ts` aligned with
+the config file whenever a function is added or renamed.

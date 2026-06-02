@@ -43,6 +43,18 @@ interface UseLecturerAssessmentActionsArgs {
 }
 const asJson = (value: unknown): Json => value as Json;
 
+type ModerationRpcClient = {
+  rpc: (
+    functionName: "send_submission_to_moderation",
+    args: { submission_id: string },
+  ) => Promise<{
+    data: ModerationCase | null;
+    error: unknown;
+  }>;
+};
+
+const moderationRpcClient = supabase as typeof supabase & ModerationRpcClient;
+
 export const useLecturerAssessmentActions = ({
   assignment,
   grades,
@@ -176,7 +188,7 @@ export const useLecturerAssessmentActions = ({
     }
 
     try {
-      const { data, error } = await (supabase as any).rpc("send_submission_to_moderation", {
+      const { data, error } = await moderationRpcClient.rpc("send_submission_to_moderation", {
         submission_id: submission.id,
       });
 

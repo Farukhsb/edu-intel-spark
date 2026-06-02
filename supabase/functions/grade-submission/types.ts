@@ -1,6 +1,7 @@
 export type AssignmentForGrading = {
   id: string;
   lecturer_id: string | null;
+  institution_id?: string | null;
   title: string;
   description: string | null;
   module_code: string | null;

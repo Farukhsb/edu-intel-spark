@@ -52,6 +52,40 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("create trigger sync_grade_institution_id");
   });
 
+  it("adds workflow run telemetry with institution-aware admin access", () => {
+    const source = readRepoFile("supabase/migrations/20260602084500_add_workflow_runs_telemetry.sql");
+
+    expect(source).toContain("create table if not exists public.workflow_runs");
+    expect(source).toContain("workflow_name text not null");
+    expect(source).toContain("retry_count integer not null default 0");
+    expect(source).toContain("status text not null check (status in ('running', 'succeeded', 'failed'))");
+    expect(source).toContain("grant select on public.workflow_runs to authenticated;");
+    expect(source).toContain("grant insert, update on public.workflow_runs to service_role;");
+    expect(source).toContain("create policy \"Admins can read workflow runs\"");
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
+
+  it("adds workflow notification delivery telemetry with institution-aware admin access", () => {
+    const source = readRepoFile("supabase/migrations/20260602082000_admin_workflow_notification_log_policy.sql");
+
+    expect(source).toContain("grant select on public.workflow_notification_log to authenticated;");
+    expect(source).toContain('create policy "Admins can read workflow notification log"');
+    expect(source).toContain("for select");
+    expect(source).toContain("private.is_admin()");
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
+
+  it("keeps grading error events readable only by admins", () => {
+    const source = readRepoFile("supabase/migrations/20260519221000_create_grading_error_events.sql");
+
+    expect(source).toContain("create table if not exists public.grading_error_events");
+    expect(source).toContain("grant select on public.grading_error_events to authenticated;");
+    expect(source).toContain("grant insert on public.grading_error_events to service_role;");
+    expect(source).toContain('create policy "Admins can read grading error events"');
+    expect(source).toContain("exists (");
+    expect(source).toContain("profiles.role = 'admin'");
+  });
+
   it("adds text overloads for institution helper compatibility on legacy text-key paths", () => {
     const source = readRepoFile("supabase/migrations/20260525094500_add_text_institution_helper_overloads.sql");
 

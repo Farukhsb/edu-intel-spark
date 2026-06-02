@@ -10,7 +10,10 @@ const ADMIN_AUDIT_FIELDS = "id, created_at, action_type, actor_role, target_user
 const GRADE_AUDIT_FIELDS = "id, created_at, event_type, submission_id, moderation_case_id, reason";
 const ACADEMIC_ACCESS_EVENT_FIELDS =
   "id, created_at, actor_id, actor_role, event_type, resource_type, resource_id, assignment_id, submission_id, moderation_case_id, metadata";
-const COMMUNICATION_FIELDS = "id, created_at, category, subject";
+const WORKFLOW_NOTIFICATION_FIELDS =
+  "id, created_at, delivery_status, sent_at, last_error";
+const WORKFLOW_RUN_FIELDS =
+  "id, created_at, started_at, finished_at, duration_ms, workflow_name, status, provider, model, retry_count, failure_category";
 const LATEST_GRADE_FIELDS = "id, created_at";
 const INTEGRITY_REVIEW_FIELDS = "id, submission_id, decision, lecturer_note, review_type, created_at, updated_at";
 
@@ -32,6 +35,38 @@ export const fetchAdminDashboardDataset = async () => {
     }
   };
 
+  const fetchWorkflowNotificationLog = async () => {
+    try {
+      return await supabase
+        .from("workflow_notification_log")
+        .select(WORKFLOW_NOTIFICATION_FIELDS)
+        .gte("created_at", todayStart.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(100);
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error : new Error("workflow notification telemetry unavailable"),
+      };
+    }
+  };
+
+  const fetchWorkflowRuns = async () => {
+    try {
+      return await supabase
+        .from("workflow_runs")
+        .select(WORKFLOW_RUN_FIELDS)
+        .gte("created_at", todayStart.toISOString())
+        .order("started_at", { ascending: false })
+        .limit(100);
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error : new Error("workflow run telemetry unavailable"),
+      };
+    }
+  };
+
   const [
     metricsRes,
     assignmentOversightRes,
@@ -47,7 +82,8 @@ export const fetchAdminDashboardDataset = async () => {
     academicAccessEventsRes,
     integrityReviewsRes,
     latestGradeRes,
-    notificationsRes,
+    workflowRunRes,
+    workflowNotificationLogRes,
     gradingFailureCountRes,
   ] = await Promise.all([
     supabase.rpc("get_admin_dashboard_metrics"),
@@ -64,7 +100,8 @@ export const fetchAdminDashboardDataset = async () => {
     supabase.from("academic_access_events").select(ACADEMIC_ACCESS_EVENT_FIELDS).order("created_at", { ascending: false }).limit(100),
     supabase.from("academic_integrity_reviews").select(INTEGRITY_REVIEW_FIELDS).order("updated_at", { ascending: false }).limit(100),
     supabase.from("grades").select(LATEST_GRADE_FIELDS).order("created_at", { ascending: false }).limit(1),
-    supabase.from("communication_messages").select(COMMUNICATION_FIELDS).order("created_at", { ascending: false }).limit(10),
+    fetchWorkflowRuns(),
+    fetchWorkflowNotificationLog(),
     fetchGradingFailureCount(),
   ]);
 
@@ -94,7 +131,8 @@ export const fetchAdminDashboardDataset = async () => {
     academicAccessEventsRes,
     integrityReviewsRes,
     latestGradeRes,
-    notificationsRes,
+    workflowRunRes,
+    workflowNotificationLogRes,
     gradingFailureCountRes,
   };
 };

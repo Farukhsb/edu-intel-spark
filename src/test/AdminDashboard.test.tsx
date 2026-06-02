@@ -168,6 +168,39 @@ const gradeAuditRows = [
   },
 ];
 
+const workflowNotificationLogs = [
+  {
+    id: "notification-1",
+    created_at: "2026-04-30T11:00:00.000Z",
+    delivery_status: "sent",
+    sent_at: "2026-04-30T11:02:00.000Z",
+    last_error: null,
+  },
+  {
+    id: "notification-2",
+    created_at: "2026-04-30T11:30:00.000Z",
+    delivery_status: "failed",
+    sent_at: null,
+    last_error: "Resend rejected",
+  },
+];
+
+const workflowRuns = [
+  {
+    id: "workflow-run-1",
+    created_at: "2026-04-30T12:00:00.000Z",
+    started_at: "2026-04-30T12:00:00.000Z",
+    finished_at: "2026-04-30T12:00:06.000Z",
+    duration_ms: 6000,
+    workflow_name: "grade-submission",
+    status: "failed",
+    provider: "openai",
+    model: "gpt-4o-mini",
+    retry_count: 2,
+    failure_category: "service_failure",
+  },
+];
+
 const academicAccessEvents = [
   {
     id: "access-1",
@@ -388,6 +421,21 @@ const buildQueryResponse = (
     };
   }
 
+  if (table === "workflow_runs") {
+    return {
+      select: () => ({
+        gte: () => ({
+          order: () => ({
+            limit: vi.fn().mockResolvedValue({
+              data: workflowRuns,
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    };
+  }
+
   if (table === "communication_messages") {
     return {
       select: () => ({
@@ -395,6 +443,21 @@ const buildQueryResponse = (
           limit: vi.fn().mockResolvedValue({
             data: [],
             error: null,
+          }),
+        }),
+      }),
+    };
+  }
+
+  if (table === "workflow_notification_log") {
+    return {
+      select: () => ({
+        gte: () => ({
+          order: () => ({
+            limit: vi.fn().mockResolvedValue({
+              data: workflowNotificationLogs,
+              error: null,
+            }),
           }),
         }),
       }),
@@ -576,11 +639,16 @@ describe("AdminDashboard", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /Failure dashboard/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Operational alerts/i })).toBeInTheDocument();
     expect(screen.getByText("Release backlog")).toBeInTheDocument();
+    expect(screen.getByText("Stale grading heartbeat")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /System health/i })).toBeInTheDocument();
     expect(screen.getByText("Read snapshot succeeded")).toBeInTheDocument();
-    expect(screen.getAllByText("No provider telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByText(/direct grading-run telemetry is not yet exposed here/i)).toBeInTheDocument();
+    expect(screen.getByText("AI grading workflow signal")).toBeInTheDocument();
+    expect(screen.getByText("1 failed run")).toBeInTheDocument();
+    expect(screen.getByText(/Latest grade-submission run failed/i)).toBeInTheDocument();
+    expect(screen.getByText("Workflow notification delivery")).toBeInTheDocument();
+    expect(screen.getByText("1 failed")).toBeInTheDocument();
     expect(screen.queryByText(/^Healthy$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Online$/)).not.toBeInTheDocument();
   });

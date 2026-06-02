@@ -3,6 +3,7 @@ import type { AppRole } from "@/lib/roles";
 import type { LucideIcon } from "lucide-react";
 import type {
   OperationalFailureCard,
+  OperationalAlertCard,
   OperationalHealthItem,
 } from "@/lib/operationalMonitoring";
 
@@ -229,6 +230,7 @@ export type AdminDashboardState = {
   metrics: AdminMetrics;
   healthItems: OperationalHealthItem[];
   failureCards: OperationalFailureCard[];
+  alertCards: OperationalAlertCard[];
   users: AdminUserRow[];
   assignments: AdminAssignmentRow[];
   submissions: AdminSubmissionRow[];
@@ -266,6 +268,7 @@ export type AdminDashboardViewModel = {
     metrics: AdminMetrics;
     healthItems: OperationalHealthItem[];
     failureCards: OperationalFailureCard[];
+    alertCards: OperationalAlertCard[];
     users: AdminUserRow[];
     assignments: AdminAssignmentRow[];
     submissions: AdminSubmissionRow[];
@@ -308,6 +311,7 @@ export type AdminDashboardViewModel = {
   };
   system: {
     failureCards: OperationalFailureCard[];
+    alertCards: OperationalAlertCard[];
     healthItems: OperationalHealthItem[];
     moderationRows: AdminModerationRow[];
     activityFeed: ActivityItem[];

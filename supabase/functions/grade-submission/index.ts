@@ -11,7 +11,7 @@ import {
 import { getModel } from "../_shared/openai.ts";
 import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
 import { parseGradeSubmissionRequestPayload } from "../_shared/grade-submission-request.ts";
-import { buildGradingErrorEventPayload } from "./error-telemetry.ts";
+import { buildGradingErrorEventPayload, classifyGradingError } from "./error-telemetry.ts";
 import {
   type CachedGradeResult,
 } from "./orchestration.ts";
@@ -225,6 +225,107 @@ async function recordGradingErrorEvent({
   }
 }
 
+type WorkflowRunTelemetryStatus = "running" | "succeeded" | "failed";
+
+async function recordGradingWorkflowRun({
+  supabaseAdmin,
+  workflowRunId,
+  assignmentId,
+  submissionId,
+  institutionId,
+  triggeredBy,
+  model,
+  status,
+  retryCount,
+  failureCategory,
+  startedAt,
+  finishedAt,
+  durationMs,
+  submissionCount,
+  provider = "openai",
+}: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  workflowRunId?: string | null;
+  assignmentId: string;
+  submissionId: string | null;
+  institutionId: string;
+  triggeredBy: string | null;
+  model: string;
+  status: WorkflowRunTelemetryStatus;
+  retryCount: number;
+  failureCategory?: string | null;
+  startedAt: string;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+  submissionCount: number;
+  provider?: string;
+}) {
+  const payload = {
+    workflow_name: "grade-submission",
+    assignment_id: assignmentId,
+    submission_id: submissionId,
+    institution_id: institutionId,
+    triggered_by: triggeredBy,
+    provider,
+    model,
+    status,
+    retry_count: Math.max(0, Math.trunc(retryCount)),
+    failure_category: failureCategory ?? null,
+    started_at: startedAt,
+    finished_at: finishedAt ?? null,
+    duration_ms: durationMs ?? null,
+    details: {
+      submission_count: submissionCount,
+      workflow: "grade-submission",
+      provider,
+      model,
+      status,
+    },
+  };
+
+  if (workflowRunId) {
+    const { error } = await supabaseAdmin
+      .from("workflow_runs")
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", workflowRunId);
+
+    if (error) {
+      logWarn("grade-submission workflow run telemetry update failed", {
+        assignmentId,
+        workflowRunId,
+        error,
+      });
+    }
+    return workflowRunId;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("workflow_runs")
+    .insert({
+      ...payload,
+      updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    logWarn("grade-submission workflow run telemetry insert failed", {
+      assignmentId,
+      error,
+    });
+    return null;
+  }
+
+  return data.id as string;
+}
+
+function getWorkflowRunRetryCount(gradingPasses: number) {
+  return Math.max(0, gradingPasses - 1);
+}
+
 async function fetchSubmissionContent(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   sub: { file_url: string; file_name: string | null },
@@ -356,9 +457,21 @@ Deno.serve(async (req) => {
   if (!corsHeaders) return createCorsForbiddenResponse();
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  let supabaseAdmin: ReturnType<typeof createAdminClient> | null = null;
+  let workflowRunId: string | null = null;
+  let workflowRunStartedAt: string | null = null;
+  let workflowRunAssignmentId: string | null = null;
+  let workflowRunInstitutionId: string | null = null;
+  let workflowRunSubmissionId: string | null = null;
+  let workflowRunSubmissionCount = 0;
+  let workflowRunModel = "";
+  let workflowRunRetryCount = 0;
+  let actorUserId: string | null = null;
+
   try {
     const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);
-    const supabaseAdmin = createAdminClient();
+    actorUserId = user.id;
+    supabaseAdmin = createAdminClient();
     const rateLimit = await applySharedRateLimit(supabaseAdmin, req, {
       scope: "grade-submission",
       limit: 5,
@@ -426,6 +539,33 @@ Deno.serve(async (req) => {
     if (!assignment) {
       throw new HttpError(403, "You do not have grading access to this assignment.");
     }
+
+    workflowRunStartedAt = new Date().toISOString();
+    workflowRunAssignmentId = assignment.id;
+    workflowRunInstitutionId = assignment.institution_id ?? null;
+    workflowRunSubmissionId = requestedSubmissionIds[0] ?? null;
+    workflowRunSubmissionCount = requestedSubmissionIds.length;
+    workflowRunModel = gradingModel;
+    workflowRunRetryCount = getWorkflowRunRetryCount(gradingPasses);
+    if (!workflowRunInstitutionId) {
+      logWarn("grade-submission workflow run telemetry skipped because assignment has no institution", {
+        assignmentId: requestedAssignmentId,
+      });
+    } else {
+      workflowRunId = await recordGradingWorkflowRun({
+        supabaseAdmin,
+        assignmentId: workflowRunAssignmentId,
+        submissionId: workflowRunSubmissionId,
+        institutionId: workflowRunInstitutionId,
+        triggeredBy: user.id,
+        model: workflowRunModel,
+        status: "running",
+        retryCount: workflowRunRetryCount,
+        startedAt: workflowRunStartedAt,
+        submissionCount: workflowRunSubmissionCount,
+      });
+    }
+
     const { normalizedRubric, rubricText } = normalizeRubricForAssignment(assignment);
 
     const submissionClient = actorIsAdmin ? supabaseAdmin : userSupabase;
@@ -487,9 +627,13 @@ Deno.serve(async (req) => {
 
     const results: Array<Record<string, unknown>> = [];
     const generatedResultsByFingerprint = new Map<string, CachedGradeResult>();
+    let workflowRunFailureCount = 0;
+    let workflowRunFailureCategory: string | null = null;
     const invalidSubmissionPaths = submissions.filter((sub) => !normalizeSubmissionStoragePath(sub.file_url));
     for (const sub of invalidSubmissionPaths) {
       const reason = "Submission file URL is missing. Re-upload the document and try again.";
+      workflowRunFailureCount += 1;
+      workflowRunFailureCategory = workflowRunFailureCategory || "submission_access_failure";
       await recordGradingFailureAudit({
         supabaseAdmin,
         submissionId: sub.id,
@@ -541,6 +685,11 @@ Deno.serve(async (req) => {
         results.push(gradingResult);
       } catch (gradeErr) {
         const reason = gradeErr instanceof Error ? gradeErr.message : String(gradeErr);
+        const gradingErrorCategory = gradeErr instanceof Error
+          ? (isDocumentExtractionError(gradeErr) ? gradeErr.safeErrorCategory : classifyGradingError(reason).safeErrorCategory)
+          : "grading_failure";
+        workflowRunFailureCount += 1;
+        workflowRunFailureCategory = workflowRunFailureCategory || gradingErrorCategory;
         logError("Grading error for submission", gradeErr, {
           submissionId: sub.id,
         });
@@ -577,10 +726,52 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (supabaseAdmin && workflowRunStartedAt && workflowRunAssignmentId && workflowRunInstitutionId) {
+      const workflowRunStatus: WorkflowRunTelemetryStatus =
+        workflowRunFailureCount > 0 ? "failed" : "succeeded";
+      await recordGradingWorkflowRun({
+        supabaseAdmin,
+        workflowRunId,
+        assignmentId: workflowRunAssignmentId,
+        submissionId: workflowRunSubmissionId,
+        institutionId: workflowRunInstitutionId,
+        triggeredBy: actorUserId,
+        model: workflowRunModel,
+        status: workflowRunStatus,
+        retryCount: workflowRunRetryCount,
+        failureCategory: workflowRunFailureCount > 0 ? workflowRunFailureCategory : null,
+        startedAt: workflowRunStartedAt,
+        finishedAt: new Date().toISOString(),
+        durationMs: Math.max(0, Date.now() - new Date(workflowRunStartedAt).getTime()),
+        submissionCount: workflowRunSubmissionCount,
+      });
+    }
+
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    if (supabaseAdmin && workflowRunStartedAt && workflowRunAssignmentId && workflowRunInstitutionId) {
+      const failureCategory = e instanceof Error
+        ? classifyGradingError(e.message).safeErrorCategory
+        : "grading_failure";
+      await recordGradingWorkflowRun({
+        supabaseAdmin,
+        workflowRunId,
+        assignmentId: workflowRunAssignmentId,
+        submissionId: workflowRunSubmissionId,
+        institutionId: workflowRunInstitutionId,
+        triggeredBy: actorUserId,
+        model: workflowRunModel || "gpt-4o-mini",
+        status: "failed",
+        retryCount: workflowRunRetryCount,
+        failureCategory,
+        startedAt: workflowRunStartedAt,
+        finishedAt: new Date().toISOString(),
+        durationMs: Math.max(0, Date.now() - new Date(workflowRunStartedAt).getTime()),
+        submissionCount: workflowRunSubmissionCount,
+      });
+    }
     logError("grade-submission error", e);
     return jsonError(e, corsHeaders);
   }

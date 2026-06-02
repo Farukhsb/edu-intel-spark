@@ -14,8 +14,16 @@ export interface PageMetadata {
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
+const readConfiguredAppUrl = () => {
+  if (typeof import.meta.env !== "undefined") {
+    return import.meta.env.VITE_APP_URL;
+  }
+
+  return undefined;
+};
+
 export const getSiteUrl = () => {
-  const configuredAppUrl = import.meta.env?.VITE_APP_URL;
+  const configuredAppUrl = readConfiguredAppUrl();
 
   if (typeof configuredAppUrl === "string" && configuredAppUrl.trim()) {
     return trimTrailingSlash(configuredAppUrl);

@@ -9,6 +9,25 @@ export interface OperationalMonitoringSubmissionLike {
   status: string;
 }
 
+export interface OperationalMonitoringWorkflowRunLike {
+  status: "failed" | "running" | "succeeded";
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  workflowName: string;
+  provider: string;
+  model: string | null;
+  retryCount: number;
+  failureCategory: string | null;
+}
+
+export interface OperationalMonitoringNotificationLike {
+  deliveryStatus: string;
+  createdAt: string;
+  sentAt: string | null;
+  lastError: string | null;
+}
+
 export interface OperationalHealthItem {
   label: string;
   statusLabel: string;
@@ -26,9 +45,20 @@ export interface OperationalFailureCard {
   signalType: "live" | "inferred" | "placeholder";
 }
 
+export interface OperationalAlertCard {
+  title: string;
+  value: string;
+  threshold: string;
+  tone: "healthy" | "warning" | "placeholder";
+  detail: string;
+  action: string;
+  signalType: "live" | "inferred" | "placeholder";
+}
+
 export interface OperationalMonitoringSnapshot {
   healthItems: OperationalHealthItem[];
   failureCards: OperationalFailureCard[];
+  alertCards: OperationalAlertCard[];
 }
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -41,20 +71,24 @@ const isOlderThanDays = (value: string | null | undefined, days: number, now: nu
 };
 
 export const buildOperationalMonitoringSnapshot = ({
+  workflowRunTelemetryAvailable,
+  workflowRunRows,
   latestGradeRun,
   aiGradingFailures,
   moderationRows,
   submissions,
-  emailNotificationsVisible,
-  emailNotificationsCount,
+  workflowNotificationTelemetryAvailable,
+  workflowNotificationRows,
   now = Date.now(),
 }: {
+  workflowRunTelemetryAvailable: boolean;
+  workflowRunRows: OperationalMonitoringWorkflowRunLike[];
   latestGradeRun: string | null;
   aiGradingFailures: number | null;
   moderationRows: OperationalMonitoringModerationLike[];
   submissions: OperationalMonitoringSubmissionLike[];
-  emailNotificationsVisible: boolean;
-  emailNotificationsCount: number;
+  workflowNotificationTelemetryAvailable: boolean;
+  workflowNotificationRows: OperationalMonitoringNotificationLike[];
   now?: number;
 }): OperationalMonitoringSnapshot => {
   const overdueModerationCount = moderationRows.filter((row) => {
@@ -70,18 +104,84 @@ export const buildOperationalMonitoringSnapshot = ({
     (row) => row.status === "escalated" || (row.integrityRiskScore ?? 0) >= 70,
   ).length;
   const staleGradingRun = latestGradeRun ? isOlderThanDays(latestGradeRun, 1, now) : false;
+  const workflowRunCounts = workflowRunRows.reduce(
+    (counts, row) => {
+      if (row.status === "running") {
+        counts.running += 1;
+      } else if (row.status === "failed") {
+        counts.failed += 1;
+      } else {
+        counts.succeeded += 1;
+      }
+
+      return counts;
+    },
+    {
+      running: 0,
+      failed: 0,
+      succeeded: 0,
+    },
+  );
+  const latestWorkflowRun = workflowRunRows[0] ?? null;
+  const staleWorkflowRun = latestWorkflowRun
+    ? isOlderThanDays(latestWorkflowRun.finishedAt ?? latestWorkflowRun.startedAt, 1, now)
+    : false;
+  const workflowNotificationCounts = workflowNotificationRows.reduce(
+    (counts, row) => {
+      if (row.deliveryStatus === "sent") {
+        counts.sent += 1;
+      } else if (row.deliveryStatus === "failed") {
+        counts.failed += 1;
+      } else {
+        counts.pending += 1;
+      }
+
+      return counts;
+    },
+    {
+      sent: 0,
+      failed: 0,
+      pending: 0,
+    },
+  );
+  const workflowNotificationActivity = workflowNotificationRows[0] ?? null;
+  const latestGradeWorkflowRun = workflowRunRows.find((row) => row.workflowName === "grade-submission") ?? null;
+  const staleGradingHeartbeat =
+    workflowRunTelemetryAvailable && latestGradeWorkflowRun
+      ? isOlderThanDays(latestGradeWorkflowRun.finishedAt ?? latestGradeWorkflowRun.startedAt, 1, now)
+      : workflowRunTelemetryAvailable;
+  const failedProviderCallCount = workflowRunRows.filter(
+    (row) => row.workflowName === "grade-submission" && row.status === "failed",
+  ).length;
+  const failedEmailDeliveryCount = workflowNotificationRows.filter((row) => row.deliveryStatus === "failed").length;
 
   const healthItems: OperationalHealthItem[] = [
     {
       label: "AI grading workflow signal",
-      statusLabel: latestGradeRun ? (staleGradingRun ? "Signal is stale" : "Recent workflow activity") : "No provider telemetry",
-      tone: latestGradeRun ? (staleGradingRun ? "warning" : "healthy") : "placeholder",
-      signalType: latestGradeRun ? "inferred" : "placeholder",
-      detail: latestGradeRun
-        ? staleGradingRun
-          ? "A grade row exists, but the latest visible grading activity is more than 24 hours old. Treat this as a stale signal, not a confirmed outage."
-          : "Latest grading evidence is recent enough to suggest the grading workflow is still active. This remains an observed workflow signal, not a provider heartbeat."
-        : "Admin can see platform workflow, but direct grading-run telemetry is not yet exposed here.",
+      statusLabel: workflowRunTelemetryAvailable
+        ? workflowRunCounts.failed > 0
+          ? `${workflowRunCounts.failed} failed run${workflowRunCounts.failed === 1 ? "" : "s"}`
+          : workflowRunCounts.running > 0
+            ? `${workflowRunCounts.running} running`
+            : workflowRunCounts.succeeded > 0
+              ? `${workflowRunCounts.succeeded} succeeded`
+              : "No runs today"
+        : "No provider telemetry",
+      tone: workflowRunTelemetryAvailable
+        ? workflowRunCounts.failed > 0 || (latestWorkflowRun ? latestWorkflowRun.status === "running" && staleWorkflowRun : false)
+          ? "warning"
+          : "healthy"
+        : "placeholder",
+      signalType: workflowRunTelemetryAvailable ? "live" : "placeholder",
+      detail: workflowRunTelemetryAvailable
+        ? latestWorkflowRun
+          ? latestWorkflowRun.status === "failed"
+            ? `Latest ${latestWorkflowRun.workflowName} run failed on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.durationMs != null ? ` after ${(latestWorkflowRun.durationMs / 1000).toFixed(1)}s` : ""}${latestWorkflowRun.retryCount > 0 ? ` with ${latestWorkflowRun.retryCount} retry attempt(s)` : ""}${latestWorkflowRun.failureCategory ? `. Failure category: ${latestWorkflowRun.failureCategory}.` : "."}`
+            : latestWorkflowRun.status === "running"
+              ? `Latest ${latestWorkflowRun.workflowName} run is still running on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.startedAt ? `; started at ${latestWorkflowRun.startedAt}.` : "."}`
+              : `Latest ${latestWorkflowRun.workflowName} run succeeded on ${latestWorkflowRun.provider}${latestWorkflowRun.model ? ` / ${latestWorkflowRun.model}` : ""}${latestWorkflowRun.durationMs != null ? ` in ${(latestWorkflowRun.durationMs / 1000).toFixed(1)}s` : ""}${latestWorkflowRun.retryCount > 0 ? ` after ${latestWorkflowRun.retryCount} retry attempt(s)` : ""}.`
+          : "Workflow run telemetry is visible, but no run records were captured for the current window."
+        : "Workflow run telemetry is not yet exposed here, so this remains a placeholder signal.",
     },
     {
       label: "Integrity workflow signal",
@@ -102,13 +202,27 @@ export const buildOperationalMonitoringSnapshot = ({
         "Profiles, assignments, submissions, and moderation tables loaded for this page refresh. This confirms dashboard reads, not full database health.",
     },
     {
-      label: "Notification records",
-      statusLabel: emailNotificationsVisible ? "Records visible" : "No provider telemetry",
-      tone: emailNotificationsVisible ? "healthy" : "placeholder",
-      signalType: emailNotificationsVisible ? "live" : "placeholder",
-      detail: emailNotificationsVisible
-        ? `${emailNotificationsCount} recent notification record(s) are visible from the communication log. This confirms records exist, not that delivery is enabled.`
-        : "Notification enablement and delivery health are not yet directly observable from the admin dashboard.",
+      label: "Workflow notification delivery",
+      statusLabel: workflowNotificationTelemetryAvailable
+        ? workflowNotificationCounts.failed > 0
+          ? `${workflowNotificationCounts.failed} failed`
+          : workflowNotificationCounts.pending > 0
+            ? `${workflowNotificationCounts.pending} pending`
+            : `${workflowNotificationCounts.sent} sent`
+        : "No provider telemetry",
+      tone: workflowNotificationTelemetryAvailable
+        ? workflowNotificationCounts.failed > 0
+          ? "warning"
+          : "healthy"
+        : "placeholder",
+      signalType: workflowNotificationTelemetryAvailable ? "live" : "placeholder",
+      detail: workflowNotificationTelemetryAvailable
+        ? workflowNotificationCounts.failed > 0
+          ? `${workflowNotificationCounts.failed} failed delivery attempt(s), ${workflowNotificationCounts.pending} pending record(s), and ${workflowNotificationCounts.sent} sent record(s) are visible in the workflow notification log.`
+          : workflowNotificationCounts.pending > 0
+            ? `${workflowNotificationCounts.pending} workflow notification record(s) are still pending and ${workflowNotificationCounts.sent} have been sent.`
+            : `${workflowNotificationCounts.sent} workflow notification record(s) are visible in the log${workflowNotificationActivity?.sentAt ? `, with the latest send at ${workflowNotificationActivity.sentAt}.` : "."}`
+        : "Workflow notification delivery records are not yet exposed here, so this remains a placeholder signal.",
     },
     {
       label: "Latest visible grading activity",
@@ -183,9 +297,67 @@ export const buildOperationalMonitoringSnapshot = ({
       action: "Prioritise the integrity queue and confirm owners are assigned.",
     },
   ];
+  const alertCards: OperationalAlertCard[] = [
+    {
+      title: "Stale grading heartbeat",
+      value: staleGradingHeartbeat ? "1" : "0",
+      threshold: "No grade-submission run within 24 hours",
+      tone: workflowRunTelemetryAvailable ? (staleGradingHeartbeat ? "warning" : "healthy") : "placeholder",
+      signalType: workflowRunTelemetryAvailable ? "live" : "placeholder",
+      detail: workflowRunTelemetryAvailable
+        ? staleGradingHeartbeat
+          ? "The latest visible grade-submission run is older than the 24 hour threshold, so the grading pipeline should be checked."
+          : "At least one grade-submission run has been observed within the last 24 hours."
+        : "Grading run telemetry is not yet available here, so the stale-run threshold cannot be evaluated.",
+      action: "Inspect the latest grade-submission runs and confirm the provider is still processing work.",
+    },
+    {
+      title: "Failed provider calls",
+      value: String(failedProviderCallCount),
+      threshold: "Any failed grade-submission run today",
+      tone: workflowRunTelemetryAvailable ? (failedProviderCallCount > 0 ? "warning" : "healthy") : "placeholder",
+      signalType: workflowRunTelemetryAvailable ? "live" : "placeholder",
+      detail: workflowRunTelemetryAvailable
+        ? failedProviderCallCount > 0
+          ? `${failedProviderCallCount} grade-submission provider call(s) failed in the current window.`
+          : "No failed grade-submission provider calls were recorded in the current window."
+        : "Provider-call telemetry is unavailable, so this threshold is not yet live.",
+      action: "Review provider logs and retry policy for grade-submission failures.",
+    },
+    {
+      title: "Email delivery failures",
+      value: String(failedEmailDeliveryCount),
+      threshold: "Any failed workflow notification today",
+      tone: workflowNotificationTelemetryAvailable
+        ? failedEmailDeliveryCount > 0
+          ? "warning"
+          : "healthy"
+        : "placeholder",
+      signalType: workflowNotificationTelemetryAvailable ? "live" : "placeholder",
+      detail: workflowNotificationTelemetryAvailable
+        ? failedEmailDeliveryCount > 0
+          ? `${failedEmailDeliveryCount} workflow notification delivery failure(s) were recorded today.`
+          : "No workflow notification delivery failures were recorded today."
+        : "Notification delivery telemetry is unavailable, so this threshold is not yet live.",
+      action: "Check notification provider status and recent delivery attempts.",
+    },
+    {
+      title: "Moderation backlog threshold",
+      value: String(overdueModerationCount),
+      threshold: "Any moderation case open more than 7 days",
+      tone: overdueModerationCount > 0 ? "warning" : "healthy",
+      signalType: "live",
+      detail:
+        overdueModerationCount > 0
+          ? `${overdueModerationCount} moderation case(s) have crossed the seven day queue threshold.`
+          : "No moderation case has crossed the seven day queue threshold.",
+      action: "Escalate ageing moderation cases before release timing drifts further.",
+    },
+  ];
 
   return {
     healthItems,
     failureCards,
+    alertCards,
   };
 };

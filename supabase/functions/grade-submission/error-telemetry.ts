@@ -24,6 +24,9 @@ export function classifyGradingError(reason: string) {
   if (normalizedReason.includes("download")) {
     return { errorCode: "submission_download_failed", safeErrorCategory: "submission_access_failure" };
   }
+  if (normalizedReason.includes("not accessible") || normalizedReason.includes("forbidden")) {
+    return { errorCode: "submission_not_accessible", safeErrorCategory: "submission_access_failure" };
+  }
   if (normalizedReason.includes("missing") && normalizedReason.includes("file url")) {
     return { errorCode: "submission_file_missing", safeErrorCategory: "submission_access_failure" };
   }

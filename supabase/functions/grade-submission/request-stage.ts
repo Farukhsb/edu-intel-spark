@@ -50,7 +50,7 @@ export function normalizeRubricForAssignment(assignment: AssignmentForGrading) {
 export async function loadAssignmentForGrading(client: QueryClient, assignmentId: string) {
   const response = await client
     .from("assignments")
-    .select("id, lecturer_id, title, description, module_code, max_score, rubric")
+    .select("id, lecturer_id, institution_id, title, description, module_code, max_score, rubric")
     .eq("id", assignmentId)
     .maybeSingle();
 

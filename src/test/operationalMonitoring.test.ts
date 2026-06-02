@@ -5,6 +5,20 @@ import { buildOperationalMonitoringSnapshot } from "@/lib/operationalMonitoring"
 describe("operationalMonitoring", () => {
   it("builds warning-oriented failure cards from observable workflow backlog", () => {
     const snapshot = buildOperationalMonitoringSnapshot({
+      workflowRunTelemetryAvailable: true,
+      workflowRunRows: [
+        {
+          status: "failed",
+          startedAt: "2026-05-04T08:00:00.000Z",
+          finishedAt: "2026-05-04T08:00:06.000Z",
+          durationMs: 6000,
+          workflowName: "grade-submission",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          retryCount: 2,
+          failureCategory: "service_failure",
+        },
+      ],
       latestGradeRun: "2026-05-01T08:00:00.000Z",
       aiGradingFailures: 2,
       moderationRows: [
@@ -22,8 +36,27 @@ describe("operationalMonitoring", () => {
         },
       ],
       submissions: [{ status: "approved" }, { status: "released" }, { status: "approved" }],
-      emailNotificationsVisible: true,
-      emailNotificationsCount: 4,
+      workflowNotificationTelemetryAvailable: true,
+      workflowNotificationRows: [
+        {
+          deliveryStatus: "sent",
+          createdAt: "2026-05-04T08:00:00.000Z",
+          sentAt: "2026-05-04T08:02:00.000Z",
+          lastError: null,
+        },
+        {
+          deliveryStatus: "failed",
+          createdAt: "2026-05-04T09:00:00.000Z",
+          sentAt: null,
+          lastError: "Resend rejected",
+        },
+        {
+          deliveryStatus: "pending",
+          createdAt: "2026-05-04T10:00:00.000Z",
+          sentAt: null,
+          lastError: null,
+        },
+      ],
       now: new Date("2026-05-04T12:00:00.000Z").getTime(),
     });
 
@@ -53,18 +86,54 @@ describe("operationalMonitoring", () => {
       ]),
     );
 
+    expect(snapshot.alertCards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Stale grading heartbeat",
+          tone: "healthy",
+          value: "0",
+          signalType: "live",
+          threshold: "No grade-submission run within 24 hours",
+        }),
+        expect.objectContaining({
+          title: "Failed provider calls",
+          tone: "warning",
+          value: "1",
+          signalType: "live",
+        }),
+        expect.objectContaining({
+          title: "Email delivery failures",
+          tone: "warning",
+          value: "1",
+          signalType: "live",
+        }),
+        expect.objectContaining({
+          title: "Moderation backlog threshold",
+          tone: "warning",
+          value: "1",
+          signalType: "live",
+        }),
+      ]),
+    );
+
     expect(snapshot.healthItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           label: "AI grading workflow signal",
           tone: "warning",
-          statusLabel: "Signal is stale",
+          statusLabel: "1 failed run",
+          signalType: "live",
+        }),
+        expect.objectContaining({
+          label: "Latest visible grading activity",
+          tone: "warning",
+          statusLabel: "Recorded",
           signalType: "inferred",
         }),
         expect.objectContaining({
-          label: "Notification records",
-          tone: "healthy",
-          statusLabel: "Records visible",
+          label: "Workflow notification delivery",
+          tone: "warning",
+          statusLabel: "1 failed",
           signalType: "live",
         }),
       ]),
@@ -73,12 +142,14 @@ describe("operationalMonitoring", () => {
 
   it("keeps placeholder language when direct telemetry is unavailable", () => {
     const snapshot = buildOperationalMonitoringSnapshot({
+      workflowRunTelemetryAvailable: false,
+      workflowRunRows: [],
       latestGradeRun: null,
       aiGradingFailures: null,
       moderationRows: [],
       submissions: [],
-      emailNotificationsVisible: false,
-      emailNotificationsCount: 0,
+      workflowNotificationTelemetryAvailable: false,
+      workflowNotificationRows: [],
     });
 
     expect(snapshot.healthItems).toEqual(
@@ -106,16 +177,48 @@ describe("operationalMonitoring", () => {
         signalType: "placeholder",
       }),
     );
+
+    expect(snapshot.alertCards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Stale grading heartbeat",
+          tone: "placeholder",
+          value: "0",
+          signalType: "placeholder",
+        }),
+      ]),
+    );
   });
 
   it("shows healthy grading telemetry when real failures count is zero", () => {
     const snapshot = buildOperationalMonitoringSnapshot({
+      workflowRunTelemetryAvailable: true,
+      workflowRunRows: [
+        {
+          status: "succeeded",
+          startedAt: "2026-05-04T08:00:00.000Z",
+          finishedAt: "2026-05-04T08:00:03.000Z",
+          durationMs: 3000,
+          workflowName: "grade-submission",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          retryCount: 0,
+          failureCategory: null,
+        },
+      ],
       latestGradeRun: "2026-05-04T08:00:00.000Z",
       aiGradingFailures: 0,
       moderationRows: [],
       submissions: [],
-      emailNotificationsVisible: true,
-      emailNotificationsCount: 1,
+      workflowNotificationTelemetryAvailable: true,
+      workflowNotificationRows: [
+        {
+          deliveryStatus: "sent",
+          createdAt: "2026-05-04T08:00:00.000Z",
+          sentAt: "2026-05-04T08:02:00.000Z",
+          lastError: null,
+        },
+      ],
       now: new Date("2026-05-04T12:00:00.000Z").getTime(),
     });
 
@@ -140,16 +243,54 @@ describe("operationalMonitoring", () => {
         }),
       ]),
     );
+
+    expect(snapshot.alertCards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Failed provider calls",
+          tone: "healthy",
+          value: "0",
+          signalType: "live",
+        }),
+        expect.objectContaining({
+          title: "Email delivery failures",
+          tone: "healthy",
+          value: "0",
+          signalType: "live",
+        }),
+      ]),
+    );
   });
 
   it("shows warning grading telemetry when one or more failures are recorded", () => {
     const snapshot = buildOperationalMonitoringSnapshot({
+      workflowRunTelemetryAvailable: true,
+      workflowRunRows: [
+        {
+          status: "succeeded",
+          startedAt: "2026-05-04T08:00:00.000Z",
+          finishedAt: "2026-05-04T08:00:03.000Z",
+          durationMs: 3000,
+          workflowName: "grade-submission",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          retryCount: 1,
+          failureCategory: null,
+        },
+      ],
       latestGradeRun: "2026-05-04T08:00:00.000Z",
       aiGradingFailures: 3,
       moderationRows: [],
       submissions: [],
-      emailNotificationsVisible: true,
-      emailNotificationsCount: 1,
+      workflowNotificationTelemetryAvailable: true,
+      workflowNotificationRows: [
+        {
+          deliveryStatus: "sent",
+          createdAt: "2026-05-04T08:00:00.000Z",
+          sentAt: "2026-05-04T08:02:00.000Z",
+          lastError: null,
+        },
+      ],
       now: new Date("2026-05-04T12:00:00.000Z").getTime(),
     });
 
@@ -170,6 +311,17 @@ describe("operationalMonitoring", () => {
           title: "Grading failures today",
           tone: "warning",
           value: "3",
+          signalType: "live",
+        }),
+      ]),
+    );
+
+    expect(snapshot.alertCards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Failed provider calls",
+          tone: "healthy",
+          value: "0",
           signalType: "live",
         }),
       ]),

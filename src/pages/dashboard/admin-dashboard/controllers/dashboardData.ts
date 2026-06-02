@@ -165,7 +165,8 @@ export const buildAdminDashboardData = ({
     academicAccessEventsRes,
     integrityReviewsRes,
     latestGradeRes,
-    notificationsRes,
+    workflowRunRes,
+    workflowNotificationLogRes,
     gradingFailureCountRes,
   } = dataset;
 
@@ -336,10 +337,30 @@ export const buildAdminDashboardData = ({
     moderation_case_id: string | null;
     reason: string | null;
   }> = [];
+  let workflowRunTelemetryAvailable = false;
+  let workflowRunRows: Array<{
+    id: string;
+    created_at: string;
+    started_at: string;
+    finished_at: string | null;
+    duration_ms: number | null;
+    workflow_name: string;
+    status: "failed" | "running" | "succeeded";
+    provider: string;
+    model: string | null;
+    retry_count: number;
+    failure_category: string | null;
+  }> = [];
   let latestGradeRun: string | null = null;
   let aiGradingFailures: number | null = null;
-  let emailNotificationsVisible = false;
-  let emailNotificationsCount = 0;
+  let workflowNotificationTelemetryAvailable = false;
+  let workflowNotificationRows: Array<{
+    id: string;
+    created_at: string;
+    delivery_status: string;
+    sent_at: string | null;
+    last_error: string | null;
+  }> = [];
   let gradeAuditAvailable = false;
   let academicAccessEventsAvailable = false;
   let academicAccessEvents: Array<{
@@ -387,11 +408,37 @@ export const buildAdminDashboardData = ({
   }
 
   try {
-    if (notificationsRes.error) throw notificationsRes.error;
-    emailNotificationsVisible = true;
-    emailNotificationsCount = (notificationsRes.data || []).length;
+    if (workflowRunRes.error) throw workflowRunRes.error;
+    workflowRunTelemetryAvailable = true;
+    workflowRunRows = (workflowRunRes.data || []).map((row) => ({
+      id: row.id,
+      created_at: row.created_at,
+      started_at: row.started_at,
+      finished_at: row.finished_at ?? null,
+      duration_ms: row.duration_ms ?? null,
+      workflow_name: row.workflow_name,
+      status: row.status,
+      provider: row.provider,
+      model: row.model ?? null,
+      retry_count: row.retry_count ?? 0,
+      failure_category: row.failure_category ?? null,
+    }));
   } catch {
-    log.warn("Communication notifications are unavailable to admin dashboard", { view: "system" });
+    log.warn("Workflow run telemetry is unavailable to admin dashboard", { view: "system" });
+  }
+
+  try {
+    if (workflowNotificationLogRes.error) throw workflowNotificationLogRes.error;
+    workflowNotificationTelemetryAvailable = true;
+    workflowNotificationRows = (workflowNotificationLogRes.data || []).map((row) => ({
+      id: row.id,
+      created_at: row.created_at,
+      delivery_status: row.delivery_status,
+      sent_at: row.sent_at ?? null,
+      last_error: row.last_error ?? null,
+    }));
+  } catch {
+    log.warn("Workflow notification delivery telemetry is unavailable to admin dashboard", { view: "system" });
   }
 
   try {
@@ -493,12 +540,31 @@ export const buildAdminDashboardData = ({
   }
 
   const monitoringSnapshot = buildOperationalMonitoringSnapshot({
+    workflowRunTelemetryAvailable,
+    workflowRunRows: workflowRunRows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      durationMs: row.duration_ms,
+      workflowName: row.workflow_name,
+      status: row.status,
+      provider: row.provider,
+      model: row.model,
+      retryCount: row.retry_count,
+      failureCategory: row.failure_category,
+    })),
     latestGradeRun,
     aiGradingFailures,
     moderationRows,
     submissions: submissionRows,
-    emailNotificationsVisible,
-    emailNotificationsCount,
+    workflowNotificationTelemetryAvailable,
+    workflowNotificationRows: workflowNotificationRows.map((row) => ({
+      deliveryStatus: row.delivery_status,
+      createdAt: row.created_at,
+      sentAt: row.sent_at,
+      lastError: row.last_error,
+    })),
   });
 
   return {
@@ -533,17 +599,18 @@ export const buildAdminDashboardData = ({
     healthItems: monitoringSnapshot.healthItems.map((item) => ({
       ...item,
       statusLabel:
-        item.label === "Last successful grading run" && latestGradeRun
+        item.label === "Latest visible grading activity" && latestGradeRun
           ? safeFormatDate(latestGradeRun, "MMM d, HH:mm", "Recorded")
           : item.statusLabel,
       detail:
-        item.label === "AI grading workflow signal" && latestGradeRun
+        item.label === "Latest visible grading activity" && latestGradeRun
           ? item.tone === "warning"
             ? `${item.detail} The latest visible grade row was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}.`
             : `Latest grading evidence visible to admin was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}. This is an observed grading timestamp, not a live service heartbeat.`
           : item.detail,
     })),
     failureCards: monitoringSnapshot.failureCards,
+    alertCards: monitoringSnapshot.alertCards,
     activityFeed:
       rpcActivityFeed ??
       buildActivityFeed({

@@ -36,6 +36,17 @@ const createState = (activeView: AdminView): AdminDashboardState => ({
       signalType: "live",
     },
   ],
+  alertCards: [
+    {
+      title: "Stale grading heartbeat",
+      value: "1",
+      threshold: "No grade-submission run within 24 hours",
+      tone: "warning",
+      detail: "The latest visible grade-submission run is older than the 24 hour threshold.",
+      action: "Inspect the latest grade-submission runs",
+      signalType: "live",
+    },
+  ],
   users: [
     {
       id: "lecturer-1",
@@ -247,11 +258,13 @@ describe("adminDashboardViewModel", () => {
     });
     expect(viewModel.overview.metrics).toBe(state.metrics);
     expect(viewModel.overview.users).toBe(state.users);
+    expect(viewModel.overview.alertCards).toBe(state.alertCards);
     expect(viewModel.users.users).toBe(state.visibleUsers);
     expect(viewModel.audit.auditRows).toBe(state.auditRows);
     expect(viewModel.dataAccessLog.rows).toBe(state.dataAccessLogRows);
     expect(viewModel.integrityOverview.overview).toBe(state.integrityOverview);
     expect(viewModel.system.failureCards).toBe(state.failureCards);
+    expect(viewModel.system.alertCards).toBe(state.alertCards);
     expect(viewModel.dialogs.pendingRoleChange).toBe(state.pendingRoleChange);
     expect(viewModel.dialogs.editingUserProfile).toBe(state.editingUserProfile);
   });

@@ -290,9 +290,12 @@ describe("edge function hardening", () => {
     expect(automationHookSource).toContain("body: JSON.stringify({");
     expect(automationHookSource).toContain("assignmentId: assignment.id,");
     expect(configSource).toContain("[functions.check-plagiarism]");
-    expect(configSource).toContain("verify_jwt = true");
     expect(configSource).toContain("[functions.grade-submission]");
     expect(configSource).toContain("[functions.explain-grade]");
+    expect(configSource).toContain("[functions.bulk-create-students]");
+    expect(configSource).toContain("[functions.import-grades]");
+    expect(configSource).toContain("verify_jwt = true");
+    expect(configSource).not.toContain("verify_jwt = false");
   });
 
   it("keeps the optional MOSS bridge non-fatal and backend-only", () => {
@@ -335,6 +338,11 @@ describe("edge function hardening", () => {
     expect(gradingSource).toContain('event_type: "grading_failed"');
     expect(gradingSource).toContain('await recordGradingFailureAudit({');
     expect(gradingSource).toContain('logWarn("grade-submission failure audit insert failed"');
+    expect(gradingSource).toContain('from("workflow_runs")');
+    expect(gradingSource).toContain('workflow_name: "grade-submission"');
+    expect(gradingSource).toContain('status: "running"');
+    expect(gradingSource).toContain('status: "failed"');
+    expect(gradingSource).toContain('workflowRunFailureCount > 0 ? "failed" : "succeeded"');
   });
 
   it("stores only short safe grading error telemetry messages", () => {

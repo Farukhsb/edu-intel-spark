@@ -18,6 +18,7 @@
     "test:coverage": "vitest run --coverage",
     "test:load": "node tools/load-test/run.mjs",
     "test:perf": "vitest run src/test/workflowPerformance.test.ts",
+    "test:e2e:install": "playwright install --with-deps chromium",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "typecheck": "tsc -p tsconfig.app.json --noEmit"

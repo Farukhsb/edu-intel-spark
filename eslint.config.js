@@ -27,4 +27,21 @@ export default tseslint.config(
       "no-empty": "off",
     },
   },
+  {
+    files: [
+      "src/lib/**/*.{ts,tsx}",
+      "src/contexts/**/*.{ts,tsx}",
+      "supabase/functions/_shared/**/*.{ts,tsx}",
+      "src/pages/dashboard/**/workflows/**/*.{ts,tsx}",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+    },
+  },
+  {
+    files: ["src/lib/**/*.{ts,tsx}", "src/contexts/**/*.{ts,tsx}", "src/pages/dashboard/**/workflows/**/*.{ts,tsx}"],
+    rules: {
+      "react-hooks/exhaustive-deps": "error",
+    },
+  },
 );

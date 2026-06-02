@@ -419,6 +419,54 @@ export type Database = {
           },
         ]
       }
+      workflow_notification_log: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          dedupe_key: string
+          delivery_status: "failed" | "pending" | "sent"
+          id: string
+          institution_id: string
+          last_error: string | null
+          notification_type: "assignment-published" | "grade-released" | "submission-received"
+          recipient_email: string
+          sent_at: string | null
+          submission_id: string | null
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          dedupe_key: string
+          delivery_status?: "failed" | "pending" | "sent"
+          id?: string
+          institution_id?: string
+          last_error?: string | null
+          notification_type: "assignment-published" | "grade-released" | "submission-received"
+          recipient_email: string
+          sent_at?: string | null
+          submission_id?: string | null
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          dedupe_key?: string
+          delivery_status?: "failed" | "pending" | "sent"
+          id?: string
+          institution_id?: string
+          last_error?: string | null
+          notification_type?: "assignment-published" | "grade-released" | "submission-received"
+          recipient_email?: string
+          sent_at?: string | null
+          submission_id?: string | null
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       grade_audit_log: {
         Row: {
           actor_role: string | null
@@ -616,6 +664,95 @@ export type Database = {
           {
             foreignKeyName: "grading_error_events_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_runs: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          details: Json
+          duration_ms: number | null
+          failure_category: string | null
+          finished_at: string | null
+          id: string
+          institution_id: string
+          model: string | null
+          provider: string
+          retry_count: number
+          started_at: string
+          status: "failed" | "running" | "succeeded"
+          submission_id: string | null
+          triggered_by: string | null
+          updated_at: string
+          workflow_name: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failure_category?: string | null
+          finished_at?: string | null
+          id?: string
+          institution_id: string
+          model?: string | null
+          provider: string
+          retry_count?: number
+          started_at?: string
+          status: "failed" | "running" | "succeeded"
+          submission_id?: string | null
+          triggered_by?: string | null
+          updated_at?: string
+          workflow_name: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failure_category?: string | null
+          finished_at?: string | null
+          id?: string
+          institution_id?: string
+          model?: string | null
+          provider?: string
+          retry_count?: number
+          started_at?: string
+          status?: "failed" | "running" | "succeeded"
+          submission_id?: string | null
+          triggered_by?: string | null
+          updated_at?: string
+          workflow_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_runs_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_triggered_by_fkey"
+            columns: ["triggered_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

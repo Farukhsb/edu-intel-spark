@@ -19,6 +19,7 @@ export const buildAdminDashboardViewModel = (
     metrics: state.metrics,
     healthItems: state.healthItems,
     failureCards: state.failureCards,
+    alertCards: state.alertCards,
     users: state.users,
     assignments: state.assignments,
     submissions: state.submissions,
@@ -61,6 +62,7 @@ export const buildAdminDashboardViewModel = (
   },
   system: {
     failureCards: state.failureCards,
+    alertCards: state.alertCards,
     healthItems: state.healthItems,
     moderationRows: state.moderationRows,
     activityFeed: state.activityFeed,

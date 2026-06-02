@@ -160,12 +160,33 @@ describe("workflow performance harness", () => {
       iterations: 30,
       run: () => {
         buildOperationalMonitoringSnapshot({
+          workflowRunTelemetryAvailable: true,
+          workflowRunRows: [
+            {
+              status: "succeeded",
+              startedAt: "2026-05-04T08:00:00.000Z",
+              finishedAt: "2026-05-04T08:00:02.000Z",
+              durationMs: 2000,
+              workflowName: "grade-submission",
+              provider: "openai",
+              model: "gpt-4o-mini",
+              retryCount: 0,
+              failureCategory: null,
+            },
+          ],
           latestGradeRun: "2026-05-04T08:00:00.000Z",
           aiGradingFailures: 1,
           moderationRows,
           submissions,
-          emailNotificationsVisible: true,
-          emailNotificationsCount: 10,
+          workflowNotificationTelemetryAvailable: true,
+          workflowNotificationRows: [
+            {
+              deliveryStatus: "sent",
+              createdAt: "2026-05-04T08:00:00.000Z",
+              sentAt: "2026-05-04T08:02:00.000Z",
+              lastError: null,
+            },
+          ],
           now: new Date("2026-05-04T12:00:00.000Z").getTime(),
         });
       },

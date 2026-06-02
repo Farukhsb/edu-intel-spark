@@ -16,7 +16,7 @@ import type {
 } from "../types";
 import { AssignmentOversightSection } from "./assignment-oversight-section";
 import { IntegrityModerationSection } from "./integrity-moderation-section";
-import { OperationalFailureSection } from "./operational-sections";
+import { OperationalAlertSection, OperationalFailureSection } from "./operational-sections";
 import { SubmissionOversightSection } from "./submission-oversight-section";
 import { SystemHealthSection } from "./system-health-section";
 import { UserManagementSection } from "./user-management-section";
@@ -168,6 +168,7 @@ export const OverviewPage = ({
   metrics,
   healthItems,
   failureCards,
+  alertCards,
   users,
   assignments,
   submissions,
@@ -184,6 +185,7 @@ export const OverviewPage = ({
   metrics: AdminMetrics;
   healthItems: AdminDashboardState["healthItems"];
   failureCards: AdminDashboardState["failureCards"];
+  alertCards: AdminDashboardState["alertCards"];
   users: AdminUserRow[];
   assignments: AdminDashboardState["assignments"];
   submissions: AdminDashboardState["submissions"];
@@ -199,6 +201,7 @@ export const OverviewPage = ({
 }) => (
   <div className="space-y-6">
     <OverviewCards metrics={metrics} />
+    <OperationalAlertSection cards={alertCards} />
     <OperationalFailureSection cards={failureCards} />
     <SystemHealthSection items={healthItems} />
     <UserManagementSection

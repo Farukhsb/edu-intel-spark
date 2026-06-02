@@ -32,6 +32,7 @@ export const useAdminDashboardController = () => {
   const [metrics, setMetrics] = useState(EMPTY_METRICS);
   const [healthItems, setHealthItems] = useState<AdminDashboardState["healthItems"]>([]);
   const [failureCards, setFailureCards] = useState<AdminDashboardState["failureCards"]>([]);
+  const [alertCards, setAlertCards] = useState<AdminDashboardState["alertCards"]>([]);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [assignments, setAssignments] = useState<AdminDashboardState["assignments"]>([]);
   const [submissions, setSubmissions] = useState<AdminDashboardState["submissions"]>([]);
@@ -89,6 +90,7 @@ export const useAdminDashboardController = () => {
       setMetrics(nextData.metrics);
       setHealthItems(nextData.healthItems);
       setFailureCards(nextData.failureCards);
+      setAlertCards(nextData.alertCards);
     } catch (error) {
       log.error("Failed to load admin dashboard", error, {
         view: activeView,
@@ -178,6 +180,7 @@ export const useAdminDashboardController = () => {
     metrics,
     healthItems,
     failureCards,
+    alertCards,
     users,
     assignments,
     submissions,

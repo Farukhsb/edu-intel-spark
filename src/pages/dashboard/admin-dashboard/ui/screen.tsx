@@ -9,6 +9,7 @@ import { DashboardHeader } from "./dashboard-header";
 import {
   ComplianceHubSection,
   AuditLogSection,
+  OperationalAlertSection,
   OperationalFailureSection,
   OverviewPage,
   RecentActivitySection,
@@ -114,6 +115,7 @@ export const AdminDashboardScreen = ({
         </div>
       ) : activeView === "system" ? (
         <div className="space-y-6">
+          <OperationalAlertSection cards={system.alertCards} />
           <OperationalFailureSection cards={system.failureCards} />
           <SystemHealthSection items={system.healthItems} />
           <IntegrityModerationSection moderationRows={system.moderationRows} />
@@ -124,6 +126,7 @@ export const AdminDashboardScreen = ({
           metrics={overview.metrics}
           healthItems={overview.healthItems}
           failureCards={overview.failureCards}
+          alertCards={overview.alertCards}
           users={overview.users}
           assignments={overview.assignments}
           submissions={overview.submissions}

@@ -356,9 +356,11 @@ npm run build
 Run Playwright browser tests:
 
 ```bash
-npx playwright install
+npm run test:e2e:install
 npm run test:e2e
 ```
+
+The CI workflow caches Playwright browsers between runs and installs Chromium with the same command before executing the E2E suite.
 
 Run the live read-heavy load test against a deployed stack:
 

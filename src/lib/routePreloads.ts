@@ -1,7 +1,12 @@
 import type { AppRole } from "@/lib/roles";
 import type { ComponentType } from "react";
 
-type RouteLoader = () => Promise<{ default: ComponentType<any> }>;
+// The route map mixes page components and layout wrappers. Keep this bridge permissive
+// rather than forcing a brittle props model across every lazy-loaded route.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteComponent = ComponentType<any>;
+
+type RouteLoader = () => Promise<{ default: RouteComponent }>;
 
 const routeDefinitions = {
   auth: {
