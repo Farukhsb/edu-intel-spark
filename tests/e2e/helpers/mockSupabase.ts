@@ -207,6 +207,52 @@ const handleRpc = async (route: Route, state: MockSupabaseState) => {
     return;
   }
 
+  if (route.request().url().includes("/rpc/send_submission_to_moderation")) {
+    const submissionId = String(payload.submission_id || "");
+    const submissionIndex = state.tables.submissions.findIndex((candidate) => candidate.id === submissionId);
+    const submission = submissionIndex >= 0 ? state.tables.submissions[submissionIndex] : null;
+    if (!submission) {
+      await fulfillJson(route, { error: "Submission not found" }, 404);
+      return;
+    }
+
+    const grade = state.tables.grades.find((candidate) => candidate.submission_id === submissionId) ?? null;
+    const lecturerId = state.tables.profiles.find((candidate) => candidate.role === "lecturer")?.id ?? submission.uploaded_by ?? null;
+    const moderationCase = {
+      id: `moderation-case-${state.counters.moderation_cases ? state.counters.moderation_cases + 1 : 1}`,
+      submission_id: submissionId,
+      assignment_id: submission.assignment_id ?? null,
+      grade_id: grade?.id ?? null,
+      lecturer_id: lecturerId,
+      first_marker_id: lecturerId,
+      moderator_id: null,
+      status: "moderation_pending",
+      trigger_flags: [],
+      trigger_summary: "Mock moderation handoff.",
+      confidence_score: 0,
+      integrity_risk_score: 0,
+      ai_score_snapshot: grade?.ai_score ?? null,
+      first_marker_score: grade?.lecturer_score ?? grade?.ai_score ?? null,
+      moderator_score: null,
+      final_agreed_score: null,
+      final_agreed_feedback: null,
+      moderated_at: null,
+      approved_at: null,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    };
+
+    state.counters.moderation_cases = (state.counters.moderation_cases ?? 0) + 1;
+    state.tables.moderation_cases.push(moderationCase);
+    state.tables.submissions[submissionIndex] = {
+      ...submission,
+      status: "moderation_pending",
+    };
+
+    await fulfillJson(route, moderationCase);
+    return;
+  }
+
   if (route.request().url().includes("/rpc/get_student_grade_assignment_metadata")) {
     const rows = state.tables.submissions.flatMap((submission) => {
       const assignment = state.tables.assignments.find((candidate) => candidate.id === submission.assignment_id);

@@ -20,6 +20,12 @@ const student = {
   fullName: "Sam Student",
 };
 
+const dismissLecturerOnboarding = async (page: { addInitScript: (arg: (storageKey: string) => void, storageKey: string) => Promise<void> }) => {
+  await page.addInitScript((storageKey) => {
+    window.localStorage.setItem(storageKey, "true");
+  }, "gradeai:lecturer-onboarding-v1-dismissed");
+};
+
 test.describe("critical assessment workflows", () => {
   test("lecturer can review, approve, and release a graded submission", async ({ page }) => {
     const state = createMockSupabaseState({
@@ -77,6 +83,7 @@ test.describe("critical assessment workflows", () => {
 
     await installSupabaseMocks(page, state);
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await dismissLecturerOnboarding(page);
 
     await page.goto("/dashboard/assignments/assignment-release");
     await page.waitForURL("**/dashboard/assignments/assignment-release");
@@ -164,6 +171,7 @@ test.describe("critical assessment workflows", () => {
 
     await installSupabaseMocks(page, state);
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await dismissLecturerOnboarding(page);
 
     await page.goto("/dashboard/assignments/assignment-moderation");
     await page.waitForURL("**/dashboard/assignments/assignment-moderation");
@@ -175,12 +183,15 @@ test.describe("critical assessment workflows", () => {
     await page.getByPlaceholder(/add or edit feedback/i).fill("Adjusted upward after first marker review.");
     await page.getByTestId("submission-review-save").click();
 
-    await expect(page.getByText("First marker review saved and sent to moderation.")).toBeVisible();
+    await expect(page.getByText("First marker review saved.")).toBeVisible();
     await expect(page.getByTestId("submission-review-dialog")).not.toBeVisible();
-    await expect(page.getByTestId("submission-status-submission-moderation")).toContainText("Moderation Pending");
+    await expect(page.getByTestId("submission-status-submission-moderation")).toContainText("First Review");
     await expect(moderationSubmissionCard).toContainText("72/100");
-    expect(state.tables.submissions[0].status).toBe("moderation_pending");
-    expect(state.tables.moderation_cases).toHaveLength(1);
+    expect(state.tables.submissions[0].status).toBe("first_review");
+    expect(state.tables.moderation_cases).toHaveLength(0);
+    await page.getByRole("button", { name: "Send to moderation" }).click();
+    await expect.poll(() => state.tables.submissions[0].status).toBe("moderation_pending");
+    await expect.poll(() => state.tables.moderation_cases.length).toBe(1);
     await expect(page.getByTestId("submission-approve-submission-moderation")).toHaveCount(0);
     expect(state.tables.submissions[0].status).toBe("moderation_pending");
 
@@ -304,16 +315,12 @@ test.describe("critical assessment workflows", () => {
 
     await page.goto("/dashboard");
     await page.waitForURL("**/dashboard");
-    await expect(page.getByText("Your grade view")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Your results, Sam")).toBeVisible({ timeout: 10000 });
 
-    const releasedCard = page.locator("div").filter({ hasText: "Released Coursework" }).first();
-    await expect(releasedCard).toContainText("74/100");
-    await expect(releasedCard).toContainText("Released feedback visible to the student.");
+    await expect(page.getByText("Released Coursework — 74%", { exact: true })).toBeVisible();
+    await expect(page.getByText("Released feedback visible to the student.")).toBeVisible();
 
-    const approvedCard = page.locator("div").filter({ hasText: "Approved Coursework" }).first();
-    await expect(approvedCard).toContainText("approved");
-    await expect(approvedCard).not.toContainText("55/100");
-    await expect(approvedCard).not.toContainText("Approved feedback should stay hidden.");
+    await expect(page.getByText("Approved Coursework")).toHaveCount(0);
   });
 
   test("student only sees the result after lecturer release changes status from approved to released", async ({ page }) => {
@@ -373,6 +380,7 @@ test.describe("critical assessment workflows", () => {
 
     await installSupabaseMocks(page, state);
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await dismissLecturerOnboarding(page);
 
     await page.goto("/dashboard/assignments/assignment-transition");
     await page.waitForURL("**/dashboard/assignments/assignment-transition");
@@ -392,12 +400,9 @@ test.describe("critical assessment workflows", () => {
     await setE2EAuth(page, { role: "student", ...student, cohortId: "cohort-1", departmentId: "cs" });
     await page.goto("/dashboard");
     await page.waitForURL("**/dashboard");
-    await expect(page.getByText("Your grade view")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Your results are on the way")).toBeVisible({ timeout: 10000 });
 
-    const approvedCard = page.locator("div").filter({ hasText: "Operating Systems Report" }).first();
-    await expect(approvedCard).toContainText("approved");
-    await expect(approvedCard).not.toContainText("78/100");
-    await expect(approvedCard).not.toContainText("Clearer systems evaluation after lecturer review.");
+    await expect(page.getByText("Operating Systems Report")).toHaveCount(0);
 
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
     await page.goto("/dashboard/assignments/assignment-transition");
@@ -410,9 +415,8 @@ test.describe("critical assessment workflows", () => {
     await page.goto("/dashboard");
     await page.waitForURL("**/dashboard");
 
-    const releasedCard = page.locator("div").filter({ hasText: "Operating Systems Report" }).first();
-    await expect(releasedCard).toContainText("78/100");
-    await expect(releasedCard).toContainText("Clearer systems evaluation after lecturer review.");
+    await expect(page.getByText("Operating Systems Report — 78%", { exact: true })).toBeVisible();
+    await expect(page.getByText("Clearer systems evaluation after lecturer review.")).toBeVisible();
   });
 
   test("older lecturer notification focus falls forward to released follow-up once the workflow is already released", async ({ page }) => {
@@ -480,12 +484,15 @@ test.describe("critical assessment workflows", () => {
 
     await installSupabaseMocks(page, state);
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await dismissLecturerOnboarding(page);
 
     await page.goto("/dashboard/assignments/assignment-notice-forward?source=notification&focus=submission-review");
     await page.waitForURL("**/dashboard/assignments/assignment-notice-forward?source=notification&focus=submission-review");
     await expect(page.getByTestId("assignment-notification-focus")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("Opened from an earlier notice after release")).toBeVisible();
-    await expect(page.getByText("released results")).toBeVisible();
+    await expect(page.getByTestId("assignment-notification-focus")).toContainText(
+      "Opened from an earlier notice after release",
+    );
+    await expect(page.getByTestId("assignment-notification-focus")).toContainText("released results");
 
     await expect(page.getByTestId("submission-card-submission-released-focus")).toBeVisible();
     await expect(page.getByTestId("submission-card-submission-released-focus")).toContainText("Released");
@@ -635,6 +642,7 @@ test.describe("critical assessment workflows", () => {
 
     await installSupabaseMocks(page, state);
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await dismissLecturerOnboarding(page);
 
     await page.goto("/dashboard/assignments/assignment-notice-moderation?source=notification&focus=ai-results");
     await page.waitForURL("**/dashboard/assignments/assignment-notice-moderation?source=notification&focus=ai-results");

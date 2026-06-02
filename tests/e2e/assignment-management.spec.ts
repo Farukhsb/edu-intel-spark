@@ -45,19 +45,22 @@ test.describe("assignment management workflows", () => {
 
     await installSupabaseMocks(page, state);
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await page.addInitScript((storageKey) => {
+      window.localStorage.setItem(storageKey, "true");
+    }, "gradeai:lecturer-onboarding-v1-dismissed");
 
     await page.goto("/dashboard/assignments");
     await page.waitForURL("**/dashboard/assignments");
-    await expect(page.getByRole("heading", { name: "Manage Assignments" })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Manage Assignments")).toBeVisible({ timeout: 10000 });
     await expect(page.getByText("Targeted Coursework")).toBeVisible();
 
-    await page.getByRole("button", { name: "Edit" }).click();
+    await page.locator("button").filter({ hasText: "Edit" }).first().click();
     await expect(page.getByRole("heading", { name: "Edit Assignment" })).toBeVisible();
 
     await page.getByRole("button", { name: /Level 100/i }).click();
     await page.getByText("Level 200").click();
 
-    await page.getByRole("button", { name: /Economics/i }).click();
+    await page.getByRole("button", { name: "Select target departments" }).click();
     await page.getByText("Biology").click();
 
     await page.getByRole("button", { name: "Save Assignment Changes" }).click();
@@ -82,17 +85,17 @@ test.describe("assignment management workflows", () => {
         .filter((row) => row.assignment_id === "assignment-targeting")
         .map((row) => row.department_id)
         .sort(),
-    ).toEqual(["Biology", "Economics"]);
+    ).toEqual(["Biology"]);
   });
 
-  test("lecturer can preview and complete a bulk student upload from the dashboard", async ({ page }) => {
+  test("admin can preview and complete a bulk student upload from the dashboard", async ({ page }) => {
     const state = createMockSupabaseState({
       profiles: [
         {
           id: lecturer.id,
           full_name: lecturer.fullName,
           email: lecturer.email,
-          role: "lecturer",
+          role: "admin",
           avatar_url: null,
           cohort_id: null,
           department_id: null,
@@ -101,11 +104,15 @@ test.describe("assignment management workflows", () => {
     });
 
     await installSupabaseMocks(page, state);
-    await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await setE2EAuth(page, { role: "admin", ...lecturer });
 
-    await page.goto("/dashboard/assignments");
-    await page.waitForURL("**/dashboard/assignments");
-    await page.getByRole("button", { name: /Admin/i }).click();
+    await page.goto("/dashboard");
+    const onboardingSkip = page.getByRole("button", { name: "Skip for now" });
+    if (await onboardingSkip.isVisible()) {
+      await onboardingSkip.click({ force: true });
+      await expect(page.getByRole("dialog", { name: "Welcome to GradeAI" })).toBeHidden();
+    }
+    await expect(page.getByRole("heading", { name: "GradeAI Admin Dashboard" })).toBeVisible({ timeout: 10000 });
     await page.getByRole("button", { name: "Bulk Upload Students" }).click();
     await expect(page.getByRole("heading", { name: "Bulk Student Upload" })).toBeVisible();
 
@@ -126,7 +133,7 @@ test.describe("assignment management workflows", () => {
 
     await page.getByRole("button", { name: "Create 2 Student Accounts" }).click();
     await expect(page.getByText("2 student(s) created")).toBeVisible();
-    await expect(page.getByText("Verified student profiles")).toBeVisible();
+    await expect(page.getByText("Verified in profiles")).toBeVisible();
     await expect(page.getByText("Sam Student").first()).toBeVisible();
     await expect(page.getByText("mina@student.test")).toBeVisible();
 
@@ -135,7 +142,7 @@ test.describe("assignment management workflows", () => {
     ).toEqual(["mina@student.test", "sam@student.test"]);
   });
 
-  test("lecturer can preview and commit a hybrid grade import from the dashboard", async ({ page }) => {
+  test("lecturer can preview and commit a hybrid grade import from the lecturer overview", async ({ page }) => {
     const state = createMockSupabaseState({
       assignments: [
         {
@@ -165,14 +172,16 @@ test.describe("assignment management workflows", () => {
 
     await installSupabaseMocks(page, state);
     await setE2EAuth(page, { role: "lecturer", ...lecturer });
+    await page.addInitScript((storageKey) => {
+      window.localStorage.setItem(storageKey, "true");
+    }, "gradeai:lecturer-onboarding-v1-dismissed");
 
-    await page.goto("/dashboard/assignments");
-    await page.waitForURL("**/dashboard/assignments");
-    await page.getByRole("button", { name: "Skip for now" }).click();
-    await expect(page.getByRole("heading", { name: "Manage Assignments" })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("Hybrid Import Essay")).toBeVisible();
+    await page.goto("/dashboard");
+    await expect(page.getByText("Teaching overview")).toBeVisible({ timeout: 10000 });
+    const importGradesButton = page.locator("button").filter({ hasText: "Import Grades" }).first();
+    await expect(importGradesButton).toBeVisible();
 
-    await page.getByRole("button", { name: "Import Grades" }).click();
+    await importGradesButton.click();
     await expect(page.getByRole("dialog", { name: "Import Grades" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "CSV" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Photo" })).toBeVisible();

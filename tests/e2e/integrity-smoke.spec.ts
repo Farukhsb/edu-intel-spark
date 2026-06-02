@@ -88,6 +88,9 @@ test("lecturer can review an integrity case and save a decision", async ({ page 
 
   await installSupabaseMocks(page, state);
   await setE2EAuth(page, { role: "lecturer", ...lecturer });
+  await page.addInitScript((storageKey) => {
+    window.localStorage.setItem(storageKey, "true");
+  }, "gradeai:lecturer-onboarding-v1-dismissed");
 
   await page.goto("/dashboard/integrity");
 

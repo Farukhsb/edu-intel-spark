@@ -152,6 +152,17 @@ export const getAssignmentNotificationFocusState = (
     };
   }
 
+  if (focus === "submission-review" && releasedSubmissionIds.length > 0) {
+    return buildReleaseFollowUpState({
+      requestedFocus: focus,
+      submissionIds: releasedSubmissionIds,
+      statusFilter: "released",
+      title: "Opened from an earlier notice after release",
+      description:
+        "The earlier workflow notice has already been overtaken by released results, so the list is focused on submissions already released to students.",
+    });
+  }
+
   if (focus === "submission-review") {
     return {
       requestedFocus: focus,

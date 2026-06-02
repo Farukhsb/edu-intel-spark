@@ -122,7 +122,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
       },
     ],
     profiles: [
-      { id: lecturer.id, full_name: lecturer.fullName, email: lecturer.email, role: "lecturer", avatar_url: null, cohort_id: null, department_id: null },
+      { id: lecturer.id, full_name: lecturer.fullName, email: lecturer.email, role: "admin", avatar_url: null, cohort_id: null, department_id: null },
       { id: "student-1", full_name: "Sam Student", email: "sam@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
       { id: "student-2", full_name: "Ari Student", email: "ari@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
       { id: "student-3", full_name: "Jo Student", email: "jo@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
@@ -132,7 +132,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
   });
 
   await installSupabaseMocks(page, state);
-  await setE2EAuth(page, { role: "lecturer", ...lecturer });
+  await setE2EAuth(page, { role: "admin", ...lecturer });
 
   await page.addInitScript(() => {
     let lastDownload: { href: string; download: string } | null = null;
@@ -160,7 +160,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
   await page.goto("/dashboard/external-examiner");
 
   await expect(page.getByText("Export Preview")).toBeVisible();
-  await expect(page.getByText("3 records ready for export")).toBeVisible();
+  await expect(page.getByText("3 records ready for export", { exact: true })).toBeVisible();
   await expect(page.getByText("Released Dissertation")).toBeVisible();
   await expect(page.getByText("Approved Capstone")).toBeVisible();
   await expect(page.getByText("Moderated Project")).toBeVisible();

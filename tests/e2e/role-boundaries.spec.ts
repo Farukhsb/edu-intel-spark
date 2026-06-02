@@ -21,7 +21,7 @@ const student = {
 };
 
 test.describe("role boundary workflows", () => {
-  test("student is redirected away from lecturer-only integrity routes", async ({ page }) => {
+  test("student is shown access denied for lecturer-only integrity routes", async ({ page }) => {
     const state = createMockSupabaseState({
       profiles: [
         {
@@ -40,8 +40,9 @@ test.describe("role boundary workflows", () => {
     await setE2EAuth(page, { role: "student", ...student, cohortId: "cohort-1", departmentId: "cs" });
 
     await page.goto("/dashboard/integrity");
-    await page.waitForURL("**/dashboard");
-    await expect(page.getByText("Your grade view")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Access denied")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("You don't have access to this area.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Go to dashboard" })).toBeVisible();
     await expect(page.getByText("Academic Integrity Review Queue")).not.toBeVisible();
   });
 
@@ -187,7 +188,7 @@ test.describe("role boundary workflows", () => {
     await setE2EAuth(page, { role: "student", ...student, cohortId: "cohort-1", departmentId: "cs" });
 
     await page.goto("/dashboard/explain-grade?assignment=assignment-unreleased&submission=submission-unreleased");
-    await expect(page.getByText("No graded submissions found")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Your results are on the way")).toBeVisible({ timeout: 10000 });
     await expect(page.getByText("Unreleased private AI feedback")).not.toBeVisible();
     await expect(page.getByText("Approved feedback should stay hidden.")).not.toBeVisible();
   });
@@ -326,7 +327,7 @@ test.describe("role boundary workflows", () => {
     await expect(page.getByText(student.fullName)).not.toBeVisible();
   });
 
-  test("student is redirected away from the lecturer-only student profile route", async ({ page }) => {
+  test("student is shown access denied on the lecturer-only student profile route", async ({ page }) => {
     const state = createMockSupabaseState({
       profiles: [
         {
@@ -345,8 +346,9 @@ test.describe("role boundary workflows", () => {
     await setE2EAuth(page, { role: "student", ...student, cohortId: "cohort-1", departmentId: "cs" });
 
     await page.goto(`/dashboard/student/${student.id}`);
-    await page.waitForURL("**/dashboard");
-    await expect(page.getByText("Your grade view")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Access denied")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("You don't have access to this area.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Go to dashboard" })).toBeVisible();
     await expect(page.getByText("Student not found for this lecturer view.")).not.toBeVisible();
   });
 });

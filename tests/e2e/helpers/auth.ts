@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 const STORAGE_KEY = "gradeai:e2e-auth";
 
-type Role = "lecturer" | "student";
+type Role = "admin" | "lecturer" | "student";
 
 interface AuthStateOptions {
   role: Role;
