@@ -254,6 +254,7 @@ describe("adminDashboardViewModel", () => {
 
     expect(viewModel.activeView).toBe("overview");
     expect(viewModel.header).toEqual({
+      institution: null,
       refreshing: true,
       showBulkUpload: true,
     });
