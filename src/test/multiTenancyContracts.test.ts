@@ -36,6 +36,17 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("insert into public.user_roles (user_id, role, institution_id)");
   });
 
+  it("keeps the signup institution resolver internal and search-path safe", () => {
+    const source = readRepoFile("supabase/migrations/20260602123000_harden_function_search_path_and_rpc_grants.sql");
+
+    expect(source).toContain("create or replace function public.try_parse_uuid(_value text)");
+    expect(source).toContain("set search_path = public");
+    expect(source).toContain("create or replace function public.sync_profile_department_columns()");
+    expect(source).toContain("create or replace function public.sync_assignment_department_columns()");
+    expect(source).toContain("revoke all on function public.try_parse_uuid(text) from authenticated");
+    expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from authenticated");
+  });
+
   it("adds institution scoping to core workflow tables with automatic derivation hooks", () => {
     const source = readRepoFile("supabase/migrations/20260525093000_add_workflow_institutions.sql");
 

@@ -131,6 +131,15 @@ describe("access policy contracts", () => {
     expect(source).toContain("grant execute on function public.get_admin_dashboard_metrics() to authenticated");
   });
 
+  it("removes anonymous access from privileged RPC helpers", () => {
+    const source = readRepoFile("supabase/migrations/20260602123000_harden_function_search_path_and_rpc_grants.sql");
+
+    expect(source).toContain("revoke all on function public.admin_assign_user_to_institution(uuid, text) from public");
+    expect(source).toContain("revoke all on function public.admin_create_institution(text, text) from public");
+    expect(source).toContain("revoke all on function public.admin_update_user_profile(uuid, text, public.app_role, text, text, boolean) from public");
+    expect(source).toContain("revoke all on function public.send_submission_to_moderation(uuid) from public");
+  });
+
   it("keeps admin oversight RPCs filtered by private.is_admin()", () => {
     const assignmentOversight = readRepoFile("supabase/migrations/20260503122000_add_admin_assignment_oversight_rpc.sql");
     const moderationOverview = readRepoFile("supabase/migrations/20260503123500_add_admin_moderation_overview_rpc.sql");
