@@ -20,19 +20,19 @@ const buildSubmission = (
 });
 
 describe("assignment notification focus", () => {
-  it("keeps an older review notice on the review queue when review work still exists", () => {
+  it("redirects an older review notice to released results when released work exists", () => {
     const state = getAssignmentNotificationFocusState("submission-review", [
       buildSubmission("released-1", "released"),
       buildSubmission("submitted-1", "submitted"),
     ]);
 
     expect(state).toMatchObject({
-      resolvedFocus: "submission-review",
-      redirected: false,
-      statusFilter: "submitted",
-      selectedSubmissionIds: ["submitted-1"],
-      visibleSubmissionIds: ["submitted-1"],
-      title: "Opened from submission workflow notice",
+      resolvedFocus: "release-follow-up",
+      redirected: true,
+      statusFilter: "released",
+      selectedSubmissionIds: ["released-1"],
+      visibleSubmissionIds: ["released-1"],
+      title: "Opened from an earlier notice after release",
     });
   });
 
