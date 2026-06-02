@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
+import { computeRisk, evaluateStudentRisk, type StudentTrajectory } from "@/lib/studentRisk";
 
 const trajectory = (scores: number[]): StudentTrajectory => ({
   name: "Test Student",
@@ -49,6 +49,15 @@ describe("student risk support signals", () => {
     const result = computeRisk(trajectory([64, 66, 65, 67]));
 
     expect(result).toBeNull();
+  });
+
+  it("still evaluates stable grades for batch scoring even when they are not high risk", () => {
+    const result = evaluateStudentRisk(trajectory([64, 66, 65, 67]));
+
+    expect(result).not.toBeNull();
+    expect(result?.riskBand).toBe("low");
+    expect(result?.reasonCodes).toContain("baseline_monitoring");
+    expect(result?.rawRiskScore).toBeLessThan(25);
   });
 
   it("uses softer visible support wording for expected outcomes and recommendations", () => {

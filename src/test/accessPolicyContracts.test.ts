@@ -131,6 +131,21 @@ describe("access policy contracts", () => {
     expect(source).toContain("grant execute on function public.get_admin_dashboard_metrics() to authenticated");
   });
 
+  it("keeps student risk intelligence readable and writable only by admins in the same institution", () => {
+    const source = readRepoFile("supabase/migrations/20260603102000_add_admin_risk_intelligence_tables.sql");
+
+    expect(source).toContain('create policy "Admins can read student risk snapshots"');
+    expect(source).toContain('create policy "Admins can read student risk predictions"');
+    expect(source).toContain('create policy "Admins can read risk feedback"');
+    expect(source).toContain('create policy "Admins can insert risk feedback"');
+    expect(source).toContain("grant select on public.student_risk_snapshots to authenticated;");
+    expect(source).toContain("grant select on public.student_risk_predictions to authenticated;");
+    expect(source).toContain("grant select, insert on public.risk_feedback to authenticated;");
+    expect(source).toContain("public.is_admin()");
+    expect(source).toContain("private.same_institution(institution_id)");
+    expect(source).not.toContain("to public");
+  });
+
   it("removes anonymous access from privileged RPC helpers", () => {
     const source = readRepoFile("supabase/migrations/20260602123000_harden_function_search_path_and_rpc_grants.sql");
 

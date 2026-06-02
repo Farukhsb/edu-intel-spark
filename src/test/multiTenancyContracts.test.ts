@@ -98,6 +98,28 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("private.same_institution(institution_id)");
   });
 
+  it("adds admin-only risk intelligence tables with institution-scoped telemetry", () => {
+    const source = readRepoFile("supabase/migrations/20260603102000_add_admin_risk_intelligence_tables.sql");
+
+    expect(source).toContain("create table if not exists public.student_risk_snapshots");
+    expect(source).toContain("create table if not exists public.student_risk_predictions");
+    expect(source).toContain("create table if not exists public.risk_feedback");
+    expect(source).toContain("student_id uuid not null references public.profiles(id)");
+    expect(source).toContain("institution_id uuid not null references public.institutions(id)");
+    expect(source).toContain("feature_version text not null default 'v1'");
+    expect(source).toContain("risk_score numeric(5,4) not null check (risk_score >= 0 and risk_score <= 1)");
+    expect(source).toContain("reason_codes text[] not null default '{}'::text[]");
+    expect(source).toContain("feedback_type in ('useful', 'false_alarm', 'student_recovered', 'intervention_sent', 'other')");
+    expect(source).toContain("grant select on public.student_risk_snapshots to authenticated;");
+    expect(source).toContain("grant select on public.student_risk_predictions to authenticated;");
+    expect(source).toContain("grant select, insert on public.risk_feedback to authenticated;");
+    expect(source).toContain("grant insert, update on public.student_risk_snapshots to service_role;");
+    expect(source).toContain("grant insert, update on public.student_risk_predictions to service_role;");
+    expect(source).toContain("create trigger sync_student_risk_snapshot_institution_id");
+    expect(source).toContain("create trigger sync_student_risk_prediction_institution_id");
+    expect(source).toContain("create trigger sync_risk_feedback_institution_id");
+  });
+
   it("keeps grading error events readable only by admins", () => {
     const source = readRepoFile("supabase/migrations/20260519221000_create_grading_error_events.sql");
 

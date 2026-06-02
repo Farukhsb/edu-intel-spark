@@ -467,6 +467,170 @@ export type Database = {
         }
         Relationships: []
       }
+      student_risk_snapshots: {
+        Row: {
+          created_at: string
+          feature_version: string
+          features: Json
+          id: string
+          institution_id: string
+          snapshot_date: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          feature_version?: string
+          features?: Json
+          id?: string
+          institution_id?: string
+          snapshot_date: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          feature_version?: string
+          features?: Json
+          id?: string
+          institution_id?: string
+          snapshot_date?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_risk_snapshots_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_snapshots_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_risk_predictions: {
+        Row: {
+          created_at: string
+          details: Json
+          explanation: string | null
+          id: string
+          institution_id: string
+          model_version: string
+          prediction_date: string
+          reason_codes: string[]
+          risk_band: string
+          risk_score: number
+          snapshot_id: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          explanation?: string | null
+          id?: string
+          institution_id: string
+          model_version: string
+          prediction_date?: string
+          reason_codes?: string[]
+          risk_band: string
+          risk_score: number
+          snapshot_id: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          explanation?: string | null
+          id?: string
+          institution_id?: string
+          model_version?: string
+          prediction_date?: string
+          reason_codes?: string[]
+          risk_band?: string
+          risk_score?: number
+          snapshot_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_risk_predictions_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_predictions_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "student_risk_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_predictions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      risk_feedback: {
+        Row: {
+          created_at: string
+          feedback_type: string
+          id: string
+          institution_id: string
+          notes: string | null
+          prediction_id: string
+          reviewer_id: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_type: string
+          id?: string
+          institution_id: string
+          notes?: string | null
+          prediction_id: string
+          reviewer_id: string
+        }
+        Update: {
+          created_at?: string
+          feedback_type?: string
+          id?: string
+          institution_id?: string
+          notes?: string | null
+          prediction_id?: string
+          reviewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_feedback_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "risk_feedback_prediction_id_fkey"
+            columns: ["prediction_id"]
+            isOneToOne: false
+            referencedRelation: "student_risk_predictions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "risk_feedback_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grade_audit_log: {
         Row: {
           actor_role: string | null

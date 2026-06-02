@@ -107,6 +107,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/InstitutionalInsights"),
     paths: ["/dashboard/institutional"],
   },
+  riskIntelligence: {
+    loader: () => import("@/pages/dashboard/RiskIntelligence"),
+    paths: ["/dashboard/risk-intelligence"],
+  },
   learningOutcomes: {
     loader: () => import("@/pages/dashboard/LearningOutcomes"),
     paths: ["/dashboard/learning-outcomes"],
@@ -202,6 +206,7 @@ export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {
 
   if (role === "admin") {
     preloadRoute("/dashboard/institutional");
+    preloadRoute("/dashboard/risk-intelligence");
     preloadRoute("/dashboard/accreditation");
     preloadRoute("/dashboard/external-examiner");
     return;

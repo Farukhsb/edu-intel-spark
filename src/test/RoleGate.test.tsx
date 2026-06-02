@@ -94,6 +94,31 @@ describe("RoleGate", () => {
     expect(screen.queryByText("You don't have access to this area.")).not.toBeInTheDocument();
   });
 
+  it("allows admins into the standalone risk intelligence route", async () => {
+    mocks.role = "admin";
+
+    render(
+      <MemoryRouter
+        initialEntries={["/dashboard/risk-intelligence"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route
+            path="/dashboard/risk-intelligence"
+            element={
+              <RoleGate allowedRole="admin">
+                <div>Risk Intelligence</div>
+              </RoleGate>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Risk Intelligence")).toBeInTheDocument();
+    expect(screen.queryByText("You don't have access to this area.")).not.toBeInTheDocument();
+  });
+
   it("allows lecturer-equivalent admin roles into lecturer-only routes", async () => {
     mocks.role = "admin";
 

@@ -11,6 +11,23 @@ export interface StudentTrajectory {
   scores: StudentTrajectoryPoint[];
 }
 
+export interface StudentRiskEvaluation {
+  name: string;
+  email: string | null;
+  studentId: string;
+  rawRiskScore: number;
+  riskBand: "low" | "medium" | "high";
+  avgGrade: number;
+  lastGrade: number;
+  trend: "declining" | "stable-low" | "volatile";
+  flags: string[];
+  reasonCodes: string[];
+  sparkline: number[];
+  recommendation: string;
+  predictedNext: number;
+  explanation: string;
+}
+
 export interface AtRiskStudent {
   name: string;
   email: string | null;
@@ -47,7 +64,52 @@ function linearRegression(values: number[]): { slope: number; intercept: number 
   return { slope, intercept };
 }
 
-export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null {
+function buildReasonCodes(params: {
+  average: number;
+  slope: number;
+  last: number;
+  predictedNext: number;
+  standardDeviation: number | null;
+  scoresLength: number;
+}): string[] {
+  const reasonCodes: string[] = [];
+
+  if (params.average < 40) {
+    reasonCodes.push("average_below_40");
+  } else if (params.average < 50) {
+    reasonCodes.push("average_below_50");
+  }
+
+  if (params.slope < -3) {
+    reasonCodes.push("steep_grade_decline");
+  } else if (params.slope < -1) {
+    reasonCodes.push("gradual_grade_decline");
+  }
+
+  if (params.scoresLength >= 2 && params.last < params.average - 15) {
+    reasonCodes.push("recent_grade_drop");
+  }
+
+  if (params.predictedNext < 40) {
+    reasonCodes.push("predicted_next_below_40");
+  }
+
+  if (params.standardDeviation != null && params.standardDeviation > 15) {
+    reasonCodes.push("high_variance");
+  }
+
+  if (params.scoresLength === 1 && params.last < 50) {
+    reasonCodes.push("limited_history");
+  }
+
+  if (reasonCodes.length === 0) {
+    reasonCodes.push("baseline_monitoring");
+  }
+
+  return reasonCodes;
+}
+
+export function evaluateStudentRisk(trajectory: StudentTrajectory): StudentRiskEvaluation | null {
   const scores = trajectory.scores.map((entry) => entry.score);
   if (scores.length === 0) return null;
 
@@ -56,57 +118,63 @@ export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null
   const { slope, intercept } = linearRegression(scores);
   const predictedNext = Math.max(0, Math.min(100, slope * scores.length + intercept));
 
-  let riskScore = 0;
+  let rawRiskScore = 0;
   const flags: string[] = [];
 
   if (average < 40) {
-    riskScore += 30;
+    rawRiskScore += 30;
     flags.push("Average below 40%");
   } else if (average < 50) {
-    riskScore += 20;
+    rawRiskScore += 20;
     flags.push("Average below 50%");
   }
 
   if (slope < -3) {
-    riskScore += 25;
+    rawRiskScore += 25;
     flags.push("Steep grade decline");
   } else if (slope < -1) {
-    riskScore += 15;
+    rawRiskScore += 15;
     flags.push("Gradual grade decline");
   }
 
   if (scores.length >= 2 && last < average - 15) {
-    riskScore += 15;
+    rawRiskScore += 15;
     flags.push("Sudden drop in last grade");
   }
 
   if (predictedNext < 40) {
-    riskScore += 15;
+    rawRiskScore += 15;
     flags.push(`Expected next outcome: ${Math.round(predictedNext)}%`);
   }
 
+  let standardDeviation: number | null = null;
   if (scores.length >= 3) {
     const variance =
       scores.reduce((sum, score) => sum + (score - average) ** 2, 0) / scores.length;
-    const standardDeviation = Math.sqrt(variance);
+    standardDeviation = Math.sqrt(variance);
     if (standardDeviation > 15) {
-      riskScore += 10;
+      rawRiskScore += 10;
       flags.push("Highly inconsistent grades");
     }
   }
 
   if (scores.length === 1 && last < 50) {
-    riskScore += 10;
+    rawRiskScore += 10;
     flags.push("Only 1 submission graded");
   }
 
-  riskScore = Math.min(100, riskScore);
-  if (riskScore < 25) return null;
+  rawRiskScore = Math.min(100, rawRiskScore);
 
-  const trend: AtRiskStudent["trend"] =
+  const trend: StudentRiskEvaluation["trend"] =
     slope < -1 ? "declining" : average < 50 ? "stable-low" : "volatile";
-  const riskLevel: AtRiskStudent["riskLevel"] =
-    riskScore >= 70 ? "critical" : riskScore >= 45 ? "high" : "moderate";
+  const reasonCodes = buildReasonCodes({
+    average,
+    slope,
+    last,
+    predictedNext,
+    standardDeviation,
+    scoresLength: scores.length,
+  });
 
   const recommendations: string[] = [];
   if (slope < -3) recommendations.push("Urgent: schedule a 1-on-1 meeting to discuss grade trajectory.");
@@ -118,18 +186,51 @@ export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null
     recommendations.push("Schedule a check-in to review study strategies and agree short-term goals.");
   }
 
+  const explanationParts = [
+    `Average ${Math.round(average)}%`,
+    `last grade ${Math.round(last)}%`,
+    `next outcome ${Math.round(predictedNext)}%`,
+  ];
+
+  if (reasonCodes.length > 0 && reasonCodes[0] !== "baseline_monitoring") {
+    explanationParts.push(`reason codes: ${reasonCodes.join(", ")}`);
+  }
+
   return {
     name: trajectory.name,
     email: trajectory.email,
     studentId: trajectory.studentId,
-    riskScore,
-    riskLevel,
+    rawRiskScore,
+    riskBand: rawRiskScore >= 70 ? "high" : rawRiskScore >= 45 ? "medium" : "low",
     avgGrade: Math.round(average),
     lastGrade: Math.round(last),
     trend,
     flags,
+    reasonCodes,
     sparkline: scores.slice(-6),
     recommendation: recommendations.join(" "),
     predictedNext: Math.round(predictedNext),
+    explanation: explanationParts.join(". "),
+  };
+}
+
+export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null {
+  const evaluation = evaluateStudentRisk(trajectory);
+  if (!evaluation || evaluation.rawRiskScore < 25) return null;
+
+  return {
+    name: evaluation.name,
+    email: evaluation.email,
+    studentId: evaluation.studentId,
+    riskScore: evaluation.rawRiskScore,
+    riskLevel:
+      evaluation.rawRiskScore >= 70 ? "critical" : evaluation.rawRiskScore >= 45 ? "high" : "moderate",
+    avgGrade: evaluation.avgGrade,
+    lastGrade: evaluation.lastGrade,
+    trend: evaluation.trend,
+    flags: evaluation.flags,
+    sparkline: evaluation.sparkline,
+    recommendation: evaluation.recommendation,
+    predictedNext: evaluation.predictedNext,
   };
 }

@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, BookCopy, CheckCircle2, FileOutput, GraduationCap, ShieldAlert, Users } from "lucide-react";
+import { Activity, ArrowRight, BookCopy, CheckCircle2, FileOutput, GraduationCap, ShieldAlert, Target, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ const OverviewCards = ({
     { title: "Pending Moderation", value: String(metrics.pendingModerationCases), helper: "Cases still awaiting academic resolution.", href: "/dashboard?view=system", icon: ShieldAlert },
     { title: "AI Grading Failures", value: formatCount(metrics.aiGradingFailures), helper: "Direct grading error events recorded today and visible to admin.", href: "/dashboard?view=system", icon: ShieldAlert },
     { title: "High Integrity Risk", value: String(metrics.highIntegrityRiskCases), helper: "Cases with elevated integrity risk or escalation signals.", href: "/dashboard?view=system", icon: ShieldAlert },
+    { title: "Risk Intelligence", value: "Open", helper: "Dedicated batch scoring workspace for student risk review.", href: "/dashboard/risk-intelligence", icon: Target },
   ];
 
   return (

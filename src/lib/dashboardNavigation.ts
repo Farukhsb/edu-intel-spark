@@ -83,6 +83,7 @@ export const adminSections = [
     defaultOpen: true,
     links: [
       { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
+      { to: "/dashboard/risk-intelligence", label: "Risk Intelligence", icon: Target },
       { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
       { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
     ],

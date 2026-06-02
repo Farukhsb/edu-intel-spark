@@ -294,6 +294,7 @@ describe("edge function hardening", () => {
     expect(configSource).toContain("[functions.explain-grade]");
     expect(configSource).toContain("[functions.bulk-create-students]");
     expect(configSource).toContain("[functions.import-grades]");
+    expect(configSource).toContain("[functions.compute-risk-batch]");
     expect(configSource).toContain("verify_jwt = true");
     expect(configSource).not.toContain("verify_jwt = false");
   });
