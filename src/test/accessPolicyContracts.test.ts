@@ -140,6 +140,18 @@ describe("access policy contracts", () => {
     expect(source).toContain("revoke all on function public.send_submission_to_moderation(uuid) from public");
   });
 
+  it("moves read-only admin and student RPCs to invoker semantics", () => {
+    const source = readRepoFile("supabase/migrations/20260602125500_reduce_security_definer_surface.sql");
+
+    expect(source).toContain("security invoker");
+    expect(source).toContain("create or replace function public.get_admin_dashboard_metrics()");
+    expect(source).toContain("create or replace function public.get_admin_assignment_oversight()");
+    expect(source).toContain("create or replace function public.get_admin_moderation_overview()");
+    expect(source).toContain("create or replace function public.get_admin_recent_activity()");
+    expect(source).toContain("create or replace function public.send_submission_to_moderation(_submission_id uuid)");
+    expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from authenticated");
+  });
+
   it("keeps admin oversight RPCs filtered by private.is_admin()", () => {
     const assignmentOversight = readRepoFile("supabase/migrations/20260503122000_add_admin_assignment_oversight_rpc.sql");
     const moderationOverview = readRepoFile("supabase/migrations/20260503123500_add_admin_moderation_overview_rpc.sql");

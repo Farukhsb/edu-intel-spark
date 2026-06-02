@@ -47,6 +47,18 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from authenticated");
   });
 
+  it("keeps student projection RPCs on invoker semantics and removes signup helper grants", () => {
+    const source = readRepoFile("supabase/migrations/20260602125500_reduce_security_definer_surface.sql");
+
+    expect(source).toContain("create or replace function public.get_student_grade_assignment_metadata()");
+    expect(source).toContain("security invoker");
+    expect(source).toContain("create or replace function public.get_student_submission_grade_projection()");
+    expect(source).toContain("create or replace function public.send_submission_to_moderation(_submission_id uuid)");
+    expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from public");
+    expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from anon");
+    expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from authenticated");
+  });
+
   it("adds institution scoping to core workflow tables with automatic derivation hooks", () => {
     const source = readRepoFile("supabase/migrations/20260525093000_add_workflow_institutions.sql");
 
