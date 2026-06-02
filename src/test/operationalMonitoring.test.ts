@@ -272,6 +272,72 @@ describe("operationalMonitoring", () => {
     );
   });
 
+  it("prefers the terminal workflow row over the paired running row", () => {
+    const snapshot = buildOperationalMonitoringSnapshot({
+      workflowRunTelemetryAvailable: true,
+      workflowRunRows: [
+        {
+          id: "running-run-id",
+          status: "running",
+          startedAt: "2026-06-02T12:13:56.336Z",
+          finishedAt: null,
+          durationMs: null,
+          workflowName: "grade-submission",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          providerRetryCount: 0,
+          gradingPassCount: 1,
+          failureCategory: null,
+          details: {
+            workflow_run_phase: "running",
+            parent_workflow_run_id: null,
+          },
+        },
+        {
+          id: "terminal-run-id",
+          status: "succeeded",
+          startedAt: "2026-06-02T12:13:56.336Z",
+          finishedAt: "2026-06-02T12:13:57.095Z",
+          durationMs: 759,
+          workflowName: "grade-submission",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          providerRetryCount: 0,
+          gradingPassCount: 1,
+          failureCategory: null,
+          details: {
+            workflow_run_phase: "terminal",
+            parent_workflow_run_id: "running-run-id",
+          },
+        },
+      ],
+      latestGradeRun: "2026-06-02T12:10:00.000Z",
+      aiGradingFailures: 0,
+      moderationRows: [],
+      submissions: [],
+      workflowNotificationTelemetryAvailable: false,
+      workflowNotificationRows: [],
+      now: new Date("2026-06-02T12:14:00.000Z").getTime(),
+    });
+
+    expect(snapshot.healthItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "AI grading workflow signal",
+          statusLabel: "1 succeeded",
+          tone: "healthy",
+        }),
+      ]),
+    );
+
+    expect(snapshot.healthItems.find((item) => item.label === "AI grading workflow signal")?.detail).toContain(
+      "run succeeded on openai / gpt-4o-mini",
+    );
+    expect(snapshot.healthItems.find((item) => item.label === "AI grading workflow signal")?.detail).toContain(
+      "in 0.8s",
+    );
+  });
+
   it("shows warning grading telemetry when one or more failures are recorded", () => {
     const snapshot = buildOperationalMonitoringSnapshot({
       workflowRunTelemetryAvailable: true,

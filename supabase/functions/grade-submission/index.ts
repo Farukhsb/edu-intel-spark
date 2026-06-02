@@ -230,6 +230,7 @@ type WorkflowRunTelemetryStatus = "running" | "succeeded" | "failed";
 async function recordGradingWorkflowRun({
   supabaseAdmin,
   workflowRunId,
+  phase,
   assignmentId,
   submissionId,
   institutionId,
@@ -247,6 +248,7 @@ async function recordGradingWorkflowRun({
 }: {
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   workflowRunId?: string | null;
+  phase: "running" | "terminal";
   assignmentId: string;
   submissionId: string | null;
   institutionId: string;
@@ -262,7 +264,9 @@ async function recordGradingWorkflowRun({
   submissionCount: number;
   provider?: string;
 }) {
+  const resolvedWorkflowRunId = phase === "running" && workflowRunId ? workflowRunId : crypto.randomUUID();
   const payload = {
+    id: resolvedWorkflowRunId,
     workflow_name: "grade-submission",
     assignment_id: assignmentId,
     submission_id: submissionId,
@@ -280,6 +284,8 @@ async function recordGradingWorkflowRun({
       submission_count: submissionCount,
       grading_pass_count: Math.max(1, Math.trunc(gradingPassCount)),
       provider_retry_count: Math.max(0, Math.trunc(providerRetryCount)),
+      parent_workflow_run_id: phase === "terminal" ? workflowRunId ?? null : null,
+      workflow_run_phase: phase,
       workflow: "grade-submission",
       provider,
       model,
@@ -287,43 +293,23 @@ async function recordGradingWorkflowRun({
     },
   };
 
-  if (workflowRunId) {
-    const { error } = await supabaseAdmin
-      .from("workflow_runs")
-      .update({
-        ...payload,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", workflowRunId);
-
-    if (error) {
-      logWarn("grade-submission workflow run telemetry update failed", {
-        assignmentId,
-        workflowRunId,
-        error,
-      });
-    }
-    return workflowRunId;
-  }
-
-  const { data, error } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("workflow_runs")
     .insert({
       ...payload,
       updated_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
+    });
 
-  if (error || !data?.id) {
+  if (error) {
     logWarn("grade-submission workflow run telemetry insert failed", {
       assignmentId,
+      phase,
       error,
     });
     return null;
   }
 
-  return data.id as string;
+  return resolvedWorkflowRunId;
 }
 
 function getWorkflowRunGradingPassCount(gradingPasses: number) {
@@ -560,6 +546,7 @@ Deno.serve(async (req) => {
     } else {
       workflowRunId = await recordGradingWorkflowRun({
         supabaseAdmin,
+        phase: "running",
         assignmentId: workflowRunAssignmentId,
         submissionId: workflowRunSubmissionId,
         institutionId: workflowRunInstitutionId,
@@ -739,6 +726,7 @@ Deno.serve(async (req) => {
       await recordGradingWorkflowRun({
         supabaseAdmin,
         workflowRunId,
+        phase: "terminal",
         assignmentId: workflowRunAssignmentId,
         submissionId: workflowRunSubmissionId,
         institutionId: workflowRunInstitutionId,
@@ -766,6 +754,7 @@ Deno.serve(async (req) => {
       await recordGradingWorkflowRun({
         supabaseAdmin,
         workflowRunId,
+        phase: "terminal",
         assignmentId: workflowRunAssignmentId,
         submissionId: workflowRunSubmissionId,
         institutionId: workflowRunInstitutionId,

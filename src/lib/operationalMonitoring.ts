@@ -10,6 +10,7 @@ export interface OperationalMonitoringSubmissionLike {
 }
 
 export interface OperationalMonitoringWorkflowRunLike {
+  id: string;
   status: "failed" | "running" | "succeeded";
   startedAt: string;
   finishedAt: string | null;
@@ -20,6 +21,7 @@ export interface OperationalMonitoringWorkflowRunLike {
   providerRetryCount: number;
   gradingPassCount: number | null;
   failureCategory: string | null;
+  details?: Record<string, unknown> | null;
 }
 
 export interface OperationalMonitoringNotificationLike {
@@ -71,6 +73,24 @@ const isOlderThanDays = (value: string | null | undefined, days: number, now: nu
   return now - timestamp > days * DAY_MS;
 };
 
+const getParentWorkflowRunId = (row: OperationalMonitoringWorkflowRunLike) => {
+  const parentId = row.details?.parent_workflow_run_id;
+  return typeof parentId === "string" && parentId.trim() ? parentId : null;
+};
+
+const isTerminalWorkflowRun = (row: OperationalMonitoringWorkflowRunLike) => row.status !== "running";
+
+const collapseWorkflowRunPairs = (rows: OperationalMonitoringWorkflowRunLike[]) => {
+  const terminalParentIds = new Set(
+    rows
+      .filter((row) => isTerminalWorkflowRun(row))
+      .map((row) => getParentWorkflowRunId(row))
+      .filter((parentId): parentId is string => Boolean(parentId)),
+  );
+
+  return rows.filter((row) => !terminalParentIds.has(row.id) || isTerminalWorkflowRun(row));
+};
+
 export const buildOperationalMonitoringSnapshot = ({
   workflowRunTelemetryAvailable,
   workflowRunRows,
@@ -92,6 +112,7 @@ export const buildOperationalMonitoringSnapshot = ({
   workflowNotificationRows: OperationalMonitoringNotificationLike[];
   now?: number;
 }): OperationalMonitoringSnapshot => {
+  const workflowRows = collapseWorkflowRunPairs(workflowRunRows);
   const overdueModerationCount = moderationRows.filter((row) => {
     if (row.status === "moderated" || row.status === "resolved" || row.status === "released") {
       return false;
@@ -105,7 +126,7 @@ export const buildOperationalMonitoringSnapshot = ({
     (row) => row.status === "escalated" || (row.integrityRiskScore ?? 0) >= 70,
   ).length;
   const staleGradingRun = latestGradeRun ? isOlderThanDays(latestGradeRun, 1, now) : false;
-  const workflowRunCounts = workflowRunRows.reduce(
+  const workflowRunCounts = workflowRows.reduce(
     (counts, row) => {
       if (row.status === "running") {
         counts.running += 1;
@@ -123,7 +144,7 @@ export const buildOperationalMonitoringSnapshot = ({
       succeeded: 0,
     },
   );
-  const latestWorkflowRun = workflowRunRows[0] ?? null;
+  const latestWorkflowRun = workflowRows[0] ?? null;
   const staleWorkflowRun = latestWorkflowRun
     ? isOlderThanDays(latestWorkflowRun.finishedAt ?? latestWorkflowRun.startedAt, 1, now)
     : false;
@@ -152,12 +173,12 @@ export const buildOperationalMonitoringSnapshot = ({
     },
   );
   const workflowNotificationActivity = workflowNotificationRows[0] ?? null;
-  const latestGradeWorkflowRun = workflowRunRows.find((row) => row.workflowName === "grade-submission") ?? null;
+  const latestGradeWorkflowRun = workflowRows.find((row) => row.workflowName === "grade-submission") ?? null;
   const staleGradingHeartbeat =
     workflowRunTelemetryAvailable && latestGradeWorkflowRun
       ? isOlderThanDays(latestGradeWorkflowRun.finishedAt ?? latestGradeWorkflowRun.startedAt, 1, now)
       : workflowRunTelemetryAvailable;
-  const failedProviderCallCount = workflowRunRows.filter(
+  const failedProviderCallCount = workflowRows.filter(
     (row) => row.workflowName === "grade-submission" && row.status === "failed",
   ).length;
   const failedEmailDeliveryCount = workflowNotificationRows.filter((row) => row.deliveryStatus === "failed").length;
