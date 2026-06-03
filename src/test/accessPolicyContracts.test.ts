@@ -133,31 +133,39 @@ describe("access policy contracts", () => {
 
   it("keeps student risk intelligence readable and writable only by admins in the same institution", () => {
     const source = readRepoFile("supabase/migrations/20260603102000_add_admin_risk_intelligence_tables.sql");
+    const policies = readRepoFile("supabase/migrations/20260604104000_switch_risk_policies_to_private_is_admin.sql");
 
-    expect(source).toContain('create policy "Admins can read student risk snapshots"');
-    expect(source).toContain('create policy "Admins can read student risk predictions"');
-    expect(source).toContain('create policy "Admins can read risk feedback"');
-    expect(source).toContain('create policy "Admins can insert risk feedback"');
-    expect(source).toContain("private.is_admin()");
     expect(source).toContain("grant select on public.student_risk_snapshots to authenticated;");
     expect(source).toContain("grant select on public.student_risk_predictions to authenticated;");
     expect(source).toContain("grant select, insert on public.risk_feedback to authenticated;");
     expect(source).toContain("private.same_institution(institution_id)");
+    expect(policies).toContain('create policy "Admins can read student risk snapshots"');
+    expect(policies).toContain('create policy "Admins can read student risk predictions"');
+    expect(policies).toContain('create policy "Admins can read risk feedback"');
+    expect(policies).toContain('create policy "Admins can insert risk feedback"');
+    expect(policies).toContain("private.is_admin()");
     expect(source).not.toContain("to public");
   });
 
   it("keeps supervised risk outcomes readable and writable only by admins in the same institution", () => {
     const source = readRepoFile("supabase/migrations/20260603212000_add_student_risk_outcomes.sql");
+    const traceability = readRepoFile("supabase/migrations/20260604103000_add_source_grade_traceability_to_risk_outcomes.sql");
+    const policies = readRepoFile("supabase/migrations/20260604104000_switch_risk_policies_to_private_is_admin.sql");
 
-    expect(source).toContain('create policy "Admins can read student risk outcomes"');
-    expect(source).toContain('create policy "Admins can insert student risk outcomes"');
-    expect(source).toContain('create policy "Admins can update student risk outcomes"');
-    expect(source).toContain("create unique index if not exists idx_student_risk_outcomes_source_grade_id");
-    expect(source).toContain("student_risk_outcomes_grade_traceability");
+    expect(source).toContain("create table if not exists public.student_risk_outcomes");
+    expect(source).toContain("prediction_id uuid references public.student_risk_predictions(id) on delete set null");
+    expect(source).toContain("snapshot_id uuid references public.student_risk_snapshots(id) on delete set null");
     expect(source).toContain("grant select on public.student_risk_outcomes to authenticated;");
     expect(source).toContain("grant select, insert, update on public.student_risk_outcomes to service_role;");
-    expect(source).toContain("private.is_admin()");
-    expect(source).toContain("private.same_institution(institution_id)");
+    expect(traceability).toContain("create unique index if not exists idx_student_risk_outcomes_source_grade_id");
+    expect(traceability).toContain("student_risk_outcomes_grade_traceability");
+    expect(traceability).toContain("drop constraint if exists student_risk_outcomes_grade_traceability");
+    expect(traceability).toContain("add constraint student_risk_outcomes_grade_traceability");
+    expect(policies).toContain('create policy "Admins can read student risk outcomes"');
+    expect(policies).toContain('create policy "Admins can insert student risk outcomes"');
+    expect(policies).toContain('create policy "Admins can update student risk outcomes"');
+    expect(policies).toContain("private.is_admin()");
+    expect(policies).toContain("private.same_institution(institution_id)");
   });
 
   it("grants authenticated admins write access to risk outcomes while keeping same-institution RLS", () => {
