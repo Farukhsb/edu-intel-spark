@@ -25,7 +25,7 @@ describe("RiskIntelligence", () => {
     cleanup();
   });
 
-  it("renders the dedicated empty-state workspace when no predictions exist", async () => {
+  it("renders the demo risk overview on localhost", async () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <RiskIntelligence />
@@ -33,8 +33,10 @@ describe("RiskIntelligence", () => {
     );
 
     expect(await screen.findByText("Risk overview")).toBeInTheDocument();
-    expect(screen.getByText("No risk predictions yet")).toBeInTheDocument();
-    expect(screen.getAllByText("Load demo data").length).toBeGreaterThan(0);
+    expect(screen.getByText("Demo data is loaded for local testing.")).toBeInTheDocument();
+    expect(screen.getAllByText("Musa Ali").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Hauwa Bello").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Show live data").length).toBeGreaterThan(0);
     expect(screen.getByText("Risk summary")).toBeInTheDocument();
   });
 });
