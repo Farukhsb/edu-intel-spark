@@ -15,6 +15,7 @@ vi.mock("@/lib/data/admin/riskIntelligence", () => ({
     feedback: [],
     profiles: [],
   }),
+  submitRiskFeedback: vi.fn(),
 }));
 
 import RiskIntelligence from "@/pages/dashboard/RiskIntelligence";
@@ -31,7 +32,9 @@ describe("RiskIntelligence", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Student risk predictions")).toBeInTheDocument();
+    expect(await screen.findByText("Risk overview")).toBeInTheDocument();
     expect(screen.getByText("No risk predictions yet")).toBeInTheDocument();
+    expect(screen.getAllByText("Load demo data").length).toBeGreaterThan(0);
+    expect(screen.getByText("Risk summary")).toBeInTheDocument();
   });
 });

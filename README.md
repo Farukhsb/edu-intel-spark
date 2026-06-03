@@ -51,6 +51,16 @@ The main idea is simple: keep the institution in control of the data, keep acade
 - backend email notification infrastructure exists for assignment, submission, and grade-release events
 - live app flows are currently bell-first, with workflow email dispatch disabled until sender and provider setup are intentionally re-enabled
 
+### Academic risk scoring
+
+- A lightweight machine learning model makes the prediction.
+- It uses a simple linear model with calibrated confidence, which keeps the output easy to explain.
+- GradeAI looks at a student's recent assessment pattern, not just one mark.
+- It gives a simple risk band: `low`, `medium`, or `high`.
+- It also gives a confidence score so staff can tell how sure the model is.
+- If the pattern looks uncertain or borderline, it flags the result for review instead of pretending to be certain.
+- The model is a support tool, not a final decision-maker.
+
 ## How The Workflow Fits Together
 
 ```text
