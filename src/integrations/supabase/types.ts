@@ -631,6 +631,100 @@ export type Database = {
           },
         ]
       }
+      student_risk_outcomes: {
+        Row: {
+          created_at: string
+          id: string
+          institution_id: string
+          label_window_days: number
+          label_value: string
+          notes: string | null
+          outcome_date: string
+          outcome_source: string
+          outcome_status: string
+          prediction_id: string | null
+          source_grade_id: string | null
+          source_submission_id: string | null
+          snapshot_id: string | null
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          institution_id: string
+          label_window_days?: number
+          label_value: string
+          notes?: string | null
+          outcome_date?: string
+          outcome_source: string
+          outcome_status: string
+          prediction_id?: string | null
+          source_grade_id?: string | null
+          source_submission_id?: string | null
+          snapshot_id?: string | null
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          institution_id?: string
+          label_window_days?: number
+          label_value?: string
+          notes?: string | null
+          outcome_date?: string
+          outcome_source?: string
+          outcome_status?: string
+          prediction_id?: string | null
+          source_grade_id?: string | null
+          source_submission_id?: string | null
+          snapshot_id?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_risk_outcomes_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_outcomes_prediction_id_fkey"
+            columns: ["prediction_id"]
+            isOneToOne: false
+            referencedRelation: "student_risk_predictions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_outcomes_source_grade_id_fkey"
+            columns: ["source_grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_outcomes_source_submission_id_fkey"
+            columns: ["source_submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_outcomes_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "student_risk_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_risk_outcomes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grade_audit_log: {
         Row: {
           actor_role: string | null

@@ -138,12 +138,32 @@ describe("access policy contracts", () => {
     expect(source).toContain('create policy "Admins can read student risk predictions"');
     expect(source).toContain('create policy "Admins can read risk feedback"');
     expect(source).toContain('create policy "Admins can insert risk feedback"');
+    expect(source).toContain("private.is_admin()");
     expect(source).toContain("grant select on public.student_risk_snapshots to authenticated;");
     expect(source).toContain("grant select on public.student_risk_predictions to authenticated;");
     expect(source).toContain("grant select, insert on public.risk_feedback to authenticated;");
-    expect(source).toContain("public.is_admin()");
     expect(source).toContain("private.same_institution(institution_id)");
     expect(source).not.toContain("to public");
+  });
+
+  it("keeps supervised risk outcomes readable and writable only by admins in the same institution", () => {
+    const source = readRepoFile("supabase/migrations/20260603212000_add_student_risk_outcomes.sql");
+
+    expect(source).toContain('create policy "Admins can read student risk outcomes"');
+    expect(source).toContain('create policy "Admins can insert student risk outcomes"');
+    expect(source).toContain('create policy "Admins can update student risk outcomes"');
+    expect(source).toContain("create unique index if not exists idx_student_risk_outcomes_source_grade_id");
+    expect(source).toContain("student_risk_outcomes_grade_traceability");
+    expect(source).toContain("grant select on public.student_risk_outcomes to authenticated;");
+    expect(source).toContain("grant select, insert, update on public.student_risk_outcomes to service_role;");
+    expect(source).toContain("private.is_admin()");
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
+
+  it("grants authenticated admins write access to risk outcomes while keeping same-institution RLS", () => {
+    const source = readRepoFile("supabase/migrations/20260604105000_grant_authenticated_risk_outcomes_write_access.sql");
+
+    expect(source).toContain("grant select, insert, update on public.student_risk_outcomes to authenticated;");
   });
 
   it("removes anonymous access from privileged RPC helpers", () => {

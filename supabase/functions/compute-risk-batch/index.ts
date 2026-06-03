@@ -4,6 +4,7 @@ import { createAdminClient, HttpError, jsonError, requireAdmin } from "../_share
 import { createCorsForbiddenResponse, getCorsHeaders } from "../_shared/cors.ts";
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
 import { applySharedRateLimit, createRateLimitResponse } from "../_shared/rate-limit.ts";
+import { scoreStudentRisk } from "../../../src/lib/riskModel.ts";
 import {
   evaluateStudentRisk,
   type StudentTrajectory,
@@ -39,12 +40,6 @@ function getNumericGrade(scoreRow: { final_score: number | null; ai_score: numbe
   return typeof score === "number" && Number.isFinite(score) ? score : null;
 }
 
-function mapRiskBand(rawRiskScore: number) {
-  if (rawRiskScore >= 70) return "high";
-  if (rawRiskScore >= 45) return "medium";
-  return "low";
-}
-
 function buildRiskDetails(evaluation: NonNullable<ReturnType<typeof evaluateStudentRisk>>, options: {
   snapshotDate: string;
   featureVersion: string;
@@ -52,6 +47,15 @@ function buildRiskDetails(evaluation: NonNullable<ReturnType<typeof evaluateStud
   scoreCount: number;
   firstSubmissionAt: string | null;
   lastSubmissionAt: string | null;
+  modelVersion: string;
+  modelSource: "ml" | "heuristic";
+  modelConfidence: number | null;
+  modelRiskScore: number;
+  modelRiskBand: string;
+  modelNeedsReview: boolean | null;
+  modelReviewReasons: string[] | null;
+  modelProbabilityByBand: Record<string, number> | null;
+  modelFeatureVector: Record<string, number> | null;
 }) {
   return {
     snapshot_date: options.snapshotDate,
@@ -71,6 +75,15 @@ function buildRiskDetails(evaluation: NonNullable<ReturnType<typeof evaluateStud
     recommendation: evaluation.recommendation,
     explanation: evaluation.explanation,
     sparkline: evaluation.sparkline,
+    model_version: options.modelVersion,
+    model_source: options.modelSource,
+    model_confidence: options.modelConfidence,
+    model_risk_score: options.modelRiskScore,
+    model_risk_band: options.modelRiskBand,
+    model_needs_review: options.modelNeedsReview,
+    model_review_reasons: options.modelReviewReasons,
+    model_probability_by_band: options.modelProbabilityByBand,
+    model_feature_vector: options.modelFeatureVector,
   };
 }
 
@@ -117,7 +130,7 @@ Deno.serve(async (req) => {
     const requestData: BatchRequest = parsed.data;
     const featureVersion = requestData.featureVersion ?? DEFAULT_FEATURE_VERSION;
     const snapshotDate = requestData.snapshotDate ?? new Date().toISOString().slice(0, 10);
-    const modelVersion = `heuristic-risk-${featureVersion}`;
+    const fallbackModelVersion = `heuristic-risk-${featureVersion}`;
 
     const { data: actorProfile, error: actorProfileError } = await supabase
       .from("profiles")
@@ -251,6 +264,12 @@ Deno.serve(async (req) => {
     for (const trajectory of scoredTrajectories) {
       const evaluation = evaluateStudentRisk(trajectory);
       if (!evaluation) continue;
+      const modelPrediction = scoreStudentRisk(trajectory);
+      const riskScore = modelPrediction?.riskScore != null
+        ? Number((modelPrediction.riskScore / 100).toFixed(4))
+        : Number((evaluation.rawRiskScore / 100).toFixed(4));
+      const riskBand = modelPrediction?.riskBand ?? evaluation.riskBand;
+      const modelVersion = modelPrediction?.modelVersion ?? fallbackModelVersion;
 
       const submissionCount = trajectory.scores.length;
       const firstSubmissionAt = trajectory.scores[0]?.date ?? null;
@@ -262,6 +281,15 @@ Deno.serve(async (req) => {
         scoreCount: submissionCount,
         firstSubmissionAt,
         lastSubmissionAt,
+        modelVersion,
+        modelSource: modelPrediction ? "ml" : "heuristic",
+        modelConfidence: modelPrediction?.confidence ?? null,
+        modelRiskScore: modelPrediction?.riskScore ?? evaluation.rawRiskScore,
+        modelRiskBand: modelPrediction?.riskBand ?? evaluation.riskBand,
+        modelNeedsReview: modelPrediction?.needsReview ?? null,
+        modelReviewReasons: modelPrediction?.reviewReasons ?? null,
+        modelProbabilityByBand: modelPrediction?.probabilityByBand ?? null,
+        modelFeatureVector: modelPrediction?.featureVector ?? null,
       });
 
       const { data: snapshotRow, error: snapshotError } = await supabaseAdmin
@@ -285,9 +313,6 @@ Deno.serve(async (req) => {
         throw new HttpError(500, snapshotError?.message || "Failed to persist risk snapshot");
       }
 
-      const riskScore = Number((evaluation.rawRiskScore / 100).toFixed(4));
-      const riskBand = mapRiskBand(evaluation.rawRiskScore);
-
       const { error: predictionError } = await supabaseAdmin
         .from("student_risk_predictions")
         .upsert(
@@ -306,6 +331,8 @@ Deno.serve(async (req) => {
               risk_band: riskBand,
               risk_score: riskScore,
               raw_risk_score: evaluation.rawRiskScore,
+              model_needs_review: modelPrediction?.needsReview ?? null,
+              model_review_reasons: modelPrediction?.reviewReasons ?? null,
             },
           },
           {

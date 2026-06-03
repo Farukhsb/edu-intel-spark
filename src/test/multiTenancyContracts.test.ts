@@ -120,6 +120,41 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("create trigger sync_risk_feedback_institution_id");
   });
 
+  it("adds student risk outcomes for supervised model labels with institution-scoped access", () => {
+    const source = readRepoFile("supabase/migrations/20260603212000_add_student_risk_outcomes.sql");
+
+    expect(source).toContain("create table if not exists public.student_risk_outcomes");
+    expect(source).toContain("prediction_id uuid references public.student_risk_predictions(id) on delete set null");
+    expect(source).toContain("snapshot_id uuid references public.student_risk_snapshots(id) on delete set null");
+    expect(source).toContain("source_grade_id uuid references public.grades(id) on delete set null");
+    expect(source).toContain("source_submission_id uuid references public.submissions(id) on delete set null");
+    expect(source).toContain("label_window_days integer not null default 30 check (label_window_days > 0)");
+    expect(source).toContain("label_value text not null check (label_value in ('low', 'medium', 'high'))");
+    expect(source).toContain("outcome_status text not null check (");
+    expect(source).toContain("outcome_source text not null check (outcome_source in ('manual', 'grade', 'import', 'system'))");
+    expect(source).toContain("create unique index if not exists idx_student_risk_outcomes_source_grade_id");
+    expect(source).toContain("grant select on public.student_risk_outcomes to authenticated;");
+    expect(source).toContain("grant select, insert, update on public.student_risk_outcomes to service_role;");
+    expect(source).toContain('create policy "Admins can read student risk outcomes"');
+    expect(source).toContain('create policy "Admins can insert student risk outcomes"');
+    expect(source).toContain('create policy "Admins can update student risk outcomes"');
+    expect(source).toContain("student_risk_outcomes_grade_traceability");
+    expect(source).toContain("create trigger sync_student_risk_outcome_institution_id");
+  });
+
+  it("switches the risk table policies to private admin checks for API callers", () => {
+    const source = readRepoFile("supabase/migrations/20260604104000_switch_risk_policies_to_private_is_admin.sql");
+
+    expect(source).toContain("private.is_admin()");
+    expect(source).toContain('create policy "Admins can read student risk snapshots"');
+    expect(source).toContain('create policy "Admins can read student risk predictions"');
+    expect(source).toContain('create policy "Admins can read risk feedback"');
+    expect(source).toContain('create policy "Admins can insert risk feedback"');
+    expect(source).toContain('create policy "Admins can read student risk outcomes"');
+    expect(source).toContain('create policy "Admins can insert student risk outcomes"');
+    expect(source).toContain('create policy "Admins can update student risk outcomes"');
+  });
+
   it("keeps grading error events readable only by admins", () => {
     const source = readRepoFile("supabase/migrations/20260519221000_create_grading_error_events.sql");
 
