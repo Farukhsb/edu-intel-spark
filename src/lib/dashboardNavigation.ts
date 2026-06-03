@@ -78,8 +78,8 @@ export const adminSections = [
     ],
   },
   {
-    label: "Reports",
-    description: "Institution-level reporting views",
+    label: "Risk",
+    description: "Institution-level risk and reporting views",
     defaultOpen: true,
     links: [
       { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },

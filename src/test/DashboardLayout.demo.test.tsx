@@ -205,7 +205,7 @@ describe("DashboardLayout demo mode", () => {
     );
 
     expect(await screen.findByText("Admin child")).toBeInTheDocument();
-    expect(screen.getAllByText("Reports").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Risk").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Institutional Insights").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Academic Oversight").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Compliance").length).toBeGreaterThan(0);
