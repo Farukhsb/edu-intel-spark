@@ -36,7 +36,6 @@ const FEATURE_NAMES = [
   "recentDelta",
   "below50Ratio",
   "below40Ratio",
-  "volatility",
 ];
 
 function pickFeatureVector(details = {}, snapshot = {}) {

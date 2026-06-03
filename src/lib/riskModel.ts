@@ -30,11 +30,12 @@ const FEATURE_NAMES = [
   "recentDelta",
   "below50Ratio",
   "below40Ratio",
-  "volatility",
 ] as const;
 
 type RiskFeatureName = (typeof FEATURE_NAMES)[number];
-type RiskFeatureVector = Record<RiskFeatureName, number>;
+type RiskFeatureVector = Record<RiskFeatureName, number> & {
+  volatility: number;
+};
 
 function linearRegression(values: number[]): { slope: number; intercept: number } {
   const n = values.length;

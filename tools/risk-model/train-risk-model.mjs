@@ -23,7 +23,6 @@ const FEATURE_NAMES = [
   "recentDelta",
   "below50Ratio",
   "below40Ratio",
-  "volatility",
 ];
 
 const CLASS_NAMES = ["low", "medium", "high"];
@@ -95,7 +94,6 @@ function extractFeatures(scores) {
     recentDelta,
     below50Ratio,
     below40Ratio,
-    sigma,
   ];
 }
 
