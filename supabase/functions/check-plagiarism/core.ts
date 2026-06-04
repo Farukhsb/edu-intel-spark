@@ -22,6 +22,7 @@ const MAX_INTERNAL_COMPARISON_SUBMISSIONS = 80;
 const MAX_REQUESTED_SUBMISSION_IDS = 80;
 logWarn("internal_similarity_large_cohort"
 logWarn("internal_similarity_skipped_large_cohort"
+Internal cohort similarity scanning was skipped because this assignment has
 const extractedComparisonContent = await mapWithConcurrency(
 logInfo("comparison_submission_extraction_started"
 logInfo("comparison_submission_extraction_completed"

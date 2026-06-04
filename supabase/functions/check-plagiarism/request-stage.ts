@@ -281,7 +281,7 @@ export async function prepareCheckPlagiarismRun(
 
   const studentIds = submissions.map((submission) => submission.student_id).filter((value): value is string => Boolean(value));
   const { data: profileRows, error: profileRowsError } = studentIds.length > 0
-    ? await userSupabase
+    ? await supabaseAdmin
         .from("student_writing_profiles")
         .select("*")
         .in("student_id", studentIds)
@@ -322,11 +322,11 @@ export async function prepareCheckPlagiarismRun(
   );
 
   const { data: studentSubmissions } = studentIds.length > 0
-    ? await userSupabase.from("submissions").select("id, student_id").in("student_id", studentIds)
+    ? await supabaseAdmin.from("submissions").select("id, student_id").in("student_id", studentIds)
     : { data: [] };
   const allStudentSubmissionIds = (studentSubmissions || []).map((submission) => submission.id);
   const { data: gradeRows } = allStudentSubmissionIds.length > 0
-    ? await userSupabase.from("grades").select("submission_id, ai_score, final_score").in("submission_id", allStudentSubmissionIds)
+    ? await supabaseAdmin.from("grades").select("submission_id, ai_score, final_score").in("submission_id", allStudentSubmissionIds)
     : { data: [] };
   const gradeMap = new Map<string, number>(
     (gradeRows || [])
