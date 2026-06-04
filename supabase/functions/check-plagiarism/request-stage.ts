@@ -61,6 +61,7 @@ export async function prepareCheckPlagiarismRun(
   corsHeaders: Record<string, string>,
 ): Promise<PreparedCheckPlagiarismRun | Response> {
   const supabaseAdmin = deps.createAdminClient();
+  const { supabase: userSupabase, user } = await deps.requireLecturer(req);
   const rateLimit = await applySharedRateLimit(supabaseAdmin, req, {
     scope: "check-plagiarism",
     limit: 5,
@@ -71,8 +72,6 @@ export async function prepareCheckPlagiarismRun(
     logWarn("Rate limit exceeded", { function: "check-plagiarism", identifierType: rateLimit.identifierType });
     return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
   }
-
-  const { supabase: userSupabase, user } = await deps.requireLecturer(req);
 
   const body = await req.json().catch(() => null);
   const rawBody = body && typeof body === "object" ? body as Record<string, unknown> : null;

@@ -1,1 +1,1 @@
-export { createCheckPlagiarismHandler } from "./analysis-execution.ts";
+export { createCheckPlagiarismHandler } from "./core.ts";
