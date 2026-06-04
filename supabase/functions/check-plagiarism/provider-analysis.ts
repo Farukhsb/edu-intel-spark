@@ -1,11 +1,10 @@
 import { logError, logInfo, logWarn } from "../_shared/log.ts";
-import type { SubmissionRow } from "../_shared/text-analysis.ts";
-import { toProviderSubmission } from "../_shared/text-analysis.ts";
 import { analyzeTextSimilarity } from "../_shared/providers/internal-text-similarity.ts";
 import type { IntegrityProviderFinding } from "../_shared/integrity-provider.ts";
 import { runMossSimilarityComparisons, type InternalSimilaritySubmission } from "../_shared/integrity-provider-runners.ts";
 import { buildInternalComparisonPairs } from "./internal-comparison-pairs.ts";
 import { fetchFileContent as sharedFetchFileContent } from "./extraction.ts";
+import { toProviderSubmission, type SubmissionRow } from "./analysis.ts";
 
 const MAX_INTERNAL_COMPARISON_SUBMISSIONS = 80;
 const INTERNAL_SIMILARITY_MIN_WORDS = 50;

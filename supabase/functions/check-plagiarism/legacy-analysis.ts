@@ -1,15 +1,15 @@
 import { z } from "npm:zod";
 import { logError } from "../_shared/log.ts";
+import { extractOutputText, parseJsonText } from "../_shared/openai.ts";
+import { normalizeFlags as sharedNormalizeFlags } from "./flags.ts";
+import type { fetchFileContent as sharedFetchFileContent } from "./extraction.ts";
 import {
   preprocessSubmissionText,
   truncateText,
   type IntegrityFlag,
   type ProcessedSubmissionText,
   type SubmissionRow,
-} from "../_shared/text-analysis.ts";
-import { extractOutputText, parseJsonText } from "../_shared/openai.ts";
-import { normalizeFlags as sharedNormalizeFlags } from "./flags.ts";
-import type { fetchFileContent as sharedFetchFileContent } from "./extraction.ts";
+} from "./analysis.ts";
 
 const MAX_SINGLE_TEXT_CHARS = 12000;
 const MAX_MULTI_TEXT_CHARS = 3500;
