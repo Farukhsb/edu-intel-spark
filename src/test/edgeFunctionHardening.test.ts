@@ -247,7 +247,7 @@ describe("edge function hardening", () => {
     expect(reminderSource).toContain("scheduler_secret");
     expect(reminderSource).toContain("send-overdue-intervention-reminders completed");
     expect(migrationSource).toContain("weekly-overdue-intervention-reminders");
-    expect(migrationSource).toContain("intervention-overdue-reminders-scheduler");
+    expect(migrationSource).toContain("weekly-overdue-intervention-reminders");
   });
 
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
