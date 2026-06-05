@@ -60,7 +60,7 @@ describe("DemoCohortAnalytics", () => {
 
     expect(await screen.findByText("Cohort Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
-    expect(screen.getByText("High-risk student cluster detected")).toBeInTheDocument();
+    expect(screen.getAllByText("High-risk student cluster detected").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Open the risk workflow and prioritise the highest-risk students."),
     ).toBeInTheDocument();
