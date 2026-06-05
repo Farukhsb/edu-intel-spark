@@ -41,8 +41,8 @@ describe("Index", () => {
         "Open the demo or sign in to see the full workflow from released results to institutional oversight",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Lecturer Demo")).toBeInTheDocument();
-    expect(screen.getByText("Student Demo")).toBeInTheDocument();
+    expect(screen.getByText("Staff Demo")).toBeInTheDocument();
+    expect(screen.getByText("Synthetic Test View")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /privacy notice/i })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: /terms of service/i })).toHaveAttribute("href", "/terms");
   });

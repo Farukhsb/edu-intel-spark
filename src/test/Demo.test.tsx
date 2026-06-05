@@ -37,8 +37,8 @@ describe("Demo", () => {
     );
 
     expect(screen.getByText("Choose a demo workspace")).toBeInTheDocument();
-    expect(screen.getByText("Lecturer Demo")).toBeInTheDocument();
-    expect(screen.getByText("Student Demo")).toBeInTheDocument();
+    expect(screen.getByText("Staff Demo")).toBeInTheDocument();
+    expect(screen.getByText("Synthetic Test View")).toBeInTheDocument();
   });
 
   it("enters demo mode from the dedicated demo page", () => {
@@ -48,7 +48,7 @@ describe("Demo", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /open lecturer demo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open staff demo/i }));
 
     expect(mocks.authState.enterDemo).toHaveBeenCalledWith("lecturer");
     expect(mocks.navigate).toHaveBeenCalledWith("/demo/dashboard");

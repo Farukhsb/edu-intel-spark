@@ -68,7 +68,7 @@ describe("DashboardLayout demo mode", () => {
     expect(await screen.findByText("Demo Mode")).toBeInTheDocument();
     expect(screen.getByText("Demo child")).toBeInTheDocument();
     expect(screen.getAllByText("Teaching").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Teaching Insights").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Student Support").length).toBeGreaterThan(0);
     expect(screen.getByText("Overview sits in daily teaching workflow.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Bulk Upload Students" })).not.toBeInTheDocument();
     expect(mocks.communications.loadVisibleCommunicationMessages).not.toHaveBeenCalled();

@@ -650,7 +650,7 @@ describe("AdminDashboard", () => {
     expect(await screen.findByRole("heading", { name: /Failure dashboard/i })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /Operational alerts/i })).toBeInTheDocument();
     expect(screen.getByText("Release backlog")).toBeInTheDocument();
-    expect(screen.getByText("Stale grading heartbeat")).toBeInTheDocument();
+    expect(screen.getByText("Stale workflow heartbeat")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /System health/i })).toBeInTheDocument();
     expect(screen.getByText("Read snapshot succeeded")).toBeInTheDocument();
     expect(screen.getByText("AI grading workflow signal")).toBeInTheDocument();
@@ -735,7 +735,7 @@ describe("AdminDashboard", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("heading", { name: /GradeAI Admin Dashboard/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Intervention and Oversight/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bulk Upload Students" })).toBeInTheDocument();
     expect(screen.getByText("Default Institution")).toBeInTheDocument();
     expect(screen.getByText(/Tenant scope:/i)).toHaveTextContent("Tenant scope: default · active");
