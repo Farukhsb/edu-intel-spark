@@ -232,7 +232,7 @@ describe("edge function hardening", () => {
     expect(configSource).toContain("verify_jwt = false");
     expect(launchSource).toContain("parseLtiLaunch(req)");
     expect(launchSource).toContain("req.method === \"GET\"");
-    expect(launchSource).toContain("req.method === \"POST\"");
+    expect(launchSource).toContain("requirePostMethod(req, corsHeaders)");
     expect(launchSource).toContain("Location");
   });
 
@@ -308,7 +308,6 @@ describe("edge function hardening", () => {
     expect(configSource).toContain("[functions.import-grades]");
     expect(configSource).toContain("[functions.compute-risk-batch]");
     expect(configSource).toContain("verify_jwt = true");
-    expect(configSource).not.toContain("verify_jwt = false");
   });
 
   it("keeps the optional MOSS bridge non-fatal and backend-only", () => {

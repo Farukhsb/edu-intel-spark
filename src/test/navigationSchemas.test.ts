@@ -21,12 +21,20 @@ describe("navigation schemas", () => {
       assignmentId: "assignment-1",
       submissionId: "submission-1",
       source: "notification",
+      ltiContextId: null,
+      ltiResourceLinkId: null,
+      ltiProvider: null,
+      ltiIssuer: null,
     });
 
     expect(invalid).toEqual({
       assignmentId: null,
       submissionId: "submission-2",
       source: null,
+      ltiContextId: null,
+      ltiResourceLinkId: null,
+      ltiProvider: null,
+      ltiIssuer: null,
     });
   });
 
