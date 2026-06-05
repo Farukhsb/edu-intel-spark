@@ -185,6 +185,20 @@ const setupStudentProfileSupabase = () => {
         };
       }
 
+      if (table === "student_intervention_events") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  order: vi.fn(() => Promise.resolve({ data: [], error: null })),
+                })),
+              })),
+            })),
+          })),
+        };
+      }
+
       if (table === "profiles") {
         return {
           eq: vi.fn(() => ({
