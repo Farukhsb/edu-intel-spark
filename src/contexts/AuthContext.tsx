@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!user || isDemo || !profile?.institution_id) return;
     void primeRiskModelArtifact(profile.institution_id).catch(() => undefined);
-  }, [isDemo, profile?.institution_id, user?.id]);
+  }, [isDemo, profile?.institution_id, user]);
 
   const refreshProfile = async () => {
     if (!user || isDemo) return;
