@@ -65,7 +65,7 @@ describe("operationalMonitoring", () => {
     expect(snapshot.failureCards).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          title: "Grading failures today",
+          title: "Workflow failures today",
           tone: "warning",
           value: "2",
           signalType: "live",
@@ -91,7 +91,7 @@ describe("operationalMonitoring", () => {
     expect(snapshot.alertCards).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          title: "Stale grading heartbeat",
+          title: "Stale workflow heartbeat",
           tone: "healthy",
           value: "0",
           signalType: "live",
@@ -127,7 +127,7 @@ describe("operationalMonitoring", () => {
           signalType: "live",
         }),
         expect.objectContaining({
-          label: "Latest visible grading activity",
+          label: "Latest visible workflow activity",
           tone: "warning",
           statusLabel: "Recorded",
           signalType: "inferred",
@@ -167,7 +167,7 @@ describe("operationalMonitoring", () => {
           signalType: "placeholder",
         }),
         expect.objectContaining({
-          label: "Visible grading failures today",
+          label: "Visible workflow failures today",
           tone: "placeholder",
           statusLabel: "Pending telemetry",
           signalType: "placeholder",
@@ -177,7 +177,7 @@ describe("operationalMonitoring", () => {
 
     expect(snapshot.failureCards[0]).toEqual(
       expect.objectContaining({
-        title: "Grading failures today",
+        title: "Workflow failures today",
         tone: "placeholder",
         value: "Pending telemetry",
         signalType: "placeholder",
@@ -187,7 +187,7 @@ describe("operationalMonitoring", () => {
     expect(snapshot.alertCards).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          title: "Stale grading heartbeat",
+          title: "Stale workflow heartbeat",
           tone: "placeholder",
           value: "0",
           signalType: "placeholder",
@@ -233,7 +233,7 @@ describe("operationalMonitoring", () => {
     expect(snapshot.healthItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "Visible grading failures today",
+          label: "Visible workflow failures today",
           tone: "healthy",
           statusLabel: "0",
           signalType: "live",
@@ -244,7 +244,7 @@ describe("operationalMonitoring", () => {
     expect(snapshot.failureCards).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          title: "Grading failures today",
+          title: "Workflow failures today",
           tone: "healthy",
           value: "0",
           signalType: "live",
@@ -377,7 +377,7 @@ describe("operationalMonitoring", () => {
     expect(snapshot.healthItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "Visible grading failures today",
+          label: "Visible workflow failures today",
           tone: "warning",
           statusLabel: "3",
           signalType: "live",
@@ -388,7 +388,7 @@ describe("operationalMonitoring", () => {
     expect(snapshot.failureCards).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          title: "Grading failures today",
+          title: "Workflow failures today",
           tone: "warning",
           value: "3",
           signalType: "live",
