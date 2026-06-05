@@ -1,5 +1,5 @@
-import { riskModelArtifact as bootstrapRiskModelArtifact } from "./riskModelArtifact";
-import type { RiskModelArtifact } from "./riskModelArtifactTypes";
+import { riskModelArtifact as bootstrapRiskModelArtifact } from "./riskModelArtifact.ts";
+import type { RiskModelArtifact } from "./riskModelArtifactTypes.ts";
 
 let activeRiskModelArtifact: RiskModelArtifact = bootstrapRiskModelArtifact;
 
