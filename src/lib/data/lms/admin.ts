@@ -61,17 +61,19 @@ export type AdminLmsConnectionInput = {
   metadata: Record<string, unknown>;
 };
 
+type LmsQueryBuilder<T> = {
+  select: (columns: string) => LmsQueryBuilder<T>;
+  upsert: (value: Record<string, unknown>, options?: { onConflict?: string }) => LmsQueryBuilder<T>;
+  delete: () => LmsQueryBuilder<T>;
+  eq: (column: string, value: unknown) => LmsQueryBuilder<T>;
+  order: (column: string, options?: { ascending?: boolean }) => LmsQueryBuilder<T>;
+  limit: (count: number) => LmsQueryBuilder<T>;
+  maybeSingle: () => Promise<{ data: T | null; error: Error | null }>;
+  single: () => Promise<{ data: T; error: Error | null }>;
+};
+
 const lmsSupabase = supabase as unknown as {
-  from: (table: string) => {
-    select: (columns: string) => any;
-    upsert: (value: Record<string, unknown>, options?: { onConflict?: string }) => any;
-    delete: () => any;
-    eq: (column: string, value: unknown) => any;
-    order: (column: string, options?: { ascending?: boolean }) => any;
-    limit: (count: number) => any;
-    maybeSingle: () => Promise<{ data: AdminLmsConnectionRow | null; error: Error | null }>;
-    single: () => Promise<{ data: AdminLmsConnectionRow; error: Error | null }>;
-  };
+  from: (table: string) => LmsQueryBuilder<AdminLmsConnectionRow | AdminLmsSyncRunRow>;
   functions: {
     invoke: (name: string, options?: { body?: unknown }) => Promise<{ data: unknown; error: Error | null }>;
   };
@@ -96,17 +98,20 @@ export async function fetchAdminLmsConnections(institutionId: string) {
       .limit(12),
   ]);
 
-  if (connectionsRes.error) throw connectionsRes.error;
-  if (runsRes.error) throw runsRes.error;
+  const connections = connectionsRes as unknown as { data: AdminLmsConnectionRow[] | null; error: Error | null };
+  const runs = runsRes as unknown as { data: AdminLmsSyncRunRow[] | null; error: Error | null };
+
+  if (connections.error) throw connections.error;
+  if (runs.error) throw runs.error;
 
   return {
-    connections: (connectionsRes.data ?? []) as AdminLmsConnectionRow[],
-    syncRuns: (runsRes.data ?? []) as AdminLmsSyncRunRow[],
+    connections: (connections.data ?? []) as AdminLmsConnectionRow[],
+    syncRuns: (runs.data ?? []) as AdminLmsSyncRunRow[],
   };
 }
 
 export async function saveAdminLmsConnection(input: AdminLmsConnectionInput) {
-  const { data, error } = await lmsSupabase
+  const { data, error } = (await lmsSupabase
     .from("lms_connections")
     .upsert(
       {
@@ -121,18 +126,18 @@ export async function saveAdminLmsConnection(input: AdminLmsConnectionInput) {
       { onConflict: "institution_id,provider" },
     )
     .select(BASE_CONNECTION_FIELDS)
-    .single();
+    .single()) as unknown as { data: AdminLmsConnectionRow; error: Error | null };
 
   if (error) throw error;
   return data as AdminLmsConnectionRow;
 }
 
 export async function deleteAdminLmsConnection(institutionId: string, provider: LmsProviderId) {
-  const { error } = await lmsSupabase
+  const { error } = (await lmsSupabase
     .from("lms_connections")
     .delete()
     .eq("institution_id", institutionId)
-    .eq("provider", provider);
+    .eq("provider", provider)) as unknown as { error: Error | null };
 
   if (error) throw error;
 }
