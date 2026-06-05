@@ -275,12 +275,10 @@ const setupSupabase = ({
 
       if (table === "student_intervention_events") {
         return {
-          select: vi.fn(() => ({
+          eq: vi.fn(() => ({
             eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  order: vi.fn(() => Promise.resolve({ data: [], error: null })),
-                })),
+              order: vi.fn(() => ({
+                order: vi.fn(() => Promise.resolve({ data: [], error: null })),
               })),
             })),
           })),
@@ -581,12 +579,10 @@ describe("StudentProfile", () => {
 
       if (table === "student_intervention_events") {
         return {
-          select: vi.fn(() => ({
+          eq: vi.fn(() => ({
             eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  order: vi.fn(() => Promise.resolve({ data: [], error: null })),
-                })),
+              order: vi.fn(() => ({
+                order: vi.fn(() => Promise.resolve({ data: [], error: null })),
               })),
             })),
           })),
