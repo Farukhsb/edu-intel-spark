@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAdminLmsConnections } from "@/lib/data/lms";
 
 const PROFILE_FIELDS = "id, full_name, email, role, department_name, department_id, cohort_id, must_change_password, created_at, institution_id";
 const INSTITUTION_FIELDS = "id, name, slug, status";
@@ -109,6 +110,16 @@ export const fetchAdminDashboardDataset = async () => {
     throw profilesRes.error || assignmentsRes.error || submissionsRes.error || moderationCasesRes.error;
   }
 
+  const lmsRes = institutionRes.data?.id
+    ? await fetchAdminLmsConnections(institutionRes.data.id).catch(() => ({
+        connections: [],
+        syncRuns: [],
+      }))
+    : {
+        connections: [],
+        syncRuns: [],
+      };
+
   return {
     metricsRes,
     assignmentOversightRes,
@@ -134,5 +145,6 @@ export const fetchAdminDashboardDataset = async () => {
     workflowRunRes,
     workflowNotificationLogRes,
     gradingFailureCountRes,
+    lmsRes,
   };
 };

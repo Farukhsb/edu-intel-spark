@@ -22,6 +22,7 @@ const Auth = lazy(routeLoaders.auth);
 const NotFound = lazy(routeLoaders.notFound);
 const Privacy = lazy(routeLoaders.privacy);
 const Demo = lazy(routeLoaders.demo);
+const LtiLaunch = lazy(routeLoaders.ltiLaunch);
 const Terms = lazy(routeLoaders.terms);
 const ResetPassword = lazy(routeLoaders.resetPassword);
 const ForcePasswordChange = lazy(routeLoaders.forcePasswordChange);
@@ -250,6 +251,14 @@ const App = () => (
                 }
               />
               <Route
+                path="/lti/launch"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <LtiLaunch />
+                  </Suspense>
+                }
+              />
+              <Route
                 path="/terms"
                 element={
                   <Suspense fallback={<PageSkeleton />}>
@@ -295,7 +304,9 @@ const App = () => (
               <Route path="/demo/dashboard/institutional" element={<DemoDashboardRoute><DemoInstitutionalInsights /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/assignments/:id" element={<DemoDashboardRoute><DemoAssignmentDetail /></DemoDashboardRoute>} />
               <Route path="/demo/dashboard/assignments" element={<DemoDashboardRoute><DemoAssignments /></DemoDashboardRoute>} />
-              <Route path="/dashboard/cohort-analytics" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
+              <Route path="/demo/dashboard/cohort-dashboard" element={<DemoDashboardRoute allowedRole="lecturer"><DemoCohortAnalytics /></DemoDashboardRoute>} />
+              <Route path="/dashboard/cohort-dashboard" element={<DashboardRoute allowedRole="lecturer"><CohortAnalytics /></DashboardRoute>} />
+              <Route path="/dashboard/cohort-analytics" element={<Navigate to="/dashboard/cohort-dashboard" replace />} />
               <Route path="/dashboard/performance" element={<DashboardRoute allowedRole="lecturer"><PerformanceTrends /></DashboardRoute>} />
               <Route path="/dashboard/integrity" element={<DashboardRoute allowedRole="lecturer"><AcademicIntegrity /></DashboardRoute>} />
               <Route path="/dashboard/moderation" element={<DashboardRoute allowedRole="lecturer"><ModerationDashboard /></DashboardRoute>} />

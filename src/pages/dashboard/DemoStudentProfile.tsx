@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -15,8 +15,21 @@ import {
   StudentRiskReasonsCard,
 } from "@/pages/dashboard/student-profile/sections";
 import { DemoStudentInterventionFormCard } from "@/pages/dashboard/student-profile/demo-intervention-form-card";
+import {
+  StudentInterventionEvidenceTrailCard,
+  StudentInterventionEventFormCard,
+} from "@/pages/dashboard/student-profile/sections";
 import { type StudentInsightData } from "@/lib/studentProfile";
-import { type InterventionEntry, type ManualInterventionStatus, type ManualInterventionType } from "@/lib/interventions";
+import {
+  buildStudentInterventionEventPayload,
+  type InterventionContactMethod,
+  type InterventionContactTargetType,
+  type InterventionEntry,
+  type InterventionEventEntry,
+  type InterventionOutcome,
+  type ManualInterventionStatus,
+  type ManualInterventionType,
+} from "@/lib/interventions";
 import { getStudentInterventionReadiness } from "@/lib/interventions";
 
 const DEMO_STUDENT: StudentInsightData = {
@@ -50,14 +63,30 @@ const DEMO_STUDENT: StudentInsightData = {
   ],
 };
 
+const toDateTimeLocalValue = (value: Date = new Date()) => {
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(
+    value.getMinutes(),
+  )}`;
+};
+
 const DemoStudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
   const [interventions, setInterventions] = useState<InterventionEntry[]>([]);
+  const [interventionEvents, setInterventionEvents] = useState<InterventionEventEntry[]>([]);
   const [interventionType, setInterventionType] = useState<ManualInterventionType>("email");
   const [interventionStatus, setInterventionStatus] = useState<ManualInterventionStatus>("in_progress");
   const [interventionNote, setInterventionNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
+  const [evidenceInterventionId, setEvidenceInterventionId] = useState("");
+  const [evidenceContactTargetType, setEvidenceContactTargetType] = useState<InterventionContactTargetType>("student");
+  const [evidenceContactTargetName, setEvidenceContactTargetName] = useState(studentId ?? DEMO_STUDENT.name);
+  const [evidenceContactMethod, setEvidenceContactMethod] = useState<InterventionContactMethod>("email");
+  const [evidenceOutcome, setEvidenceOutcome] = useState<InterventionOutcome>("ongoing");
+  const [evidenceSummary, setEvidenceSummary] = useState("");
+  const [evidenceNextStep, setEvidenceNextStep] = useState("");
+  const [evidenceContactedAt, setEvidenceContactedAt] = useState(toDateTimeLocalValue());
 
   const student = useMemo(
     () => ({
@@ -77,13 +106,27 @@ const DemoStudentProfile = () => {
     return "steady" as const;
   }, [student.chart]);
 
+  useEffect(() => {
+    setEvidenceContactTargetName((current) => current || student.name);
+  }, [student.name]);
+
   const openInterventions = interventions.filter((entry) => entry.status === "planned" || entry.status === "in_progress").length;
+  const overdueInterventions = useMemo(
+    () =>
+      interventions.filter(
+        (entry) =>
+          (entry.status === "planned" || entry.status === "in_progress") &&
+          entry.followUpDate &&
+          new Date(entry.followUpDate).getTime() < Date.now(),
+      ).length,
+    [interventions],
+  );
   const interventionReadiness = getStudentInterventionReadiness({
     riskLevel: student.riskLevel,
     recommendation: student.recommendation,
     missedAssignmentsCount: student.missedAssignments.length,
     openInterventions,
-    overdueInterventions: interventions.length,
+    overdueInterventions,
     latestIntervention: interventions[0] ?? null,
   });
 
@@ -95,6 +138,7 @@ const DemoStudentProfile = () => {
     const nextEntry: InterventionEntry = {
       id: `${Date.now()}`,
       createdAt: new Date().toISOString(),
+      title: `${interventionType.charAt(0).toUpperCase()}${interventionType.slice(1)} intervention`,
       type: interventionType,
       note: interventionNote.trim(),
       followUpDate: followUpDate || null,
@@ -102,11 +146,57 @@ const DemoStudentProfile = () => {
     };
 
     setInterventions((current) => [nextEntry, ...current]);
+    setEvidenceInterventionId(nextEntry.id);
     setInterventionNote("");
     setFollowUpDate("");
     setInterventionType("email");
     setInterventionStatus("in_progress");
     toast.success("Demo intervention logged");
+  };
+
+  const handleLogEvidence = () => {
+    if (!evidenceInterventionId) {
+      return;
+    }
+
+    const payload = buildStudentInterventionEventPayload({
+      lecturerId: "demo-lecturer",
+      studentId: student.studentRecordId ?? student.studentId,
+      interventionId: evidenceInterventionId,
+      contactTargetType: evidenceContactTargetType,
+      contactTargetName: evidenceContactTargetName,
+      contactMethod: evidenceContactMethod,
+      outcome: evidenceOutcome,
+      summary: evidenceSummary,
+      nextStep: evidenceNextStep || null,
+      contactedAt: new Date(evidenceContactedAt).toISOString(),
+    });
+
+    const nextEntry: InterventionEventEntry = {
+      id: `${Date.now()}`,
+      interventionId: payload.intervention_id,
+      studentId: payload.student_id,
+      lecturerId: payload.lecturer_id,
+      contactedAt: payload.contacted_at || new Date().toISOString(),
+      contactTargetType: payload.contact_target_type as InterventionContactTargetType,
+      contactTargetName: payload.contact_target_name,
+      contactMethod: payload.contact_method as InterventionContactMethod,
+      outcome: payload.outcome as InterventionOutcome,
+      summary: payload.summary,
+      nextStep: payload.next_step || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setInterventionEvents((current) => [nextEntry, ...current]);
+    setEvidenceContactTargetType("student");
+    setEvidenceContactTargetName(student.name);
+    setEvidenceContactMethod("email");
+    setEvidenceOutcome("ongoing");
+    setEvidenceSummary("");
+    setEvidenceNextStep("");
+    setEvidenceContactedAt(toDateTimeLocalValue());
+    toast.success("Demo contact evidence logged");
   };
 
   const queueAtRiskAlert = () => {
@@ -200,13 +290,41 @@ const DemoStudentProfile = () => {
         />
       </div>
 
-      <StudentInterventionHistoryCard
+      <div className="grid gap-6 lg:grid-cols-2">
+        <StudentInterventionEventFormCard
+          canSave={interventions.length > 0}
+          interventionId={evidenceInterventionId}
+          contactTargetType={evidenceContactTargetType}
+          contactTargetName={evidenceContactTargetName}
+          contactMethod={evidenceContactMethod}
+          outcome={evidenceOutcome}
+          summary={evidenceSummary}
+          nextStep={evidenceNextStep}
+          contactedAt={evidenceContactedAt}
+          interventions={interventions}
+          onInterventionIdChange={setEvidenceInterventionId}
+          onContactTargetTypeChange={(value) => setEvidenceContactTargetType(value as InterventionContactTargetType)}
+          onContactTargetNameChange={setEvidenceContactTargetName}
+          onContactMethodChange={(value) => setEvidenceContactMethod(value as InterventionContactMethod)}
+          onOutcomeChange={(value) => setEvidenceOutcome(value as InterventionOutcome)}
+          onSummaryChange={setEvidenceSummary}
+          onNextStepChange={setEvidenceNextStep}
+          onContactedAtChange={setEvidenceContactedAt}
+          onSubmit={handleLogEvidence}
+        />
+        <StudentInterventionHistoryCard
+          interventions={interventions}
+          onUpdateStatus={(interventionId, nextStatus) =>
+            setInterventions((current) =>
+              current.map((entry) => (entry.id === interventionId ? { ...entry, status: nextStatus } : entry)),
+            )
+          }
+        />
+      </div>
+
+      <StudentInterventionEvidenceTrailCard
         interventions={interventions}
-        onUpdateStatus={(interventionId, nextStatus) =>
-          setInterventions((current) =>
-            current.map((entry) => (entry.id === interventionId ? { ...entry, status: nextStatus } : entry)),
-          )
-        }
+        events={interventionEvents}
       />
     </div>
   );

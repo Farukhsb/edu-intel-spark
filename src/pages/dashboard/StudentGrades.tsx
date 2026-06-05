@@ -11,7 +11,12 @@ import { log } from "@/lib/logger";
 import { fetchStudentGradeProjection } from "@/lib/studentGradeProjection";
 import { getStudentGradeReadiness } from "@/lib/studentGradeReadiness";
 import { getFirstName } from "@/lib/formatters";
-import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
+import {
+  DashboardEmptyState,
+  DashboardErrorState,
+  DashboardLoadingState,
+  DashboardLiveBanner,
+} from "@/components/dashboard/PageStates";
 import { parseExplainGradeSearchState } from "@/lib/schemas/navigation";
 import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 import { buildSubmissionOptionsFromProjection, type SubmissionOption } from "@/pages/dashboard/explain-grade/helpers";
@@ -69,7 +74,12 @@ const StudentGrades = () => {
   const [stats, setStats] = useState({ avg: 0, count: 0, highest: 0, lowest: 0 });
   const [downloadErrorBySubmission, setDownloadErrorBySubmission] = useState<Record<string, string>>({});
   const lastLoggedGradeDetailsRef = useRef<string | null>(null);
-  const { assignmentId: focusAssignmentId, submissionId: focusSubmissionId, source: focusSource } =
+  const {
+    assignmentId: focusAssignmentId,
+    submissionId: focusSubmissionId,
+    source: focusSource,
+    ltiResourceLinkId,
+  } =
     parseExplainGradeSearchState(searchParams);
 
   useEffect(() => {
@@ -140,6 +150,12 @@ const StudentGrades = () => {
         : undefined) ??
       (focusAssignmentId
         ? releasedResults.find((submission) => submission.assignmentId === focusAssignmentId)
+        : undefined) ??
+      (ltiResourceLinkId
+        ? releasedResults.find(
+            (submission) =>
+              submission.assignmentId === ltiResourceLinkId || submission.submissionId === ltiResourceLinkId,
+          )
         : undefined);
 
     if (focusedSubmission && focusedSubmission.gradeId !== selectedId) {
@@ -292,6 +308,7 @@ const StudentGrades = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {ltiResourceLinkId ? <DashboardLiveBanner label="Launched from your LMS." /> : null}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         <CardContent className="space-y-4 p-4">
           <div>

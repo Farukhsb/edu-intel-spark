@@ -1,297 +1,135 @@
-import { lazy, Suspense } from "react";
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  Lightbulb,
-  Shield,
-  TrendingDown,
-} from "lucide-react";
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
-import {
-  formatStatusLabel,
-  getRecommendationActionSummary,
-  severityVariant,
-  statusVariant,
-  useCohortAnalyticsController,
-} from "./useCohortAnalyticsController";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DashboardLiveBanner } from "@/components/dashboard/PageStates";
+import { cohortDashboardViewComponents, type CohortDashboardView } from "./views";
+import { useCohortAnalyticsController } from "./useCohortAnalyticsController";
 
 type CohortAnalyticsScreenProps = ReturnType<typeof useCohortAnalyticsController>;
 
-const GradeDistributionChart = lazy(() =>
-  import("@/pages/dashboard/cohort-analytics/distribution-chart").then((module) => ({
-    default: module.GradeDistributionChart,
-  })),
-);
+const COHORT_VIEWS: Array<{
+  value: CohortDashboardView;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "tutor",
+    label: "Personal tutor",
+    description: "Student support, interventions, and early risk follow-up.",
+  },
+  {
+    value: "course-leader",
+    label: "Course leader",
+    description: "Module comparison, grading spread, and cohort pacing.",
+  },
+  {
+    value: "hod",
+    label: "Head of Department",
+    description: "Programme oversight, readiness, and governance signals.",
+  },
+];
 
-export const CohortAnalyticsScreen = ({
-  modules,
-  moduleFilter,
-  setModuleFilter,
-  gradeDistChart,
-  filteredModules,
-  visibleRecommendations,
-  reportingReadiness,
-  actingId,
-  handleReview,
-  handleDismiss,
-  handleCreateIntervention,
-  handleCopyWorkflowLink,
-}: CohortAnalyticsScreenProps) => (
-  <div className="space-y-6 animate-fade-in">
-    <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
-      <CardHeader>
-        <CardTitle className="text-base">Teaching Focus</CardTitle>
-        <CardDescription>
-          A compact reading of which cohort-level signal is most likely to need teaching attention next.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border bg-background/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current position</p>
-          <p className="mt-2 text-sm font-semibold">{reportingReadiness.postureLabel}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Based on the current recommendation severity mix and weakest assignment performance in this cohort view.
-          </p>
-        </div>
-        <div className="rounded-lg border bg-background/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">What needs attention</p>
-          <p className="mt-2 text-sm font-semibold">{reportingReadiness.likelyChallenge}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            This is the cohort signal most likely to require either direct action or a clear quality-review explanation.
-          </p>
-        </div>
-        <div className="rounded-lg border bg-background/70 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next step</p>
-          <p className="mt-2 text-sm font-semibold">{reportingReadiness.bestNextAction}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Use this to decide whether to move into student-risk follow-up, integrity review, or assignment remediation first.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+const isCohortDashboardView = (value: string | null): value is CohortDashboardView =>
+  value === "tutor" || value === "course-leader" || value === "hod";
 
-    {modules.length > 0 && (
-      <div className="flex items-center gap-4">
-        <Select value={moduleFilter} onValueChange={setModuleFilter}>
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Filter by assignment" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Assignments</SelectItem>
-            {modules.map((module) => (
-              <SelectItem key={module.id} value={module.id}>
-                {module.moduleCode ? `${module.moduleCode} - ` : ""}
-                {module.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    )}
+export const CohortAnalyticsScreen = (props: CohortAnalyticsScreenProps) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewParam = searchParams.get("view");
+  const ltiContextId = searchParams.get("ltiContextId");
+  const ltiResourceLinkId = searchParams.get("ltiResourceLinkId");
+  const activeView: CohortDashboardView = isCohortDashboardView(viewParam) ? viewParam : "tutor";
 
-    <Tabs defaultValue="distribution">
-      <TabsList>
-        <TabsTrigger value="distribution">Grade Distribution</TabsTrigger>
-        <TabsTrigger value="modules">Assignment Comparison</TabsTrigger>
-        <TabsTrigger value="recommendations">AI Recommendations</TabsTrigger>
-      </TabsList>
+  useEffect(() => {
+    if (viewParam === activeView) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("view", activeView);
+    setSearchParams(next, { replace: true });
+  }, [activeView, searchParams, setSearchParams, viewParam]);
 
-      <TabsContent value="distribution" className="mt-4 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Grade Distribution</CardTitle>
-            <CardDescription>
-              {moduleFilter === "all" ? "Cohort classification breakdown" : "Distribution for the selected assignment"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {gradeDistChart.every((item) => item.count === 0) ? (
-              <DashboardEmptyState
-                title="No graded submissions yet"
-                description="This view will populate once submissions have been graded and released, so there is live cohort performance data to compare."
-              />
-            ) : (
-              <Suspense fallback={<DashboardLoadingState testId="cohort-analytics-grade-distribution-loading" />}>
-                <GradeDistributionChart gradeDistChart={gradeDistChart} />
-              </Suspense>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
+  const viewProps = {
+    modules: props.modules,
+    moduleFilter: props.moduleFilter,
+    setModuleFilter: props.setModuleFilter,
+    gradeDistChart: props.gradeDistChart,
+    filteredModules: props.filteredModules,
+    visibleRecommendations: props.visibleRecommendations,
+    reportingReadiness: props.reportingReadiness,
+    topAtRiskStudents: props.topAtRiskStudents,
+    actingId: props.actingId,
+    handleReview: props.handleReview,
+    handleDismiss: props.handleDismiss,
+    handleCreateIntervention: props.handleCreateIntervention,
+    handleCopyWorkflowLink: props.handleCopyWorkflowLink,
+  };
 
-      <TabsContent value="modules" className="mt-4">
-        {filteredModules.length === 0 ? (
-          <DashboardEmptyState
-            title="No assignments found"
-            description="Assignment comparison appears after assignments and grading data are available."
-          />
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {filteredModules.map((module) => (
-              <Card key={module.id}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm">
-                        {module.moduleCode ? `${module.moduleCode} - ` : ""}
-                        {module.title}
-                      </p>
-                      <p className="mt-1 text-3xl font-bold font-display">
-                        {module.gradedCount > 0 ? `${module.avgScore}%` : "-"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Average Grade</p>
-                    </div>
-                    {module.submissions > 0 && (
-                      <Badge
-                        variant={
-                          module.passRate >= 80 ? "default" : module.passRate >= 70 ? "secondary" : "destructive"
-                        }
-                      >
-                        {module.passRate}% pass
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                    <span>{module.submissions} submissions</span>
-                    <span>{module.gradedCount} graded</span>
-                    <span>{module.failRate}% fail rate</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+  const ActiveViewComponent = cohortDashboardViewComponents[activeView];
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {(ltiContextId || ltiResourceLinkId) ? <DashboardLiveBanner label="Launched from your LMS." /> : null}
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="text-base">Cohort Dashboard</CardTitle>
+          <CardDescription>
+            A cohort-level workspace split for personal tutors, course leaders, and Heads of Department.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Tabs
+            value={activeView}
+            onValueChange={(value) => {
+              if (!isCohortDashboardView(value)) return;
+              const next = new URLSearchParams(searchParams);
+              next.set("view", value);
+              setSearchParams(next, { replace: true });
+            }}
+          >
+            <TabsList className="grid h-auto w-full grid-cols-3">
+              {COHORT_VIEWS.map((view) => (
+                <TabsTrigger key={view.value} value={view.value} className="flex min-h-12 flex-col items-start gap-0.5 py-3 text-left">
+                  <span>{view.label}</span>
+                  <span className="text-[11px] font-normal text-muted-foreground">{view.description}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active view</p>
+              <p className="text-sm font-semibold">
+                {COHORT_VIEWS.find((view) => view.value === activeView)?.label ?? "Personal tutor"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {COHORT_VIEWS.find((view) => view.value === activeView)?.description}
+              </p>
+            </div>
+
+            <div className="w-full md:w-[320px]">
+              <Select value={props.moduleFilter} onValueChange={props.setModuleFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Filter by assignment" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignments</SelectItem>
+                  {props.modules.map((module) => (
+                    <SelectItem key={module.id} value={module.id}>
+                      {module.moduleCode ? `${module.moduleCode} - ` : ""}
+                      {module.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        )}
-      </TabsContent>
+        </CardContent>
+      </Card>
 
-      <TabsContent value="recommendations" className="mt-4 space-y-4">
-        {visibleRecommendations.length === 0 ? (
-          <DashboardEmptyState
-            title="No recommendations yet"
-            description="Explainable recommendations will appear here once enough analytics data is available."
-          />
-        ) : (
-          visibleRecommendations.map((recommendation) => (
-            <Card key={recommendation.id} className="border-l-4 border-l-primary">
-              <CardContent className="space-y-4 p-5">
-                {(() => {
-                  const actionSummary = getRecommendationActionSummary(recommendation);
+      <ActiveViewComponent {...viewProps} />
+    </div>
+  );
+};
 
-                  return (
-                    <>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex gap-3">
-                    <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-medium text-sm">{recommendation.title}</h3>
-                        <Badge variant={severityVariant(recommendation.severity)} className="text-xs">
-                          {recommendation.severity}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {recommendation.type}
-                        </Badge>
-                        <Badge variant={statusVariant(recommendation.status)} className="text-xs">
-                          {formatStatusLabel(recommendation.status)}
-                        </Badge>
-                      </div>
-
-                      <p className="text-sm text-muted-foreground">{recommendation.summary}</p>
-                      <p className="text-sm">{recommendation.explanation}</p>
-
-                      <div className="rounded-lg border bg-muted/20 p-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Evidence</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {recommendation.evidence.metrics.map((metric) => (
-                            <Badge key={`${recommendation.id}-${metric.label}`} variant="outline" className="text-xs">
-                              {metric.label}: {metric.value}
-                            </Badge>
-                          ))}
-                        </div>
-                        {recommendation.evidence.affectedStudentNames &&
-                          recommendation.evidence.affectedStudentNames.length > 0 && (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Affected students: {recommendation.evidence.affectedStudentNames.join(", ")}
-                            </p>
-                          )}
-                      </div>
-
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Suggested Actions
-                        </p>
-                        {recommendation.recommendedActions.map((action) => (
-                          <div key={`${recommendation.id}-${action}`} className="flex items-start gap-2 text-sm">
-                            <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                            <span>{action}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="rounded-lg border bg-muted/20 p-3" data-testid={`recommendation-action-summary-${recommendation.id}`}>
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Operational handoff
-                        </p>
-                        <p className="mt-2 text-sm font-semibold">{actionSummary.headline}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">{actionSummary.detail}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 flex-wrap gap-2 lg:w-[240px] lg:justify-end">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actingId === recommendation.id}
-                      onClick={() => void handleReview(recommendation)}
-                    >
-                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                      Review
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actingId === recommendation.id}
-                      onClick={() => void handleDismiss(recommendation)}
-                    >
-                      <Shield className="mr-1.5 h-3.5 w-3.5" />
-                      Dismiss
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actingId === recommendation.id}
-                      onClick={() => void handleCopyWorkflowLink(recommendation)}
-                    >
-                      <ArrowRight className="mr-1.5 h-3.5 w-3.5" />
-                      Copy workflow link
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={actingId === recommendation.id}
-                      onClick={() => void handleCreateIntervention(recommendation)}
-                    >
-                      {recommendation.type === "student risk" ? (
-                        <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
-                      ) : (
-                        <TrendingDown className="mr-1.5 h-3.5 w-3.5" />
-                      )}
-                      {actionSummary.primaryLabel}
-                    </Button>
-                  </div>
-                </div>
-                    </>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </TabsContent>
-    </Tabs>
-  </div>
-);
+export default CohortAnalyticsScreen;

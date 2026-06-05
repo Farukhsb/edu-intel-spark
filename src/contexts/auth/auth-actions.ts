@@ -25,9 +25,10 @@ export const signUpWithPassword = async ({
   if (password.length < 8) throw new Error("Password must be at least 8 characters");
   const env = getEnv();
   const institutionSlug = env.VITE_INSTITUTION_SLUG?.trim() || undefined;
+  const normalizedEmail = email.trim();
 
   const { data, error } = await supabase.auth.signUp({
-    email,
+    email: normalizedEmail,
     password,
     options: {
       data: {
@@ -63,7 +64,7 @@ export const signUpWithPassword = async ({
 };
 
 export const signInWithPassword = async (email: string, password: string) => {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw error;
 };
 
@@ -100,7 +101,7 @@ export const completePasswordChangeForUser = async ({
 };
 
 export const sendPasswordResetEmail = async (email: string) => {
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
     redirectTo: getPasswordResetRedirectUrl({
       origin: window.location.origin,
       configuredAppUrl: import.meta.env.VITE_APP_URL,

@@ -39,10 +39,13 @@ const rewriteDashboardLinkForDemo = (to: string) => {
   if (to === "/dashboard" || to.startsWith("/dashboard?")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
+  if (to.startsWith("/dashboard/cohort-dashboard")) {
+    return to.replace("/dashboard/cohort-dashboard", "/demo/dashboard/cohort-analytics");
+  }
   if (to.startsWith("/dashboard/performance")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
-  if (to.startsWith("/dashboard/cohort-analytics")) {
+  if (to.startsWith("/dashboard/cohort-dashboard") || to.startsWith("/dashboard/cohort-analytics")) {
     return to.replace("/dashboard", "/demo/dashboard");
   }
   if (to.startsWith("/dashboard/improvements")) {

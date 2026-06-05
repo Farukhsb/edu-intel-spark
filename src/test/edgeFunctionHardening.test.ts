@@ -224,6 +224,18 @@ describe("edge function hardening", () => {
     expect(confirmSource).toContain('logInfo("import-grades completed"');
   });
 
+  it("keeps the LTI launch endpoint public for LMS-initiated posts", () => {
+    const configSource = readRepoFile("supabase/config.toml");
+    const launchSource = readRepoFile("supabase/functions/lti-launch/index.ts");
+
+    expect(configSource).toContain("[functions.lti-launch]");
+    expect(configSource).toContain("verify_jwt = false");
+    expect(launchSource).toContain("parseLtiLaunch(req)");
+    expect(launchSource).toContain("req.method === \"GET\"");
+    expect(launchSource).toContain("req.method === \"POST\"");
+    expect(launchSource).toContain("Location");
+  });
+
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
     const source = readRepoFile("supabase/functions/check-plagiarism/core.ts");
     const wrapperSource = readRepoFile("supabase/functions/check-plagiarism/handler.ts");

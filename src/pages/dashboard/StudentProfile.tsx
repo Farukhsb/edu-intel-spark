@@ -10,13 +10,20 @@ import { log } from "@/lib/logger";
 import { toast } from "sonner";
 import {
   buildManualInterventionPayload,
+  buildStudentInterventionEventPayload,
   fetchStudentInterventions,
+  fetchStudentInterventionEvents,
   getInterventionErrorText,
   getStudentInterventionReadiness,
   isInterventionOverdue,
   insertManualIntervention,
+  insertStudentInterventionEvent,
   normalizeManualInterventionStatus,
   normalizeManualInterventionType,
+  type InterventionContactMethod,
+  type InterventionContactTargetType,
+  type InterventionEventEntry,
+  type InterventionOutcome,
   type InterventionEntry,
   type ManualInterventionStatus,
   type ManualInterventionType,
@@ -32,6 +39,8 @@ import {
 import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
   StudentInterventionFormCard,
+  StudentInterventionEvidenceTrailCard,
+  StudentInterventionEventFormCard,
   StudentInterventionHistoryCard,
   StudentMissedAssignmentsCard,
   StudentProfileBackButton,
@@ -88,6 +97,16 @@ const normalizeResolvedProfile = (profile: { id: string; email?: string | null }
       }
     : null;
 
+const toDateTimeLocalValue = (value: Date = new Date()) => {
+  const pad = (input: number) => String(input).padStart(2, "0");
+  const year = value.getFullYear();
+  const month = pad(value.getMonth() + 1);
+  const day = pad(value.getDate());
+  const hours = pad(value.getHours());
+  const minutes = pad(value.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 const getSupportNotificationToastCopy = (
   actionLabel: string,
   dispatchResult: {
@@ -126,10 +145,19 @@ const StudentProfile = () => {
   const [reloadKey, setReloadKey] = useState(0);
   const [student, setStudent] = useState<StudentInsightData | null>(null);
   const [interventions, setInterventions] = useState<InterventionEntry[]>([]);
+  const [interventionEvents, setInterventionEvents] = useState<InterventionEventEntry[]>([]);
   const [interventionType, setInterventionType] = useState<ManualInterventionType>("email");
   const [interventionStatus, setInterventionStatus] = useState<ManualInterventionStatus>("in_progress");
   const [interventionNote, setInterventionNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
+  const [evidenceInterventionId, setEvidenceInterventionId] = useState("");
+  const [evidenceContactTargetType, setEvidenceContactTargetType] = useState<InterventionContactTargetType>("student");
+  const [evidenceContactTargetName, setEvidenceContactTargetName] = useState("");
+  const [evidenceContactMethod, setEvidenceContactMethod] = useState<InterventionContactMethod>("email");
+  const [evidenceOutcome, setEvidenceOutcome] = useState<InterventionOutcome>("ongoing");
+  const [evidenceSummary, setEvidenceSummary] = useState("");
+  const [evidenceNextStep, setEvidenceNextStep] = useState("");
+  const [evidenceContactedAt, setEvidenceContactedAt] = useState(toDateTimeLocalValue());
   const resolvedStudentRecordId =
     student?.studentRecordId || (isUuid(student?.studentId) ? student.studentId : null);
 
@@ -254,6 +282,38 @@ const StudentProfile = () => {
     void loadInterventions();
   }, [decodedStudentId, resolvedStudentRecordId, user?.id]);
 
+  useEffect(() => {
+    if (!user?.id || !resolvedStudentRecordId) return;
+
+    const loadInterventionEvents = async () => {
+      const { data, error } = await fetchStudentInterventionEvents(supabase, user.id, resolvedStudentRecordId);
+
+      if (error) {
+        log.error("Failed to load intervention events", error, {
+          studentId: decodedStudentId,
+        });
+        toast.error(getInterventionErrorText(error) || "Could not load intervention evidence");
+        return;
+      }
+
+      setInterventionEvents(data || []);
+    };
+
+    void loadInterventionEvents();
+  }, [decodedStudentId, resolvedStudentRecordId, user?.id, reloadKey]);
+
+  useEffect(() => {
+    if (!evidenceInterventionId && interventions[0]?.id) {
+      setEvidenceInterventionId(interventions[0].id);
+    }
+  }, [evidenceInterventionId, interventions]);
+
+  useEffect(() => {
+    if (student?.name) {
+      setEvidenceContactTargetName((current) => current || student.name);
+    }
+  }, [student?.name]);
+
   const handleAddIntervention = async () => {
     if (!interventionNote.trim()) return;
 
@@ -295,6 +355,7 @@ const StudentProfile = () => {
     }
 
     setInterventions((current) => (data ? [data, ...current] : current));
+    setEvidenceInterventionId(data?.id || "");
     setInterventionNote("");
     setFollowUpDate("");
     setInterventionType("email");
@@ -405,6 +466,56 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
     toast.success(nextStatus === "resolved" ? "Intervention resolved" : "Intervention reopened");
   };
 
+  const handleLogEvidence = async () => {
+    if (!student || !user?.id) {
+      toast.error("Student context is not ready yet");
+      return;
+    }
+
+    if (!resolvedStudentRecordId) {
+      toast.error("This student record is missing a database ID, so the evidence cannot be saved yet");
+      return;
+    }
+
+    if (!evidenceInterventionId) {
+      toast.error("Choose an intervention before logging evidence");
+      return;
+    }
+
+    const payload = buildStudentInterventionEventPayload({
+      lecturerId: user.id,
+      studentId: resolvedStudentRecordId,
+      interventionId: evidenceInterventionId,
+      contactTargetType: evidenceContactTargetType,
+      contactTargetName: evidenceContactTargetName,
+      contactMethod: evidenceContactMethod,
+      outcome: evidenceOutcome,
+      summary: evidenceSummary,
+      nextStep: evidenceNextStep || null,
+      contactedAt: new Date(evidenceContactedAt).toISOString(),
+    });
+
+    const { data, error } = await insertStudentInterventionEvent(supabase, payload);
+
+    if (error) {
+      log.error("Failed to save intervention evidence", error, {
+        studentId: decodedStudentId,
+      });
+      toast.error(getInterventionErrorText(error) || "Could not save intervention evidence");
+      return;
+    }
+
+    setInterventionEvents((current) => (data ? [data, ...current] : current));
+    setEvidenceContactTargetType("student");
+    setEvidenceContactTargetName(student.name);
+    setEvidenceContactMethod("email");
+    setEvidenceOutcome("ongoing");
+    setEvidenceSummary("");
+    setEvidenceNextStep("");
+    setEvidenceContactedAt(toDateTimeLocalValue());
+    toast.success("Contact evidence logged");
+  };
+
   if (loading) {
     return <DashboardLoadingState />;
   }
@@ -510,7 +621,7 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
 
       <div className="grid gap-6 lg:grid-cols-2">
         <StudentMissedAssignmentsCard assignments={student.missedAssignments} />
-      <StudentInterventionFormCard
+        <StudentInterventionFormCard
           canSave={Boolean(resolvedStudentRecordId)}
           interventionType={interventionType}
           interventionStatus={interventionStatus}
@@ -524,9 +635,37 @@ Please share a short update before ${latestIntervention?.followUpDate ? safeForm
         />
       </div>
 
-      <StudentInterventionHistoryCard
+      <div className="grid gap-6 lg:grid-cols-2">
+        <StudentInterventionEventFormCard
+          canSave={Boolean(resolvedStudentRecordId && interventions.length > 0)}
+          interventionId={evidenceInterventionId}
+          contactTargetType={evidenceContactTargetType}
+          contactTargetName={evidenceContactTargetName}
+          contactMethod={evidenceContactMethod}
+          outcome={evidenceOutcome}
+          summary={evidenceSummary}
+          nextStep={evidenceNextStep}
+          contactedAt={evidenceContactedAt}
+          interventions={interventions}
+          onInterventionIdChange={setEvidenceInterventionId}
+          onContactTargetTypeChange={(value) => setEvidenceContactTargetType(value as InterventionContactTargetType)}
+          onContactTargetNameChange={setEvidenceContactTargetName}
+          onContactMethodChange={(value) => setEvidenceContactMethod(value as InterventionContactMethod)}
+          onOutcomeChange={(value) => setEvidenceOutcome(value as InterventionOutcome)}
+          onSummaryChange={setEvidenceSummary}
+          onNextStepChange={setEvidenceNextStep}
+          onContactedAtChange={setEvidenceContactedAt}
+          onSubmit={() => void handleLogEvidence()}
+        />
+        <StudentInterventionHistoryCard
+          interventions={interventions}
+          onUpdateStatus={(interventionId, nextStatus) => void handleUpdateInterventionStatus(interventionId, nextStatus)}
+        />
+      </div>
+
+      <StudentInterventionEvidenceTrailCard
         interventions={interventions}
-        onUpdateStatus={(interventionId, nextStatus) => void handleUpdateInterventionStatus(interventionId, nextStatus)}
+        events={interventionEvents}
       />
     </div>
   );

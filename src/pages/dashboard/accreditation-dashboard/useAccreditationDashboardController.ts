@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { log } from "@/lib/logger";
 import {
+  buildOfsB3EvidencePackMarkdown,
+  buildTefNarrativeSubmissionMarkdown,
+} from "@/lib/accreditationEvidencePacks";
+import {
   getAssignmentWorkflowTargetFromStats,
   type AssignmentWorkflowStatsLike,
 } from "@/lib/assignmentWorkflowNavigation";
@@ -20,6 +24,16 @@ const exportQAAReport = (qaaMetrics: QAAMetric[], summary: { overallCompliance: 
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `qaa_compliance_report_${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
+
+const downloadMarkdown = (content: string, filename: string) => {
+  const blob = new Blob([content], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
 };
@@ -220,6 +234,28 @@ export const useAccreditationDashboardController = () => {
     statusIcon,
     tefColor,
     exportQAAReport: () => exportQAAReport(qaaMetrics, summary),
+    exportOfsB3EvidencePack: () =>
+      downloadMarkdown(
+        buildOfsB3EvidencePackMarkdown({
+          qaaMetrics,
+          nssMetrics,
+          tefIndicators,
+          feedbackTurnaround,
+          summary,
+        }),
+        `ofs_b3_evidence_pack_${new Date().toISOString().slice(0, 10)}.md`,
+      ),
+    exportTefNarrativeSubmission: () =>
+      downloadMarkdown(
+        buildTefNarrativeSubmissionMarkdown({
+          qaaMetrics,
+          nssMetrics,
+          tefIndicators,
+          feedbackTurnaround,
+          summary,
+        }),
+        `tef_narrative_submission_${new Date().toISOString().slice(0, 10)}.md`,
+      ),
     pendingWorkflowTarget,
     openPendingWorkflow: () => navigate(pendingWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review"),
     openSubmissionOversight: () => navigate("/dashboard?view=submissions"),

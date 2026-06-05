@@ -151,7 +151,7 @@ export function buildCohortRecommendations(snapshot: CohortAnalyticsSnapshot): C
           title: "Low cohort average detected",
           summary: `${assignment.title} is averaging ${formatPct(assignment.avgScore)}, below the 45% threshold.`,
           explanation:
-            "This recommendation is triggered from the assignment-level cohort average already used in Cohort Analytics. It highlights an assessment where overall performance is materially weak.",
+            "This recommendation is triggered from the assignment-level cohort average already used in the Cohort Dashboard. It highlights an assessment where overall performance is materially weak.",
           severity: assignment.avgScore < 35 ? "critical" : "high",
           confidence: 0.96,
           recommendedActions: [

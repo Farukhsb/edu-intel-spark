@@ -6,12 +6,14 @@ import {
   GraduationCap,
   LayoutDashboard,
   Settings,
+  Link2,
   Shield,
   Target,
   TrendingUp,
   University,
   Upload,
   Users,
+  ClipboardList,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -52,7 +54,7 @@ export const lecturerSections = [
     description: "Cohort and learner signals",
     defaultOpen: false,
     links: [
-      { to: "/dashboard/cohort-analytics", label: "Cohort Analytics", icon: BarChart3 },
+      { to: "/dashboard/cohort-dashboard", label: "Cohort Dashboard", icon: BarChart3 },
       { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
       { to: "/dashboard/learning-outcomes", label: "Criterion Analysis", icon: Target },
     ],
@@ -72,9 +74,11 @@ export const adminSections = [
     defaultOpen: true,
     links: [
       { to: "/dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
+      { to: "/dashboard?view=lms", label: "LMS Connections", icon: Link2 },
       { to: "/dashboard?view=users", label: "User Management", icon: Users },
       { to: "/dashboard?view=system", label: "System Overview", icon: Shield },
       { to: "/dashboard?view=audit", label: "Audit Log", icon: FileOutput },
+      { to: "/dashboard?view=intervention-evidence", label: "Intervention Evidence", icon: ClipboardList },
     ],
   },
   {

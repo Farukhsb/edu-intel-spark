@@ -2,8 +2,10 @@ import {
   AlertTriangle,
   ArrowLeft,
   BookOpen,
+  Clock3,
   Lightbulb,
   Mail,
+  MessageSquareText,
   Target,
   TrendingDown,
   TrendingUp,
@@ -20,7 +22,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { safeFormatDate } from "@/lib/date";
 import {
   formatManualInterventionStatus,
+  formatInterventionContactMethod,
+  formatInterventionContactTargetType,
+  formatInterventionOutcome,
   isInterventionOverdue,
+  type InterventionContactMethod,
+  type InterventionContactTargetType,
+  type InterventionEventEntry,
+  type InterventionOutcome,
   type InterventionEntry,
   type ManualInterventionStatus,
   type ManualInterventionType,
@@ -321,6 +330,7 @@ export const StudentInterventionHistoryCard = ({
                 Logged {safeFormatDate(entry.createdAt, "MMM d, yyyy HH:mm")}
               </span>
             </div>
+            <p className="mt-3 text-sm font-medium">{entry.title}</p>
             <p className="mt-3 text-sm">{entry.note}</p>
             {entry.followUpDate && (
               <p className="mt-2 text-xs text-muted-foreground">
@@ -341,6 +351,269 @@ export const StudentInterventionHistoryCard = ({
           </div>
         ))
       )}
+  </CardContent>
+</Card>
+);
+
+const INTERVENTION_CONTACT_TARGETS: InterventionContactTargetType[] = [
+  "student",
+  "parent",
+  "guardian",
+  "tutor",
+  "course_leader",
+  "department_head",
+  "support_service",
+  "placement_supervisor",
+  "employer",
+  "other",
+];
+
+const INTERVENTION_CONTACT_METHODS: InterventionContactMethod[] = [
+  "email",
+  "meeting",
+  "phone",
+  "lms_message",
+  "sms",
+  "in_person",
+  "referral",
+  "other",
+];
+
+const INTERVENTION_OUTCOMES: InterventionOutcome[] = [
+  "no_response",
+  "left_message",
+  "responded",
+  "attended",
+  "referred",
+  "resolved",
+  "follow_up_scheduled",
+  "escalated",
+  "ongoing",
+  "other",
+];
+
+export const StudentInterventionEventFormCard = ({
+  canSave,
+  interventionId,
+  contactTargetType,
+  contactTargetName,
+  contactMethod,
+  outcome,
+  summary,
+  nextStep,
+  contactedAt,
+  interventions,
+  onInterventionIdChange,
+  onContactTargetTypeChange,
+  onContactTargetNameChange,
+  onContactMethodChange,
+  onOutcomeChange,
+  onSummaryChange,
+  onNextStepChange,
+  onContactedAtChange,
+  onSubmit,
+}: {
+  canSave: boolean;
+  interventionId: string;
+  contactTargetType: InterventionContactTargetType;
+  contactTargetName: string;
+  contactMethod: InterventionContactMethod;
+  outcome: InterventionOutcome;
+  summary: string;
+  nextStep: string;
+  contactedAt: string;
+  interventions: InterventionEntry[];
+  onInterventionIdChange: (value: string) => void;
+  onContactTargetTypeChange: (value: string) => void;
+  onContactTargetNameChange: (value: string) => void;
+  onContactMethodChange: (value: string) => void;
+  onOutcomeChange: (value: string) => void;
+  onSummaryChange: (value: string) => void;
+  onNextStepChange: (value: string) => void;
+  onContactedAtChange: (value: string) => void;
+  onSubmit: () => void;
+}) => (
+  <Card>
+    <CardHeader>
+      <div className="flex items-center gap-2">
+        <Clock3 className="h-5 w-5 text-primary" />
+        <CardTitle className="text-base">Intervention evidence log</CardTitle>
+      </div>
+      <CardDescription>Record who was contacted, when, by whom, and the outcome</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Intervention</Label>
+          <Select value={interventionId} onValueChange={onInterventionIdChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose an intervention" />
+            </SelectTrigger>
+            <SelectContent>
+              {interventions.length === 0 ? (
+                <SelectItem value="__none__" disabled>
+                  No interventions available
+                </SelectItem>
+              ) : (
+                interventions.map((intervention) => (
+                  <SelectItem key={intervention.id} value={intervention.id}>
+                    {intervention.title || intervention.type} - {intervention.status}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Contacted at</Label>
+          <Input type="datetime-local" value={contactedAt} onChange={(event) => onContactedAtChange(event.target.value)} />
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Who was contacted</Label>
+          <Select value={contactTargetType} onValueChange={onContactTargetTypeChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {INTERVENTION_CONTACT_TARGETS.map((target) => (
+                <SelectItem key={target} value={target}>
+                  {formatInterventionContactTargetType(target)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Contact name</Label>
+          <Input
+            value={contactTargetName}
+            onChange={(event) => onContactTargetNameChange(event.target.value)}
+            placeholder="Student, parent, tutor, or support contact"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>By what method</Label>
+          <Select value={contactMethod} onValueChange={onContactMethodChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {INTERVENTION_CONTACT_METHODS.map((method) => (
+                <SelectItem key={method} value={method}>
+                  {formatInterventionContactMethod(method)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Outcome</Label>
+          <Select value={outcome} onValueChange={onOutcomeChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {INTERVENTION_OUTCOMES.map((entry) => (
+                <SelectItem key={entry} value={entry}>
+                  {formatInterventionOutcome(entry)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Evidence summary</Label>
+        <Textarea
+          rows={4}
+          value={summary}
+          onChange={(event) => onSummaryChange(event.target.value)}
+          placeholder="Summarise the contact, what was agreed, and anything that needs escalation."
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Next step</Label>
+        <Textarea
+          rows={3}
+          value={nextStep}
+          onChange={(event) => onNextStepChange(event.target.value)}
+          placeholder="Record the follow-up action, owner, and deadline."
+        />
+      </div>
+
+      {!canSave && (
+        <p className="text-xs text-destructive">
+          This student is missing a database ID, so evidence entries cannot be saved yet.
+        </p>
+      )}
+
+      <Button className="w-full" onClick={onSubmit} disabled={!canSave || !summary.trim() || !contactTargetName.trim()}>
+        Log contact evidence
+      </Button>
     </CardContent>
   </Card>
 );
+
+export const StudentInterventionEvidenceTrailCard = ({
+  interventions,
+  events,
+}: {
+  interventions: InterventionEntry[];
+  events: InterventionEventEntry[];
+}) => {
+  const interventionTitleById = new Map(
+    interventions.map((intervention) => [intervention.id, intervention.title || intervention.type]),
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <MessageSquareText className="h-5 w-5 text-primary" />
+          <CardTitle className="text-base">Intervention evidence trail</CardTitle>
+        </div>
+        <CardDescription>Each contact attempt, follow-up, and outcome recorded against the intervention</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {events.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            No contact evidence logged yet.
+          </div>
+        ) : (
+          events.map((event) => (
+            <div key={event.id} className="rounded-lg border p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{formatInterventionContactTargetType(event.contactTargetType)}</Badge>
+                <Badge variant="secondary">{formatInterventionContactMethod(event.contactMethod)}</Badge>
+                <Badge variant={event.outcome === "resolved" ? "default" : "outline"}>
+                  {formatInterventionOutcome(event.outcome)}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {safeFormatDate(event.contactedAt, "MMM d, yyyy HH:mm")}
+                </span>
+              </div>
+              <p className="mt-3 text-sm font-medium">
+                {event.contactTargetName}
+                <span className="text-muted-foreground">
+                  {" "}
+                  on {interventionTitleById.get(event.interventionId) || "intervention"}
+                </span>
+              </p>
+              <p className="mt-2 text-sm">{event.summary}</p>
+              {event.nextStep && <p className="mt-2 text-xs text-muted-foreground">Next step: {event.nextStep}</p>}
+              <p className="mt-3 text-xs text-muted-foreground">Recorded by the lecturer account</p>
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+};

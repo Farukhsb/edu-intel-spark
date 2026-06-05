@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { IntegrityModerationSection } from "./integrity-moderation-section";
 import { AssignmentOversightSection } from "./assignment-oversight-section";
 import { SubmissionOversightSection } from "./submission-oversight-section";
+import { LmsConnectionsSection } from "./lms-connections-section";
+import { InterventionEvidenceSection } from "./intervention-evidence-section";
 import { SystemHealthSection } from "./system-health-section";
 import { UserManagementSection } from "./user-management-section";
 import { DashboardHeader } from "./dashboard-header";
@@ -104,6 +106,10 @@ export const AdminDashboardScreen = ({
         />
       ) : activeView === "assignments" ? (
         <AssignmentOversightSection assignments={assignments.assignments} />
+      ) : activeView === "lms" ? (
+        <LmsConnectionsSection institution={header.institution} onRefreshDashboard={() => loadAdminDashboard({ silent: true })} />
+      ) : activeView === "intervention-evidence" ? (
+        <InterventionEvidenceSection />
       ) : activeView === "submissions" ? (
         <SubmissionOversightSection submissions={submissions.submissions} />
       ) : activeView === "moderation" ? (
@@ -124,6 +130,7 @@ export const AdminDashboardScreen = ({
       ) : (
         <OverviewPage
           metrics={overview.metrics}
+          lmsOverview={overview.lmsOverview}
           healthItems={overview.healthItems}
           failureCards={overview.failureCards}
           alertCards={overview.alertCards}

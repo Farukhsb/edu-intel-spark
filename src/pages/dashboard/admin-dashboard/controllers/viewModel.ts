@@ -17,6 +17,7 @@ export const buildAdminDashboardViewModel = (
   },
   overview: {
     metrics: state.metrics,
+    lmsOverview: state.lmsOverview,
     healthItems: state.healthItems,
     failureCards: state.failureCards,
     alertCards: state.alertCards,

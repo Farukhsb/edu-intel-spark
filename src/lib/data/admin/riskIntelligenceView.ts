@@ -9,6 +9,18 @@ export type RiskPredictionDisplayRow = {
   riskBand: RiskBand;
   reasonCodes: string[];
   explanation: string | null;
+  componentScores: {
+    academic: number | null;
+    engagement: number | null;
+    nonSubmission: number | null;
+  };
+  componentSignals: {
+    engagementEventCount: number | null;
+    lastEngagementAt: string | null;
+    submittedAssignments: number | null;
+    lateSubmissions: number | null;
+    totalAssignments: number | null;
+  };
   feedbackCount: number;
   latestFeedback: string | null;
 };
@@ -24,6 +36,7 @@ export type RiskIntelligenceDataset = {
     risk_band: string;
     reason_codes: string[] | null;
     explanation: string | null;
+    details: unknown | null;
   }>;
   snapshots: Array<{ snapshot_date: string; feature_version: string }>;
   feedback: Array<{
@@ -37,6 +50,29 @@ export function buildRiskIntelligenceDisplayRows(dataset: RiskIntelligenceDatase
   const studentLabelById = new Map(dataset.profiles.map((profile) => [profile.id, profile.full_name || profile.email || "Unknown student"]));
   const feedbackByPredictionId = new Map<string, RiskIntelligenceDataset["feedback"]>();
 
+  const getDetails = (value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
+    }
+
+    return value as {
+      academic_risk_score?: number | null;
+      engagement_event_count?: number | null;
+      engagement_last_event_at?: string | null;
+      non_submission_submitted_assignments?: number | null;
+      non_submission_late_submissions?: number | null;
+      non_submission_total_assignments?: number | null;
+      composite_component_scores?: {
+        academic?: number | null;
+        engagement?: number | null;
+        nonSubmission?: number | null;
+      } | null;
+      composite_reason_codes?: string[] | null;
+      composite_risk_score?: number | null;
+      composite_risk_band?: string | null;
+    };
+  };
+
   dataset.feedback.forEach((entry) => {
     const current = feedbackByPredictionId.get(entry.prediction_id) ?? [];
     current.push(entry);
@@ -47,6 +83,7 @@ export function buildRiskIntelligenceDisplayRows(dataset: RiskIntelligenceDatase
     .slice()
     .sort((left, right) => Number(right.risk_score) - Number(left.risk_score))
     .map((prediction) => {
+      const details = getDetails(prediction.details);
       const relatedFeedback = feedbackByPredictionId.get(prediction.id) ?? [];
       const latestFeedback = relatedFeedback[0];
 
@@ -57,8 +94,20 @@ export function buildRiskIntelligenceDisplayRows(dataset: RiskIntelligenceDatase
         modelVersion: prediction.model_version,
         riskScore: Number(prediction.risk_score),
         riskBand: prediction.risk_band as RiskBand,
-        reasonCodes: prediction.reason_codes || [],
+        reasonCodes: details.composite_reason_codes || prediction.reason_codes || [],
         explanation: prediction.explanation,
+        componentScores: {
+          academic: details.composite_component_scores?.academic ?? details.academic_risk_score ?? null,
+          engagement: details.composite_component_scores?.engagement ?? null,
+          nonSubmission: details.composite_component_scores?.nonSubmission ?? null,
+        },
+        componentSignals: {
+          engagementEventCount: details.engagement_event_count ?? null,
+          lastEngagementAt: details.engagement_last_event_at ?? null,
+          submittedAssignments: details.non_submission_submitted_assignments ?? null,
+          lateSubmissions: details.non_submission_late_submissions ?? null,
+          totalAssignments: details.non_submission_total_assignments ?? null,
+        },
         feedbackCount: relatedFeedback.length,
         latestFeedback: latestFeedback
           ? `${latestFeedback.feedback_type}${latestFeedback.notes ? `: ${latestFeedback.notes}` : ""}`

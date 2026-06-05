@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.compute-risk-batch]
 verify_jwt = true
+
+[functions.lti-launch]
+verify_jwt = false

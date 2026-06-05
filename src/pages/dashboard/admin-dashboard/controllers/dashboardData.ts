@@ -11,6 +11,7 @@ import type {
   AdminDashboardState,
   AdminGovernanceStatus,
   AdminIntegrityOverview,
+  AdminLmsOverview,
   AdminMetrics,
   AdminModerationRow,
   AdminModerationAuditRow,
@@ -58,6 +59,14 @@ export const EMPTY_INTEGRITY_OVERVIEW: AdminIntegrityOverview = {
   assignmentsWithMostConcerns: [],
   recentEvents: [],
   status: "empty",
+};
+
+export const EMPTY_LMS_OVERVIEW: AdminLmsOverview = {
+  connectionCount: 0,
+  enabledConnectionCount: 0,
+  providerCount: 0,
+  lastSyncAt: null,
+  lastSyncStatus: null,
 };
 
 const buildAssignmentSubmissionSummaryMap = (
@@ -168,6 +177,7 @@ export const buildAdminDashboardData = ({
     workflowRunRes,
     workflowNotificationLogRes,
     gradingFailureCountRes,
+    lmsRes,
   } = dataset;
 
   const users: AdminUserRow[] = profiles.map((row) => ({
@@ -576,6 +586,16 @@ export const buildAdminDashboardData = ({
     })),
   });
 
+  const lmsOverview = lmsRes?.connections
+    ? {
+        connectionCount: lmsRes.connections.length,
+        enabledConnectionCount: lmsRes.connections.filter((row: { enabled: boolean }) => row.enabled).length,
+        providerCount: new Set(lmsRes.connections.map((row: { provider: string }) => row.provider)).size,
+        lastSyncAt: lmsRes.syncRuns[0]?.created_at ?? null,
+        lastSyncStatus: lmsRes.syncRuns[0]?.status ?? null,
+      }
+    : EMPTY_LMS_OVERVIEW;
+
   return {
     institution,
     users,
@@ -605,6 +625,7 @@ export const buildAdminDashboardData = ({
       aiGradingFailures,
       highIntegrityRiskCases: rpcMetrics?.high_integrity_risk_cases ?? highIntegrityRiskCases,
     } satisfies AdminMetrics,
+    lmsOverview,
     healthItems: monitoringSnapshot.healthItems.map((item) => ({
       ...item,
       statusLabel:

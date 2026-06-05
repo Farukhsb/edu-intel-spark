@@ -20,6 +20,7 @@ const AdminViewSchema = z.enum([
   "overview",
   "users",
   "system",
+  "lms",
   "assignments",
   "submissions",
   "moderation",
@@ -29,6 +30,7 @@ const AdminViewSchema = z.enum([
   "integrity-overview",
   "moderation-audit",
   "policy-exceptions",
+  "intervention-evidence",
 ]);
 const AdminUserFilterSchema = z.enum(["student", "lecturer", "admin"]);
 const PerformanceRiskFilterSchema = z.enum(["all", "high-plus", "critical", "high", "moderate"]);
@@ -48,6 +50,10 @@ export interface ExplainGradeSearchState {
   assignmentId: string | null;
   submissionId: string | null;
   source: ExplainGradeSource | null;
+  ltiContextId: string | null;
+  ltiResourceLinkId: string | null;
+  ltiProvider: string | null;
+  ltiIssuer: string | null;
 }
 
 export interface AssignmentDetailSearchState {
@@ -85,6 +91,10 @@ export const parseExplainGradeSearchState = (
     assignmentId: parseOptionalId(searchParams.get("assignment")),
     submissionId: parseOptionalId(searchParams.get("submission")),
     source: sourceResult.success ? sourceResult.data : null,
+    ltiContextId: parseOptionalId(searchParams.get("ltiContextId")),
+    ltiResourceLinkId: parseOptionalId(searchParams.get("ltiResourceLinkId")),
+    ltiProvider: parseOptionalId(searchParams.get("ltiProvider")),
+    ltiIssuer: parseOptionalId(searchParams.get("ltiIssuer")),
   };
 };
 

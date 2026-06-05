@@ -25,6 +25,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/Demo"),
     paths: ["/demo"],
   },
+  ltiLaunch: {
+    loader: () => import("@/pages/LtiLaunch"),
+    paths: ["/lti/launch"],
+  },
   terms: {
     loader: () => import("@/pages/Terms"),
     paths: ["/terms"],
@@ -57,11 +61,11 @@ const routeDefinitions = {
   },
   cohortAnalytics: {
     loader: () => import("@/pages/dashboard/CohortAnalytics"),
-    paths: ["/dashboard/cohort-analytics"],
+    paths: ["/dashboard/cohort-dashboard", "/dashboard/cohort-analytics"],
   },
   demoCohortAnalytics: {
     loader: () => import("@/pages/dashboard/DemoCohortAnalytics"),
-    paths: ["/demo/dashboard/cohort-analytics"],
+    paths: ["/demo/dashboard/cohort-dashboard", "/demo/dashboard/cohort-analytics"],
   },
   performanceTrends: {
     loader: () => import("@/pages/dashboard/PerformanceTrends"),
@@ -200,7 +204,7 @@ export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {
   if (role === "lecturer") {
     preloadRoute("/dashboard/assignments");
     preloadRoute("/dashboard/moderation");
-    preloadRoute("/dashboard/cohort-analytics");
+    preloadRoute("/dashboard/cohort-dashboard");
     return;
   }
 

@@ -18,6 +18,14 @@ export type AdminMetrics = {
   highIntegrityRiskCases: number;
 };
 
+export type AdminLmsOverview = {
+  connectionCount: number;
+  enabledConnectionCount: number;
+  providerCount: number;
+  lastSyncAt: string | null;
+  lastSyncStatus: "queued" | "running" | "succeeded" | "failed" | null;
+};
+
 export type AdminInstitutionSummary = {
   id: string;
   name: string;
@@ -172,6 +180,7 @@ export type AdminView =
   | "overview"
   | "users"
   | "system"
+  | "lms"
   | "assignments"
   | "submissions"
   | "moderation"
@@ -180,7 +189,8 @@ export type AdminView =
   | "data-access-log"
   | "integrity-overview"
   | "moderation-audit"
-  | "policy-exceptions";
+  | "policy-exceptions"
+  | "intervention-evidence";
 
 export type AdminComplianceTab =
   | "data-access-log"
@@ -228,6 +238,7 @@ export type AdminDashboardState = {
   loadError: string | null;
   institution: AdminInstitutionSummary | null;
   metrics: AdminMetrics;
+  lmsOverview: AdminLmsOverview;
   healthItems: OperationalHealthItem[];
   failureCards: OperationalFailureCard[];
   alertCards: OperationalAlertCard[];
@@ -266,6 +277,7 @@ export type AdminDashboardViewModel = {
   };
   overview: {
     metrics: AdminMetrics;
+    lmsOverview: AdminLmsOverview;
     healthItems: OperationalHealthItem[];
     failureCards: OperationalFailureCard[];
     alertCards: OperationalAlertCard[];

@@ -12,7 +12,7 @@ const CohortAnalytics = () => {
   if (controller.loadError) {
     return (
       <DashboardErrorState
-        title="Cohort analytics unavailable"
+        title="Cohort dashboard unavailable"
         description={controller.loadError}
         action={
           <Button variant="outline" onClick={controller.reload}>

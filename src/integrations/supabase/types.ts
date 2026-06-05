@@ -1406,6 +1406,79 @@ export type Database = {
         }
         Relationships: []
       }
+      student_intervention_events: {
+        Row: {
+          contacted_at: string
+          contact_method: string
+          contact_target_name: string
+          contact_target_type: string
+          created_at: string
+          id: string
+          institution_id?: string | null
+          intervention_id: string
+          lecturer_id: string
+          next_step: string | null
+          outcome: string
+          student_id: string
+          summary: string
+          updated_at: string
+        }
+        Insert: {
+          contacted_at?: string
+          contact_method: string
+          contact_target_name: string
+          contact_target_type: string
+          created_at?: string
+          id?: string
+          institution_id?: string | null
+          intervention_id: string
+          lecturer_id: string
+          next_step?: string | null
+          outcome: string
+          student_id: string
+          summary: string
+          updated_at?: string
+        }
+        Update: {
+          contacted_at?: string
+          contact_method?: string
+          contact_target_name?: string
+          contact_target_type?: string
+          created_at?: string
+          id?: string
+          institution_id?: string | null
+          intervention_id?: string
+          lecturer_id?: string
+          next_step?: string | null
+          outcome?: string
+          student_id?: string
+          summary?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_intervention_events_intervention_id_fkey"
+            columns: ["intervention_id"]
+            isOneToOne: false
+            referencedRelation: "student_interventions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_intervention_events_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_intervention_events_lecturer_id_fkey"
+            columns: ["lecturer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_writing_profiles: {
         Row: {
           average_sentence_complexity: number

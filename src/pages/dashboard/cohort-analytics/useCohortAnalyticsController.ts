@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCohortAnalyticsDataset } from "@/lib/data/cohort";
@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { EMPTY_GRADE_DIST } from "./demoData";
 import type {
   AssignmentAnalytics,
+  CohortAtRiskStudentSummary,
   BadgeVariant,
   CriterionBreakdownItem,
   GradeBand,
@@ -140,15 +141,36 @@ const normalizeCriterionBreakdown = (value: unknown): CriterionBreakdownItem[] =
 export const useCohortAnalyticsController = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [moduleFilter, setModuleFilter] = useState("all");
   const [modules, setModules] = useState<AssignmentAnalytics[]>([]);
   const [allScores, setAllScores] = useState<Array<{ assignmentId: string; score: number }>>([]);
   const [recommendations, setRecommendations] = useState<CohortRecommendation[]>([]);
+  const [topAtRiskStudents, setTopAtRiskStudents] = useState<CohortAtRiskStudentSummary[]>([]);
   const [studentDirectory, setStudentDirectory] = useState<Record<string, StudentDirectoryEntry>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [actingId, setActingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (moduleFilter !== "all" || modules.length === 0) return;
+
+    const launchContextId = searchParams.get("ltiContextId");
+    const launchResourceLinkId = searchParams.get("ltiResourceLinkId");
+    const targetId = launchContextId || launchResourceLinkId;
+    if (!targetId) return;
+
+    const matchedModule = modules.find(
+      (module) =>
+        module.id === targetId ||
+        (module.moduleCode && module.moduleCode === targetId),
+    );
+
+    if (matchedModule) {
+      setModuleFilter(matchedModule.id);
+    }
+  }, [moduleFilter, modules, searchParams]);
 
   useEffect(() => {
     if (!user) return;
@@ -166,6 +188,7 @@ export const useCohortAnalyticsController = () => {
           setModules([]);
           setRecommendations([]);
           setAllScores([]);
+          setTopAtRiskStudents([]);
           setStudentDirectory({});
           setLoading(false);
           return;
@@ -281,6 +304,16 @@ export const useCohortAnalyticsController = () => {
         const highRiskStudents = atRiskStudents.filter(
           (student) => student.riskLevel === "critical" || student.riskLevel === "high",
         );
+        const topRiskSummaries: CohortAtRiskStudentSummary[] = highRiskStudents.slice(0, 5).map((student) => ({
+          studentId: student.studentId,
+          name: student.name,
+          riskLevel: student.riskLevel,
+          riskScore: student.riskScore,
+          trend: student.trend,
+          signal: student.flags[0] ?? student.recommendation,
+          recommendation: student.recommendation,
+          predictedNext: student.predictedNext,
+        }));
 
         const flaggedIntegrityCaseIds = new Set<string>();
         const flaggedIntegrityCases = integrityReviews.filter((review) => {
@@ -334,11 +367,13 @@ export const useCohortAnalyticsController = () => {
         setModules(moduleData);
         setAllScores(allScoresData);
         setRecommendations(mergedRecommendations);
+        setTopAtRiskStudents(topRiskSummaries);
         setStudentDirectory(directory);
       } catch (error) {
         log.error("Failed to fetch cohort analytics", error);
         setLoadError("Cohort analytics could not be loaded right now.");
         toast.error("Could not load cohort analytics.");
+        setTopAtRiskStudents([]);
       }
 
       setLoading(false);
@@ -535,6 +570,7 @@ export const useCohortAnalyticsController = () => {
     filteredModules,
     visibleRecommendations,
     reportingReadiness,
+    topAtRiskStudents,
     actingId,
     handleReview,
     handleDismiss,

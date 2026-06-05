@@ -8,7 +8,12 @@ import { log } from "@/lib/logger";
 import { parseAdminDashboardSearchState } from "@/lib/schemas/navigation";
 
 import { runManagedProfileSave, runRoleChange, runRoleMetadataSync } from "./controllers/actions";
-import { buildAdminDashboardData, EMPTY_INTEGRITY_OVERVIEW, EMPTY_METRICS } from "./controllers/dashboardData";
+import {
+  buildAdminDashboardData,
+  EMPTY_INTEGRITY_OVERVIEW,
+  EMPTY_LMS_OVERVIEW,
+  EMPTY_METRICS,
+} from "./controllers/dashboardData";
 import { buildAdminDashboardViewModel } from "./controllers/viewModel";
 import type {
   AdminDashboardControllerResult,
@@ -30,6 +35,7 @@ export const useAdminDashboardController = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [institution, setInstitution] = useState<AdminDashboardState["institution"]>(null);
   const [metrics, setMetrics] = useState(EMPTY_METRICS);
+  const [lmsOverview, setLmsOverview] = useState(EMPTY_LMS_OVERVIEW);
   const [healthItems, setHealthItems] = useState<AdminDashboardState["healthItems"]>([]);
   const [failureCards, setFailureCards] = useState<AdminDashboardState["failureCards"]>([]);
   const [alertCards, setAlertCards] = useState<AdminDashboardState["alertCards"]>([]);
@@ -88,6 +94,7 @@ export const useAdminDashboardController = () => {
       setPolicyExceptionRows(nextData.policyExceptionRows);
       setPolicyExceptionStatus(nextData.policyExceptionStatus);
       setMetrics(nextData.metrics);
+      setLmsOverview(nextData.lmsOverview);
       setHealthItems(nextData.healthItems);
       setFailureCards(nextData.failureCards);
       setAlertCards(nextData.alertCards);
@@ -178,6 +185,7 @@ export const useAdminDashboardController = () => {
     loadError,
     institution,
     metrics,
+    lmsOverview,
     healthItems,
     failureCards,
     alertCards,

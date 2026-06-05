@@ -38,7 +38,14 @@ const isRefreshTokenNotFoundError = (error: unknown) => {
   if (!record) return false;
 
   const message = String(record.message ?? "").toLowerCase();
-  return record.code === "refresh_token_not_found" || message.includes("refresh token not found");
+  return (
+    record.code === "refresh_token_not_found" ||
+    record.code === "invalid_grant" ||
+    message.includes("refresh token not found") ||
+    message.includes("invalid refresh token") ||
+    message.includes("refresh token expired") ||
+    message.includes("token expired")
+  );
 };
 
 const isPublicAuthRoute = (pathname: string) =>

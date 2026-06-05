@@ -22,6 +22,17 @@ describe("auth session internals", () => {
     ).toBe(true);
   });
 
+  it("detects expired or invalid refresh token failures", () => {
+    expect(
+      authSessionInternals.isRefreshTokenNotFoundError({
+        __isAuthError: true,
+        code: "invalid_grant",
+        message: "Invalid refresh token: refresh token expired",
+        status: 400,
+      }),
+    ).toBe(true);
+  });
+
   it("does not classify unrelated auth errors as refresh token failures", () => {
     expect(
       authSessionInternals.isRefreshTokenNotFoundError({

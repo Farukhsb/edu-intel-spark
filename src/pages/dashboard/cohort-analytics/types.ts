@@ -42,6 +42,17 @@ export interface StudentDirectoryEntry {
   email: string | null;
 }
 
+export interface CohortAtRiskStudentSummary {
+  studentId: string;
+  name: string;
+  riskLevel: "critical" | "high" | "moderate";
+  riskScore: number;
+  trend: "declining" | "stable-low" | "volatile";
+  signal: string;
+  recommendation: string;
+  predictedNext: number;
+}
+
 export interface LoadedAnalytics {
   assignments: AssignmentAnalytics[];
   snapshot: CohortAnalyticsSnapshot;

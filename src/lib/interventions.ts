@@ -3,14 +3,54 @@ import type { Database, Tables, TablesInsert } from "@/integrations/supabase/typ
 
 export type ManualInterventionType = "email" | "meeting" | "feedback" | "referral";
 export type ManualInterventionStatus = "planned" | "in_progress" | "completed" | "resolved";
+export type InterventionContactTargetType =
+  | "student"
+  | "parent"
+  | "guardian"
+  | "tutor"
+  | "course_leader"
+  | "department_head"
+  | "support_service"
+  | "placement_supervisor"
+  | "employer"
+  | "other";
+export type InterventionContactMethod = "email" | "meeting" | "phone" | "lms_message" | "sms" | "in_person" | "referral" | "other";
+export type InterventionOutcome =
+  | "no_response"
+  | "left_message"
+  | "responded"
+  | "attended"
+  | "referred"
+  | "resolved"
+  | "follow_up_scheduled"
+  | "escalated"
+  | "ongoing"
+  | "other";
 
 export interface InterventionEntry {
   id: string;
   createdAt: string;
+  title: string;
   type: string;
   note: string;
   followUpDate: string | null;
   status: ManualInterventionStatus;
+}
+
+export interface InterventionEventEntry {
+  id: string;
+  interventionId: string;
+  studentId: string;
+  lecturerId: string;
+  contactedAt: string;
+  contactTargetType: InterventionContactTargetType;
+  contactTargetName: string;
+  contactMethod: InterventionContactMethod;
+  outcome: InterventionOutcome;
+  summary: string;
+  nextStep: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StudentInterventionReadiness {
@@ -20,6 +60,7 @@ export interface StudentInterventionReadiness {
 }
 
 export type StudentInterventionRow = Tables<"student_interventions">;
+export type StudentInterventionEventRow = Tables<"student_intervention_events">;
 
 export interface RecommendationInterventionTarget {
   studentId: string;
@@ -37,6 +78,19 @@ export interface ManualInterventionPayloadInput {
   note: string;
   followUpDate: string | null;
   riskLevel?: string | null;
+}
+
+export interface StudentInterventionEventPayloadInput {
+  lecturerId: string;
+  studentId: string;
+  interventionId: string;
+  contactTargetType: InterventionContactTargetType;
+  contactTargetName: string;
+  contactMethod: InterventionContactMethod;
+  outcome: InterventionOutcome;
+  summary: string;
+  nextStep?: string | null;
+  contactedAt?: string;
 }
 
 const toStoredInterventionType = (value: ManualInterventionType): string =>
@@ -68,6 +122,58 @@ export const normalizeManualInterventionStatus = (value: string): ManualInterven
   return "planned";
 };
 
+export const normalizeInterventionContactTargetType = (value: string): InterventionContactTargetType => {
+  if (
+    value === "student" ||
+    value === "parent" ||
+    value === "guardian" ||
+    value === "tutor" ||
+    value === "course_leader" ||
+    value === "department_head" ||
+    value === "support_service" ||
+    value === "placement_supervisor" ||
+    value === "employer"
+  ) {
+    return value;
+  }
+
+  return "other";
+};
+
+export const normalizeInterventionContactMethod = (value: string): InterventionContactMethod => {
+  if (
+    value === "email" ||
+    value === "meeting" ||
+    value === "phone" ||
+    value === "lms_message" ||
+    value === "sms" ||
+    value === "in_person" ||
+    value === "referral"
+  ) {
+    return value;
+  }
+
+  return "other";
+};
+
+export const normalizeInterventionOutcome = (value: string): InterventionOutcome => {
+  if (
+    value === "no_response" ||
+    value === "left_message" ||
+    value === "responded" ||
+    value === "attended" ||
+    value === "referred" ||
+    value === "resolved" ||
+    value === "follow_up_scheduled" ||
+    value === "escalated" ||
+    value === "ongoing"
+  ) {
+    return value;
+  }
+
+  return "other";
+};
+
 export const formatManualInterventionStatus = (value: ManualInterventionStatus) => {
   switch (value) {
     case "planned":
@@ -83,16 +189,81 @@ export const formatManualInterventionStatus = (value: ManualInterventionStatus) 
   }
 };
 
+const toTitleCase = (value: string) =>
+  value
+    .split(/[_-]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+export const formatInterventionContactTargetType = (value: InterventionContactTargetType) => {
+  switch (value) {
+    case "course_leader":
+      return "Course leader";
+    case "department_head":
+      return "Department head";
+    case "support_service":
+      return "Support service";
+    case "placement_supervisor":
+      return "Placement supervisor";
+    default:
+      return toTitleCase(value);
+  }
+};
+
+export const formatInterventionContactMethod = (value: InterventionContactMethod) => {
+  switch (value) {
+    case "lms_message":
+      return "LMS message";
+    case "in_person":
+      return "In person";
+    default:
+      return toTitleCase(value);
+  }
+};
+
+export const formatInterventionOutcome = (value: InterventionOutcome) => {
+  switch (value) {
+    case "no_response":
+      return "No response";
+    case "left_message":
+      return "Left message";
+    case "follow_up_scheduled":
+      return "Follow-up scheduled";
+    case "ongoing":
+      return "Ongoing";
+    default:
+      return toTitleCase(value);
+  }
+};
+
 export const getInterventionErrorText = (error: { message?: string; details?: string; hint?: string } | null) =>
   [error?.message, error?.details, error?.hint].filter(Boolean).join(" | ");
 
 export const mapInterventionRow = (row: StudentInterventionRow): InterventionEntry => ({
   id: row.id,
   createdAt: row.created_at || row.updated_at || new Date().toISOString(),
+  title: row.title,
   type: toDisplayInterventionType(row.intervention_type),
   note: row.notes || "",
   followUpDate: row.follow_up_date || null,
   status: normalizeManualInterventionStatus(row.status),
+});
+
+export const mapInterventionEventRow = (row: StudentInterventionEventRow): InterventionEventEntry => ({
+  id: row.id,
+  interventionId: row.intervention_id,
+  studentId: row.student_id,
+  lecturerId: row.lecturer_id,
+  contactedAt: row.contacted_at || row.updated_at || new Date().toISOString(),
+  contactTargetType: normalizeInterventionContactTargetType(row.contact_target_type),
+  contactTargetName: row.contact_target_name,
+  contactMethod: normalizeInterventionContactMethod(row.contact_method),
+  outcome: normalizeInterventionOutcome(row.outcome),
+  summary: row.summary,
+  nextStep: row.next_step || null,
+  createdAt: row.created_at || row.updated_at || new Date().toISOString(),
+  updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
 });
 
 export const buildManualInterventionPayload = ({
@@ -125,6 +296,31 @@ export const buildManualInterventionPayload = ({
     updated_at: new Date().toISOString(),
   };
 };
+
+export const buildStudentInterventionEventPayload = ({
+  lecturerId,
+  studentId,
+  interventionId,
+  contactTargetType,
+  contactTargetName,
+  contactMethod,
+  outcome,
+  summary,
+  nextStep,
+  contactedAt,
+}: StudentInterventionEventPayloadInput): TablesInsert<"student_intervention_events"> => ({
+  lecturer_id: lecturerId,
+  student_id: studentId,
+  intervention_id: interventionId,
+  contact_target_type: contactTargetType,
+  contact_target_name: contactTargetName.trim(),
+  contact_method: contactMethod,
+  outcome,
+  summary: summary.trim(),
+  next_step: nextStep?.trim() || null,
+  contacted_at: contactedAt || new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
 
 export const buildRecommendationInterventionRows = ({
   lecturerId,
@@ -180,6 +376,29 @@ export async function fetchStudentInterventions(
   };
 }
 
+export async function fetchStudentInterventionEvents(
+  supabase: SupabaseClient<Database>,
+  lecturerId: string,
+  studentId: string
+) {
+  const { data, error } = await supabase
+    .from("student_intervention_events")
+    .select("id, intervention_id, student_id, lecturer_id, contact_target_type, contact_target_name, contact_method, contacted_at, outcome, summary, next_step, created_at, updated_at")
+    .eq("lecturer_id", lecturerId)
+    .eq("student_id", studentId)
+    .order("contacted_at", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  return {
+    data: ((data || []) as StudentInterventionEventRow[]).map(mapInterventionEventRow),
+    error: null,
+  };
+}
+
 export async function insertManualIntervention(
   supabase: SupabaseClient<Database>,
   payload: TablesInsert<"student_interventions">
@@ -210,6 +429,26 @@ export async function insertRecommendationInterventions(
 
   const { error } = await supabase.from("student_interventions").insert(rows);
   return { error };
+}
+
+export async function insertStudentInterventionEvent(
+  supabase: SupabaseClient<Database>,
+  payload: TablesInsert<"student_intervention_events">
+) {
+  const { data, error } = await supabase
+    .from("student_intervention_events")
+    .insert(payload)
+    .select("id, intervention_id, student_id, lecturer_id, contact_target_type, contact_target_name, contact_method, contacted_at, outcome, summary, next_step, created_at, updated_at")
+    .single();
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  return {
+    data: mapInterventionEventRow(data as StudentInterventionEventRow),
+    error: null,
+  };
 }
 
 export async function updateStudentInterventionStatus(

@@ -1,5 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  buildOfsB3EvidencePackMarkdown,
+  buildTefNarrativeSubmissionMarkdown,
+} from "@/lib/accreditationEvidencePacks";
 import type { NSSMetric, QAAMetric, TEFIndicator } from "@/lib/accreditationMetrics";
 import {
   DEMO_FEEDBACK_TURNAROUND,
@@ -37,6 +41,8 @@ type DemoAccreditationDashboardController = {
   statusIcon: (status: string) => "met" | "at-risk" | "below";
   tefColor: (rating: string) => string;
   exportQAAReport: () => void;
+  exportOfsB3EvidencePack: () => void;
+  exportTefNarrativeSubmission: () => void;
   pendingWorkflowTarget: AccreditationWorkflowTarget;
   openPendingWorkflow: () => void;
   openSubmissionOversight: () => void;
@@ -51,6 +57,16 @@ export const useDemoAccreditationDashboardController = (): DemoAccreditationDash
   const [tefIndicators] = useState<TEFIndicator[]>(DEMO_TEF_INDICATORS);
   const [feedbackTurnaround] = useState(DEMO_FEEDBACK_TURNAROUND);
   const pendingWorkflowTarget: AccreditationWorkflowTarget = null;
+
+  const downloadMarkdown = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   const summary = useMemo(() => {
     const overallCompliance =
@@ -111,6 +127,28 @@ export const useDemoAccreditationDashboardController = (): DemoAccreditationDash
       anchor.click();
       URL.revokeObjectURL(url);
     },
+    exportOfsB3EvidencePack: () =>
+      downloadMarkdown(
+        buildOfsB3EvidencePackMarkdown({
+          qaaMetrics,
+          nssMetrics,
+          tefIndicators,
+          feedbackTurnaround,
+          summary,
+        }),
+        `demo_ofs_b3_evidence_pack_${new Date().toISOString().slice(0, 10)}.md`,
+      ),
+    exportTefNarrativeSubmission: () =>
+      downloadMarkdown(
+        buildTefNarrativeSubmissionMarkdown({
+          qaaMetrics,
+          nssMetrics,
+          tefIndicators,
+          feedbackTurnaround,
+          summary,
+        }),
+        `demo_tef_narrative_submission_${new Date().toISOString().slice(0, 10)}.md`,
+      ),
     pendingWorkflowTarget,
     openPendingWorkflow: () => navigate("/demo/dashboard/accreditation"),
     openSubmissionOversight: () => navigate("/demo/dashboard/accreditation"),

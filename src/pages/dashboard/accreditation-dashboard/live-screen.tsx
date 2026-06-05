@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardEmptyState } from "@/components/dashboard/PageStates";
 import { ProgrammeReports } from "./programmeReports";
+import { EvidencePacksSection } from "./evidence-packs-section";
 import { useAccreditationDashboardController } from "./useAccreditationDashboardController";
 
 const MetricBar = ({ value, className = "h-2" }: { value: number; className?: string }) => (
@@ -38,6 +39,8 @@ export const LiveAccreditationDashboardScreen = ({
   statusIcon,
   tefColor,
   exportQAAReport,
+  exportOfsB3EvidencePack,
+  exportTefNarrativeSubmission,
   pendingWorkflowTarget,
   openPendingWorkflow,
   openSubmissionOversight,
@@ -226,6 +229,7 @@ export const LiveAccreditationDashboardScreen = ({
           <TabsTrigger value="qaa">QAA Compliance</TabsTrigger>
           <TabsTrigger value="nss">NSS & Satisfaction</TabsTrigger>
           <TabsTrigger value="tef">TEF Indicators</TabsTrigger>
+          <TabsTrigger value="evidence-packs">Exports</TabsTrigger>
           <TabsTrigger value="programme">Programme Reports</TabsTrigger>
         </TabsList>
         <Button variant="outline" size="sm" onClick={exportQAAReport}>
@@ -351,6 +355,13 @@ export const LiveAccreditationDashboardScreen = ({
             ))}
           </CardContent>
         </Card>
+      </TabsContent>
+
+      <TabsContent value="evidence-packs" className="space-y-4">
+        <EvidencePacksSection
+          onExportOfsB3EvidencePack={exportOfsB3EvidencePack}
+          onExportTefNarrativeSubmission={exportTefNarrativeSubmission}
+        />
       </TabsContent>
 
       <TabsContent value="programme" className="space-y-4">

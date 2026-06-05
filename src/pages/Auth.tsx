@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { getAuthReadiness } from "@/lib/authReadiness";
 import { getEnv } from "@/lib/env";
+import { consumeLtiLaunchTargetPath } from "@/lib/ltiLaunch";
 import {
   DEPARTMENT_OPTIONS,
   OTHER_DEPARTMENT_OPTION,
@@ -74,14 +75,16 @@ const Auth = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmail.trim() || !loginPassword.trim()) {
+    const normalizedEmail = loginEmail.trim();
+    const normalizedPassword = loginPassword;
+    if (!normalizedEmail || !normalizedPassword.trim()) {
       toast({ title: "Missing fields", description: "Please fill in all fields.", variant: "destructive" });
       return;
     }
     setLoading(true);
     try {
-      await signIn(loginEmail, loginPassword);
-      navigate("/dashboard");
+      await signIn(normalizedEmail, normalizedPassword);
+      navigate(consumeLtiLaunchTargetPath() ?? "/dashboard");
     } catch (err) {
       toast({ title: "Login failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
@@ -91,11 +94,14 @@ const Auth = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signupName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
+    const normalizedName = signupName.trim();
+    const normalizedEmail = signupEmail.trim();
+    const normalizedPassword = signupPassword;
+    if (!normalizedName || !normalizedEmail || !normalizedPassword.trim()) {
       toast({ title: "Missing fields", description: "Please fill in all required fields.", variant: "destructive" });
       return;
     }
-    if (signupPassword.length < 8) {
+    if (normalizedPassword.length < 8) {
       toast({ title: "Weak password", description: "Password must be at least 8 characters.", variant: "destructive" });
       return;
     }
@@ -110,9 +116,9 @@ const Auth = () => {
     setLoading(true);
     try {
       const result = await signUp(
-        signupEmail,
-        signupPassword,
-        signupName,
+        normalizedEmail,
+        normalizedPassword,
+        normalizedName,
         signupRole,
         signupCohort,
         resolvedSignupDepartmentName
@@ -127,7 +133,7 @@ const Auth = () => {
       }
 
       toast({ title: "Account created!", description: "Welcome to GradeAI." });
-      navigate("/dashboard");
+      navigate(consumeLtiLaunchTargetPath() ?? "/dashboard");
     } catch (err) {
       toast({ title: "Signup failed", description: getErrorMessage(getErrorFromUnknown(err)), variant: "destructive" });
     } finally {
@@ -137,13 +143,14 @@ const Auth = () => {
 
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail.trim()) {
+    const normalizedEmail = resetEmail.trim();
+    if (!normalizedEmail) {
       toast({ title: "Email required", description: "Please enter your email.", variant: "destructive" });
       return;
     }
     setLoading(true);
     try {
-      await resetPassword(resetEmail);
+      await resetPassword(normalizedEmail);
       toast({ title: "Reset email sent", description: "Check your inbox for a password reset link to choose a new password." });
       setShowForgotPassword(false);
     } catch (err) {

@@ -30,6 +30,7 @@ const bandStyles: Record<RiskBand, string> = {
 };
 
 const formatScore = (value: number) => `${Math.round(value * 100)}%`;
+const formatComponentScore = (value: number | null) => (value == null ? "Pending" : `${Math.round(value)}%`);
 const humanizeReason = (value: string) => value.replace(/_/g, " ");
 
 const getInitials = (name: string) =>
@@ -97,6 +98,17 @@ const RiskIntelligence = () => {
   }, [demoMode, isLocalhost, reloadKey, user?.id]);
 
   const summary = summarizeRiskPredictions(predictions);
+  const componentSummary = predictions.reduce(
+    (acc, row) => {
+      if (row.componentScores.academic != null) acc.academic.push(row.componentScores.academic);
+      if (row.componentScores.engagement != null) acc.engagement.push(row.componentScores.engagement);
+      if (row.componentScores.nonSubmission != null) acc.nonSubmission.push(row.componentScores.nonSubmission);
+      return acc;
+    },
+    { academic: [] as number[], engagement: [] as number[], nonSubmission: [] as number[] },
+  );
+  const averageComponent = (values: number[]) =>
+    values.length > 0 ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
 
   const latestUpdateLabel = snapshotDate ? `Last updated ${safeFormatDate(snapshotDate, "MMM d, yyyy", "Not available")}` : "Waiting for the first refresh.";
   const topStudents = predictions.slice(0, 3);
@@ -193,6 +205,30 @@ const RiskIntelligence = () => {
 
       <Card className="border-border/70 shadow-sm">
         <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle className="text-base">Composite risk breakdown</CardTitle>
+          <CardDescription>Average signal mix behind the current predictions.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-border/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Academic</p>
+            <p className="mt-2 text-2xl font-bold font-display">{formatComponentScore(averageComponent(componentSummary.academic))}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Grades and trajectory signal.</p>
+          </div>
+          <div className="rounded-xl border border-border/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Engagement</p>
+            <p className="mt-2 text-2xl font-bold font-display">{formatComponentScore(averageComponent(componentSummary.engagement))}</p>
+            <p className="mt-1 text-sm text-muted-foreground">LMS activity and recency signal.</p>
+          </div>
+          <div className="rounded-xl border border-border/70 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Non-submission</p>
+            <p className="mt-2 text-2xl font-bold font-display">{formatComponentScore(averageComponent(componentSummary.nonSubmission))}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Coverage and late submission signal.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 shadow-sm">
+        <CardHeader className="border-b border-border/60 pb-4">
           <CardTitle className="text-base">Who needs attention</CardTitle>
           <CardDescription>The highest-risk students are shown first.</CardDescription>
         </CardHeader>
@@ -257,6 +293,7 @@ const RiskIntelligence = () => {
                     <TableHead>Student</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Risk</TableHead>
+                    <TableHead>Breakdown</TableHead>
                     <TableHead>Reasons</TableHead>
                     <TableHead>Feedback</TableHead>
                   </TableRow>
@@ -275,6 +312,18 @@ const RiskIntelligence = () => {
                         <Badge variant="outline" className={bandStyles[row.riskBand]}>
                           {row.riskBand}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          <p>Academic {formatComponentScore(row.componentScores.academic)}</p>
+                          <p>Engagement {formatComponentScore(row.componentScores.engagement)}</p>
+                          <p>Non-submission {formatComponentScore(row.componentScores.nonSubmission)}</p>
+                          <p className="text-[11px]">
+                            {row.componentSignals.engagementEventCount != null
+                              ? `${row.componentSignals.engagementEventCount} engagement events`
+                              : "No engagement signal"}
+                          </p>
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {row.reasonCodes.length > 0 ? row.reasonCodes.map(humanizeReason).join(", ") : "No reason codes yet"}
