@@ -65,12 +65,14 @@ vi.mock("@/lib/communications", () => ({
   dispatchCommunicationMessage: mocks.dispatchCommunicationMessage,
 }));
 
-vi.mock("lucide-react", () => {
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
   const Icon = ({ "data-testid": testId }: { "data-testid"?: string }) => (
     <svg data-testid={testId ?? "icon"} />
   );
 
   return {
+    ...actual,
     AlertTriangle: Icon,
     ArrowLeft: Icon,
     BookOpen: Icon,
