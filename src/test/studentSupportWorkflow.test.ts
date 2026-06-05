@@ -13,7 +13,7 @@ const baseSupportNotice: CommunicationMessage = {
   recipientEmail: "student@example.com",
   recipientId: "student-1",
   subject: "Study plan reminder",
-  body: "Review your improvement plan.",
+  body: "Review your support plan.",
   relatedStudentId: "student-1",
 };
 

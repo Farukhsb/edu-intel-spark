@@ -61,16 +61,16 @@ const DemoImprovementPlan = () => {
       emptyDescription: "New module plans will appear here when released results create a fresh improvement signal.",
     },
     completed: {
-      title: "Completed tasks",
-      description: "Review the tasks you have already marked as done so you can carry that progress forward.",
-      emptyTitle: "No completed tasks yet",
-      emptyDescription: "Completed tasks will appear here after you mark an improvement step as done.",
+      title: "Completed steps",
+      description: "Review the steps you have already marked as done so you can carry that progress forward.",
+      emptyTitle: "No completed steps yet",
+      emptyDescription: "Completed steps will appear here after you mark a support step as done.",
     },
     open: {
-      title: "Open tasks",
-      description: "Focus on the improvement tasks that still need attention before your next submission.",
-      emptyTitle: "No open tasks remain",
-      emptyDescription: "You have cleared the current open tasks in this workspace.",
+      title: "Open steps",
+      description: "Focus on the support steps that still need attention before your next submission.",
+      emptyTitle: "No open steps remain",
+      emptyDescription: "You have cleared the current open steps in this workspace.",
     },
   }[activeWorkspaceView];
 
@@ -110,7 +110,7 @@ const DemoImprovementPlan = () => {
   if (error) {
     return (
       <DashboardErrorState
-        title="Improvement plan unavailable"
+        title="Support plan unavailable"
         description={error}
         action={
           <Button variant="outline" onClick={() => void refreshPlan()}>
@@ -124,15 +124,15 @@ const DemoImprovementPlan = () => {
   if (plan.length === 0) {
     return (
       <DashboardEmptyState
-        title="No improvement plan yet"
-        description="Submit and receive graded work to unlock a personalised improvement journey."
+        title="No support plan yet"
+        description="Submit and receive graded work to unlock a personalised support journey."
       />
     );
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <DashboardDemoBanner label="Viewing demo improvement plan data" />
+      <DashboardDemoBanner label="Viewing demo support plan data" />
 
       {notification && (
         <Card className="border-primary/20 bg-primary/5">
@@ -159,7 +159,7 @@ const DemoImprovementPlan = () => {
               <CardTitle className="text-base">Opened from support notice</CardTitle>
             </div>
             <CardDescription>
-              Start with the highest-priority fix below, then complete the first open task before your next submission window.
+              Start with the highest-priority support step below, then complete the first open step before your next submission window.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
@@ -177,7 +177,7 @@ const DemoImprovementPlan = () => {
             )}
             {firstOpenTaskEntry && (
               <div className="rounded-xl border bg-muted/20 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">First Open Task</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">First Open Step</p>
                 <p className="mt-2 text-sm font-semibold">{firstOpenTaskEntry.task.task}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {firstOpenTaskEntry.module} | {firstOpenTaskEntry.task.area}
@@ -190,7 +190,7 @@ const DemoImprovementPlan = () => {
                     document.getElementById("best-next-moves")?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                 >
-                  Review improvement plan
+                  Review support plan
                 </Button>
               </div>
             )}
@@ -215,12 +215,12 @@ const DemoImprovementPlan = () => {
             <div>
               <p className="text-sm font-medium">Progress you have already made</p>
               <p className="text-sm text-muted-foreground">
-                You have completed {overallTasks.completed} of {overallTasks.total} task{overallTasks.total === 1 ? "" : "s"} so far. Keep that progress visible while you work through what is still open.
+                You have completed {overallTasks.completed} of {overallTasks.total} step{overallTasks.total === 1 ? "" : "s"} so far. Keep that progress visible while you work through what is still open.
               </p>
             </div>
             <div className="min-w-[180px] space-y-2">
               <p className="text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {overallTasks.completed} of {overallTasks.total} tasks complete
+                {overallTasks.completed} of {overallTasks.total} steps complete
               </p>
               <InlineProgressBar value={overallTasks.progress} className="h-2 w-full" />
             </div>
@@ -236,22 +236,22 @@ const DemoImprovementPlan = () => {
               {activeWorkspaceView === "modules"
                 ? "Modules"
                 : activeWorkspaceView === "completed"
-                  ? "Completed tasks"
-                  : "Open tasks"}
+                ? "Completed steps"
+                : "Open steps"}
             </Badge>
             <span>
               {activeWorkspaceView === "modules"
                 ? "Browse each active module plan."
                 : activeWorkspaceView === "completed"
-                  ? "Showing modules that contain completed tasks."
-                  : "Showing modules with open tasks that still need attention."}
+                  ? "Showing modules that contain completed steps."
+                  : "Showing modules with open steps that still need attention."}
             </span>
           </div>
           <div className="min-w-[220px] space-y-2" data-testid="workspace-progress-indicator">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-foreground">Overall progress</span>
               <span>
-                {overallTasks.completed} of {overallTasks.total} tasks complete
+                {overallTasks.completed} of {overallTasks.total} steps complete
               </span>
             </div>
             <InlineProgressBar value={overallTasks.progress} className="h-2 w-full" />

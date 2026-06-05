@@ -61,9 +61,9 @@ export const ImprovementPlanHero = ({
       <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-background shadow-sm">
         <CardContent className="space-y-4 p-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Improvement Plan</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Support Plan</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              You are up to date. New tasks will appear after your next result.
+              You are up to date. New support steps will appear after your next result.
             </p>
           </div>
 
@@ -76,7 +76,7 @@ export const ImprovementPlanHero = ({
               variant={activeView === "completed" ? "default" : "outline"}
               onClick={onViewCompletedTasks}
             >
-              View completed tasks
+              View completed steps
             </Button>
           </div>
         </CardContent>
@@ -90,9 +90,9 @@ export const ImprovementPlanHero = ({
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
           <div className="space-y-4">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Improvement Plan</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Support Plan</h1>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Use this page to understand your latest result, see what improved, and focus on the next action before your next submission.
+                Use this page to understand your latest result, see what improved, and focus on the next support step before your next submission.
               </p>
             </div>
 
@@ -135,7 +135,7 @@ export const ImprovementPlanHero = ({
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current focus</p>
               <p className="mt-2 text-sm font-semibold text-foreground">{readiness.postureLabel}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Based on your current support tasks, recurring weak criteria, and recommended next moves.
+                Based on your current support steps, recurring weak criteria, and recommended next moves.
               </p>
             </div>
 
@@ -177,7 +177,7 @@ export const ImprovementPlanHero = ({
             variant={activeView === "completed" ? "default" : "outline"}
             onClick={onViewCompletedTasks}
           >
-            View completed tasks
+              View completed steps
           </Button>
         </div>
       </CardContent>
@@ -208,7 +208,7 @@ export const ImprovementPlanOverview = ({
         <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="text-2xl font-bold font-display">{progress}%</p>
-            <p className="text-xs text-muted-foreground">task completion</p>
+            <p className="text-xs text-muted-foreground">step completion</p>
           </div>
           <InlineProgressBar value={progress} className="h-2 w-32" />
         </div>
@@ -224,7 +224,7 @@ export const ImprovementPlanOverview = ({
       </Card>
       <Card>
         <CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">Completed tasks</p>
+          <p className="text-xs text-muted-foreground">Completed steps</p>
           <p className="mt-2 text-2xl font-semibold">{completed}</p>
         </CardContent>
       </Card>
@@ -264,10 +264,10 @@ export const ImprovementPlanModuleCard = ({
       <Card>
         <CardContent className="flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed module plan</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed support plan</p>
             <p className="text-base font-semibold">{module.module}</p>
             <p className="text-sm text-muted-foreground">
-              Current {module.currentGrade}% | Target {module.targetGrade}% | {completed}/{module.tasks.length} tasks completed
+              Current {module.currentGrade}% | Target {module.targetGrade}% | {completed}/{module.tasks.length} steps completed
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -290,8 +290,8 @@ export const ImprovementPlanModuleCard = ({
         <div className="space-y-4">
           <div>
             <CardTitle className="text-base">{module.module}</CardTitle>
-            <CardDescription className="mt-2">
-              Use this summary to see what went well, what needs improvement, and what to carry into your next submission.
+              <CardDescription className="mt-2">
+              Use this summary to see what went well, what still needs attention, and what to carry into your next submission.
             </CardDescription>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -397,7 +397,7 @@ export const ImprovementPlanModuleCard = ({
 
         <div id={`improvement-module-tasks-${module.module}`} className="rounded-lg border p-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium">Tasks</p>
+            <p className="text-sm font-medium">Steps</p>
             {openTasks.length > 0 ? (
               <span className="text-xs text-muted-foreground">
                 {completed} of {module.tasks.length} completed
@@ -417,7 +417,7 @@ export const ImprovementPlanModuleCard = ({
               </div>
             )) : (
               <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
-                No open tasks remain for this module.
+                No open steps remain for this module.
               </div>
             )}
           </div>
@@ -431,7 +431,7 @@ export const ImprovementPlanModuleCard = ({
                     className="h-auto px-0 text-sm text-muted-foreground hover:text-foreground"
                     onClick={() => onToggleCompletedSection(module.module)}
                   >
-                  {expandedCompletedSection ? "Hide completed tasks" : `Show completed tasks (${completedTasks.length})`}
+                  {expandedCompletedSection ? "Hide completed steps" : `Show completed steps (${completedTasks.length})`}
                   </Button>
                   {isFullyCompleted && (
                     <Button type="button" variant="outline" size="sm" onClick={() => onToggleCompletedCard(module.module)}>
@@ -470,7 +470,7 @@ export const ImprovementPlanResourcesSection = ({ resources }: { resources: Reso
       <CardHeader>
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
-          <CardTitle className="text-base">Improvement plan</CardTitle>
+          <CardTitle className="text-base">Support plan</CardTitle>
         </div>
         <CardDescription>
           {hasRecoveryGuidance
