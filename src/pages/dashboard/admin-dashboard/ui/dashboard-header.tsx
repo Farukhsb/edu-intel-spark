@@ -38,9 +38,9 @@ export const DashboardHeader = ({
           <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Platform Oversight</span>
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold font-display tracking-tight md:text-3xl">GradeAI Admin Dashboard</h1>
+          <h1 className="text-2xl font-bold font-display tracking-tight md:text-3xl">Intervention and Oversight</h1>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            Monitor platform health, academic workflow progress, integrity risk, moderation load, and protected role activity
+            Monitor intervention flow, cohort risk, platform health, integrity signals, moderation load, and protected role activity
             without borrowing the lecturer workflow.
           </p>
           {institution ? (

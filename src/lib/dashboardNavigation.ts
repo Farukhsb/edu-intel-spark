@@ -50,8 +50,8 @@ export const lecturerSections = [
     ],
   },
   {
-    label: "Teaching Insights",
-    description: "Cohort and learner signals",
+    label: "Student Support",
+    description: "Early-warning and cohort signals",
     defaultOpen: false,
     links: [
       { to: "/dashboard/cohort-dashboard", label: "Cohort Dashboard", icon: BarChart3 },

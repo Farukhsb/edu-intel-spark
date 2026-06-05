@@ -53,9 +53,9 @@ export const SystemHealthSection = ({
         <div className="rounded-xl border border-border/70 p-4">
           <div className="flex items-center gap-2">
             <Settings2 className="h-4 w-4 text-primary" />
-            <p className="font-medium">AI grading controls</p>
+            <p className="font-medium">Workflow controls</p>
           </div>
-          <p className="mt-2 text-muted-foreground">Enabled state and grading thresholds are currently backend-governed. This view makes the control area visible without exposing direct runtime edits.</p>
+          <p className="mt-2 text-muted-foreground">Enabled state and support thresholds are currently backend-governed. This view makes the control area visible without exposing direct runtime edits.</p>
         </div>
         <div className="rounded-xl border border-border/70 p-4">
           <div className="flex items-center gap-2">

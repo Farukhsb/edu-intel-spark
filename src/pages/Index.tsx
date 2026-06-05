@@ -7,21 +7,21 @@ import { getPublicLandingReadiness } from "@/lib/publicLanding";
 import { usePageMetadata } from "@/lib/seo";
 
 const features = [
-  { icon: Brain, title: "AI-Powered Grading", description: "Rubric-based automated grading with detailed criterion-level feedback using advanced AI models." },
-  { icon: BarChart3, title: "Cohort Analytics", description: "Track performance trends, grade distributions, and learning outcome achievement across modules." },
-  { icon: Shield, title: "Academic Integrity", description: "Internal similarity detection engine flags potential plagiarism with severity scoring." },
-  { icon: MessageSquare, title: "AI Grade Assistant", description: "Students can chat with AI to understand their grades and get personalized improvement guidance." },
-  { icon: TrendingUp, title: "Performance Insights", description: "Identify at-risk students early with AI-powered intervention recommendations." },
-  { icon: Users, title: "Institutional Reporting", description: "Accreditation-ready dashboards with department-level benchmarks and compliance metrics." },
+  { icon: TrendingUp, title: "Early Warning Signals", description: "Track grades, submissions, and engagement to identify students who may be starting to struggle." },
+  { icon: BarChart3, title: "Cohort Dashboard", description: "Give tutors, course leaders, and heads of department a clear view of risk across a cohort." },
+  { icon: Shield, title: "Academic Integrity", description: "Internal similarity detection flags potential plagiarism with severity scoring." },
+  { icon: MessageSquare, title: "Intervention Tracking", description: "Record who was contacted, when, by whom, and what outcome followed." },
+  { icon: Users, title: "Engagement Monitoring", description: "Monitor submission timing and participation patterns over time." },
+  { icon: Brain, title: "Evidence Exports", description: "Produce reporting packs for OfS, APP, B3, and TEF evidence workflows." },
 ];
 
 const benefits = [
-  "Reduce marking time by up to 70%",
-  "Consistent, rubric-aligned feedback",
-  "Real-time cohort performance tracking",
-  "Early at-risk student identification",
-  "Accreditation-ready analytics",
-  "Secure academic integrity monitoring",
+  "Spot risk before students fall behind",
+  "Track submissions, grades, and engagement",
+  "Give staff a clear cohort view",
+  "Log interventions and follow-ups",
+  "Export evidence for reporting",
+  "Keep academic judgement with staff",
 ];
 
 const Index = () => {
@@ -29,9 +29,9 @@ const Index = () => {
   const readiness = getPublicLandingReadiness();
 
   usePageMetadata({
-    title: "GradeAI | AI Academic Assessment and Analytics Platform",
+    title: "GradeAI | Early-warning and intervention platform",
     description:
-      "GradeAI helps universities streamline marking, monitor cohort performance, strengthen academic integrity, and deliver clearer student feedback.",
+      "GradeAI helps institutions identify students at risk early and support them before they fall behind.",
     path: "/",
     robots: "index,follow",
   });
@@ -58,15 +58,15 @@ const Index = () => {
         <div className="relative mx-auto max-w-6xl px-4 py-20 lg:py-32">
           <div className="mx-auto max-w-3xl space-y-6 text-center">
             <Badge variant="secondary" className="px-4 py-1.5 text-sm">
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" /> AI-Powered Academic Intelligence
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Early-warning and intervention
             </Badge>
             <h1 className="font-display text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-              Smarter Marking.{" "}
-              <span className="text-primary">Deeper Insights.</span>
+              Spot risk early.{" "}
+              <span className="text-primary">Support students sooner.</span>
             </h1>
             <p className="mx-auto max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              GradeAI transforms academic assessment with AI-powered grading, real-time analytics,
-              and personalised student feedback, helping lecturers mark faster and students learn better.
+              GradeAI sits on top of your existing LMS to monitor grades, submissions, and engagement,
+              helping tutors and academic leads intervene before students fall too far behind.
             </p>
             <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
               <Button size="lg" onClick={() => navigate("/auth")} className="px-8 text-base">
@@ -88,7 +88,7 @@ const Index = () => {
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Platform Readiness</p>
               <p className="mt-2 text-sm font-semibold">{readiness.postureLabel}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                GradeAI is structured around real academic workflow rather than disconnected AI utilities.
+                GradeAI is structured around early warning, intervention, and evidence rather than disconnected AI utilities.
               </p>
             </div>
             <div className="rounded-lg border bg-background/70 p-4">
@@ -118,8 +118,8 @@ const Index = () => {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 transition-colors group-hover:bg-primary/20">
                 <GraduationCap className="h-7 w-7 text-primary" />
               </div>
-              <h3 className="font-display text-lg font-semibold">Lecturer Demo</h3>
-              <p className="text-sm text-muted-foreground">View analytics, manage assignments, AI-grade submissions</p>
+              <h3 className="font-display text-lg font-semibold">Staff Demo</h3>
+              <p className="text-sm text-muted-foreground">See at-risk students, interventions, and reporting</p>
               <Badge variant="outline">Demo Mode</Badge>
             </CardContent>
           </Card>
@@ -128,8 +128,8 @@ const Index = () => {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/10 transition-colors group-hover:bg-secondary/20">
                 <Users className="h-7 w-7 text-secondary" />
               </div>
-              <h3 className="font-display text-lg font-semibold">Student Demo</h3>
-              <p className="text-sm text-muted-foreground">View grades, chat with AI assistant, improvement plans</p>
+              <h3 className="font-display text-lg font-semibold">Synthetic Student View</h3>
+              <p className="text-sm text-muted-foreground">Test the learner surface without using live data</p>
               <Badge variant="outline">Demo Mode</Badge>
             </CardContent>
           </Card>
@@ -141,7 +141,7 @@ const Index = () => {
           <div className="mb-12 text-center">
             <h2 className="font-display text-3xl font-bold">Everything You Need</h2>
             <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
-              A comprehensive platform for AI-powered academic assessment, analytics, and student support.
+              A platform for early warning, intervention, and institution-level evidence.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -166,8 +166,8 @@ const Index = () => {
             <div className="space-y-6">
               <h2 className="font-display text-3xl font-bold">Why Educators Choose GradeAI</h2>
               <p className="leading-relaxed text-muted-foreground">
-                Built by academics, for academics. GradeAI understands the nuances of university
-                marking, rubric alignment, and the importance of consistent, constructive feedback.
+                Built by academics, for academics. GradeAI helps staff spot risk early, intervene sooner,
+                and keep a defensible record of what happened next.
               </p>
               <div className="space-y-3">
                 {benefits.map((benefit) => (
@@ -180,10 +180,10 @@ const Index = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { value: "70%", label: "Less Marking Time" },
-                { value: "98%", label: "Feedback Accuracy" },
-                { value: "3x", label: "Faster Turnaround" },
-                { value: "24/7", label: "AI Available" },
+                { value: "20", label: "Top At-Risk Students" },
+                { value: "7", label: "Day Follow-Up Window" },
+                { value: "1", label: "Cohort View" },
+                { value: "24/7", label: "Evidence Logging" },
               ].map((stat) => (
                 <Card key={stat.label}>
                   <CardContent className="p-6 text-center">
@@ -199,9 +199,9 @@ const Index = () => {
 
       <section className="bg-primary/5 py-20">
         <div className="mx-auto max-w-2xl space-y-6 px-4 text-center">
-          <h2 className="font-display text-3xl font-bold">Ready to Transform Your Assessment?</h2>
+          <h2 className="font-display text-3xl font-bold">Ready to Support Students Earlier?</h2>
           <p className="text-muted-foreground">
-            Join educators who are already saving hours on marking while providing better feedback.
+            Join educators who are already identifying risk sooner and keeping a clear intervention record.
           </p>
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" onClick={() => navigate("/auth")}>
@@ -221,7 +221,7 @@ const Index = () => {
             <span className="font-display font-semibold">GradeAI</span>
           </div>
           <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground sm:items-end">
-            <p>(c) 2025 GradeAI. AI-Powered Academic Intelligence.</p>
+            <p>(c) 2025 GradeAI. Early-warning and intervention.</p>
             <div className="flex items-center gap-3">
               <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
                 Privacy notice

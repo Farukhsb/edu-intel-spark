@@ -8,11 +8,10 @@ The aim is to improve retention, support student success, and provide evidence f
 
 ## At a Glance
 
-- connects assignments, submissions, grading, integrity, moderation, and intervention records
-- supports AI-assisted grading, but keeps approval and release with the lecturer
 - monitors grade, submission, and engagement patterns to flag risk early
 - gives tutors, course leaders, and heads of department a cohort view
 - records interventions and exports evidence for institutional reporting
+- keeps AI-assisted grading available where institutions want it, without making it the product focus
 
 AI output is not treated as the final academic decision. Students only see feedback after educator review and release.
 
@@ -22,13 +21,13 @@ GradeAI includes a synthetic demo mode for reviewer walkthroughs and product eva
 
 ## Key Product Areas
 
-### Educator workspace
+### Staff workspace
 
-Educators can identify students who may be struggling, review why they were flagged, create assignments, run AI-assisted grading and integrity checks, edit marks and feedback, manage moderation cases, and record intervention or follow-up actions.
+Tutors and academic leads can identify students who may be struggling, review why they were flagged, manage follow-up actions, and record intervention evidence.
 
-### Student workspace
+### Student view
 
-Students can submit work for open assignments, view released grades, read educator-approved feedback, use support tools to understand their performance, and track improvement-plan progress.
+Students can submit work for open assignments, view released grades, and read educator-approved feedback in the demo and live student surface.
 
 ### Institutional workflows
 

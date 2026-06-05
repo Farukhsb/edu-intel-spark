@@ -38,7 +38,7 @@ const OverviewCards = ({
     { title: "Assignments", value: String(metrics.totalAssignments), helper: "Draft and published assignment records.", href: "/dashboard?view=assignments", icon: BookCopy },
     { title: "Submissions", value: String(metrics.totalSubmissions), helper: "All submission rows across the platform.", href: "/dashboard?view=submissions", icon: FileOutput },
     { title: "Pending Moderation", value: String(metrics.pendingModerationCases), helper: "Cases still awaiting academic resolution.", href: "/dashboard?view=system", icon: ShieldAlert },
-    { title: "AI Grading Failures", value: formatCount(metrics.aiGradingFailures), helper: "Direct grading error events recorded today and visible to admin.", href: "/dashboard?view=system", icon: ShieldAlert },
+    { title: "Workflow Failures", value: formatCount(metrics.aiGradingFailures), helper: "Grading and release error events recorded today and visible to admin.", href: "/dashboard?view=system", icon: ShieldAlert },
     { title: "High Integrity Risk", value: String(metrics.highIntegrityRiskCases), helper: "Cases with elevated integrity risk or escalation signals.", href: "/dashboard?view=system", icon: ShieldAlert },
     { title: "Risk Intelligence", value: "Open", helper: "Dedicated batch scoring workspace for student risk review.", href: "/dashboard/risk-intelligence", icon: Target },
     {

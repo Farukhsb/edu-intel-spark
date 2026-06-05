@@ -54,7 +54,7 @@ export const DataAccessLogSection = ({
     </CardHeader>
     <CardContent className="space-y-4 p-6">
       <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
-        Read-only governance view. This page does not expose grading, feedback editing, or release controls.
+        Read-only governance view. This page does not expose feedback editing or release controls.
       </div>
       <GovernanceStateNotice
         status={status}

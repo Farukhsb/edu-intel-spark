@@ -13,7 +13,7 @@ const Demo = () => {
 
   usePageMetadata({
     title: "GradeAI Demo | Choose Your Workspace",
-    description: "Open the lecturer or student demo workspace to explore GradeAI without a live account.",
+    description: "Open the staff or synthetic student demo workspace to explore GradeAI without a live account.",
     path: "/demo",
     robots: "noindex,follow",
   });
@@ -53,7 +53,7 @@ const Demo = () => {
               Choose a demo workspace
             </h1>
             <p className="mx-auto max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              Open a lecturer or student view with synthetic data. No sign-up required.
+              Open a staff or synthetic student view with synthetic data. No sign-up required.
             </p>
           </div>
         </div>
@@ -66,12 +66,12 @@ const Demo = () => {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 transition-colors group-hover:bg-primary/20">
                 <GraduationCap className="h-7 w-7 text-primary" />
               </div>
-              <h2 className="font-display text-lg font-semibold">Lecturer Demo</h2>
+              <h2 className="font-display text-lg font-semibold">Staff Demo</h2>
               <p className="text-sm text-muted-foreground">
-                View analytics, import grades, manage assignments, and review the lecturer workflow.
+                View at-risk students, intervention logging, and the tutor workflow.
               </p>
               <Button className="w-full">
-                Open lecturer demo <ArrowRight className="ml-2 h-4 w-4" />
+                Open staff demo <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
           </Card>
@@ -81,12 +81,12 @@ const Demo = () => {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/10 transition-colors group-hover:bg-secondary/20">
                 <Users className="h-7 w-7 text-secondary" />
               </div>
-              <h2 className="font-display text-lg font-semibold">Student Demo</h2>
+              <h2 className="font-display text-lg font-semibold">Synthetic Student View</h2>
               <p className="text-sm text-muted-foreground">
-                View grades, chat with the assistant, and inspect improvement guidance.
+                Test the learner surface without using live data.
               </p>
               <Button variant="outline" className="w-full">
-                Open student demo <Zap className="ml-2 h-4 w-4" />
+                Open synthetic view <Zap className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
           </Card>

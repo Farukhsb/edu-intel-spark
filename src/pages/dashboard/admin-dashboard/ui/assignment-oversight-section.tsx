@@ -52,7 +52,7 @@ export const AssignmentOversightSection = ({
         <div className="flex items-start justify-between gap-4">
           <div>
             <CardTitle className="text-base">Assignment oversight</CardTitle>
-            <CardDescription>Publishing volume, submission coverage, and grading release progress across the platform.</CardDescription>
+            <CardDescription>Publishing volume, submission coverage, and release progress across the platform.</CardDescription>
           </div>
           {compact ? (
             <Button variant="outline" size="sm" onClick={() => navigate("/dashboard?view=assignments")}>
