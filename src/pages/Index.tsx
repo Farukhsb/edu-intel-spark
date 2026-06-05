@@ -128,7 +128,7 @@ const Index = () => {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/10 transition-colors group-hover:bg-secondary/20">
                 <Users className="h-7 w-7 text-secondary" />
               </div>
-              <h3 className="font-display text-lg font-semibold">Synthetic Student View</h3>
+              <h3 className="font-display text-lg font-semibold">Synthetic Test View</h3>
               <p className="text-sm text-muted-foreground">Test the learner surface without using live data</p>
               <Badge variant="outline">Demo Mode</Badge>
             </CardContent>

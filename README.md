@@ -4,7 +4,7 @@
 
 GradeAI helps institutions identify students at risk of disengagement or underperformance early, so tutors and academic leads can intervene sooner. It works alongside existing systems and uses machine learning to monitor grades, submissions, and engagement over time.
 
-The aim is to improve retention, support student success, and provide evidence for effective intervention. GradeAI is not a replacement for the LMS or a black-box decision system. Academic judgement stays with educators.
+The aim is to improve retention, support student progress, and provide evidence for effective intervention. GradeAI is not a replacement for the LMS or a black-box decision system. Academic judgement stays with educators.
 
 ## At a Glance
 
@@ -25,9 +25,9 @@ GradeAI includes a synthetic demo mode for reviewer walkthroughs and product eva
 
 Tutors and academic leads can identify students who may be struggling, review why they were flagged, manage follow-up actions, and record intervention evidence.
 
-### Student view
+### Synthetic test view
 
-Students can submit work for open assignments, view released grades, and read educator-approved feedback in the demo and live student surface.
+Learners can submit work for open assignments, view released grades, and read educator-approved feedback in the demo and live test surface.
 
 ### Institutional workflows
 

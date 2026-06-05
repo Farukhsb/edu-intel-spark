@@ -53,7 +53,7 @@ const Demo = () => {
               Choose a demo workspace
             </h1>
             <p className="mx-auto max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              Open a staff or synthetic student view with synthetic data. No sign-up required.
+              Open a staff or synthetic test view with synthetic data. No sign-up required.
             </p>
           </div>
         </div>
@@ -81,7 +81,7 @@ const Demo = () => {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary/10 transition-colors group-hover:bg-secondary/20">
                 <Users className="h-7 w-7 text-secondary" />
               </div>
-              <h2 className="font-display text-lg font-semibold">Synthetic Student View</h2>
+              <h2 className="font-display text-lg font-semibold">Synthetic Test View</h2>
               <p className="text-sm text-muted-foreground">
                 Test the learner surface without using live data.
               </p>
