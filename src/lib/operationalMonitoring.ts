@@ -253,43 +253,43 @@ export const buildOperationalMonitoringSnapshot = ({
         : "Workflow notification delivery records are not yet exposed here, so this remains a placeholder signal.",
     },
     {
-      label: "Latest visible grading activity",
+      label: "Latest visible workflow activity",
       statusLabel: latestGradeRun ? "Recorded" : "Not exposed",
       tone: latestGradeRun ? (staleGradingRun ? "warning" : "healthy") : "placeholder",
       signalType: latestGradeRun ? "inferred" : "placeholder",
       detail: latestGradeRun
         ? staleGradingRun
-          ? "A dedicated grading-run telemetry record would make stale grading signals easier to classify with confidence."
-          : "Latest grade creation timestamp is being used as an inferred grading activity signal."
-        : "A dedicated grading-run telemetry record would make this signal more reliable.",
+          ? "A dedicated workflow-run telemetry record would make stale workflow signals easier to classify with confidence."
+          : "Latest grade creation timestamp is being used as an inferred workflow activity signal."
+        : "A dedicated workflow-run telemetry record would make this signal more reliable.",
     },
     {
-      label: "Visible grading failures today",
+      label: "Visible workflow failures today",
       statusLabel: aiGradingFailures == null ? "Pending telemetry" : String(aiGradingFailures),
       tone: aiGradingFailures == null ? "placeholder" : aiGradingFailures > 0 ? "warning" : "healthy",
       signalType: aiGradingFailures == null ? "placeholder" : "live",
       detail:
         aiGradingFailures == null
-          ? "Grading error telemetry is not readable in this snapshot, so a direct failure count is unavailable."
+          ? "Workflow error telemetry is not readable in this snapshot, so a direct failure count is unavailable."
           : aiGradingFailures > 0
-            ? `${aiGradingFailures} grading failure event(s) were recorded today.`
-            : "No grading failure events were recorded today.",
+            ? `${aiGradingFailures} workflow failure event(s) were recorded today.`
+            : "No workflow failure events were recorded today.",
     },
   ];
 
   const failureCards: OperationalFailureCard[] = [
     {
-      title: "Grading failures today",
+      title: "Workflow failures today",
       value: aiGradingFailures == null ? "Pending telemetry" : String(aiGradingFailures),
       tone: aiGradingFailures == null ? "placeholder" : aiGradingFailures > 0 ? "warning" : "healthy",
       signalType: aiGradingFailures == null ? "placeholder" : "live",
       detail:
         aiGradingFailures == null
-          ? "Direct grading error telemetry could not be read for this admin snapshot."
+          ? "Direct workflow error telemetry could not be read for this admin snapshot."
           : aiGradingFailures > 0
-            ? "Recorded grading failures need triage before more lecturer retries stack up."
-            : "No grading failure events were recorded in the current daily window.",
-      action: "Check grading error events and the grade-submission function logs.",
+            ? "Recorded workflow failures need triage before more lecturer retries stack up."
+            : "No workflow failure events were recorded in the current daily window.",
+      action: "Check workflow error events and the grade-submission function logs.",
     },
     {
       title: "Release backlog",
@@ -327,16 +327,16 @@ export const buildOperationalMonitoringSnapshot = ({
   ];
   const alertCards: OperationalAlertCard[] = [
     {
-      title: "Stale grading heartbeat",
+      title: "Stale workflow heartbeat",
       value: staleGradingHeartbeat ? "1" : "0",
       threshold: "No grade-submission run within 24 hours",
       tone: workflowRunTelemetryAvailable ? (staleGradingHeartbeat ? "warning" : "healthy") : "placeholder",
       signalType: workflowRunTelemetryAvailable ? "live" : "placeholder",
       detail: workflowRunTelemetryAvailable
         ? staleGradingHeartbeat
-          ? "The latest visible grade-submission run is older than the 24 hour threshold, so the grading pipeline should be checked."
+          ? "The latest visible grade-submission run is older than the 24 hour threshold, so the workflow pipeline should be checked."
           : "At least one grade-submission run has been observed within the last 24 hours."
-        : "Grading run telemetry is not yet available here, so the stale-run threshold cannot be evaluated.",
+        : "Workflow run telemetry is not yet available here, so the stale-run threshold cannot be evaluated.",
       action: "Inspect the latest grade-submission runs and confirm the provider is still processing work.",
     },
     {

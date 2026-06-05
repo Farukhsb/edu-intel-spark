@@ -88,7 +88,7 @@ export const AssignmentOversightSection = ({
                   <TableHead>Status</TableHead>
                   <TableHead>Due</TableHead>
                   <TableHead>Submissions</TableHead>
-                  <TableHead>Graded</TableHead>
+                  <TableHead>Processed</TableHead>
                   <TableHead>Released</TableHead>
                 </TableRow>
               </TableHeader>

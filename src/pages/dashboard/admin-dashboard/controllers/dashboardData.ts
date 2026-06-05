@@ -629,14 +629,14 @@ export const buildAdminDashboardData = ({
     healthItems: monitoringSnapshot.healthItems.map((item) => ({
       ...item,
       statusLabel:
-        item.label === "Latest visible grading activity" && latestGradeRun
+        item.label === "Latest visible workflow activity" && latestGradeRun
           ? safeFormatDate(latestGradeRun, "MMM d, HH:mm", "Recorded")
-          : item.statusLabel,
+        : item.statusLabel,
       detail:
-        item.label === "Latest visible grading activity" && latestGradeRun
+        item.label === "Latest visible workflow activity" && latestGradeRun
           ? item.tone === "warning"
-            ? `${item.detail} The latest visible grade row was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}.`
-            : `Latest grading evidence visible to admin was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}. This is an observed grading timestamp, not a live service heartbeat.`
+            ? `${item.detail} The latest visible workflow row was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}.`
+            : `Latest workflow evidence visible to admin was recorded ${safeFormatDate(latestGradeRun, "MMM d, yyyy HH:mm", "recently")}. This is an observed workflow timestamp, not a live service heartbeat.`
           : item.detail,
     })),
     failureCards: monitoringSnapshot.failureCards,
