@@ -78,6 +78,7 @@ vi.mock("lucide-react", () => {
     ChevronDown: Icon,
     ChevronUp: Icon,
     Clock: () => <svg data-testid="loading-spinner" />,
+    Clock3: Icon,
     Lightbulb: Icon,
     Loader2: () => <svg data-testid="loading-spinner" />,
     Mail: Icon,
