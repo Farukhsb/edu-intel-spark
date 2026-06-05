@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, RefreshCw, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState, DashboardLiveBanner, DashboardPageIntro } from "@/components/dashboard/PageStates";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -12,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { buildRiskIntelligenceDemoDataset } from "@/lib/data/admin/riskIntelligenceDemo";
 import { fetchRiskIntelligenceDataset } from "@/lib/data/admin/riskIntelligence";
+import { triggerRiskModelTraining } from "@/lib/data/admin";
 import {
   buildRiskIntelligenceDisplayRows,
   downloadRiskIntelligenceCsv,
@@ -57,6 +59,7 @@ const RiskIntelligence = () => {
   const [feedbackCount, setFeedbackCount] = useState(0);
   const [snapshotDate, setSnapshotDate] = useState<string | null>(null);
   const [latestModelVersion, setLatestModelVersion] = useState<string | null>(null);
+  const [training, setTraining] = useState(false);
 
   const loadDataset = async (dataset: RiskIntelligenceDataset) => {
     const { displayRows, snapshotCount: nextSnapshotCount, feedbackCount: nextFeedbackCount, snapshotDate: nextSnapshotDate, latestModelVersion: nextLatestModelVersion } = buildRiskIntelligenceDisplayRows(dataset);
@@ -164,6 +167,30 @@ const RiskIntelligence = () => {
               <Download className="mr-2 h-4 w-4" />
               Export CSV
             </Button>
+            {!demoMode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={training}
+                onClick={async () => {
+                  try {
+                    setTraining(true);
+                    const result = await triggerRiskModelTraining();
+                    toast.success(
+                      `Model retrained: ${result.data.version} (${Math.round(result.data.testAccuracy * 100)}% validation accuracy)`,
+                    );
+                    setReloadKey((current) => current + 1);
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Model retraining failed");
+                  } finally {
+                    setTraining(false);
+                  }
+                }}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${training ? "animate-spin" : ""}`} />
+                Retrain model
+              </Button>
+            ) : null}
             <Button size="sm" onClick={() => navigate("/dashboard?view=users")}>
               <Users className="mr-2 h-4 w-4" />
               Open user management

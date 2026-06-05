@@ -13,6 +13,7 @@ import {
   evaluateCompositeStudentRisk,
   type StudentRiskCompositeEvaluation,
 } from "../../../src/lib/studentRiskComposite.ts";
+import { normalizeRiskModelArtifact, setRiskModelArtifact } from "../../../src/lib/riskModelRegistry.ts";
 
 type BatchRequest = {
   featureVersion?: string;
@@ -251,6 +252,26 @@ Deno.serve(async (req) => {
     const institutionId = actorProfile?.institution_id ?? null;
     if (!institutionId) {
       throw new HttpError(403, "Admin institution could not be resolved");
+    }
+
+    const { data: riskModelRows, error: riskModelError } = await supabaseAdmin
+      .from("risk_model_registry")
+      .select("artifact, version, trained_at, status")
+      .eq("institution_id", institutionId)
+      .eq("status", "active")
+      .order("trained_at", { ascending: false })
+      .limit(1);
+
+    if (riskModelError) {
+      logWarn("Risk model registry is unavailable; falling back to bootstrap artifact", {
+        function: "compute-risk-batch",
+        institutionId,
+      });
+    } else {
+      const activeArtifact = normalizeRiskModelArtifact(riskModelRows?.[0]?.artifact);
+      if (activeArtifact) {
+        setRiskModelArtifact(activeArtifact);
+      }
     }
 
     const { data: studentRows, error: studentError } = await supabaseAdmin

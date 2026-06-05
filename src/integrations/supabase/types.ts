@@ -631,6 +631,63 @@ export type Database = {
           },
         ]
       }
+      risk_model_registry: {
+        Row: {
+          artifact: Json
+          created_at: string
+          id: string
+          institution_id: string
+          metrics: Json
+          source: string
+          status: string
+          trained_at: string
+          trained_by: string | null
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          artifact: Json
+          created_at?: string
+          id?: string
+          institution_id: string
+          metrics?: Json
+          source?: string
+          status: string
+          trained_at?: string
+          trained_by?: string | null
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          artifact?: Json
+          created_at?: string
+          id?: string
+          institution_id?: string
+          metrics?: Json
+          source?: string
+          status?: string
+          trained_at?: string
+          trained_by?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_model_registry_institution_id_fkey"
+            columns: ["institution_id"]
+            isOneToOne: false
+            referencedRelation: "institutions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "risk_model_registry_trained_by_fkey"
+            columns: ["trained_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_risk_outcomes: {
         Row: {
           created_at: string

@@ -18,5 +18,8 @@ verify_jwt = true
 [functions.compute-risk-batch]
 verify_jwt = true
 
+[functions.train-risk-model]
+verify_jwt = false
+
 [functions.lti-launch]
 verify_jwt = false

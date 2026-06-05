@@ -1,7 +1,8 @@
 import type { StudentTrajectory } from "@/lib/studentRisk";
 
-import { riskModelArtifact } from "@/lib/riskModelArtifact";
-import type { RiskModelArtifact, RiskModelClassName } from "@/lib/riskModelArtifactTypes";
+import type { RiskModelClassName } from "@/lib/riskModelArtifactTypes";
+import { scoreRiskModelArtifact } from "@/lib/riskModelPipeline";
+import { getRiskModelArtifact } from "@/lib/riskModelRegistry";
 
 export type RiskModelPrediction = {
   modelVersion: string;
@@ -109,18 +110,6 @@ export function extractRiskFeatures(trajectory: StudentTrajectory): RiskFeatureV
   };
 }
 
-function softmax(logits: number[]): number[] {
-  const maxLogit = Math.max(...logits);
-  const expValues = logits.map((value) => Math.exp(value - maxLogit));
-  const denominator = expValues.reduce((sum, value) => sum + value, 0) || 1;
-  return expValues.map((value) => value / denominator);
-}
-
-function applyTemperatureScaling(logits: number[], temperature?: number): number[] {
-  const safeTemperature = Number.isFinite(temperature) && (temperature ?? 0) > 0 ? temperature! : 1;
-  return logits.map((value) => value / safeTemperature);
-}
-
 function blendWithUniform(probabilities: number[], blendFactor: number): number[] {
   const safeBlend = clamp(blendFactor, 0, 1);
   const uniform = 1 / Math.max(1, probabilities.length);
@@ -193,37 +182,19 @@ function buildReviewReasons(
   return Array.from(reasons);
 }
 
-function normalizeFeatures(artifact: RiskModelArtifact, features: RiskFeatureVector) {
-  return artifact.featureNames.map((featureName, index) => {
-    const rawValue = features[featureName as RiskFeatureName] ?? 0;
-    const meanValue = artifact.featureMeans[index] ?? 0;
-    const stdDev = artifact.featureStdDevs[index] || 1;
-    return (rawValue - meanValue) / stdDev;
-  });
-}
-
 export function scoreStudentRisk(trajectory: StudentTrajectory): RiskModelPrediction | null {
+  const riskModelArtifact = getRiskModelArtifact();
   if (!riskModelArtifact?.enabled) return null;
 
   const features = extractRiskFeatures(trajectory);
-  const normalized = normalizeFeatures(riskModelArtifact, features);
-
-  const logits = riskModelArtifact.classNames.map((_, classIndex) => {
-    const weights = (riskModelArtifact.weights[classIndex] ?? []) as number[];
-    const bias = riskModelArtifact.biases[classIndex] ?? 0;
-    return weights.reduce((sum, weight, featureIndex) => sum + weight * (normalized[featureIndex] ?? 0), bias);
-  });
-
-  const calibrationTemperature = (riskModelArtifact as RiskModelArtifact).calibrationTemperature;
-  const baseProbabilities = softmax(applyTemperatureScaling(logits, calibrationTemperature));
-  const ranked = riskModelArtifact.classNames
-    .map((className, index) => ({ className, probability: baseProbabilities[index] ?? 0 }))
-    .sort((left, right) => right.probability - left.probability);
+  const scoring = scoreRiskModelArtifact(riskModelArtifact, features);
+  const baseProbabilities = scoring.baseProbabilities;
+  const ranked = scoring.ranked;
   const conservatism = computeConservatism(features, ranked);
   const probabilities = blendWithUniform(baseProbabilities, conservatism);
   const boundarySoftening = computeBoundarySoftening(features);
   const finalProbabilities = blendWithUniform(probabilities, boundarySoftening);
-  const primary = ranked[0] ?? { className: "low" as const, probability: 1 / 3 };
+  const primary = scoring.primary;
   const primaryIndex = riskModelArtifact.classNames.indexOf(primary.className);
   const primaryProbability = finalProbabilities[primaryIndex] ?? primary.probability;
 
@@ -232,11 +203,7 @@ export function scoreStudentRisk(trajectory: StudentTrajectory): RiskModelPredic
     medium: finalProbabilities[riskModelArtifact.classNames.indexOf("medium")] ?? 0,
     high: finalProbabilities[riskModelArtifact.classNames.indexOf("high")] ?? 0,
   };
-  const baseProbabilityByBand = {
-    low: baseProbabilities[riskModelArtifact.classNames.indexOf("low")] ?? 0,
-    medium: baseProbabilities[riskModelArtifact.classNames.indexOf("medium")] ?? 0,
-    high: baseProbabilities[riskModelArtifact.classNames.indexOf("high")] ?? 0,
-  };
+  const baseProbabilityByBand = scoring.probabilityByBand;
 
   const riskScore = clamp(
     baseProbabilityByBand.low * 15 + baseProbabilityByBand.medium * 55 + baseProbabilityByBand.high * 90,

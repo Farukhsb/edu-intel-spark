@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import type { AppRole, PublicSignupRole } from "@/lib/roles";
 import type { User } from "@supabase/supabase-js";
@@ -15,6 +15,7 @@ import {
 import { fetchAuthProfile } from "@/contexts/auth/auth-profile";
 import { useAuthSessionSync } from "@/contexts/auth/auth-session";
 import type { AuthContextType, Profile } from "@/contexts/auth/types";
+import { primeRiskModelArtifact } from "@/lib/data/admin";
 export type { AuthContextType, Profile } from "@/contexts/auth/types";
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -52,6 +53,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading,
     setIsDemo,
   });
+
+  useEffect(() => {
+    if (!user || isDemo || !profile?.institution_id) return;
+    void primeRiskModelArtifact(profile.institution_id).catch(() => undefined);
+  }, [isDemo, profile?.institution_id, user?.id]);
 
   const refreshProfile = async () => {
     if (!user || isDemo) return;
