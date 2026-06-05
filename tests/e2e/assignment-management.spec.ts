@@ -112,7 +112,7 @@ test.describe("assignment management workflows", () => {
       await onboardingSkip.click({ force: true });
       await expect(page.getByRole("dialog", { name: "Welcome to GradeAI" })).toBeHidden();
     }
-    await expect(page.getByRole("heading", { name: "GradeAI Admin Dashboard" })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("heading", { name: "Intervention and Oversight" })).toBeVisible({ timeout: 10000 });
     await page.getByRole("button", { name: "Bulk Upload Students" }).click();
     await expect(page.getByRole("heading", { name: "Bulk Student Upload" })).toBeVisible();
 
