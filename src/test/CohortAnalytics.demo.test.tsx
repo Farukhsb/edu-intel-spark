@@ -66,7 +66,7 @@ describe("DemoCohortAnalytics", () => {
         .length,
     ).toBeGreaterThan(0);
     expect(screen.getByRole("tab", { name: /Personal tutor/i })).toBeInTheDocument();
-    expect(screen.getAllByText("Grade Distribution").length).toBeGreaterThan(0);
+    expect(screen.getByText("Student support actions")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
   });
 });
