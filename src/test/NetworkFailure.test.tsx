@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   },
   computeRisk: vi.fn(),
   fetchStudentInterventions: vi.fn(),
+  fetchStudentInterventionEvents: vi.fn(),
   getInterventionErrorText: vi.fn(),
 }));
 
@@ -60,6 +61,7 @@ vi.mock("@/lib/interventions", async () => {
   return {
     ...actual,
     fetchStudentInterventions: mocks.fetchStudentInterventions,
+    fetchStudentInterventionEvents: mocks.fetchStudentInterventionEvents,
     getInterventionErrorText: mocks.getInterventionErrorText,
   };
 });
@@ -251,6 +253,7 @@ describe("Network/API failure handling", () => {
     mocks.params.studentId = "sam-student";
     mocks.computeRisk.mockReturnValue(risk);
     mocks.fetchStudentInterventions.mockResolvedValue({ data: [], error: null });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
     mocks.getInterventionErrorText.mockReturnValue("Intervention API unavailable");
     vi.stubGlobal("fetch", vi.fn());
   });
@@ -268,6 +271,7 @@ describe("Network/API failure handling", () => {
       data: null,
       error: { message: "Intervention API unavailable" },
     });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
 
     render(<StudentProfile />);
 
@@ -284,6 +288,7 @@ describe("Network/API failure handling", () => {
   it("shows a safe toast and no partial assistant reply when the StudentGrades AI request fails", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     setupExplainGradeSupabase();
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
     vi.mocked(fetch).mockRejectedValue(new Error("network down"));
 
     render(

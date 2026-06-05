@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   },
   computeRisk: vi.fn(),
   fetchStudentInterventions: vi.fn(),
+  fetchStudentInterventionEvents: vi.fn(),
   getInterventionErrorText: vi.fn(),
   dispatchCommunicationMessage: vi.fn(),
 }));
@@ -57,6 +58,7 @@ vi.mock("@/lib/interventions", async () => {
   return {
     ...actual,
     fetchStudentInterventions: mocks.fetchStudentInterventions,
+    fetchStudentInterventionEvents: mocks.fetchStudentInterventionEvents,
     getInterventionErrorText: mocks.getInterventionErrorText,
   };
 });
@@ -321,6 +323,7 @@ describe("StudentProfile", () => {
     mocks.params.studentId = "sam-student";
     mocks.computeRisk.mockReturnValue(defaultRisk);
     mocks.fetchStudentInterventions.mockResolvedValue({ data: [], error: null });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
     mocks.getInterventionErrorText.mockReturnValue("Could not load intervention history");
     mocks.dispatchCommunicationMessage.mockResolvedValue({
       ok: true,
@@ -526,6 +529,7 @@ describe("StudentProfile", () => {
   it("renders the risk and support summary from mocked support signals", async () => {
     setupSupabase();
     mocks.fetchStudentInterventions.mockResolvedValue({ data: defaultInterventions, error: null });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
 
     renderStudentProfile();
 
@@ -540,6 +544,7 @@ describe("StudentProfile", () => {
   it("renders intervention history when mocked records are available", async () => {
     setupSupabase();
     mocks.fetchStudentInterventions.mockResolvedValue({ data: defaultInterventions, error: null });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
 
     renderStudentProfile();
 
@@ -652,6 +657,7 @@ describe("StudentProfile", () => {
   it("renders a safe empty intervention state when no records exist", async () => {
     setupSupabase();
     mocks.fetchStudentInterventions.mockResolvedValue({ data: [], error: null });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
 
     renderStudentProfile();
 
@@ -661,6 +667,7 @@ describe("StudentProfile", () => {
   it("renders a safe fallback state if the student profile request fails", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     setupSupabase({ assignmentsError: new Error("supabase unavailable") });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
 
     renderStudentProfile();
 
@@ -696,6 +703,7 @@ describe("StudentProfile", () => {
         },
       ],
     });
+    mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
 
     renderStudentProfile();
 
