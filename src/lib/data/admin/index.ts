@@ -1,7 +1,9 @@
 export { fetchAdminDashboardDataset } from "./adminData";
 export {
   buildInterventionEvidenceReport,
+  buildInterventionEvidencePack,
   fetchAdminInterventionEvidenceDataset,
+  queueOverdueInterventionReminders,
 } from "./interventionEvidence";
 export {
   fetchActiveRiskModelArtifact,
@@ -12,6 +14,7 @@ export {
 export type {
   AdminInterventionEvidenceDataset,
   AdminInterventionEvidenceEventRow,
+  AdminInterventionEvidenceOutcomeBreakdown,
   AdminInterventionEvidenceRow,
   AdminInterventionEvidenceSummary,
 } from "./interventionEvidence";

@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.lti-launch]
 verify_jwt = false
+
+[functions.send-overdue-intervention-reminders]
+verify_jwt = false

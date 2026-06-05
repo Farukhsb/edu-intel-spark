@@ -8,6 +8,7 @@ export type CommunicationCategory =
   | "at-risk-alert"
   | "grade-released"
   | "intervention-follow-up"
+  | "intervention-overdue-reminder"
   | "submission-received"
   | "ai-grading-ready"
   | "integrity-check-ready"
@@ -97,6 +98,7 @@ const CommunicationCategorySchema = z.enum([
   "at-risk-alert",
   "grade-released",
   "intervention-follow-up",
+  "intervention-overdue-reminder",
   "submission-received",
   "ai-grading-ready",
   "integrity-check-ready",

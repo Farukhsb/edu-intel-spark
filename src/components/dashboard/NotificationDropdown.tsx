@@ -35,6 +35,8 @@ const getNotificationCategoryLabel = (category: CommunicationMessage["category"]
       return "At-risk";
     case "intervention-follow-up":
       return "Support";
+    case "intervention-overdue-reminder":
+      return "Reminder";
     default:
       return "Notice";
   }
@@ -51,6 +53,8 @@ const getStudentNotificationPreviewHint = (notification: CommunicationMessage) =
     case "at-risk-alert":
     case "intervention-follow-up":
       return "Opens your released result and grade explanation.";
+    case "intervention-overdue-reminder":
+      return "Opens the student support record for follow-up.";
     default:
       return null;
   }

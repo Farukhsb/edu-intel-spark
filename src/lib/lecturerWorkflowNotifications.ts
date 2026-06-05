@@ -24,6 +24,8 @@ const getLecturerNotificationFocus = (
       return "integrity-review";
     case "grade-released":
       return "release-follow-up";
+    case "intervention-overdue-reminder":
+      return "release-follow-up";
     default:
       return null;
   }
@@ -99,6 +101,10 @@ export const getLecturerWorkflowNotificationPreviewHint = ({
   notification: CommunicationMessage;
   notifications: CommunicationMessage[];
 }) => {
+  if (notification.category === "intervention-overdue-reminder") {
+    return "Opens the student support record for overdue intervention follow-up.";
+  }
+
   const destination = getLecturerWorkflowNotificationDestination({
     notification,
     notifications,

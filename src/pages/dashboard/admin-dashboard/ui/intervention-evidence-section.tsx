@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ClipboardList, Download, Filter, Users } from "lucide-react";
+import { ClipboardList, Download, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,9 @@ import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
 import {
   buildInterventionEvidenceReport,
+  buildInterventionEvidencePack,
   fetchAdminInterventionEvidenceDataset,
+  queueOverdueInterventionReminders,
   type AdminInterventionEvidenceDataset,
   type AdminInterventionEvidenceRow,
   type AdminInterventionEvidenceSummary,
@@ -36,6 +38,16 @@ const downloadCsv = (content: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const downloadText = (content: string, filename: string, mimeType = "text/markdown") => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
+
 const summaryCards = (summary: AdminInterventionEvidenceSummary) => [
   { label: "Interventions", value: summary.interventionCount },
   { label: "Evidence events", value: summary.eventCount },
@@ -43,6 +55,7 @@ const summaryCards = (summary: AdminInterventionEvidenceSummary) => [
   { label: "Lecturers involved", value: summary.uniqueLecturers },
   { label: "Open follow-ups", value: summary.openCount },
   { label: "Overdue follow-ups", value: summary.overdueCount },
+  { label: "Resolved rate", value: `${Math.round(summary.resolvedRate * 100)}%` },
 ];
 
 const ReportTable = ({ rows }: { rows: AdminInterventionEvidenceRow[] }) => (
@@ -129,6 +142,7 @@ export const InterventionEvidenceSection = () => {
   const [startDate, setStartDate] = useState(() => toDateInputValue(new Date(Date.now() - 29 * 86400000)));
   const [endDate, setEndDate] = useState(() => toDateInputValue(new Date()));
   const [exporting, setExporting] = useState(false);
+  const [reminding, setReminding] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -180,6 +194,50 @@ export const InterventionEvidenceSection = () => {
       toast.error("Failed to generate APP evidence export");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPack = () => {
+    if (!dataset) return;
+
+    const pack = buildInterventionEvidencePack(dataset, {
+      cohortId: selectedCohortId as "all" | string,
+      startDate: startDate || null,
+      endDate: endDate || null,
+    });
+
+    downloadText(pack.markdown, pack.filename);
+    toast.success("APP evidence pack downloaded");
+  };
+
+  const handleSendOverdueReminders = async () => {
+    if (!dataset) return;
+
+    setReminding(true);
+    try {
+      const result = await queueOverdueInterventionReminders(dataset, {
+        cohortId: selectedCohortId as "all" | string,
+        startDate: startDate || null,
+        endDate: endDate || null,
+      });
+
+      if (result.total === 0) {
+        toast.info("No overdue follow-ups were found for the current filter");
+        return;
+      }
+
+      if (result.created > 0) {
+        toast.success(`Queued ${result.created} overdue follow-up reminder${result.created === 1 ? "" : "s"}`);
+      } else if (result.duplicate > 0) {
+        toast.warning("Overdue reminders were already queued for the current filter");
+      } else {
+        toast.warning("No overdue reminders could be queued right now");
+      }
+    } catch (error) {
+      log.error("Failed to queue overdue intervention reminders", error);
+      toast.error("Could not queue overdue follow-up reminders");
+    } finally {
+      setReminding(false);
     }
   };
 
@@ -253,6 +311,20 @@ export const InterventionEvidenceSection = () => {
               <Button className="w-full" onClick={handleExport} disabled={exporting || report.rows.length === 0}>
                 <Download className="mr-2 h-4 w-4" />
                 Download CSV
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label>Evidence pack</Label>
+              <Button className="w-full" variant="outline" onClick={handleExportPack} disabled={report.rows.length === 0}>
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Download evidence pack
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label>Automation</Label>
+              <Button className="w-full" variant="secondary" onClick={handleSendOverdueReminders} disabled={reminding}>
+                <Users className="mr-2 h-4 w-4" />
+                Send overdue reminders
               </Button>
             </div>
             <div className="space-y-2">

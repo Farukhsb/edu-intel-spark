@@ -230,6 +230,16 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
       return;
     }
 
+    if (isLecturerEquivalent && notification.category === "intervention-overdue-reminder") {
+      if (notification.relatedStudentId) {
+        navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}?source=overdue-reminder`);
+        return;
+      }
+
+      navigate("/dashboard?view=intervention-evidence");
+      return;
+    }
+
     if (isLecturerEquivalent && notification.relatedStudentId) {
       navigate(`/dashboard/student/${encodeURIComponent(notification.relatedStudentId)}`);
       return;

@@ -236,6 +236,20 @@ describe("edge function hardening", () => {
     expect(launchSource).toContain("Location");
   });
 
+  it("keeps the overdue intervention reminder scheduler public for cron posts", () => {
+    const configSource = readRepoFile("supabase/config.toml");
+    const reminderSource = readRepoFile("supabase/functions/send-overdue-intervention-reminders/index.ts");
+    const migrationSource = readRepoFile("supabase/migrations/20260605180000_add_weekly_overdue_intervention_reminders.sql");
+
+    expect(configSource).toContain("[functions.send-overdue-intervention-reminders]");
+    expect(configSource).toContain("verify_jwt = false");
+    expect(reminderSource).toContain("intervention-overdue-reminder");
+    expect(reminderSource).toContain("scheduler_secret");
+    expect(reminderSource).toContain("send-overdue-intervention-reminders completed");
+    expect(migrationSource).toContain("weekly-overdue-intervention-reminders");
+    expect(migrationSource).toContain("intervention-overdue-reminders-scheduler");
+  });
+
   it("keeps internal similarity fallback logic non-fatal inside check-plagiarism", () => {
     const source = readRepoFile("supabase/functions/check-plagiarism/core.ts");
     const wrapperSource = readRepoFile("supabase/functions/check-plagiarism/handler.ts");
