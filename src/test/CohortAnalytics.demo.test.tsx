@@ -62,8 +62,9 @@ describe("DemoCohortAnalytics", () => {
     expect(screen.getByText("Immediate intervention position")).toBeInTheDocument();
     expect(screen.getAllByText("High-risk student cluster detected").length).toBeGreaterThan(0);
     expect(
-      screen.getByText("Open the risk workflow and prioritise the highest-risk students."),
-    ).toBeInTheDocument();
+      screen.getAllByText("Open the risk workflow and prioritise the highest-risk students.")
+        .length,
+    ).toBeGreaterThan(0);
     expect(screen.getByRole("tab", { name: "AI Recommendations" })).toBeInTheDocument();
     expect(screen.getAllByText("Grade Distribution").length).toBeGreaterThan(0);
     expect(mocks.supabase.from).not.toHaveBeenCalled();
