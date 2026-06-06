@@ -46,7 +46,7 @@ const withOverviewIcons = (items: ReturnType<typeof buildIntegrityOverview>): In
   }));
 
 export const useAcademicIntegrityController = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<IntegrityOverviewItem[]>([]);
   const [flagged, setFlagged] = useState<FlaggedIntegrityCase[]>([]);
@@ -160,6 +160,7 @@ export const useAcademicIntegrityController = () => {
     void logAcademicAccessEvent({
       actorId: user.id,
       actorRole: "lecturer",
+      institutionId: profile?.institution_id ?? null,
       eventType: "integrity_evidence_viewed",
       resourceType: "academic_integrity_review",
       resourceId: item.submissionId,
@@ -171,7 +172,7 @@ export const useAcademicIntegrityController = () => {
         riskLevel: item.riskLevel,
       },
     });
-  }, [expandedId, flagged, user]);
+  }, [expandedId, flagged, profile?.institution_id, user]);
 
   const saveDecision = async (item: FlaggedIntegrityCase) => {
     if (!user) return;

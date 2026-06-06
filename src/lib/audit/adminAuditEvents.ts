@@ -1,26 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
-import { log } from "@/lib/logger";
 import type { Json, TablesInsert } from "@/integrations/supabase/types";
+import { log } from "@/lib/logger";
 
-export type AcademicAccessEventType =
-  | "submission_viewed"
-  | "submission_file_opened"
-  | "student_profile_viewed"
-  | "integrity_evidence_viewed"
-  | "moderation_evidence_viewed"
-  | "grade_details_viewed";
-
-type AcademicAccessEventInput = {
+type AdminAuditEventInput = {
   actorId?: string | null;
   actorRole?: string | null;
   institutionId?: string | null;
-  eventType: AcademicAccessEventType;
-  resourceType: string;
-  resourceId?: string | null;
-  assignmentId?: string | null;
-  submissionId?: string | null;
-  moderationCaseId?: string | null;
-  metadata?: Record<string, unknown>;
+  actionType: string;
+  targetUserId?: string | null;
+  targetUserName?: string | null;
+  targetUserEmail?: string | null;
+  details?: Record<string, unknown>;
 };
 
 const toJsonValue = (value: unknown): Json | undefined => {
@@ -45,13 +35,13 @@ const toJsonValue = (value: unknown): Json | undefined => {
   return String(value);
 };
 
-const sanitizeMetadata = (metadata?: Record<string, unknown>): Json => {
-  if (!metadata) {
+const sanitizeDetails = (details?: Record<string, unknown>): Json => {
+  if (!details) {
     return {};
   }
 
   const sanitized: Record<string, Json | undefined> = {};
-  for (const [key, value] of Object.entries(metadata)) {
+  for (const [key, value] of Object.entries(details)) {
     const normalized = toJsonValue(value);
     if (normalized !== undefined) {
       sanitized[key] = normalized;
@@ -61,33 +51,29 @@ const sanitizeMetadata = (metadata?: Record<string, unknown>): Json => {
   return sanitized;
 };
 
-export const logAcademicAccessEvent = async ({
+export const logAdminAuditEvent = async ({
   actorId,
   actorRole,
   institutionId,
-  eventType,
-  resourceType,
-  resourceId,
-  assignmentId,
-  submissionId,
-  moderationCaseId,
-  metadata,
-}: AcademicAccessEventInput) => {
+  actionType,
+  targetUserId,
+  targetUserName,
+  targetUserEmail,
+  details,
+}: AdminAuditEventInput) => {
   if (!actorId || !actorRole) {
     return;
   }
 
-  const payload: TablesInsert<"academic_access_events"> = {
+  const payload: TablesInsert<"admin_audit_log"> = {
     actor_id: actorId,
     actor_role: actorRole,
     institution_id: institutionId ?? null,
-    event_type: eventType,
-    resource_type: resourceType,
-    resource_id: resourceId ?? null,
-    assignment_id: assignmentId ?? null,
-    submission_id: submissionId ?? null,
-    moderation_case_id: moderationCaseId ?? null,
-    metadata: sanitizeMetadata(metadata),
+    action_type: actionType,
+    target_user_id: targetUserId ?? null,
+    target_user_name: targetUserName ?? null,
+    target_user_email: targetUserEmail ?? null,
+    details: sanitizeDetails(details),
   };
 
   try {
@@ -95,7 +81,7 @@ export const logAcademicAccessEvent = async ({
       return;
     }
 
-    const table = supabase.from("academic_access_events");
+    const table = supabase.from("admin_audit_log");
     if (!table || typeof (table as { insert?: unknown }).insert !== "function") {
       return;
     }
@@ -105,23 +91,15 @@ export const logAcademicAccessEvent = async ({
       return;
     }
 
-    log.warn("Failed to record academic access event", {
-      eventType,
-      resourceType,
-      resourceId,
-      submissionId,
-      moderationCaseId,
-      assignmentId,
+    log.warn("Failed to record admin audit event", {
+      actionType,
+      targetUserId,
       actorRole,
     });
   } catch (error) {
-    log.warn("Failed to record academic access event", {
-      eventType,
-      resourceType,
-      resourceId,
-      submissionId,
-      moderationCaseId,
-      assignmentId,
+    log.warn("Failed to record admin audit event", {
+      actionType,
+      targetUserId,
       actorRole,
       error,
     });

@@ -51,6 +51,7 @@ describe("academic access event logging", () => {
       expect.objectContaining({
         actor_id: "lecturer-1",
         actor_role: "lecturer",
+        institution_id: null,
         event_type: "submission_viewed",
         resource_type: "submission",
         resource_id: "submission-1",
@@ -60,6 +61,29 @@ describe("academic access event logging", () => {
         metadata: expect.objectContaining({
           source: "assignment_review_dialog",
         }),
+      }),
+    );
+  });
+
+  it("records a student profile view event", async () => {
+    const { logAcademicAccessEvent } = await import("@/lib/audit/academicAccessEvents");
+
+    await logAcademicAccessEvent({
+      actorId: "lecturer-1",
+      actorRole: "lecturer",
+      eventType: "student_profile_viewed",
+      resourceType: "student_profile",
+      resourceId: "student-1",
+      metadata: {
+        source: "student_profile_page",
+      },
+    });
+
+    expect(mocks.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        institution_id: null,
+        event_type: "student_profile_viewed",
+        resource_type: "student_profile",
       }),
     );
   });

@@ -197,6 +197,7 @@ const StudentGrades = () => {
     void logAcademicAccessEvent({
       actorId: user.id,
       actorRole: "student",
+      institutionId: profile?.institution_id ?? null,
       eventType: "grade_details_viewed",
       resourceType: "grade",
       resourceId: selectedRelease.gradeId,

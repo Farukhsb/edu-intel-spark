@@ -1,7 +1,8 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
 import { computeRisk } from "@/lib/studentRisk";
 import { fetchLecturerStudentProfileDataset } from "@/lib/data/student";
 import { safeFormatDate } from "@/lib/date";
@@ -137,7 +138,7 @@ const getSupportNotificationToastCopy = (
 const StudentProfile = () => {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const decodedStudentId = decodeURIComponent(studentId || "");
   const [loading, setLoading] = useState(true);
@@ -158,6 +159,7 @@ const StudentProfile = () => {
   const [evidenceSummary, setEvidenceSummary] = useState("");
   const [evidenceNextStep, setEvidenceNextStep] = useState("");
   const [evidenceContactedAt, setEvidenceContactedAt] = useState(toDateTimeLocalValue());
+  const lastLoggedProfileViewRef = useRef<string | null>(null);
   const resolvedStudentRecordId =
     student?.studentRecordId || (isUuid(student?.studentId) ? student.studentId : null);
 
@@ -301,6 +303,30 @@ const StudentProfile = () => {
 
     void loadInterventionEvents();
   }, [decodedStudentId, resolvedStudentRecordId, user?.id, reloadKey]);
+
+  useEffect(() => {
+    if (!user?.id || !resolvedStudentRecordId || !student) return;
+
+    const logKey = `${resolvedStudentRecordId}:${student.name}`;
+    if (lastLoggedProfileViewRef.current === logKey) {
+      return;
+    }
+
+    lastLoggedProfileViewRef.current = logKey;
+    void logAcademicAccessEvent({
+      actorId: user.id,
+      actorRole: "lecturer",
+      institutionId: profile?.institution_id ?? null,
+      eventType: "student_profile_viewed",
+      resourceType: "student_profile",
+      resourceId: resolvedStudentRecordId,
+      metadata: {
+        source: "student_profile_page",
+        studentName: student.name,
+        studentRiskLevel: student.riskLevel,
+      },
+    });
+  }, [profile?.institution_id, resolvedStudentRecordId, student, user?.id]);
 
   useEffect(() => {
     if (!evidenceInterventionId && interventions[0]?.id) {

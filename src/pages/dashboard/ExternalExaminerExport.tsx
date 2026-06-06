@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, FileText, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAdminAuditEvent } from "@/lib/audit/adminAuditEvents";
 import { toast } from "sonner";
 import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { ExternalExaminerDatasetError } from "@/lib/data/academic/academicData";
@@ -52,7 +53,7 @@ const getExportSummary = (rows: ExternalExaminerExportRow[]) => {
 };
 
 const ExternalExaminerExport = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [assignments, setAssignments] = useState<Array<{ id: string; title: string; moduleCode: string }>>([]);
@@ -162,6 +163,22 @@ const ExternalExaminerExport = () => {
         downloadCSV(csv, `external_examiner_export_${new Date().toISOString().slice(0, 10)}.csv`);
       }
 
+      void logAdminAuditEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        institutionId: profile?.institution_id ?? null,
+        actionType: "report_exported",
+        details: {
+          report_name: "external_examiner_export",
+          format,
+          assignment_filter: selectedAssignment,
+          row_count: filteredData.length,
+          include_scores: includeOptions.scores,
+          include_feedback: includeOptions.feedback,
+          include_moderation: includeOptions.moderation,
+          include_student_identity: includeOptions.studentIdentity,
+        },
+      });
       toast.success("Export downloaded successfully");
     } catch {
       toast.error("Failed to generate export");

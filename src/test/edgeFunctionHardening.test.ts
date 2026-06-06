@@ -393,8 +393,12 @@ describe("edge function hardening", () => {
     const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
 
     expect(gradingSource).toContain('event_type: "grading_failed"');
+    expect(gradingSource).toContain('eventType: "grading_started"');
+    expect(gradingSource).toContain('eventType: "grading_completed"');
     expect(gradingSource).toContain('await recordGradingFailureAudit({');
+    expect(gradingSource).toContain('await recordGradingAuditEvent({');
     expect(gradingSource).toContain('logWarn("grade-submission failure audit insert failed"');
+    expect(gradingSource).toContain('logWarn("grade-submission audit insert failed"');
     expect(gradingSource).toContain('from("workflow_runs")');
     expect(gradingSource).toContain('workflow_name: "grade-submission"');
     expect(gradingSource).toContain('status: "running"');

@@ -60,6 +60,7 @@ export const SubmissionReviewDialog = ({
     void logAcademicAccessEvent({
       actorId: user?.id,
       actorRole: profile?.role ?? null,
+      institutionId: profile?.institution_id ?? null,
       eventType: "submission_viewed",
       resourceType: "submission",
       resourceId: reviewSubmission.id,
@@ -74,6 +75,7 @@ export const SubmissionReviewDialog = ({
     void logAcademicAccessEvent({
       actorId: user?.id,
       actorRole: profile?.role ?? null,
+      institutionId: profile?.institution_id ?? null,
       eventType: "grade_details_viewed",
       resourceType: "grade",
       resourceId: grade?.id ?? reviewSubmission.id,
@@ -84,7 +86,7 @@ export const SubmissionReviewDialog = ({
         hasAiDraft: Boolean(grade?.ai_score != null),
       },
     });
-  }, [grade?.ai_score, grade?.id, open, profile?.role, reviewSubmission, user?.id]);
+  }, [grade?.ai_score, grade?.id, open, profile?.institution_id, profile?.role, reviewSubmission, user?.id]);
 
   return (
   <Dialog open={open} onOpenChange={onOpenChange}>

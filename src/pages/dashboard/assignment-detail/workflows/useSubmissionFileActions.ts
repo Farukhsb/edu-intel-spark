@@ -28,6 +28,7 @@ export const useSubmissionFileActions = (): UseSubmissionFileActionsResult => {
         void logAcademicAccessEvent({
           actorId: user?.id,
           actorRole: profile?.role ?? null,
+          institutionId: profile?.institution_id ?? null,
           eventType: "submission_file_opened",
           resourceType: options?.resourceType || "submission_file",
           resourceId: submission.id,
@@ -55,6 +56,7 @@ export const useSubmissionFileActions = (): UseSubmissionFileActionsResult => {
       void logAcademicAccessEvent({
         actorId: user?.id,
         actorRole: profile?.role ?? null,
+        institutionId: profile?.institution_id ?? null,
         eventType: "submission_file_opened",
         resourceType: options?.resourceType || "submission_file",
         resourceId: submission.id,

@@ -231,6 +231,53 @@ async function recordGradingErrorEvent({
   }
 }
 
+async function recordGradingAuditEvent({
+  supabaseAdmin,
+  submissionId,
+  userId,
+  institutionId,
+  actorRole,
+  gradeId,
+  moderationCaseId,
+  eventType,
+  previousValues,
+  newValues,
+  reason,
+}: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  submissionId: string;
+  userId: string;
+  institutionId: string;
+  actorRole: "admin" | "lecturer";
+  gradeId?: string | null;
+  moderationCaseId?: string | null;
+  eventType: string;
+  previousValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
+  reason: string;
+}) {
+  const { error } = await supabaseAdmin.from("grade_audit_log").insert({
+    submission_id: submissionId,
+    grade_id: gradeId ?? null,
+    moderation_case_id: moderationCaseId ?? null,
+    institution_id: institutionId,
+    changed_by: userId,
+    event_type: eventType,
+    actor_role: actorRole,
+    previous_values: previousValues ?? {},
+    new_values: newValues ?? {},
+    reason,
+  });
+
+  if (error) {
+    logWarn("grade-submission audit insert failed", {
+      submissionId,
+      eventType,
+      error,
+    });
+  }
+}
+
 type WorkflowRunTelemetryStatus = "running" | "succeeded" | "failed";
 
 async function recordGradingWorkflowRun({
@@ -687,6 +734,23 @@ Deno.serve(async (req) => {
 
     for (const sub of submissions.filter((item) => normalizeSubmissionStoragePath(item.file_url))) {
       try {
+        await recordGradingAuditEvent({
+          supabaseAdmin,
+          submissionId: sub.id,
+          userId: user.id,
+          institutionId,
+          actorRole,
+          eventType: "grading_started",
+          previousValues: {
+            status: sub.status,
+          },
+          newValues: {
+            status: "ai_grading",
+            grading_model: gradingModel,
+            grading_passes: gradingPasses,
+          },
+          reason: "AI grading workflow started.",
+        });
         const gradingResult = await gradeSingleSubmission({
           sub,
           assignment,
@@ -708,6 +772,23 @@ Deno.serve(async (req) => {
           submissionId: sub.id,
           institutionId,
           gradingResult,
+        });
+        await recordGradingAuditEvent({
+          supabaseAdmin,
+          submissionId: sub.id,
+          userId: user.id,
+          institutionId,
+          actorRole,
+          eventType: "grading_completed",
+          previousValues: {
+            status: "ai_grading",
+          },
+          newValues: {
+            status: gradingResult.requiresLecturerReview ? "first_review" : "ai_graded",
+            score: gradingResult.score ?? null,
+            requires_lecturer_review: Boolean(gradingResult.requiresLecturerReview),
+          },
+          reason: "AI grading workflow completed.",
         });
         results.push(gradingResult);
       } catch (gradeErr) {
