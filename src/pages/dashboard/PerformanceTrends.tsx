@@ -134,19 +134,25 @@ const PerformanceTrends = () => {
 
     const critical = projection.atRiskStudents.filter((student) => student.riskLevel === "critical");
     const high = projection.atRiskStudents.filter((student) => student.riskLevel === "high");
+    const alertParts: string[] = [];
 
     if (critical.length > 0) {
-      toast({
-        variant: "destructive",
-        title: `Critical At-Risk Student${critical.length > 1 ? "s" : ""}`,
-        description: `${critical.map((student) => student.name).join(", ")} - immediate intervention recommended.`,
-      });
+      alertParts.push(
+        `Critical: ${critical.map((student) => student.name).join(", ")} - immediate intervention recommended.`,
+      );
     }
 
     if (high.length > 0) {
+      alertParts.push(
+        `${high.length} High-Risk Student${high.length > 1 ? "s" : ""}: ${high.map((student) => student.name).join(", ")} - review their trajectories.`,
+      );
+    }
+
+    if (alertParts.length > 0) {
       toast({
-        title: `${high.length} High-Risk Student${high.length > 1 ? "s" : ""} Detected`,
-        description: `${high.map((student) => student.name).join(", ")} - review their trajectories.`,
+        variant: critical.length > 0 ? "destructive" : "default",
+        title: "At-risk students detected",
+        description: alertParts.join(" "),
       });
     }
 
