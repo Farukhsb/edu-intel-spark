@@ -348,17 +348,41 @@ describe("edge function hardening", () => {
     const authSource = readRepoFile("supabase/functions/_shared/auth.ts");
     const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
     const adminRoleSource = readRepoFile("supabase/functions/admin-set-user-role/index.ts");
+    const riskBatchSource = readRepoFile("supabase/functions/compute-risk-batch/index.ts");
+    const workflowEmailSource = readRepoFile("supabase/functions/send-workflow-notification-email/index.ts");
+    const importGradesSource = readRepoFile("supabase/functions/import-grades/index.ts");
+    const importConfirmSource = readRepoFile("supabase/functions/import-grades/confirm.ts");
 
     expect(authSource).toContain("export async function resolveUserRoles");
     expect(authSource).toContain("export async function requireAppRoles");
     expect(authSource).toContain("export async function requireAdmin");
     expect(gradingSource).not.toContain("async function resolveActorRoles");
     expect(gradingSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
+    expect(gradingSource).toContain('select("id, institution_id, institutions:institution_id (slug)")');
+    expect(gradingSource).toContain("loadAssignmentForGrading(");
+    expect(gradingSource).toContain("loadRequestedSubmissionsForGrading(");
+    expect(gradingSource).toContain("loadAssignmentSubmissionRows(");
+    expect(gradingSource).toContain("loadExistingGradesForGrading(");
+    expect(gradingSource).toContain('institution_id: institutionId');
+    expect(gradingSource).toContain('institution_id: institutionId,');
+    expect(gradingSource).toContain('grading_error_events").insert(');
     expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? existingMetadata.institution_id ?? null");
     expect(adminRoleSource).toContain("institution_slug: institutionSlug ?? existingMetadata.institution_slug ?? null");
     expect(adminRoleSource).toContain("const actorInstitutionSlug");
     expect(adminRoleSource).toContain("Admin users can only change users in their own institution");
     expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? actorProfile?.institution_id ?? null");
+    expect(riskBatchSource).toContain('.eq("institution_id", institutionId)');
+    expect(workflowEmailSource).toContain('select("id, institution_id, institutions:institution_id (slug)")');
+    expect(workflowEmailSource).toContain('.eq("institution_id", institutionId)');
+    expect(workflowEmailSource).toContain('notification_type: "assignment-published"');
+    expect(workflowEmailSource).toContain('institution_id: institutionId');
+    expect(importGradesSource).toContain('select("id, institution_id, institutions:institution_id (slug)")');
+    expect(importGradesSource).toContain('.eq("institution_id", institutionId)');
+    expect(importGradesSource).toContain('loadAssignmentForGrading(');
+    expect(importGradesSource).toContain('createImportedAssignment({');
+    expect(importGradesSource).toContain('confirmImport({');
+    expect(importConfirmSource).toContain('institution_id: params.institutionId');
+    expect(importConfirmSource).toContain('.eq("institution_id", params.institutionId)');
   });
 
   it("persists grading failure audit events for admin operational monitoring", () => {

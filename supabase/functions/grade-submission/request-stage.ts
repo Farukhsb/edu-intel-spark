@@ -47,11 +47,12 @@ export function normalizeRubricForAssignment(assignment: AssignmentForGrading) {
   return { normalizedRubric, rubricText };
 }
 
-export async function loadAssignmentForGrading(client: QueryClient, assignmentId: string) {
+export async function loadAssignmentForGrading(client: QueryClient, assignmentId: string, institutionId: string) {
   const response = await client
     .from("assignments")
     .select("id, lecturer_id, institution_id, title, description, module_code, max_score, rubric")
     .eq("id", assignmentId)
+    .eq("institution_id", institutionId)
     .maybeSingle();
 
   return {
@@ -64,11 +65,13 @@ export async function loadRequestedSubmissionsForGrading(
   client: QueryClient,
   assignmentId: string,
   submissionIds: string[],
+  institutionId: string,
 ) {
   const response = await client
     .from("submissions")
-    .select("id, assignment_id, student_name, student_email, file_name, file_url")
+    .select("id, assignment_id, institution_id, student_name, student_email, file_name, file_url")
     .eq("assignment_id", assignmentId)
+    .eq("institution_id", institutionId)
     .in("id", submissionIds) as { data: unknown; error: unknown };
 
   return {
@@ -77,11 +80,12 @@ export async function loadRequestedSubmissionsForGrading(
   };
 }
 
-export async function loadAssignmentSubmissionRows(client: QueryClient, assignmentId: string) {
+export async function loadAssignmentSubmissionRows(client: QueryClient, assignmentId: string, institutionId: string) {
   const response = await client
     .from("submissions")
-    .select("id, file_url, file_name, student_name, student_email")
-    .eq("assignment_id", assignmentId) as { data: unknown; error: unknown };
+    .select("id, institution_id, file_url, file_name, student_name, student_email")
+    .eq("assignment_id", assignmentId)
+    .eq("institution_id", institutionId) as { data: unknown; error: unknown };
 
   const rows = (response.data as SubmissionForGrading[] | null) ?? [];
   return {
@@ -95,10 +99,12 @@ export async function loadAssignmentSubmissionRows(client: QueryClient, assignme
 export async function loadExistingGradesForGrading(
   client: QueryClient,
   submissionIds: string[],
+  institutionId: string,
 ) {
   const response = await client
     .from("grades")
     .select("id, submission_id, ai_score, ai_feedback, ai_breakdown, grading_confidence, grading_metadata, created_at")
+    .eq("institution_id", institutionId)
     .in("submission_id", submissionIds) as { data: unknown; error: unknown };
 
   const gradeRows = (response.data as ExistingGradeRecordWithMeta[] | null) ?? [];

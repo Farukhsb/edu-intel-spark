@@ -12,6 +12,7 @@ export type AssignmentForGrading = {
 export type SubmissionForGrading = {
   id: string;
   assignment_id?: string;
+  institution_id?: string | null;
   student_name: string | null;
   student_email: string | null;
   file_name: string | null;

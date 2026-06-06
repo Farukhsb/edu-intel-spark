@@ -29,6 +29,7 @@ async function sha256Hex(value: string) {
 export async function loadExistingGrades(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
   submissionIds: string[],
+  institutionId: string,
 ) {
   if (submissionIds.length === 0) {
     return new Map<string, {
@@ -49,6 +50,7 @@ export async function loadExistingGrades(
   const { data, error } = await supabaseAdmin
     .from("grades")
     .select("submission_id, ai_score, ai_feedback, ai_breakdown, lecturer_score, lecturer_feedback, final_score, final_feedback, grading_confidence, grading_metadata, grade_source, source_metadata")
+    .eq("institution_id", institutionId)
     .in("submission_id", submissionIds);
 
   if (error) {
@@ -78,6 +80,7 @@ export async function loadExistingGrades(
 export async function createImportedAssignment(params: {
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   userId: string;
+  institutionId: string;
   title: string;
   moduleCode: string;
   maxScore: number;
@@ -87,6 +90,7 @@ export async function createImportedAssignment(params: {
   const { data, error } = await params.supabaseAdmin
     .from("assignments")
     .insert({
+      institution_id: params.institutionId,
       lecturer_id: params.userId,
       title: params.title,
       description: params.description,
@@ -115,6 +119,7 @@ export async function createImportedAssignment(params: {
 export async function confirmImport(params: {
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   userId: string;
+  institutionId: string;
   assignmentId: string;
   assignmentTitle: string;
   corsHeaders: HeadersInit;
@@ -184,6 +189,7 @@ export async function confirmImport(params: {
 
     const { error: importInsertError } = await params.supabaseAdmin.from("grade_imports").insert({
       id: importId,
+      institution_id: params.institutionId,
       imported_by: params.userId,
       import_method: params.request.importMethod,
       file_path: sourceFilePath,
@@ -203,6 +209,7 @@ export async function confirmImport(params: {
     const submissionRowsToCreate = acceptedRows.filter((row) => row.submissionAction === "create");
     for (const row of submissionRowsToCreate) {
       const submissionInsert = await params.supabaseAdmin.from("submissions").insert({
+        institution_id: params.institutionId,
         assignment_id: params.assignmentId,
         student_name: row.studentName || null,
         student_email: row.studentEmail,
@@ -224,7 +231,7 @@ export async function confirmImport(params: {
       .map((row) => row.matchedSubmissionId)
       .filter((value): value is string => Boolean(value));
 
-    const existingGradesBySubmission = await loadExistingGrades(params.supabaseAdmin, submissionIds);
+    const existingGradesBySubmission = await loadExistingGrades(params.supabaseAdmin, submissionIds, params.institutionId);
     const acceptedBatches = chunkArray(acceptedRows, batchSize);
 
     for (const [batchIndex, batch] of acceptedBatches.entries()) {
@@ -249,6 +256,7 @@ export async function confirmImport(params: {
           row,
           submissionId,
           lecturerId: params.userId,
+          institutionId: params.institutionId,
           sourceFileName,
           sourceFileHash,
           importMethod: params.request.importMethod,
@@ -274,7 +282,8 @@ export async function confirmImport(params: {
             student_name: row.studentName || null,
             student_email: row.studentEmail,
           })
-          .eq("id", submissionId);
+          .eq("id", submissionId)
+          .eq("institution_id", params.institutionId);
 
         if (submissionUpdateError) {
           logWarn("import-grades submission update failed", {
@@ -307,7 +316,8 @@ export async function confirmImport(params: {
           import_id: importId,
         },
       })
-      .eq("id", importId);
+      .eq("id", importId)
+      .eq("institution_id", params.institutionId);
 
     if (importUpdateError) {
       logWarn("import-grades import log update failed", {

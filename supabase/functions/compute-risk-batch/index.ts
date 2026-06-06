@@ -321,6 +321,7 @@ Deno.serve(async (req) => {
       ? await supabaseAdmin
         .from("grades")
         .select("submission_id, final_score, ai_score")
+        .eq("institution_id", institutionId)
         .in("submission_id", submissionIds)
       : { data: [], error: null };
 

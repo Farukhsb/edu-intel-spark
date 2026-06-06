@@ -70,6 +70,7 @@ export function buildGradingErrorEventPayload({
   submissionId,
   assignmentId,
   userId,
+  institutionId,
   provider,
   reason,
   errorCode,
@@ -79,6 +80,7 @@ export function buildGradingErrorEventPayload({
   submissionId: string;
   assignmentId: string;
   userId: string;
+  institutionId: string;
   provider: string;
   reason: string;
   errorCode?: string;
@@ -93,6 +95,7 @@ export function buildGradingErrorEventPayload({
     submission_id: submissionId,
     assignment_id: assignmentId,
     user_id: userId,
+    institution_id: institutionId,
     provider,
     error_code: classification.errorCode,
     error_message: safeErrorMessage ?? toSafeGradingErrorMessage(reason),

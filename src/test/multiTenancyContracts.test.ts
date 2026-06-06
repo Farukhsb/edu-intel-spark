@@ -211,6 +211,29 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("profiles.role = 'admin'");
   });
 
+  it("adds institution scoping to grading error events", () => {
+    const source = readRepoFile("supabase/migrations/20260606131000_harden_grading_error_events_institution_scope.sql");
+
+    expect(source).toContain("alter table public.grading_error_events");
+    expect(source).toContain("add column if not exists institution_id uuid");
+    expect(source).toContain("grading_error_events_institution_id_fkey");
+    expect(source).toContain("private.submission_institution_id(ge.submission_id)");
+    expect(source).toContain("private.assignment_institution_id(ge.assignment_id)");
+    expect(source).toContain("create trigger sync_grading_error_event_institution_id");
+    expect(source).toContain('create policy "Admins can read grading error events"');
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
+
+  it("adds institution scoping to grade imports", () => {
+    const source = readRepoFile("supabase/migrations/20260606133000_harden_grade_imports_institution_scope.sql");
+
+    expect(source).toContain('create policy "Users can view their own grade imports"');
+    expect(source).toContain('create policy "Users can insert their own grade imports"');
+    expect(source).toContain("private.same_institution(institution_id)");
+    expect(source).toContain("imported_by = auth.uid()");
+    expect(source).toContain("private.is_admin()");
+  });
+
   it("adds text overloads for institution helper compatibility on legacy text-key paths", () => {
     const source = readRepoFile("supabase/migrations/20260525094500_add_text_institution_helper_overloads.sql");
 
