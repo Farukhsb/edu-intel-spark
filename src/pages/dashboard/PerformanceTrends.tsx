@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { type AtRiskStudent, computeRisk } from "@/lib/studentRisk";
+import { computeRisk } from "@/lib/studentRisk";
 import { fetchLecturerPerformanceDataset } from "@/lib/data/student";
 import { log } from "@/lib/logger";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
@@ -50,67 +50,79 @@ const PerformanceTrends = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [alertsDismissed, setAlertsDismissed] = useState(false);
-  const [modules, setModules] = useState<string[]>([]);
-  const [assessmentTrends, setAssessmentTrends] = useState<{ name: string; avgGrade: number; participation: number }[]>([]);
-  const [gradeDist, setGradeDist] = useState(EMPTY_GRADE_DIST);
-  const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
-
+  const [assignments, setAssignments] = useState<
+    { id: string; title: string; module_code: string | null }[]
+  >([]);
+  const [submissions, setSubmissions] = useState<
+    {
+      id: string;
+      assignment_id: string;
+      student_id: string | null;
+      student_name: string | null;
+      student_email: string | null;
+      submitted_at: string;
+    }[]
+  >([]);
+  const [grades, setGrades] = useState<
+    { submission_id: string; ai_score: number | null; final_score: number | null }[]
+  >([]);
   const { riskFilter, scoreBandFilter } = performanceSearchState;
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      setLoadError(null);
+      setAssignments([]);
+      setSubmissions([]);
+      setGrades([]);
+      return;
+    }
 
     const fetchLiveData = async () => {
       setLoadError(null);
       try {
-        const { assignments, submissions, grades } = await fetchLecturerPerformanceDataset(user.id);
-        if (assignments.length === 0) {
-          setModules([]);
-          setAssessmentTrends([]);
-          setGradeDist(EMPTY_GRADE_DIST);
-          setAtRiskStudents([]);
-          setLoading(false);
-          return;
-        }
-
-        const moduleSet = new Set(assignments.map((assignment) => assignment.module_code).filter(Boolean) as string[]);
-        setModules(Array.from(moduleSet));
-
-        if (submissions.length === 0) {
-          setAssessmentTrends([]);
-          setGradeDist(EMPTY_GRADE_DIST);
-          setAtRiskStudents([]);
-          setLoading(false);
-          return;
-        }
-
-        const projection = buildPerformanceProjection({
-          assignments,
-          submissions,
-          grades,
-          moduleFilter,
-          computeRisk,
-        });
-
-        setAssessmentTrends(projection.assessmentTrends);
-        setGradeDist(projection.gradeDist);
-        setAtRiskStudents(projection.atRiskStudents);
+        const dataset = await fetchLecturerPerformanceDataset(user.id);
+        setAssignments(dataset.assignments);
+        setSubmissions(dataset.submissions);
+        setGrades(dataset.grades);
       } catch (error) {
         log.error("Failed to fetch performance data", error);
         setLoadError("Performance trends could not be loaded right now.");
+        setAssignments([]);
+        setSubmissions([]);
+        setGrades([]);
       }
 
       setLoading(false);
     };
 
     void fetchLiveData();
-  }, [user?.id, moduleFilter, reloadKey]);
+  }, [user?.id, reloadKey]);
+
+  const projection = useMemo(() => {
+    if (assignments.length === 0) {
+      return {
+        modules: [],
+        assessmentTrends: [],
+        gradeDist: EMPTY_GRADE_DIST,
+        atRiskStudents: [],
+      };
+    }
+
+    return buildPerformanceProjection({
+      assignments,
+      submissions,
+      grades,
+      moduleFilter,
+      computeRisk,
+    });
+  }, [assignments, submissions, grades, moduleFilter]);
 
   useEffect(() => {
-    if (alertsDismissed || atRiskStudents.length === 0) return;
+    if (alertsDismissed || projection.atRiskStudents.length === 0) return;
 
-    const critical = atRiskStudents.filter((student) => student.riskLevel === "critical");
-    const high = atRiskStudents.filter((student) => student.riskLevel === "high");
+    const critical = projection.atRiskStudents.filter((student) => student.riskLevel === "critical");
+    const high = projection.atRiskStudents.filter((student) => student.riskLevel === "high");
 
     if (critical.length > 0) {
       toast({
@@ -128,24 +140,24 @@ const PerformanceTrends = () => {
     }
 
     setAlertsDismissed(true);
-  }, [atRiskStudents, alertsDismissed, toast]);
+  }, [alertsDismissed, projection.atRiskStudents, toast]);
 
   const filteredAtRiskStudents = useMemo(() => {
     return filterAtRiskStudents({
-      students: atRiskStudents,
+      students: projection.atRiskStudents,
       riskFilter,
       scoreBandFilter,
     });
-  }, [atRiskStudents, riskFilter, scoreBandFilter]);
+  }, [projection.atRiskStudents, riskFilter, scoreBandFilter]);
 
   const reportingReadiness = useMemo(
     () =>
       getPerformanceReportingReadiness({
-        assessmentTrends,
-        atRiskStudents,
-        gradeDist,
+        assessmentTrends: projection.assessmentTrends,
+        atRiskStudents: projection.atRiskStudents,
+        gradeDist: projection.gradeDist,
       }),
-    [assessmentTrends, atRiskStudents, gradeDist],
+    [projection.assessmentTrends, projection.atRiskStudents, projection.gradeDist],
   );
 
   const updateFilters = (nextRisk: string, nextScoreBand: string) => {
@@ -185,7 +197,7 @@ const PerformanceTrends = () => {
     );
   }
 
-  const noData = assessmentTrends.length === 0 && gradeDist.every((entry) => entry.count === 0);
+  const noData = projection.assessmentTrends.length === 0 && projection.gradeDist.every((entry) => entry.count === 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -222,11 +234,11 @@ const PerformanceTrends = () => {
       </Card>
 
       <PerformanceFiltersBar
-        modules={modules}
+        modules={projection.modules}
         moduleFilter={moduleFilter}
         riskFilter={riskFilter}
         scoreBandFilter={scoreBandFilter}
-        atRiskCount={atRiskStudents.length}
+        atRiskCount={projection.atRiskStudents.length}
         onModuleFilterChange={setModuleFilter}
         onRiskFilterChange={(value) => updateFilters(value, scoreBandFilter)}
         onScoreBandFilterChange={(value) => updateFilters(riskFilter, value)}
@@ -243,22 +255,25 @@ const PerformanceTrends = () => {
         />
       ) : (
         <>
-          {assessmentTrends.length > 0 && (
+          {projection.assessmentTrends.length > 0 && (
             <Suspense fallback={<DashboardLoadingState testId="performance-trends-chart-loading" />}>
-              <AssessmentTrendsCard assessmentTrends={assessmentTrends} />
+              <AssessmentTrendsCard assessmentTrends={projection.assessmentTrends} />
             </Suspense>
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Suspense fallback={<DashboardLoadingState testId="performance-grade-distribution-loading" />}>
-              <GradeDistributionCard gradeDist={gradeDist} />
+              <GradeDistributionCard gradeDist={projection.gradeDist} />
             </Suspense>
-            <StudentSupportSummaryCard filteredStudents={filteredAtRiskStudents} allAtRiskCount={atRiskStudents.length} />
+            <StudentSupportSummaryCard
+              filteredStudents={filteredAtRiskStudents}
+              allAtRiskCount={projection.atRiskStudents.length}
+            />
           </div>
 
           <EarlySupportSignalsCard
             students={filteredAtRiskStudents}
-            allAtRiskCount={atRiskStudents.length}
+            allAtRiskCount={projection.atRiskStudents.length}
             expandedStudent={expandedStudent}
             onToggleStudent={(studentId) => setExpandedStudent(studentId || null)}
             onOpenStudentPlan={(studentId) => navigate(`/dashboard/student/${encodeURIComponent(studentId)}`)}
