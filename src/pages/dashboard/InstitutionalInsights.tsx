@@ -8,7 +8,9 @@ import { useNavigate } from "react-router-dom";
 import { getAssignmentWorkflowTargetFromStats } from "@/lib/assignmentWorkflowNavigation";
 import { fetchProgrammeReportDataset } from "@/lib/data/academic";
 import { downloadInstitutionalInsightsSnapshot } from "@/lib/data/academic/institutionalInsightsView";
+import { logReportExportEvent } from "@/lib/audit/exportAuditEvents";
 import { log } from "@/lib/logger";
+import { toast } from "sonner";
 import {
   buildInstitutionalInsightsSnapshot,
   type AccreditationMetric,
@@ -24,7 +26,7 @@ import {
 } from "@/components/dashboard/PageStates";
 
 const InstitutionalInsights = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [moduleStats, setModuleStats] = useState<ModuleStat[]>([]);
   const [lowPerforming, setLowPerforming] = useState<LowPerformingAssessment[]>([]);
@@ -41,7 +43,7 @@ const InstitutionalInsights = () => {
 
     const fetchData = async () => {
       try {
-        const { assignments, submissions, grades, profiles } = await fetchProgrammeReportDataset();
+        const { assignments, submissions, grades, profiles } = await fetchProgrammeReportDataset(profile?.institution_id ?? null);
         const snapshot = buildInstitutionalInsightsSnapshot({
           assignments,
           submissions,
@@ -76,7 +78,7 @@ const InstitutionalInsights = () => {
     };
 
     void fetchData();
-  }, [user]);
+  }, [profile?.institution_id, user]);
 
   if (loading) {
     return <DashboardLoadingState />;
@@ -125,7 +127,38 @@ const InstitutionalInsights = () => {
       <DashboardLiveBanner label="Viewing live institutional reporting data derived from assignment, submission, and grading records." />
 
       <div className="flex items-center justify-end">
-        <Button variant="outline" size="sm" onClick={() => downloadInstitutionalInsightsSnapshot(moduleStats, lowPerforming, accreditation)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            try {
+              downloadInstitutionalInsightsSnapshot(moduleStats, lowPerforming, accreditation);
+              void logReportExportEvent({
+                actorId: user?.id,
+                actorRole: profile?.role ?? null,
+                institutionId: profile?.institution_id ?? null,
+                reportName: "institutional_insights_snapshot",
+                format: "csv",
+                rowCount: moduleStats.length + lowPerforming.length + accreditation.length,
+                scope: "institution",
+              });
+            } catch (error) {
+              log.error("Failed to export institutional insights snapshot", error);
+              toast.error("Failed to export the institutional snapshot. Please try again.");
+              void logReportExportEvent({
+                actorId: user?.id,
+                actorRole: profile?.role ?? null,
+                institutionId: profile?.institution_id ?? null,
+                reportName: "institutional_insights_snapshot",
+                format: "csv",
+                rowCount: moduleStats.length + lowPerforming.length + accreditation.length,
+                scope: "institution",
+                status: "failure",
+                errorMessage: error instanceof Error ? error.message : "Export failed",
+              });
+            }
+          }}
+        >
           <Download className="mr-2 h-3.5 w-3.5" />
           Export snapshot
         </Button>

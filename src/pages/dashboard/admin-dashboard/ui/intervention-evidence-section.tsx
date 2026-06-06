@@ -150,7 +150,7 @@ export const InterventionEvidenceSection = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const nextDataset = await fetchAdminInterventionEvidenceDataset();
+        const nextDataset = await fetchAdminInterventionEvidenceDataset(profile?.institution_id ?? null);
         setDataset(nextDataset);
         setLoadError(null);
       } catch (error) {
@@ -163,7 +163,7 @@ export const InterventionEvidenceSection = () => {
     };
 
     void load();
-  }, []);
+  }, [profile?.institution_id]);
 
   const cohorts = useMemo(() => {
     const values = new Set<string>();

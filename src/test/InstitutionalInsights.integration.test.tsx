@@ -20,6 +20,7 @@ const renderInstitutionalInsights = async () => {
       profile: {
         id: "admin-1",
         role: "admin",
+        institution_id: "institution-1",
       },
     }),
   }));

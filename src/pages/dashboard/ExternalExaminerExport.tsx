@@ -6,13 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, FileText, Shield, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { logAdminAuditEvent } from "@/lib/audit/adminAuditEvents";
 import { toast } from "sonner";
 import { fetchExternalExaminerDataset } from "@/lib/data/academic";
 import { ExternalExaminerDatasetError } from "@/lib/data/academic/academicData";
 import { safeFormatDate } from "@/lib/date";
 import { buildDetailedExternalExaminerCsv, buildExternalExaminerCsv } from "@/lib/externalExaminerExport";
 import { log } from "@/lib/logger";
+import { logReportExportEvent } from "@/lib/audit/exportAuditEvents";
+import { redactStudentIdentity as buildRedactedStudentIdentity } from "@/lib/exportPrivacy";
 import {
   DashboardEmptyState,
   DashboardLiveBanner,
@@ -67,13 +68,15 @@ const ExternalExaminerExport = () => {
     moderation: true,
     aiBreakdown: false,
     studentIdentity: true,
+    redactStudentIdentity: false,
   });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const institutionId = profile?.institution_id ?? null;
         const { assignments: assignmentRows, submissions: submissionRows, grades: gradeRows, profiles: profileRows } =
-          await fetchExternalExaminerDataset();
+          await fetchExternalExaminerDataset(institutionId);
         setHasSourceData(
           assignmentRows.length > 0 || submissionRows.length > 0 || gradeRows.length > 0 || profileRows.length > 0,
         );
@@ -142,11 +145,19 @@ const ExternalExaminerExport = () => {
     };
 
     void fetchData();
-  }, [user?.id]);
+  }, [profile?.institution_id, user?.id]);
 
   const filteredData = selectedAssignment === "all"
     ? exportData
     : exportData.filter((row) => row.assignmentTitle === assignments.find((assignment) => assignment.id === selectedAssignment)?.title);
+  const previewRows = filteredData.map((row, index) =>
+    includeOptions.redactStudentIdentity && includeOptions.studentIdentity
+      ? {
+          ...row,
+          ...buildRedactedStudentIdentity(index),
+        }
+      : row,
+  );
   const exportSummary = getExportSummary(filteredData);
 
   const handleExport = (format: "csv" | "detailed") => {
@@ -163,21 +174,15 @@ const ExternalExaminerExport = () => {
         downloadCSV(csv, `external_examiner_export_${new Date().toISOString().slice(0, 10)}.csv`);
       }
 
-      void logAdminAuditEvent({
+      void logReportExportEvent({
         actorId: user?.id,
         actorRole: profile?.role ?? null,
         institutionId: profile?.institution_id ?? null,
-        actionType: "report_exported",
-        details: {
-          report_name: "external_examiner_export",
-          format,
-          assignment_filter: selectedAssignment,
-          row_count: filteredData.length,
-          include_scores: includeOptions.scores,
-          include_feedback: includeOptions.feedback,
-          include_moderation: includeOptions.moderation,
-          include_student_identity: includeOptions.studentIdentity,
-        },
+        reportName: "external_examiner_export",
+        format,
+        rowCount: filteredData.length,
+        redactedStudentIdentity: includeOptions.redactStudentIdentity,
+        scope: selectedAssignment,
       });
       toast.success("Export downloaded successfully");
     } catch (error) {
@@ -185,6 +190,18 @@ const ExternalExaminerExport = () => {
         format,
         assignmentFilter: selectedAssignment,
         rowCount: filteredData.length,
+      });
+      void logReportExportEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        institutionId: profile?.institution_id ?? null,
+        reportName: "external_examiner_export",
+        format,
+        rowCount: filteredData.length,
+        redactedStudentIdentity: includeOptions.redactStudentIdentity,
+        scope: selectedAssignment,
+        status: "failure",
+        errorMessage: error instanceof Error ? error.message : "Export failed",
       });
       toast.error("Failed to generate export. Please try again.");
     }
@@ -302,6 +319,7 @@ const ExternalExaminerExport = () => {
                 { key: "feedback" as const, label: "Feedback & Comments", icon: FileText },
                 { key: "moderation" as const, label: "Moderation Evidence", icon: Shield },
                 { key: "studentIdentity" as const, label: "Student Identity", icon: Users },
+                { key: "redactStudentIdentity" as const, label: "Redact Student Identity", icon: Shield },
               ].map((option) => (
                 <div key={option.key} className="flex items-center gap-2">
                   <Checkbox
@@ -354,9 +372,9 @@ const ExternalExaminerExport = () => {
                 <tbody>
                   {filteredData.slice(0, 20).map((row, index) => (
                     <tr key={index} className="border-b last:border-0">
-                      <td className="py-2">{row.studentName}</td>
-                      <td className="max-w-[150px] truncate py-2">{row.assignmentTitle}</td>
-                      <td className="py-2">{row.moduleCode}</td>
+                  <td className="py-2">{previewRows[index].studentName}</td>
+                  <td className="max-w-[150px] truncate py-2">{row.assignmentTitle}</td>
+                  <td className="py-2">{row.moduleCode}</td>
                       <td className="py-2 text-right">{row.aiScore ?? MISSING_FIELD_LABEL}</td>
                       <td className="py-2 text-right">{row.lecturerScore ?? MISSING_FIELD_LABEL}</td>
                       <td className="py-2 text-right font-medium">{row.finalScore ?? MISSING_FIELD_LABEL}</td>
@@ -365,11 +383,11 @@ const ExternalExaminerExport = () => {
                           {row.gradeSource ?? MISSING_FIELD_LABEL}
                         </Badge>
                       </td>
-                      <td className="py-2"><Badge variant="outline" className="text-xs">{row.classification}</Badge></td>
-                      <td className="py-2"><Badge variant={row.status === "released" ? "default" : "secondary"} className="text-xs">{row.status}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
+                    <td className="py-2"><Badge variant="outline" className="text-xs">{row.classification}</Badge></td>
+                    <td className="py-2"><Badge variant={row.status === "released" ? "default" : "secondary"} className="text-xs">{row.status}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
               </table>
               {filteredData.length > 20 && (
                 <p className="mt-3 text-center text-xs text-muted-foreground">

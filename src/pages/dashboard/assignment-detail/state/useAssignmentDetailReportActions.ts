@@ -1,8 +1,10 @@
 import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 
+import { logReportExportEvent } from "@/lib/audit/exportAuditEvents";
 import { safeFormatDate } from "@/lib/date";
 import { formatSubmissionStatus } from "@/lib/moderation";
+import { isLecturerEquivalentRole } from "@/lib/roles";
 import type {
   AssignmentDetailAssignment,
   AssignmentDetailSubmission,
@@ -13,6 +15,9 @@ const formatStatusLabel = (status: string) => formatSubmissionStatus(status);
 
 interface UseAssignmentDetailReportActionsArgs {
   assignment: AssignmentDetailAssignment | null;
+  actorId: string | null;
+  actorRole: string | null;
+  institutionId: string | null;
   grades: Record<string, Grade>;
   navigate: NavigateFunction;
   submissions: AssignmentDetailSubmission[];
@@ -25,6 +30,9 @@ interface UseAssignmentDetailReportActionsResult {
 
 export const useAssignmentDetailReportActions = ({
   assignment,
+  actorId,
+  actorRole,
+  institutionId,
   grades,
   navigate,
   submissions,
@@ -36,6 +44,11 @@ export const useAssignmentDetailReportActions = ({
   };
 
   const exportReviewedReports = () => {
+    if (!isLecturerEquivalentRole(actorRole)) {
+      toast.error("Only lecturers and admins can export reviewed reports");
+      return;
+    }
+
     const reviewedSubmissions = submissions.filter((submission) => {
       const grade = grades[submission.id];
       return (
@@ -77,6 +90,15 @@ export const useAssignmentDetailReportActions = ({
     link.download = `${assignment?.title || "assignment"}-reviewed-reports.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    void logReportExportEvent({
+      actorId,
+      actorRole,
+      institutionId,
+      reportName: "reviewed_reports",
+      format: "csv",
+      rowCount: reviewedSubmissions.length,
+      scope: assignment?.id ?? "assignment",
+    });
   };
 
   return {

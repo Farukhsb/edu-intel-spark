@@ -53,17 +53,26 @@ const isGradeSourceLookupError = (error: unknown) => {
   return /grade_source|column|schema/i.test(value.message ?? "");
 };
 
-export const fetchAccreditationDataset = async () => {
+const requireInstitutionId = (institutionId?: string | null) => {
+  if (!institutionId) {
+    throw new Error("Institution context is required for export data.");
+  }
+
+  return institutionId;
+};
+
+export const fetchAccreditationDataset = async (institutionId?: string | null) => {
+  const scopedInstitutionId = requireInstitutionId(institutionId);
   const [
     { data: grades, error: gradesError },
     { data: submissions, error: submissionsError },
     { data: assignments, error: assignmentsError },
     { data: profiles, error: profilesError },
   ] = await Promise.all([
-    supabase.from("grades").select(ACCREDITATION_GRADE_FIELDS),
-    supabase.from("submissions").select(ACCREDITATION_SUBMISSION_FIELDS),
-    supabase.from("assignments").select(ACCREDITATION_ASSIGNMENT_FIELDS),
-    supabase.from("profiles").select(ACCREDITATION_PROFILE_FIELDS),
+    supabase.from("grades").select(ACCREDITATION_GRADE_FIELDS).eq("institution_id", scopedInstitutionId),
+    supabase.from("submissions").select(ACCREDITATION_SUBMISSION_FIELDS).eq("institution_id", scopedInstitutionId),
+    supabase.from("assignments").select(ACCREDITATION_ASSIGNMENT_FIELDS).eq("institution_id", scopedInstitutionId),
+    supabase.from("profiles").select(ACCREDITATION_PROFILE_FIELDS).eq("institution_id", scopedInstitutionId),
   ]);
 
   if (gradesError) throw gradesError;
@@ -79,17 +88,18 @@ export const fetchAccreditationDataset = async () => {
   };
 };
 
-export const fetchProgrammeReportDataset = async () => {
+export const fetchProgrammeReportDataset = async (institutionId?: string | null) => {
+  const scopedInstitutionId = requireInstitutionId(institutionId);
   const [
     { data: assignments, error: assignmentsError },
     { data: submissions, error: submissionsError },
     { data: grades, error: gradesError },
     { data: profiles, error: profilesError },
   ] = await Promise.all([
-    supabase.from("assignments").select(PROGRAMME_ASSIGNMENT_FIELDS),
-    supabase.from("submissions").select(PROGRAMME_SUBMISSION_FIELDS),
-    supabase.from("grades").select(PROGRAMME_GRADE_FIELDS),
-    supabase.from("profiles").select(PROGRAMME_PROFILE_FIELDS),
+    supabase.from("assignments").select(PROGRAMME_ASSIGNMENT_FIELDS).eq("institution_id", scopedInstitutionId),
+    supabase.from("submissions").select(PROGRAMME_SUBMISSION_FIELDS).eq("institution_id", scopedInstitutionId),
+    supabase.from("grades").select(PROGRAMME_GRADE_FIELDS).eq("institution_id", scopedInstitutionId),
+    supabase.from("profiles").select(PROGRAMME_PROFILE_FIELDS).eq("institution_id", scopedInstitutionId),
   ]);
 
   if (assignmentsError) throw assignmentsError;
@@ -105,26 +115,27 @@ export const fetchProgrammeReportDataset = async () => {
   };
 };
 
-export const fetchExternalExaminerDataset = async () => {
+export const fetchExternalExaminerDataset = async (institutionId?: string | null) => {
+  const scopedInstitutionId = requireInstitutionId(institutionId);
   const stages: Array<{
     key: ExternalExaminerDatasetStage;
     promise: PromiseLike<{ data: unknown[] | null; error: unknown | null }>;
   }> = [
     {
       key: "assignments",
-      promise: supabase.from("assignments").select(EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS),
+      promise: supabase.from("assignments").select(EXTERNAL_EXAMINER_ASSIGNMENT_FIELDS).eq("institution_id", scopedInstitutionId),
     },
     {
       key: "submissions",
-      promise: supabase.from("submissions").select(EXTERNAL_EXAMINER_SUBMISSION_FIELDS),
+      promise: supabase.from("submissions").select(EXTERNAL_EXAMINER_SUBMISSION_FIELDS).eq("institution_id", scopedInstitutionId),
     },
     {
       key: "grades",
-      promise: supabase.from("grades").select(EXTERNAL_EXAMINER_GRADE_FIELDS),
+      promise: supabase.from("grades").select(EXTERNAL_EXAMINER_GRADE_FIELDS).eq("institution_id", scopedInstitutionId),
     },
     {
       key: "profiles",
-      promise: supabase.from("profiles").select(EXTERNAL_EXAMINER_PROFILE_FIELDS),
+      promise: supabase.from("profiles").select(EXTERNAL_EXAMINER_PROFILE_FIELDS).eq("institution_id", scopedInstitutionId),
     },
   ];
 
@@ -137,7 +148,10 @@ export const fetchExternalExaminerDataset = async () => {
     gradesStageResult.value.error &&
     isGradeSourceLookupError(gradesStageResult.value.error)
   ) {
-    const fallbackGrades = await supabase.from("grades").select(EXTERNAL_EXAMINER_GRADE_FIELDS_NO_SOURCE);
+    const fallbackGrades = await supabase
+      .from("grades")
+      .select(EXTERNAL_EXAMINER_GRADE_FIELDS_NO_SOURCE)
+      .eq("institution_id", scopedInstitutionId);
     if (fallbackGrades.error) {
       throw new ExternalExaminerDatasetError("grades", fallbackGrades.error);
     }

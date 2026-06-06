@@ -26,6 +26,7 @@ interface UseAssignmentDetailViewStateArgs {
   assignment: AssignmentDetailAssignment | null;
   currentUserEmail: string | null;
   currentUserId: string | null;
+  currentUserInstitutionId: string | null;
   grades: Record<string, Grade>;
   navigate: NavigateFunction;
   plagiarismFlags: AcademicIntegrityFlag[];
@@ -74,6 +75,7 @@ export const useAssignmentDetailViewState = ({
   assignment,
   currentUserEmail,
   currentUserId,
+  currentUserInstitutionId,
   grades,
   navigate,
   plagiarismFlags,
@@ -178,6 +180,9 @@ export const useAssignmentDetailViewState = ({
 
   const { exportReviewedReports, openReleasedResult } = useAssignmentDetailReportActions({
     assignment,
+    actorId: currentUserId,
+    actorRole: role,
+    institutionId: currentUserInstitutionId,
     grades,
     navigate,
     submissions,

@@ -1,3 +1,5 @@
+import { redactStudentIdentity } from "@/lib/exportPrivacy";
+
 export type RiskBand = "low" | "medium" | "high";
 
 export type RiskPredictionDisplayRow = {
@@ -207,15 +209,30 @@ export function summarizeRiskPredictions(predictions: RiskPredictionDisplayRow[]
   };
 }
 
-export function downloadRiskIntelligenceCsv(predictions: RiskPredictionDisplayRow[]) {
+export function buildRiskIntelligenceCsv(
+  predictions: RiskPredictionDisplayRow[],
+  options?: { redactStudentIdentity?: boolean },
+) {
   const lines = [
     "Student,Risk Band,Risk Score,Confidence,Model Version,Feature Version,Prediction Date,Generated At,Reasons,Explanation,Feedback Count,Latest Feedback",
-    ...predictions.map((row) =>
-      `"${row.studentLabel}",${row.riskBand},${row.riskScore.toFixed(3)},${row.confidenceScore ?? ""},${row.modelVersion},${row.featureVersion},"${row.predictionDate}","${row.generatedAt}","${row.reasonCodes.join("; ")}","${row.explanation ?? ""}",${row.feedbackCount},"${row.latestFeedback ?? ""}"`,
-    ),
+    ...predictions.map((row, index) => {
+      const studentLabel = options?.redactStudentIdentity
+        ? redactStudentIdentity(index).studentName
+        : row.studentLabel;
+      return `"${studentLabel}",${row.riskBand},${row.riskScore.toFixed(3)},${row.confidenceScore ?? ""},${row.modelVersion},${row.featureVersion},"${row.predictionDate}","${row.generatedAt}","${row.reasonCodes.join("; ")}","${row.explanation ?? ""}",${row.feedbackCount},"${row.latestFeedback ?? ""}"`;
+    }),
   ];
 
-  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  return lines.join("\n");
+}
+
+export function downloadRiskIntelligenceCsv(
+  predictions: RiskPredictionDisplayRow[],
+  options?: { redactStudentIdentity?: boolean },
+) {
+  const csv = buildRiskIntelligenceCsv(predictions, options);
+
+  const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

@@ -1,4 +1,5 @@
 import type { ExternalExaminerExportRow } from "@/types/academic";
+import { redactStudentIdentity } from "@/lib/exportPrivacy";
 
 export type ExternalExaminerExportIncludeOptions = {
   scores: boolean;
@@ -6,6 +7,7 @@ export type ExternalExaminerExportIncludeOptions = {
   moderation: boolean;
   aiBreakdown: boolean;
   studentIdentity: boolean;
+  redactStudentIdentity: boolean;
 };
 
 const csvEscape = (value: string) => `"${value.replace(/"/g, "\"\"")}"`;
@@ -46,9 +48,12 @@ export const buildExternalExaminerCsv = (
   if (includeOptions.feedback) headers.push("AI Feedback", "Lecturer Feedback", "Final Feedback");
   if (includeOptions.moderation) headers.push("Status", "Submitted", "Reviewed", "Reviewed By");
 
-  const csvRows = rows.map((row) => {
+  const csvRows = rows.map((row, index) => {
+    const identity = includeOptions.redactStudentIdentity
+      ? redactStudentIdentity(index)
+      : { studentName: row.studentName, studentEmail: row.studentEmail };
     const csvRow: string[] = [];
-    if (includeOptions.studentIdentity) csvRow.push(csvEscape(row.studentName), csvEscape(row.studentEmail));
+    if (includeOptions.studentIdentity) csvRow.push(csvEscape(identity.studentName), csvEscape(identity.studentEmail));
     csvRow.push(csvEscape(row.assignmentTitle), csvEscape(row.moduleCode));
     if (includeOptions.scores) {
       csvRow.push(

@@ -28,6 +28,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { submitRiskFeedback, submitRiskOutcome } from "@/lib/data/admin/riskIntelligence";
+import { buildRiskIntelligenceCsv } from "@/lib/data/admin/riskIntelligenceView";
 
 describe("risk intelligence data helpers", () => {
   beforeEach(() => {
@@ -174,5 +175,40 @@ describe("risk intelligence data helpers", () => {
         outcomeSource: "manual",
       }),
     );
+  });
+
+  it("redacts student names in exported risk CSVs when requested", () => {
+    const csv = buildRiskIntelligenceCsv(
+      [
+        {
+          id: "pred-1",
+          studentLabel: "Sam Student",
+          predictionDate: "2026-06-01",
+          generatedAt: "2026-06-01T10:00:00Z",
+          modelVersion: "risk-v1",
+          featureVersion: "feat-v1",
+          riskScore: 0.81,
+          riskBand: "high",
+          confidenceScore: 0.77,
+          reasonCodes: ["late_submissions"],
+          explanation: "High late submission rate",
+          calibrationMetrics: null,
+          componentScores: { academic: 85, engagement: 70, nonSubmission: 90 },
+          componentSignals: {
+            engagementEventCount: 2,
+            lastEngagementAt: "2026-05-31T10:00:00Z",
+            submittedAssignments: 1,
+            lateSubmissions: 3,
+            totalAssignments: 4,
+          },
+          feedbackCount: 0,
+          latestFeedback: null,
+        },
+      ],
+      { redactStudentIdentity: true },
+    );
+
+    expect(csv).toContain("Student 1");
+    expect(csv).not.toContain("Sam Student");
   });
 });

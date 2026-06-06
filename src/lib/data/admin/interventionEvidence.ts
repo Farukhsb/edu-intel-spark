@@ -91,11 +91,20 @@ const EVENT_FIELDS =
 
 const OVERDUE_REMINDER_CATEGORY = "intervention-overdue-reminder" as const;
 
-export const fetchAdminInterventionEvidenceDataset = async (): Promise<AdminInterventionEvidenceDataset> => {
+const requireInstitutionId = (institutionId?: string | null) => {
+  if (!institutionId) {
+    throw new Error("Institution context is required for intervention evidence exports.");
+  }
+
+  return institutionId;
+};
+
+export const fetchAdminInterventionEvidenceDataset = async (institutionId?: string | null): Promise<AdminInterventionEvidenceDataset> => {
+  const scopedInstitutionId = requireInstitutionId(institutionId);
   const [profilesRes, interventionsRes, eventsRes] = await Promise.all([
-    supabase.from("profiles").select(PROFILE_FIELDS),
-    supabase.from("student_interventions").select(INTERVENTION_FIELDS).order("created_at", { ascending: false }),
-    supabase.from("student_intervention_events").select(EVENT_FIELDS).order("contacted_at", { ascending: false }),
+    supabase.from("profiles").select(PROFILE_FIELDS).eq("institution_id", scopedInstitutionId),
+    supabase.from("student_interventions").select(INTERVENTION_FIELDS).eq("institution_id", scopedInstitutionId).order("created_at", { ascending: false }),
+    supabase.from("student_intervention_events").select(EVENT_FIELDS).eq("institution_id", scopedInstitutionId).order("contacted_at", { ascending: false }),
   ]);
 
   if (profilesRes.error) throw profilesRes.error;
