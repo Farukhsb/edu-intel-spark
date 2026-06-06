@@ -78,7 +78,7 @@ describe("App legal routes", () => {
     expect(screen.getByText("Controlled pilot use")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "AI grading, integrity signals, feedback drafting, and student-support insights are decision-support tools. They do not replace lecturer judgement, moderation, approval, release, or formal institutional decision-making.",
+        "AI grading, integrity signals, feedback drafting, and student-support insights are decision-support tools. They do not replace lecturer judgement, moderation, approval, release, or formal institutional decision-making. AI output is always a draft recommendation until a lecturer approves it.",
       ),
     ).toBeInTheDocument();
   });

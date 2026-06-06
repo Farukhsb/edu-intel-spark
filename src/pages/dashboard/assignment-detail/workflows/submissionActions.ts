@@ -144,16 +144,18 @@ export const uploadSubmissionFile = async (
     throw new Error(metadataValidation.message);
   }
 
-  const fileBytes = new Uint8Array(await file.arrayBuffer());
-  const validation = validateSubmissionFile({
-    fileName: file.name,
-    mimeType: file.type,
-    size: file.size,
-    bytes: fileBytes,
-  });
+  const bytesValidation =
+    metadataValidation.fileType === "pdf" || metadataValidation.fileType === "docx"
+      ? validateSubmissionFile({
+          fileName: file.name,
+          mimeType: file.type,
+          size: file.size,
+          bytes: new Uint8Array(await file.arrayBuffer()),
+        })
+      : metadataValidation;
 
-  if (!validation.ok) {
-    throw new Error(validation.message);
+  if (!bytesValidation.ok) {
+    throw new Error(bytesValidation.message);
   }
 
   const safeFileName = file.name.replace(/[\\/]/g, "_");
@@ -165,7 +167,7 @@ export const uploadSubmissionFile = async (
     .upload(filePath, file, {
       cacheControl: "3600",
       upsert: false,
-      contentType: validation.normalizedMimeType,
+      contentType: bytesValidation.normalizedMimeType,
     });
   if (error) throw error;
   onProgress?.(100);
@@ -173,7 +175,7 @@ export const uploadSubmissionFile = async (
   return {
     fileUrl: data.path,
     fileName: safeFileName,
-    fileType: validation.normalizedMimeType,
+    fileType: bytesValidation.normalizedMimeType,
     storagePath: data.path,
   };
 };
