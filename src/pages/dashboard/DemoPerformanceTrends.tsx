@@ -1,7 +1,8 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type AtRiskStudent, computeRisk } from "@/lib/studentRisk";
+import { preloadPerformanceTrendsCharts } from "@/lib/routePreloads";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import { DashboardDemoBanner, DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
@@ -42,6 +43,10 @@ const DemoPerformanceTrends = () => {
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
 
   const { riskFilter, scoreBandFilter } = performanceSearchState;
+
+  useEffect(() => {
+    preloadPerformanceTrendsCharts();
+  }, []);
 
   const modules = useMemo(
     () => Array.from(new Set(DEMO_ASSESSMENT_TRENDS.map((entry) => entry.module))),

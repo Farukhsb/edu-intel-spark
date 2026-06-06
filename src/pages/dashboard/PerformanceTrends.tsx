@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { computeRisk } from "@/lib/studentRisk";
 import { fetchLecturerPerformanceDataset } from "@/lib/data/student";
 import { log } from "@/lib/logger";
+import { preloadPerformanceTrendsCharts } from "@/lib/routePreloads";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import {
   DashboardEmptyState,
@@ -99,6 +100,10 @@ const PerformanceTrends = () => {
 
     void fetchLiveData();
   }, [user?.id, reloadKey]);
+
+  useEffect(() => {
+    preloadPerformanceTrendsCharts();
+  }, []);
 
   const projection = useMemo(() => {
     if (assignments.length === 0) {
