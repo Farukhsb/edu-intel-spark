@@ -16,6 +16,22 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AssessmentTrendEntry, GradeDistributionEntry } from "@/lib/performanceAnalytics";
 
+const AssessmentTrendTick = (props: any) => {
+  const x = Number(props?.x ?? 0);
+  const y = Number(props?.y ?? 0);
+  const label = String(props?.payload?.value ?? "");
+
+  return (
+    <g transform={`translate(${x},${y + 8})`}>
+      <foreignObject x={-48} y={0} width={96} height={24} overflow="visible">
+        <div className="w-full truncate text-center text-[11px] text-muted-foreground" title={label}>
+          {label}
+        </div>
+      </foreignObject>
+    </g>
+  );
+};
+
 export const AssessmentTrendsCard = ({ assessmentTrends }: { assessmentTrends: AssessmentTrendEntry[] }) => (
   <Card>
     <CardHeader>
@@ -26,7 +42,12 @@ export const AssessmentTrendsCard = ({ assessmentTrends }: { assessmentTrends: A
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={assessmentTrends}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" angle={-20} textAnchor="end" height={50} />
+          <XAxis
+            dataKey="name"
+            tick={AssessmentTrendTick}
+            stroke="hsl(var(--muted-foreground))"
+            height={50}
+          />
           <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" domain={[0, 100]} />
           <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
           <Legend />

@@ -245,7 +245,7 @@ export const buildPerformanceProjection = ({
   });
 
   const assessmentTrends = Object.entries(perAssignment).map(([name, data]) => ({
-    name: name.length > 20 ? `${name.slice(0, 18)}...` : name,
+    name,
     avgGrade:
       data.scores.length > 0
         ? Math.round(data.scores.reduce((sum, score) => sum + score, 0) / data.scores.length)

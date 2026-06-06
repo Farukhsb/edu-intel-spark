@@ -29,7 +29,11 @@ describe("performanceAnalytics", () => {
 
     const projection = buildPerformanceProjection({
       assignments: [
-        { id: "a1", title: "Algorithms Coursework", module_code: "CS101" },
+        {
+          id: "a1",
+          title: "Algorithms Coursework and Applied Systems Analysis Project",
+          module_code: "CS101",
+        },
         { id: "a2", title: "Data Reflection", module_code: "CS101" },
       ],
       submissions: [
@@ -60,6 +64,9 @@ describe("performanceAnalytics", () => {
 
     expect(projection.modules).toEqual(["CS101"]);
     expect(projection.assessmentTrends).toHaveLength(2);
+    expect(projection.assessmentTrends[0]?.name).toBe(
+      "Algorithms Coursework and Applied Systems Analysis Project",
+    );
     expect(projection.gradeDist.find((entry) => entry.band === "Fail (<40%)")?.count).toBe(1);
     expect(projection.gradeDist.find((entry) => entry.band === "3rd (40-49%)")?.count).toBe(1);
     expect(projection.atRiskStudents).toHaveLength(1);
