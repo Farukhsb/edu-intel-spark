@@ -223,7 +223,13 @@ export const getPerformanceReportingReadiness = ({
   const criticalStudents = atRiskStudents.filter((student) => student.riskLevel === "critical");
   const highStudents = atRiskStudents.filter((student) => student.riskLevel === "high");
   const failingBand = gradeDist.find((entry) => entry.band === "Fail (<40%)");
-  const weakestAssessment = [...assessmentTrends].sort((left, right) => left.avgGrade - right.avgGrade)[0];
+  const weakestAssessment = assessmentTrends.reduce<AssessmentTrendEntry | null>(
+    (currentWeakest, currentAssessment) =>
+      currentWeakest === null || currentAssessment.avgGrade < currentWeakest.avgGrade
+        ? currentAssessment
+        : currentWeakest,
+    null,
+  );
 
   return {
     postureLabel:
