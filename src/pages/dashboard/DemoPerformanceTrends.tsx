@@ -5,6 +5,7 @@ import { type AtRiskStudent, computeRisk } from "@/lib/studentRisk";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import { DashboardDemoBanner, DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
+  buildAtRiskStudentFilterIndex,
   buildGradeDistribution,
   filterAtRiskStudents,
   getPerformanceReportingReadiness,
@@ -74,13 +75,19 @@ const DemoPerformanceTrends = () => {
       .sort((left, right) => right.riskScore - left.riskScore);
   }, [moduleFilter]);
 
+  const atRiskStudentFilterIndex = useMemo(
+    () => buildAtRiskStudentFilterIndex(atRiskStudents),
+    [atRiskStudents],
+  );
+
   const filteredAtRiskStudents = useMemo(() => {
     return filterAtRiskStudents({
       students: atRiskStudents,
       riskFilter,
       scoreBandFilter,
+      index: atRiskStudentFilterIndex,
     });
-  }, [atRiskStudents, riskFilter, scoreBandFilter]);
+  }, [atRiskStudents, atRiskStudentFilterIndex, riskFilter, scoreBandFilter]);
 
   const reportingReadiness = useMemo(
     () =>

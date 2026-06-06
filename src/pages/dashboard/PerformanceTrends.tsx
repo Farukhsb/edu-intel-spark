@@ -15,6 +15,7 @@ import {
 } from "@/components/dashboard/PageStates";
 import {
   buildPerformanceProjection,
+  buildAtRiskStudentFilterIndex,
   EMPTY_GRADE_DIST,
   filterAtRiskStudents,
   getPerformanceReportingReadiness,
@@ -118,6 +119,11 @@ const PerformanceTrends = () => {
     });
   }, [assignments, submissions, grades, moduleFilter]);
 
+  const atRiskStudentFilterIndex = useMemo(
+    () => buildAtRiskStudentFilterIndex(projection.atRiskStudents),
+    [projection.atRiskStudents],
+  );
+
   useEffect(() => {
     if (alertsDismissed || projection.atRiskStudents.length === 0) return;
 
@@ -147,8 +153,9 @@ const PerformanceTrends = () => {
       students: projection.atRiskStudents,
       riskFilter,
       scoreBandFilter,
+      index: atRiskStudentFilterIndex,
     });
-  }, [projection.atRiskStudents, riskFilter, scoreBandFilter]);
+  }, [projection.atRiskStudents, atRiskStudentFilterIndex, riskFilter, scoreBandFilter]);
 
   const reportingReadiness = useMemo(
     () =>

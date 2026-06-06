@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildAtRiskStudentFilterIndex,
   buildGradeDistribution,
   buildPerformanceProjection,
   EMPTY_GRADE_DIST,
@@ -111,8 +112,25 @@ describe("performanceAnalytics", () => {
       },
     ];
 
-    expect(filterAtRiskStudents({ students: [...students], riskFilter: "high-plus", scoreBandFilter: "lt40" })).toHaveLength(1);
-    expect(filterAtRiskStudents({ students: [...students], riskFilter: "all", scoreBandFilter: "40-49" })).toHaveLength(1);
+    const index = buildAtRiskStudentFilterIndex(students);
+
+    expect(
+      filterAtRiskStudents({
+        students: [...students],
+        riskFilter: "high-plus",
+        scoreBandFilter: "lt40",
+        index,
+      }),
+    ).toHaveLength(1);
+    expect(
+      filterAtRiskStudents({
+        students: [...students],
+        riskFilter: "all",
+        scoreBandFilter: "40-49",
+        index,
+      }),
+    ).toHaveLength(1);
+    expect(index.combinedBuckets.get("high-plus|lt40") ?? []).toHaveLength(1);
   });
 
   it("returns an empty grade distribution shape for no scores", () => {
