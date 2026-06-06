@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => {
     insert,
     select,
     single,
+    log: {
+      error: vi.fn(),
+    },
   };
 });
 
@@ -20,6 +23,10 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
+vi.mock("@/lib/logger", () => ({
+  log: mocks.log,
+}));
+
 import { submitRiskFeedback, submitRiskOutcome } from "@/lib/data/admin/riskIntelligence";
 
 describe("risk intelligence data helpers", () => {
@@ -27,6 +34,7 @@ describe("risk intelligence data helpers", () => {
     mocks.from.mockClear();
     mocks.insert.mockClear();
     mocks.select.mockClear();
+    mocks.log.error.mockClear();
     mocks.single.mockReset();
     mocks.single.mockResolvedValue({
       data: {
@@ -103,5 +111,68 @@ describe("risk intelligence data helpers", () => {
       }),
     );
     expect(result.outcome_status).toBe("at_risk");
+  });
+
+  it("logs failed false-positive feedback writes without exposing notes", async () => {
+    mocks.single.mockResolvedValueOnce({
+      data: null,
+      error: { message: "feedback insert failed" },
+    });
+
+    await expect(
+      submitRiskFeedback({
+        predictionId: "pred-1",
+        reviewerId: "reviewer-1",
+        institutionId: "institution-1",
+        feedbackType: "false_alarm",
+        notes: "The alert was a false positive.",
+      }),
+    ).rejects.toMatchObject({ message: "feedback insert failed" });
+
+    expect(mocks.log.error).toHaveBeenCalledWith(
+      "Failed to submit risk feedback",
+      { message: "feedback insert failed" },
+      expect.objectContaining({
+        predictionId: "pred-1",
+        reviewerId: "reviewer-1",
+        institutionId: "institution-1",
+        feedbackType: "false_alarm",
+      }),
+    );
+  });
+
+  it("logs failed intervention outcome writes without exposing notes", async () => {
+    mocks.single.mockResolvedValueOnce({
+      data: null,
+      error: { message: "outcome insert failed" },
+    });
+
+    await expect(
+      submitRiskOutcome({
+        studentId: "student-1",
+        institutionId: "institution-1",
+        predictionId: "pred-1",
+        snapshotId: "snapshot-1",
+        sourceGradeId: "grade-1",
+        sourceSubmissionId: "submission-1",
+        labelValue: "medium",
+        outcomeStatus: "at_risk",
+        outcomeSource: "manual",
+        notes: "Lecturer intervention recorded.",
+      }),
+    ).rejects.toMatchObject({ message: "outcome insert failed" });
+
+    expect(mocks.log.error).toHaveBeenCalledWith(
+      "Failed to submit risk outcome",
+      { message: "outcome insert failed" },
+      expect.objectContaining({
+        studentId: "student-1",
+        predictionId: "pred-1",
+        snapshotId: "snapshot-1",
+        institutionId: "institution-1",
+        outcomeStatus: "at_risk",
+        outcomeSource: "manual",
+      }),
+    );
   });
 });

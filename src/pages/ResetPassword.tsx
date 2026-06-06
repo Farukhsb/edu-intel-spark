@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getResetPasswordReadiness } from "@/lib/resetPasswordReadiness";
+import { log } from "@/lib/logger";
 import { useAuth } from "@/contexts/AuthContext";
 
 const getHashParams = () => {
@@ -168,6 +169,9 @@ const ResetPassword = () => {
       await completePasswordChange(password);
     } catch (error) {
       setLoading(false);
+      log.error("Failed to complete password recovery", error, {
+        stage: "reset-password-submit",
+      });
       const errorMessage = error instanceof Error ? error.message : "Password reset failed";
       const isWeakOrCompromised =
         errorMessage.toLowerCase().includes("weak") ||

@@ -358,6 +358,13 @@ export const useAutomatedAssessmentActions = ({
         toast.error(extractionFailure || firstFailure || `${failCount} submission(s) failed to grade`);
       }
     } catch (error: unknown) {
+      log.error("AI grading workflow failed", error, {
+        assignmentId: assignment.id,
+        selectedCount: selectedAtActionTime.size,
+        readyCount: statusReadySubmissions.length,
+        preflightFailureCount: preflightFailures.length,
+        statusUpdateFailureCount: statusUpdateFailures.length,
+      });
       toast.error(getErrorMessage(error));
       const nextRecoveryIssues = Object.fromEntries(
         [
@@ -507,6 +514,10 @@ export const useAutomatedAssessmentActions = ({
 
       toast[outcome.toastTone](outcome.toastMessage);
     } catch (error: unknown) {
+      log.error("Plagiarism check workflow failed", error, {
+        assignmentId: assignment.id,
+        submissionCount: submissions.length,
+      });
       const message = error instanceof Error ? error.message : "Plagiarism check failed";
       toast.error(message);
     }

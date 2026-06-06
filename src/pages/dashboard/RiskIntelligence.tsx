@@ -183,6 +183,11 @@ const RiskIntelligence = () => {
                     );
                     setReloadKey((current) => current + 1);
                   } catch (error) {
+                    log.error("Failed to retrain risk model", error, {
+                      demoMode,
+                      currentPredictionCount: predictions.length,
+                      currentSnapshotCount: snapshotCount,
+                    });
                     toast.error(error instanceof Error ? error.message : "Model retraining failed");
                   } finally {
                     setTraining(false);

@@ -372,6 +372,13 @@ describe("StudentGrades", () => {
 
     expect(screen.getByText("Your results could not be loaded right now.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(mocks.logger.error).toHaveBeenCalledWith(
+      "Failed to fetch student grades",
+      expect.any(Error),
+      expect.objectContaining({
+        userId: "student-1",
+      }),
+    );
   });
 
   it("renders a safe pending-state card when feedback is not yet released", async () => {

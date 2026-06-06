@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
     error: vi.fn(),
     success: vi.fn(),
   },
+  logger: {
+    error: vi.fn(),
+  },
   supabase: {
     from: vi.fn(),
   },
@@ -30,6 +33,10 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("sonner", () => ({
   toast: mocks.toast,
+}));
+
+vi.mock("@/lib/logger", () => ({
+  log: mocks.logger,
 }));
 
 vi.mock("lucide-react", () => {
@@ -316,6 +323,31 @@ describe("ExternalExaminerExport", () => {
     await waitFor(() => {
       expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("logs and shows a readable error when the export download fails", async () => {
+    setupSupabase();
+    createObjectURLSpy.mockImplementation(() => {
+      throw new Error("download blocked");
+    });
+
+    render(<ExternalExaminerExport />);
+
+    const exportButton = await screen.findByRole("button", { name: /Export CSV/i });
+    fireEvent.click(exportButton);
+
+    await waitFor(() => {
+      expect(mocks.logger.error).toHaveBeenCalledWith(
+        "Failed to generate external examiner export file",
+        expect.any(Error),
+        expect.objectContaining({
+          format: "csv",
+          rowCount: 1,
+        }),
+      );
+    });
+
+    expect(mocks.toast.error).toHaveBeenCalledWith("Failed to generate export. Please try again.");
   });
 
   it("includes grade source in the exported CSV headers and rows", () => {

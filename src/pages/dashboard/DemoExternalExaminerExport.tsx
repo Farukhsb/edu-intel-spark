@@ -71,7 +71,7 @@ const DemoExternalExaminerExport = () => {
       }
       toast.success("Export downloaded successfully");
     } catch {
-      toast.error("Failed to generate export");
+      toast.error("Failed to generate export. Please try again.");
     }
     setExporting(false);
   };

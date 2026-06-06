@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { log } from "@/lib/logger";
 
 type RiskSnapshotRow = Database["public"]["Tables"]["student_risk_snapshots"]["Row"];
 type RiskPredictionRow = Database["public"]["Tables"]["student_risk_predictions"]["Row"];
@@ -78,6 +79,12 @@ export const submitRiskFeedback = async (input: {
     .single();
 
   if (error) {
+    log.error("Failed to submit risk feedback", error, {
+      predictionId: input.predictionId,
+      reviewerId: input.reviewerId,
+      institutionId: input.institutionId,
+      feedbackType: input.feedbackType,
+    });
     throw error;
   }
 
@@ -120,6 +127,14 @@ export const submitRiskOutcome = async (input: {
     .single();
 
   if (error) {
+    log.error("Failed to submit risk outcome", error, {
+      studentId: input.studentId,
+      predictionId: input.predictionId ?? null,
+      snapshotId: input.snapshotId ?? null,
+      institutionId: input.institutionId,
+      outcomeStatus: input.outcomeStatus,
+      outcomeSource: input.outcomeSource,
+    });
     throw error;
   }
 

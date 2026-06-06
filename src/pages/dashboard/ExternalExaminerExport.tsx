@@ -180,8 +180,13 @@ const ExternalExaminerExport = () => {
         },
       });
       toast.success("Export downloaded successfully");
-    } catch {
-      toast.error("Failed to generate export");
+    } catch (error) {
+      log.error("Failed to generate external examiner export file", error, {
+        format,
+        assignmentFilter: selectedAssignment,
+        rowCount: filteredData.length,
+      });
+      toast.error("Failed to generate export. Please try again.");
     }
     setExporting(false);
   };
