@@ -6,16 +6,17 @@ const lecturer = {
   id: "lecturer-export-1",
   email: "external.examiner@gradeai.test",
   fullName: "Dr. Eleanor Examiner",
+  institutionId: "institution-1",
 };
 
 test("external examiner export excludes unreleased workflow records", async ({ page }) => {
   const state = createMockSupabaseState({
     assignments: [
-      { id: "assignment-released", title: "Released Dissertation", module_code: "CS701" },
-      { id: "assignment-approved", title: "Approved Capstone", module_code: "CS702" },
-      { id: "assignment-moderated", title: "Moderated Project", module_code: "CS703" },
-      { id: "assignment-submitted", title: "Submitted Draft", module_code: "CS704" },
-      { id: "assignment-aigraded", title: "AI Graded Draft", module_code: "CS705" },
+      { id: "assignment-released", title: "Released Dissertation", module_code: "CS701", institution_id: "institution-1" },
+      { id: "assignment-approved", title: "Approved Capstone", module_code: "CS702", institution_id: "institution-1" },
+      { id: "assignment-moderated", title: "Moderated Project", module_code: "CS703", institution_id: "institution-1" },
+      { id: "assignment-submitted", title: "Submitted Draft", module_code: "CS704", institution_id: "institution-1" },
+      { id: "assignment-aigraded", title: "AI Graded Draft", module_code: "CS705", institution_id: "institution-1" },
     ],
     submissions: [
       {
@@ -26,6 +27,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         student_email: "sam@student.test",
         status: "released",
         submitted_at: "2026-04-20T09:00:00.000Z",
+        institution_id: "institution-1",
       },
       {
         id: "submission-approved",
@@ -35,6 +37,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         student_email: "ari@student.test",
         status: "approved",
         submitted_at: "2026-04-21T09:00:00.000Z",
+        institution_id: "institution-1",
       },
       {
         id: "submission-moderated",
@@ -44,6 +47,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         student_email: "jo@student.test",
         status: "moderated",
         submitted_at: "2026-04-22T09:00:00.000Z",
+        institution_id: "institution-1",
       },
       {
         id: "submission-submitted",
@@ -53,6 +57,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         student_email: "rae@student.test",
         status: "submitted",
         submitted_at: "2026-04-23T09:00:00.000Z",
+        institution_id: "institution-1",
       },
       {
         id: "submission-aigraded",
@@ -62,6 +67,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         student_email: "kai@student.test",
         status: "ai_graded",
         submitted_at: "2026-04-24T09:00:00.000Z",
+        institution_id: "institution-1",
       },
     ],
     grades: [
@@ -75,6 +81,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         final_feedback: "Released final feedback",
         reviewed_at: "2026-04-25T09:00:00.000Z",
         reviewed_by: lecturer.id,
+        institution_id: "institution-1",
       },
       {
         submission_id: "submission-approved",
@@ -86,6 +93,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         final_feedback: "Approved final feedback",
         reviewed_at: "2026-04-25T10:00:00.000Z",
         reviewed_by: lecturer.id,
+        institution_id: "institution-1",
       },
       {
         submission_id: "submission-moderated",
@@ -97,6 +105,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         final_feedback: "Moderated final feedback",
         reviewed_at: "2026-04-25T11:00:00.000Z",
         reviewed_by: lecturer.id,
+        institution_id: "institution-1",
       },
       {
         submission_id: "submission-submitted",
@@ -108,6 +117,7 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         final_feedback: "",
         reviewed_at: null,
         reviewed_by: null,
+        institution_id: "institution-1",
       },
       {
         submission_id: "submission-aigraded",
@@ -119,20 +129,21 @@ test("external examiner export excludes unreleased workflow records", async ({ p
         final_feedback: "",
         reviewed_at: null,
         reviewed_by: null,
+        institution_id: "institution-1",
       },
     ],
     profiles: [
-      { id: lecturer.id, full_name: lecturer.fullName, email: lecturer.email, role: "admin", avatar_url: null, cohort_id: null, department_id: null },
-      { id: "student-1", full_name: "Sam Student", email: "sam@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
-      { id: "student-2", full_name: "Ari Student", email: "ari@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
-      { id: "student-3", full_name: "Jo Student", email: "jo@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
-      { id: "student-4", full_name: "Rae Student", email: "rae@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
-      { id: "student-5", full_name: "Kai Student", email: "kai@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs" },
+      { id: lecturer.id, full_name: lecturer.fullName, email: lecturer.email, role: "admin", avatar_url: null, cohort_id: null, department_id: null, institution_id: "institution-1" },
+      { id: "student-1", full_name: "Sam Student", email: "sam@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs", institution_id: "institution-1" },
+      { id: "student-2", full_name: "Ari Student", email: "ari@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs", institution_id: "institution-1" },
+      { id: "student-3", full_name: "Jo Student", email: "jo@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs", institution_id: "institution-1" },
+      { id: "student-4", full_name: "Rae Student", email: "rae@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs", institution_id: "institution-1" },
+      { id: "student-5", full_name: "Kai Student", email: "kai@student.test", role: "student", avatar_url: null, cohort_id: "cohort-1", department_id: "cs", institution_id: "institution-1" },
     ],
   });
 
   await installSupabaseMocks(page, state);
-  await setE2EAuth(page, { role: "admin", ...lecturer });
+  await setE2EAuth(page, { role: "admin", ...lecturer, institutionId: lecturer.institutionId });
 
   await page.addInitScript(() => {
     let lastDownload: { href: string; download: string } | null = null;

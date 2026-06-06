@@ -14,6 +14,7 @@ export interface E2EAuthProfile {
   email: string | null;
   role: E2EAuthRole;
   avatar_url: string | null;
+  institution_id: string | null;
   cohort_id: string | null;
   department_name: string | null;
   department_id: string | null;
@@ -39,6 +40,7 @@ const E2EAuthStateSchema = z.object({
     email: z.string().email().nullable().optional(),
     role: z.enum(["lecturer", "student", "admin"]),
     avatar_url: z.string().nullable().optional(),
+    institution_id: z.string().nullable().optional(),
     cohort_id: z.string().nullable().optional(),
     department_name: z.string().nullable().optional(),
     department_id: z.string().nullable().optional(),
@@ -79,6 +81,7 @@ export const readE2EAuthState = (): E2EAuthState | null => {
         email: parsed.data.profile.email ?? null,
         role,
         avatar_url: parsed.data.profile.avatar_url ?? null,
+        institution_id: parsed.data.profile.institution_id ?? null,
         cohort_id: parsed.data.profile.cohort_id ?? null,
         department_name: departmentName,
         department_id: departmentName,

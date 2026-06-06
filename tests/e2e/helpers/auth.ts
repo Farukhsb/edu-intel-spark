@@ -9,6 +9,7 @@ interface AuthStateOptions {
   id: string;
   email: string;
   fullName: string;
+  institutionId?: string | null;
   cohortId?: string | null;
   departmentId?: string | null;
 }
@@ -25,6 +26,7 @@ export const setE2EAuth = async (page: Page, options: AuthStateOptions) => {
       email: options.email,
       role: options.role,
       avatar_url: null,
+      institution_id: options.institutionId ?? null,
       cohort_id: options.cohortId ?? null,
       department_id: options.departmentId ?? null,
     },
