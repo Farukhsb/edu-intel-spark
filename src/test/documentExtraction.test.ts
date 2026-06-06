@@ -160,6 +160,47 @@ startxref
   return new TextEncoder().encode(pdf);
 }
 
+function buildPasswordProtectedPdfBytes() {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Encrypt 5 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 44 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+(Protected content) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Filter /Standard /V 1 /R 2 >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000060 00000 n 
+0000000117 00000 n 
+0000000207 00000 n 
+0000000295 00000 n 
+trailer
+<< /Root 1 0 R /Encrypt 5 0 R /Size 6 >>
+startxref
+353
+%%EOF`;
+
+  return new TextEncoder().encode(pdf);
+}
+
 function buildJsPdfBytes(text: string, options?: { compress?: boolean }) {
   const doc = new jsPDF({
     compress: options?.compress ?? false,
@@ -257,6 +298,48 @@ describe("document extraction", () => {
     expect(result.extractionMethod).toBe("pdf_fallback");
     expect(result.extractedText).toContain("This PDF report discusses");
     expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
+  });
+
+  it("rejects an image-only PDF that has no readable text layer", async () => {
+    const result = await extractDocumentText({
+      fileName: "scanned-handout.pdf",
+      mimeType: "application/pdf",
+      bytes: buildBlankPdfBytes(),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.fileType).toBe("pdf");
+    expect(result.extractionFailureReason).toBe("unreadable_pdf");
+    expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+    expect(result.extractionWarning).toMatch(/image-only|scanned|unreadable/i);
+  });
+
+  it("rejects a corrupted PDF before extraction runs", async () => {
+    const result = await extractDocumentText({
+      fileName: "corrupted.pdf",
+      mimeType: "application/pdf",
+      bytes: new TextEncoder().encode("not a pdf at all"),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.fileType).toBe("pdf");
+    expect(result.extractionFailureReason).toBe("corrupted_pdf");
+    expect(result.extractionError).toBe("This PDF appears corrupted or incomplete. Please re-export the file and upload it again.");
+    expect(result.extractionMethod).toBe("none");
+  });
+
+  it("rejects a password-protected PDF", async () => {
+    const result = await extractDocumentText({
+      fileName: "protected.pdf",
+      mimeType: "application/pdf",
+      bytes: buildPasswordProtectedPdfBytes(),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.fileType).toBe("pdf");
+    expect(result.extractionFailureReason).toBe("password_protected_pdf");
+    expect(result.extractionError).toBe("Password-protected PDFs cannot be graded automatically. Remove the password and upload a readable export.");
+    expect(result.extractionMethod).toBe("none");
   });
 
   it("rejects PDF extraction polluted by internal document artefacts", async () => {
@@ -579,6 +662,32 @@ ${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref
     expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
   });
 
+  it("rejects a file when the MIME type does not match the extension", async () => {
+    const result = await extractDocumentText({
+      fileName: "mislabelled.pdf",
+      mimeType: "text/plain",
+      bytes: buildJsPdfBytes("This should never be processed as plain text."),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.fileType).toBe("pdf");
+    expect(result.extractionFailureReason).toBe("mime_type_mismatch");
+    expect(result.extractionError).toBe("The file MIME type does not match the PDF file extension. Please re-export the file and try again.");
+  });
+
+  it("rejects an empty file", async () => {
+    const result = await extractDocumentText({
+      fileName: "empty.txt",
+      mimeType: "text/plain",
+      bytes: new Uint8Array(),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.fileType).toBe("txt");
+    expect(result.extractionFailureReason).toBe("empty_file");
+    expect(result.extractionError).toBe("The uploaded file is empty. Upload a readable PDF, DOCX, TXT, or supported code file.");
+  });
+
   it("extracts readable text from a Python source file", async () => {
     const result = await extractDocumentText({
       fileName: "solution.py",
@@ -604,6 +713,6 @@ ${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref
 
     expect(result.success).toBe(false);
     expect(result.fileType).toBe("unsupported");
-    expect(result.extractionError).toBe(DOCUMENT_EXTRACTION_ERROR_MESSAGE);
+    expect(result.extractionError).toBe("Unsupported file type. Upload a readable PDF, DOCX, TXT, or supported code file.");
   });
 });
