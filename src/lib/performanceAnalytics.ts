@@ -179,27 +179,35 @@ export const buildPerformanceProjection = ({
   const filteredGrades = grades.filter((grade) => filteredSubmissionIds.has(grade.submission_id));
 
   const assignmentMap = new Map(filteredAssignments.map((assignment) => [assignment.id, assignment]));
-  const gradeBySubmission = new Map(
-    filteredGrades
-      .map((grade) => [grade.submission_id, toNumericScore(grade)] as const)
-      .filter((entry) => !Number.isNaN(entry[1])),
-  );
+  const gradeBySubmission: Record<string, number> = {};
+  for (const grade of filteredGrades) {
+    const score = toNumericScore(grade);
+    if (!Number.isNaN(score)) {
+      gradeBySubmission[grade.submission_id] = score;
+    }
+  }
 
-  const orderedSubmissionRecords = filteredSubmissions
-    .map((submission) => {
-      const assignment = assignmentMap.get(submission.assignment_id);
-      return assignment ? { assignment, submission, score: gradeBySubmission.get(submission.id) } : null;
-    })
-    .filter(
-      (
-        record,
-      ): record is {
-        assignment: PerformanceAssignmentLike;
-        submission: PerformanceSubmissionLike;
-        score: number | undefined;
-      } => record !== null,
-    )
-    .sort((left, right) => new Date(left.submission.submitted_at).getTime() - new Date(right.submission.submitted_at).getTime());
+  const orderedSubmissionRecords: Array<{
+    assignment: PerformanceAssignmentLike;
+    submission: PerformanceSubmissionLike;
+    score: number | undefined;
+  }> = [];
+
+  for (const submission of filteredSubmissions) {
+    const assignment = assignmentMap.get(submission.assignment_id);
+    if (!assignment) continue;
+
+    orderedSubmissionRecords.push({
+      assignment,
+      submission,
+      score: gradeBySubmission[submission.id],
+    });
+  }
+
+  orderedSubmissionRecords.sort(
+    (left, right) =>
+      new Date(left.submission.submitted_at).getTime() - new Date(right.submission.submitted_at).getTime(),
+  );
 
   const perAssignment: Record<string, { scores: number[]; totalSubs: number }> = {};
   const trajectories: Record<string, StudentTrajectory> = {};
