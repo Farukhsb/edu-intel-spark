@@ -128,6 +128,7 @@ function buildRiskDetails(evaluation: NonNullable<ReturnType<typeof evaluateStud
   composite: StudentRiskCompositeEvaluation | null;
   snapshotDate: string;
   featureVersion: string;
+  generatedAt: string;
   submissionCount: number;
   scoreCount: number;
   firstSubmissionAt: string | null;
@@ -135,12 +136,15 @@ function buildRiskDetails(evaluation: NonNullable<ReturnType<typeof evaluateStud
   modelVersion: string;
   modelSource: "ml" | "heuristic";
   modelConfidence: number | null;
+  modelConfidenceScore: number | null;
   modelRiskScore: number;
   modelRiskBand: string;
   modelNeedsReview: boolean | null;
   modelReviewReasons: string[] | null;
   modelProbabilityByBand: Record<string, number> | null;
   modelFeatureVector: Record<string, number> | null;
+  modelCalibrationMetrics: Record<string, number | null> | null;
+  inputSnapshotReference?: string | null;
   engagementEventCount: number;
   engagementLastEventAt: string | null;
   totalAssignments: number;
@@ -151,6 +155,8 @@ function buildRiskDetails(evaluation: NonNullable<ReturnType<typeof evaluateStud
   return {
     snapshot_date: options.snapshotDate,
     feature_version: options.featureVersion,
+    generated_at: options.generatedAt,
+    ...(options.inputSnapshotReference ? { input_snapshot_reference: options.inputSnapshotReference } : {}),
     submission_count: options.submissionCount,
     score_count: options.scoreCount,
     first_submission_at: options.firstSubmissionAt,
@@ -185,12 +191,15 @@ function buildRiskDetails(evaluation: NonNullable<ReturnType<typeof evaluateStud
     model_version: options.modelVersion,
     model_source: options.modelSource,
     model_confidence: options.modelConfidence,
+    model_confidence_score: options.modelConfidenceScore,
     model_risk_score: options.modelRiskScore,
     model_risk_band: options.modelRiskBand,
     model_needs_review: options.modelNeedsReview,
     model_review_reasons: options.modelReviewReasons,
     model_probability_by_band: options.modelProbabilityByBand,
     model_feature_vector: options.modelFeatureVector,
+    model_calibration_metrics: options.modelCalibrationMetrics,
+    advisory_only: true,
   };
 }
 
@@ -285,6 +294,8 @@ Deno.serve(async (req) => {
     }
 
     const studentIds = (studentRows ?? []).map((row) => row.id);
+    const batchGeneratedAt = new Date().toISOString();
+    const modelVersion = fallbackModelVersion;
     if (studentIds.length === 0) {
       const response: BatchResponse = {
         snapshotDate,
@@ -444,9 +455,11 @@ Deno.serve(async (req) => {
     let lowRiskCount = 0;
 
     for (const trajectory of scoredTrajectories) {
-      const evaluation = trajectory.scores.length > 0 ? evaluateStudentRisk(trajectory) : null;
-      const modelPrediction = evaluation ? scoreStudentRisk(trajectory) : null;
-      const modelVersion = modelPrediction?.modelVersion ?? fallbackModelVersion;
+      const evaluation = trajectory.scores.length > 0
+        ? evaluateStudentRisk(trajectory, { referenceDate: `${snapshotDate}T23:59:59.999Z` })
+        : null;
+      const modelPrediction = evaluation ? scoreStudentRisk(trajectory, { featureVersion, generatedAt: batchGeneratedAt }) : null;
+      const resolvedModelVersion = modelPrediction?.modelVersion ?? modelVersion;
       const studentSubmissionRows = submissionsByStudentId.get(trajectory.studentId) ?? [];
       const submissionSummary = buildStudentSubmissionSummary(
         trajectory.studentId,
@@ -498,19 +511,23 @@ Deno.serve(async (req) => {
         composite,
         snapshotDate,
         featureVersion,
+        generatedAt: batchGeneratedAt,
         submissionCount,
         scoreCount: submissionCount,
         firstSubmissionAt,
         lastSubmissionAt,
-        modelVersion,
+        modelVersion: resolvedModelVersion,
         modelSource: modelPrediction ? "ml" : "heuristic",
         modelConfidence: modelPrediction?.confidence ?? null,
+        modelConfidenceScore: modelPrediction?.confidenceScore ?? null,
         modelRiskScore: modelPrediction?.riskScore ?? academicRiskScore,
         modelRiskBand: modelPrediction?.riskBand ?? riskBand,
         modelNeedsReview: modelPrediction?.needsReview ?? null,
         modelReviewReasons: modelPrediction?.reviewReasons ?? null,
         modelProbabilityByBand: modelPrediction?.probabilityByBand ?? null,
         modelFeatureVector: modelPrediction?.featureVector ?? null,
+        modelCalibrationMetrics: modelPrediction?.calibrationMetrics ?? null,
+        inputSnapshotReference: null,
         engagementEventCount: engagementSummary.eventCount,
         engagementLastEventAt: engagementSummary.lastEventAt,
         totalAssignments: (assignmentRows ?? []).length,
@@ -539,6 +556,11 @@ Deno.serve(async (req) => {
         throw new HttpError(500, snapshotError?.message || "Failed to persist risk snapshot");
       }
 
+      const predictionDetails = {
+        ...snapshotFeatures,
+        input_snapshot_reference: snapshotRow.id,
+      };
+
       const { error: predictionError } = await supabaseAdmin
         .from("student_risk_predictions")
         .upsert(
@@ -547,13 +569,17 @@ Deno.serve(async (req) => {
             student_id: trajectory.studentId,
             institution_id: institutionId,
             prediction_date: snapshotDate,
-            model_version: modelVersion,
+            generated_at: batchGeneratedAt,
+            feature_version: featureVersion,
+            model_version: resolvedModelVersion,
             risk_score: riskScore,
             risk_band: riskBand,
             reason_codes: composite?.reasonCodes ?? evaluation?.reasonCodes ?? ["baseline_monitoring"],
+            confidence_score: modelPrediction?.confidenceScore ?? null,
             explanation: composite?.explanation ?? evaluation?.explanation ?? "Risk score computed from engagement and submission patterns.",
+            calibration_metrics: modelPrediction?.calibrationMetrics ?? {},
             details: {
-              ...snapshotFeatures,
+              ...predictionDetails,
               risk_band: riskBand,
               risk_score: riskScore,
               raw_risk_score: composite?.rawRiskScore ?? academicRiskScore,
@@ -565,8 +591,11 @@ Deno.serve(async (req) => {
               total_assignments: (assignmentRows ?? []).length,
               model_needs_review: modelPrediction?.needsReview ?? null,
               model_review_reasons: modelPrediction?.reviewReasons ?? null,
+              model_confidence_score: modelPrediction?.confidenceScore ?? null,
+              model_calibration_metrics: modelPrediction?.calibrationMetrics ?? null,
               composite_reason_codes: composite?.reasonCodes ?? null,
               composite_component_scores: composite?.componentScores ?? null,
+              advisory_only: true,
             },
           },
           {

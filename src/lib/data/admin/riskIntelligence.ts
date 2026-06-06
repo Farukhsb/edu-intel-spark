@@ -11,7 +11,7 @@ type RiskOutcomeInsert = Database["public"]["Tables"]["student_risk_outcomes"]["
 
 const SNAPSHOT_FIELDS = "id, student_id, institution_id, snapshot_date, feature_version, features, created_at";
 const PREDICTION_FIELDS =
-  "id, snapshot_id, student_id, institution_id, prediction_date, model_version, risk_score, risk_band, reason_codes, explanation, details, created_at";
+  "id, snapshot_id, student_id, institution_id, prediction_date, generated_at, feature_version, model_version, risk_score, confidence_score, risk_band, reason_codes, explanation, details, calibration_metrics, created_at";
 const FEEDBACK_FIELDS = "id, prediction_id, reviewer_id, institution_id, feedback_type, notes, created_at";
 const OUTCOME_FIELDS =
   "id, student_id, institution_id, prediction_id, snapshot_id, source_grade_id, source_submission_id, outcome_date, label_window_days, label_value, outcome_status, outcome_source, notes, created_at";

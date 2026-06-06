@@ -159,6 +159,18 @@ describe("multi-tenancy identity contracts", () => {
     expect(policies).toContain("private.same_institution(institution_id)");
   });
 
+  it("hardens risk prediction transparency fields without weakening access control", () => {
+    const source = readRepoFile("supabase/migrations/20260606150000_harden_risk_prediction_transparency.sql");
+
+    expect(source).toContain("add column if not exists generated_at timestamptz not null default now()");
+    expect(source).toContain("add column if not exists feature_version text not null default 'trajectory-v1'");
+    expect(source).toContain("add column if not exists confidence_score numeric(5,4) check (confidence_score >= 0 and confidence_score <= 1)");
+    expect(source).toContain("add column if not exists calibration_metrics jsonb not null default '{}'::jsonb");
+    expect(source).toContain("coalesce(generated_at, created_at, now())");
+    expect(source).toContain("coalesce(feature_version, 'trajectory-v1')");
+    expect(source).toContain("coalesce(calibration_metrics, '{}'::jsonb)");
+  });
+
   it("adds student risk outcomes for supervised model labels with institution-scoped access", () => {
     const source = readRepoFile("supabase/migrations/20260603212000_add_student_risk_outcomes.sql");
     const traceability = readRepoFile("supabase/migrations/20260604103000_add_source_grade_traceability_to_risk_outcomes.sql");

@@ -75,7 +75,7 @@ const DemoPerformanceTrends = () => {
 
   const atRiskStudents = useMemo<AtRiskStudent[]>(() => {
     return DEMO_TRAJECTORIES.filter((student) => moduleFilter === "all" || student.module === moduleFilter)
-      .map(computeRisk)
+      .map((student) => computeRisk(student))
       .filter((student): student is AtRiskStudent => student !== null)
       .sort((left, right) => right.riskScore - left.riskScore);
   }, [moduleFilter]);

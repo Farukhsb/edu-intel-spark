@@ -33,6 +33,15 @@ describe("risk model scorer", () => {
     expect(result?.reviewReasons).toEqual(expect.arrayContaining(["sharp_decline"]));
   });
 
+  it("scores a severely declining student as high risk", () => {
+    const result = scoreStudentRisk(trajectory([35, 24, 18, 10]));
+
+    expect(result).not.toBeNull();
+    expect(result?.riskBand).toBe("high");
+    expect(result?.riskScore).toBeGreaterThan(70);
+    expect(result?.advisoryOnly).toBe(true);
+  });
+
   it("stays less certain on boundary-like histories", () => {
     const stable = scoreStudentRisk(trajectory([84, 85, 86, 84, 87]));
     const boundary = scoreStudentRisk(trajectory([62, 60, 59, 58, 57]));
@@ -44,5 +53,21 @@ describe("risk model scorer", () => {
     expect(boundary?.confidence).toBeLessThan(99);
     expect(boundary?.needsReview).toBe(true);
     expect(boundary?.reviewReasons).toEqual(expect.arrayContaining(["boundary_pattern"]));
+  });
+
+  it("exposes calibration metadata for transparent risk review", () => {
+    const result = scoreStudentRisk(trajectory([62, 60, 59, 58, 57]));
+
+    expect(result).not.toBeNull();
+    expect(result?.featureVersion).toBe("trajectory-v1");
+    expect(typeof result?.generatedAt).toBe("string");
+    expect(result?.confidenceScore).not.toBeNull();
+    expect(result?.confidenceScore).toBeGreaterThanOrEqual(0);
+    expect(result?.confidenceScore).toBeLessThanOrEqual(1);
+    expect(result?.calibrationMetrics?.trainAccuracy).not.toBeNull();
+    expect(result?.calibrationMetrics?.testAccuracy).not.toBeNull();
+    expect(result?.calibrationMetrics?.validationNll).toBeNull();
+    expect(result?.calibrationMetrics?.validationConfidenceEce).not.toBeNull();
+    expect(result?.calibrationMetrics?.calibrationTemperature).not.toBeNull();
   });
 });

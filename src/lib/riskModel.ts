@@ -4,16 +4,29 @@ import type { RiskModelClassName } from "@/lib/riskModelArtifactTypes";
 import { scoreRiskModelArtifact } from "@/lib/riskModelPipeline";
 import { getRiskModelArtifact } from "@/lib/riskModelRegistry";
 
+export const RISK_FEATURE_VERSION = "trajectory-v1";
+
 export type RiskModelPrediction = {
   modelVersion: string;
+  featureVersion: string;
+  generatedAt: string;
   className: RiskModelClassName;
   riskBand: RiskModelClassName;
   riskScore: number;
   confidence: number;
+  confidenceScore: number;
   needsReview: boolean;
   reviewReasons: string[];
   probabilityByBand: Record<RiskModelClassName, number>;
   featureVector: Record<string, number>;
+  calibrationMetrics: {
+    calibrationTemperature: number | null;
+    validationNll: number | null;
+    validationConfidenceEce: number | null;
+    trainAccuracy: number | null;
+    testAccuracy: number | null;
+  };
+  advisoryOnly: true;
 };
 
 const FEATURE_NAMES = [
@@ -182,7 +195,13 @@ function buildReviewReasons(
   return Array.from(reasons);
 }
 
-export function scoreStudentRisk(trajectory: StudentTrajectory): RiskModelPrediction | null {
+export function scoreStudentRisk(
+  trajectory: StudentTrajectory,
+  options?: {
+    featureVersion?: string;
+    generatedAt?: string;
+  },
+): RiskModelPrediction | null {
   const riskModelArtifact = getRiskModelArtifact();
   if (!riskModelArtifact?.enabled) return null;
 
@@ -216,13 +235,24 @@ export function scoreStudentRisk(trajectory: StudentTrajectory): RiskModelPredic
 
   return {
     modelVersion: riskModelArtifact.version,
+    featureVersion: options?.featureVersion ?? RISK_FEATURE_VERSION,
+    generatedAt: options?.generatedAt ?? new Date().toISOString(),
     className: primary.className,
     riskBand: primary.className,
     riskScore: Number(riskScore.toFixed(2)),
     confidence: Number((confidenceProbability * 100).toFixed(2)),
+    confidenceScore: Number(confidenceProbability.toFixed(4)),
     needsReview,
     reviewReasons,
     probabilityByBand,
     featureVector: features,
+    calibrationMetrics: {
+      calibrationTemperature: riskModelArtifact.calibrationTemperature ?? null,
+      validationNll: riskModelArtifact.metrics?.validationNll ?? null,
+      validationConfidenceEce: riskModelArtifact.metrics?.validationConfidenceEce ?? null,
+      trainAccuracy: riskModelArtifact.metrics?.trainAccuracy ?? null,
+      testAccuracy: riskModelArtifact.metrics?.testAccuracy ?? null,
+    },
+    advisoryOnly: true,
   };
 }

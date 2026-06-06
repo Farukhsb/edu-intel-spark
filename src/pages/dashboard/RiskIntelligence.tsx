@@ -59,6 +59,7 @@ const RiskIntelligence = () => {
   const [feedbackCount, setFeedbackCount] = useState(0);
   const [snapshotDate, setSnapshotDate] = useState<string | null>(null);
   const [latestModelVersion, setLatestModelVersion] = useState<string | null>(null);
+  const [latestFeatureVersion, setLatestFeatureVersion] = useState<string | null>(null);
   const [training, setTraining] = useState(false);
 
   const loadDataset = async (dataset: RiskIntelligenceDataset) => {
@@ -68,6 +69,7 @@ const RiskIntelligence = () => {
     setFeedbackCount(nextFeedbackCount);
     setSnapshotDate(nextSnapshotDate);
     setLatestModelVersion(nextLatestModelVersion);
+    setLatestFeatureVersion(displayRows[0]?.featureVersion ?? dataset.snapshots[0]?.feature_version ?? null);
   };
 
   useEffect(() => {
@@ -380,6 +382,10 @@ const RiskIntelligence = () => {
           <div className="rounded-lg border p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Model version</p>
             <p className="mt-2 text-2xl font-bold font-display">{latestModelVersion || "Pending"}</p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Feature version</p>
+            <p className="mt-2 text-2xl font-bold font-display">{latestFeatureVersion || "Pending"}</p>
           </div>
         </CardContent>
       </Card>

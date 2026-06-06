@@ -515,8 +515,12 @@ export type Database = {
       student_risk_predictions: {
         Row: {
           created_at: string
+          calibration_metrics: Json
+          confidence_score: number | null
           details: Json
+          feature_version: string
           explanation: string | null
+          generated_at: string
           id: string
           institution_id: string
           model_version: string
@@ -529,8 +533,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          calibration_metrics?: Json
+          confidence_score?: number | null
           details?: Json
+          feature_version?: string
           explanation?: string | null
+          generated_at?: string
           id?: string
           institution_id: string
           model_version: string
@@ -543,8 +551,12 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          calibration_metrics?: Json
+          confidence_score?: number | null
           details?: Json
+          feature_version?: string
           explanation?: string | null
+          generated_at?: string
           id?: string
           institution_id?: string
           model_version?: string

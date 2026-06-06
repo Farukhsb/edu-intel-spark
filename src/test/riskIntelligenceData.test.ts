@@ -1,0 +1,107 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => {
+  const single = vi.fn();
+  const select = vi.fn(() => ({ single }));
+  const insert = vi.fn(() => ({ select }));
+  const from = vi.fn(() => ({ insert }));
+
+  return {
+    from,
+    insert,
+    select,
+    single,
+  };
+});
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: mocks.from,
+  },
+}));
+
+import { submitRiskFeedback, submitRiskOutcome } from "@/lib/data/admin/riskIntelligence";
+
+describe("risk intelligence data helpers", () => {
+  beforeEach(() => {
+    mocks.from.mockClear();
+    mocks.insert.mockClear();
+    mocks.select.mockClear();
+    mocks.single.mockReset();
+    mocks.single.mockResolvedValue({
+      data: {
+        id: "row-1",
+        prediction_id: "pred-1",
+        reviewer_id: "reviewer-1",
+        institution_id: "institution-1",
+        feedback_type: "false_alarm",
+        notes: "The alert was a false positive.",
+        created_at: "2026-06-01T10:00:00Z",
+        student_id: "student-1",
+        snapshot_id: "snapshot-1",
+        source_grade_id: null,
+        source_submission_id: null,
+        outcome_date: "2026-06-01",
+        label_window_days: 30,
+        label_value: "medium",
+        outcome_status: "at_risk",
+        outcome_source: "manual",
+      },
+      error: null,
+    });
+  });
+
+  it("records false-positive feedback without mutating the prediction", async () => {
+    const result = await submitRiskFeedback({
+      predictionId: "pred-1",
+      reviewerId: "reviewer-1",
+      institutionId: "institution-1",
+      feedbackType: "false_alarm",
+      notes: "The alert was a false positive.",
+    });
+
+    expect(mocks.from).toHaveBeenCalledWith("risk_feedback");
+    expect(mocks.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prediction_id: "pred-1",
+        reviewer_id: "reviewer-1",
+        institution_id: "institution-1",
+        feedback_type: "false_alarm",
+        notes: "The alert was a false positive.",
+      }),
+    );
+    expect(result.feedback_type).toBe("false_alarm");
+  });
+
+  it("stores intervention outcomes for later model evaluation", async () => {
+    const result = await submitRiskOutcome({
+      studentId: "student-1",
+      institutionId: "institution-1",
+      predictionId: "pred-1",
+      snapshotId: "snapshot-1",
+      sourceGradeId: "grade-1",
+      sourceSubmissionId: "submission-1",
+      labelValue: "medium",
+      outcomeStatus: "at_risk",
+      outcomeSource: "manual",
+      notes: "Lecturer intervention recorded.",
+    });
+
+    expect(mocks.from).toHaveBeenCalledWith("student_risk_outcomes");
+    expect(mocks.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        student_id: "student-1",
+        institution_id: "institution-1",
+        prediction_id: "pred-1",
+        snapshot_id: "snapshot-1",
+        source_grade_id: "grade-1",
+        source_submission_id: "submission-1",
+        label_value: "medium",
+        outcome_status: "at_risk",
+        outcome_source: "manual",
+        notes: "Lecturer intervention recorded.",
+      }),
+    );
+    expect(result.outcome_status).toBe("at_risk");
+  });
+});

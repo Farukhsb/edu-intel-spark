@@ -255,7 +255,7 @@ export const buildPerformanceProjection = ({
   }));
 
   const atRiskStudents = Object.values(trajectories)
-    .map(computeRisk)
+    .map((trajectory) => computeRisk(trajectory))
     .filter((student): student is AtRiskStudent => student !== null)
     .sort((left, right) => right.riskScore - left.riskScore);
 

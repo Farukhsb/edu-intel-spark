@@ -71,4 +71,15 @@ describe("student risk support signals", () => {
     expect(visibleText).not.toContain("Predicted to fail");
     expect(visibleText).not.toContain("Intervene before the next deadline");
   });
+
+  it("marks stale evidence in the reason codes and recommendations", () => {
+    const result = computeRisk(trajectory([42, 37, 31]), {
+      referenceDate: "2026-03-15T00:00:00Z",
+      staleWindowDays: 14,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.reasonCodes).toContain("stale_data");
+    expect(result?.recommendation).toContain("evidence is stale");
+  });
 });
