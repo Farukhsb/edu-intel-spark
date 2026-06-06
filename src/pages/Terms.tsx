@@ -14,7 +14,7 @@ const termsSections = [
   {
     title: "Decision-support only",
     body:
-      "AI grading, integrity signals, feedback drafting, and student-support insights are decision-support tools. They do not replace lecturer judgement, moderation, approval, release, or formal institutional decision-making.",
+      "AI grading, integrity signals, feedback drafting, and student-support insights are decision-support tools. They do not replace lecturer judgement, moderation, approval, release, or formal institutional decision-making. AI output is always a draft recommendation until a lecturer approves it.",
   },
   {
     title: "Acceptable use",
@@ -29,7 +29,7 @@ const termsSections = [
   {
     title: "Review before final use",
     body:
-      "Platform outputs should be reviewed by lecturers or authorised staff before being treated as final academic outcomes. A generated mark, feedback note, or integrity flag should not be treated as final without human review.",
+      "Platform outputs should be reviewed by lecturers or authorised staff before being treated as final academic outcomes. A generated mark, feedback note, or integrity flag should not be treated as final without human review. Students should only see feedback after it has been approved and released by a lecturer or authorised staff member.",
   },
   {
     title: "Deletion requests",
