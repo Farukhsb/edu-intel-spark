@@ -356,6 +356,9 @@ describe("edge function hardening", () => {
     expect(gradingSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
     expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? existingMetadata.institution_id ?? null");
     expect(adminRoleSource).toContain("institution_slug: institutionSlug ?? existingMetadata.institution_slug ?? null");
+    expect(adminRoleSource).toContain("const actorInstitutionSlug");
+    expect(adminRoleSource).toContain("Admin users can only change users in their own institution");
+    expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? actorProfile?.institution_id ?? null");
   });
 
   it("persists grading failure audit events for admin operational monitoring", () => {

@@ -65,6 +65,12 @@ Deno.serve(async (req) => {
       throw new HttpError(403, "Admin profile could not be resolved");
     }
 
+    const actorInstitutionSlug =
+      actorProfile && typeof actorProfile === "object" && "institutions" in actorProfile && actorProfile.institutions &&
+      typeof actorProfile.institutions === "object" && "slug" in actorProfile.institutions
+        ? actorProfile.institutions.slug ?? null
+        : null;
+
     const supabaseAdmin = createAdminClient();
 
     const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
@@ -75,6 +81,10 @@ Deno.serve(async (req) => {
 
     if (targetProfileError || !targetProfile) {
       throw new HttpError(404, "Target user was not found");
+    }
+
+    if (actorInstitutionSlug !== "default" && actorProfile?.institution_id !== targetProfile.institution_id) {
+      throw new HttpError(403, "Admin users can only change users in their own institution");
     }
 
     if (!syncOnly && targetProfile.id === user.id) {
@@ -184,6 +194,7 @@ Deno.serve(async (req) => {
       .insert({
         actor_id: user.id,
         actor_role: "admin",
+        institution_id: targetProfile.institution_id ?? actorProfile?.institution_id ?? null,
         action_type: syncOnly ? "role_metadata_synced" : "role_changed",
         target_user_id: targetUserId,
         target_user_name: targetProfile.full_name || targetProfile.email || "Unknown user",
