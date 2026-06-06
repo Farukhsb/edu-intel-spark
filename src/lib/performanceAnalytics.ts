@@ -111,19 +111,54 @@ export const buildPerformanceProjection = ({
       .filter((entry) => !Number.isNaN(entry[1])),
   );
 
-  const perAssignment: Record<string, { scores: number[]; totalSubs: number }> = {};
-  filteredSubmissions.forEach((submission) => {
-    const assignment = assignmentMap.get(submission.assignment_id);
-    if (!assignment) return;
+  const orderedSubmissionRecords = filteredSubmissions
+    .map((submission) => {
+      const assignment = assignmentMap.get(submission.assignment_id);
+      return assignment ? { assignment, submission, score: gradeBySubmission.get(submission.id) } : null;
+    })
+    .filter(
+      (
+        record,
+      ): record is {
+        assignment: PerformanceAssignmentLike;
+        submission: PerformanceSubmissionLike;
+        score: number | undefined;
+      } => record !== null,
+    )
+    .sort((left, right) => new Date(left.submission.submitted_at).getTime() - new Date(right.submission.submitted_at).getTime());
 
+  const perAssignment: Record<string, { scores: number[]; totalSubs: number }> = {};
+  const trajectories: Record<string, StudentTrajectory> = {};
+  const allScores: number[] = [];
+
+  orderedSubmissionRecords.forEach(({ assignment, submission, score }) => {
     if (!perAssignment[assignment.title]) {
       perAssignment[assignment.title] = { scores: [], totalSubs: 0 };
     }
 
     perAssignment[assignment.title].totalSubs++;
-    const score = gradeBySubmission.get(submission.id);
+
     if (score != null) {
       perAssignment[assignment.title].scores.push(score);
+      allScores.push(score);
+    }
+
+    const key = submission.student_id || submission.student_email || submission.student_name || "unknown";
+    if (!trajectories[key]) {
+      trajectories[key] = {
+        name: submission.student_name || submission.student_email || "Unknown Student",
+        email: submission.student_email,
+        studentId: key,
+        scores: [],
+      };
+    }
+
+    if (score != null) {
+      trajectories[key].scores.push({
+        score,
+        date: submission.submitted_at,
+        assignmentTitle: assignment.title,
+      });
     }
   });
 
@@ -136,37 +171,6 @@ export const buildPerformanceProjection = ({
     participation:
       filteredSubmissions.length > 0 ? Math.round((data.totalSubs / filteredSubmissions.length) * 100) : 0,
   }));
-
-  const allScores = filteredGrades
-    .map(toNumericScore)
-    .filter((score) => !Number.isNaN(score));
-
-  const trajectories: Record<string, StudentTrajectory> = {};
-  filteredSubmissions.forEach((submission) => {
-    const key = submission.student_id || submission.student_email || submission.student_name || "unknown";
-    if (!trajectories[key]) {
-      trajectories[key] = {
-        name: submission.student_name || submission.student_email || "Unknown Student",
-        email: submission.student_email,
-        studentId: key,
-        scores: [],
-      };
-    }
-
-    const score = gradeBySubmission.get(submission.id);
-    if (score != null) {
-      const assignment = assignmentMap.get(submission.assignment_id);
-      trajectories[key].scores.push({
-        score,
-        date: submission.submitted_at,
-        assignmentTitle: assignment?.title || "Assignment",
-      });
-    }
-  });
-
-  Object.values(trajectories).forEach((trajectory) => {
-    trajectory.scores.sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
-  });
 
   const atRiskStudents = Object.values(trajectories)
     .map(computeRisk)
