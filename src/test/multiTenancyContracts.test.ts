@@ -59,6 +59,42 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from authenticated");
   });
 
+  it("hardens admin dashboards, student projection RPCs, and submission-file reads to the current institution", () => {
+    const source = readRepoFile("supabase/migrations/20260606120000_harden_multi_tenant_admin_and_student_surfaces.sql");
+
+    expect(source).toContain("create or replace function public.get_admin_dashboard_metrics()");
+    expect(source).toContain("where institution_id = private.current_institution_id()");
+    expect(source).toContain("create or replace function public.get_admin_assignment_oversight()");
+    expect(source).toContain("and a.institution_id = private.current_institution_id()");
+    expect(source).toContain("and s.institution_id = a.institution_id");
+    expect(source).toContain("create or replace function public.get_admin_moderation_overview()");
+    expect(source).toContain("and mc.institution_id = private.current_institution_id()");
+    expect(source).toContain("and a.institution_id = mc.institution_id");
+    expect(source).toContain("create or replace function public.get_student_grade_assignment_metadata()");
+    expect(source).toContain("and s.institution_id = private.current_institution_id()");
+    expect(source).toContain("create or replace function public.get_student_submission_grade_projection()");
+    expect(source).toContain("and g.institution_id = s.institution_id");
+    expect(source).toContain("create or replace function public.send_submission_to_moderation(_submission_id uuid)");
+    expect(source).toContain("where id = _submission_id");
+    expect(source).toContain("and institution_id = private.current_institution_id()");
+    expect(source).toContain("drop policy if exists \"Users can view authorized submission files\" on storage.objects;");
+    expect(source).toContain("and private.same_institution(s.institution_id)");
+  });
+
+  it("seeds a two-institution isolation fixture with mirrored risk data", () => {
+    const source = readRepoFile("supabase/fixtures/multi-tenant-isolation-fixture.sql");
+
+    expect(source).toContain("Isolation Institution A");
+    expect(source).toContain("Isolation Institution B");
+    expect(source).toContain("isolation.student.a@edu-intel.test");
+    expect(source).toContain("isolation.student.b@edu-intel.test");
+    expect(source).toContain("11111111-1111-4111-8111-111111111111");
+    expect(source).toContain("22222222-2222-4222-8222-222222222222");
+    expect(source).toContain("student_risk_snapshots");
+    expect(source).toContain("student_risk_predictions");
+    expect(source).toContain("student_risk_outcomes");
+  });
+
   it("adds institution scoping to core workflow tables with automatic derivation hooks", () => {
     const source = readRepoFile("supabase/migrations/20260525093000_add_workflow_institutions.sql");
 
