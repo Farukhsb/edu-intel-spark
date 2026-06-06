@@ -349,6 +349,7 @@ describe("edge function hardening", () => {
     const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
     const adminRoleSource = readRepoFile("supabase/functions/admin-set-user-role/index.ts");
     const riskBatchSource = readRepoFile("supabase/functions/compute-risk-batch/index.ts");
+    const explainGradeSource = readRepoFile("supabase/functions/explain-grade/index.ts");
     const workflowEmailSource = readRepoFile("supabase/functions/send-workflow-notification-email/index.ts");
     const importGradesSource = readRepoFile("supabase/functions/import-grades/index.ts");
     const importConfirmSource = readRepoFile("supabase/functions/import-grades/confirm.ts");
@@ -372,6 +373,9 @@ describe("edge function hardening", () => {
     expect(adminRoleSource).toContain("Admin users can only change users in their own institution");
     expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? actorProfile?.institution_id ?? null");
     expect(riskBatchSource).toContain('.eq("institution_id", institutionId)');
+    expect(explainGradeSource).toContain('select("id, institution_id, institutions:institution_id (slug)")');
+    expect(explainGradeSource).toContain('.eq("institution_id", institutionId)');
+    expect(explainGradeSource).toContain('institution_id,');
     expect(workflowEmailSource).toContain('select("id, institution_id, institutions:institution_id (slug)")');
     expect(workflowEmailSource).toContain('.eq("institution_id", institutionId)');
     expect(workflowEmailSource).toContain('notification_type: "assignment-published"');

@@ -66,10 +66,23 @@ Deno.serve(async (req) => {
     }
 
     const { submissionId, message, messages } = parsed.data;
+    const { data: actorProfile, error: actorProfileError } = await userSupabase
+      .from("profiles")
+      .select("id, institution_id, institutions:institution_id (slug)")
+      .eq("id", user.id)
+      .maybeSingle<{ id: string; institution_id: string | null }>();
+
+    if (actorProfileError || !actorProfile?.institution_id) {
+      throw new HttpError(403, "You do not have access to this institution");
+    }
+
+    const institutionId = actorProfile.institution_id;
+
     const { data: submission, error: submissionError } = await userSupabase
       .from("submissions")
-      .select("id, assignment_id, student_id, student_name, student_email, file_name, status")
+      .select("id, assignment_id, institution_id, student_id, student_name, student_email, file_name, status")
       .eq("id", submissionId)
+      .eq("institution_id", institutionId)
       .maybeSingle();
 
     if (submissionError) {
@@ -78,8 +91,9 @@ Deno.serve(async (req) => {
 
     const { data: grade, error: gradeError } = await userSupabase
       .from("grades")
-      .select("id, submission_id, ai_score, final_score, ai_feedback, final_feedback, ai_breakdown, grading_confidence")
+      .select("id, submission_id, institution_id, ai_score, final_score, ai_feedback, final_feedback, ai_breakdown, grading_confidence")
       .eq("submission_id", submissionId)
+      .eq("institution_id", institutionId)
       .maybeSingle();
 
     if (gradeError) {
@@ -90,8 +104,9 @@ Deno.serve(async (req) => {
     const { data: assignment, error: assignmentError } = assignmentId
       ? await userSupabase
           .from("assignments")
-          .select("id, title, module_code, max_score")
+          .select("id, institution_id, title, module_code, max_score")
           .eq("id", assignmentId)
+          .eq("institution_id", institutionId)
           .maybeSingle()
       : { data: null, error: null };
 
