@@ -2,6 +2,15 @@
 
 This document describes the system as it exists now. It reflects the current React frontend, Supabase backend, Edge Functions, RLS model, and the recent architecture-hardening work in this repository.
 
+## Current Delivery Posture
+
+GradeAI is best understood as an implemented controlled-pilot system:
+
+- the core workflows are built and test-covered in this repository
+- demo routes use synthetic data and are isolated from live academic data
+- institution-scoped live data flows are present for the supported dashboards and exports
+- some operational questions still require pilot validation rather than claiming full production readiness
+
 ## System Overview
 
 GradeAI is a Vite/React single-page application backed by Supabase.
@@ -451,6 +460,7 @@ What is still true:
 - the app is still a frontend-driven orchestration layer over Supabase
 - some admin and institutional analytics views are still better described as frontend projections over raw table reads than as backend-curated reporting endpoints
 - AI-dependent surfaces still rely on the quality of stored grading feedback and structured context
+- the repository documents a controlled pilot posture, not a formal institution-wide production certification
 
 ## Summary
 

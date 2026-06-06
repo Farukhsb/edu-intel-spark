@@ -8,6 +8,13 @@ This document explains the current security model in plain English. It is writte
 
 GradeAI is still a developing product, so this document should be read as a working security model rather than a final institutional security certification.
 
+## Current Security Posture
+
+- live code paths are institution-scoped and covered by contract tests where possible
+- demo routes use synthetic data and should never be treated as a source of live academic records
+- exports, audit logging, risk prediction, and AI grading have been hardened to reduce silent failure or hidden data exposure
+- some deployment and governance questions remain pilot-stage checks rather than completed enterprise sign-off
+
 ## Security Principles
 
 GradeAI is built around a few simple principles:
@@ -60,6 +67,8 @@ Access control in GradeAI is handled through a combination of:
 - backend checks inside Supabase Edge Functions
 
 The important point is that frontend routing is not enough. A hidden button or protected page does not fully secure the system. The database and backend functions must also check who the user is and what they are allowed to access.
+
+The current implementation uses the frontend mainly as a convenience layer. The real security boundary is still the combination of Supabase authentication, row-level security, and Edge Function validation.
 
 ## Row-Level Security
 

@@ -20,9 +20,14 @@ material.
 
 ### 1. Assessor Evidence Summary
 
-**File:** [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
+There is no single canonical `ASSESSOR_EVIDENCE_SUMMARY.md` file in this branch. Start with the README and the pilot-status docs instead:
 
-Start here if you want the clearest evidence-facing summary of the product, the problem, the technical work, and the current stage of the project.
+- [`../README.md`](../README.md)
+- [`PILOT_STATUS.md`](PILOT_STATUS.md)
+- [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
+- [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
+- [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
 
 ### 2. Technical Architecture
 
@@ -42,14 +47,32 @@ Use this to understand how GradeAI keeps AI output inside a human-reviewed acade
 
 Use this to understand authentication, role boundaries, data access, row-level security, and protection of sensitive academic information.
 
-### 5. Academic Compliance and AI Governance
+### 5. Pilot Status
+
+**File:** [`PILOT_STATUS.md`](PILOT_STATUS.md)
+
+Use this to understand what is implemented, what is synthetic/demo-only, what is under pilot validation, and what is not production-ready.
+
+### 6. Model Evaluation
+
+**File:** [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
+
+Use this to understand how the grading and risk models are evaluated, what metrics are stored, and where the limits are.
+
+### 7. Human Oversight
+
+**File:** [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
+
+Use this to understand the lecturer-review, moderation, release, and audit workflow that keeps AI decision support inside human control.
+
+### 8. Academic Compliance and AI Governance
 
 **File:** [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
 
 Use this for the project's governance position on student data, lecturer control,
 AI-assisted assessment, and responsible pilot-stage rollout.
 
-### 6. Authorization Reference
+### 9. Authorization Reference
 
 **File:** [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
 
@@ -57,7 +80,7 @@ Use this when you need the fastest route from a critical workflow to the exact t
 
 This is the most audit-friendly map of the current authorization surface.
 
-### 7. Operational Runbook
+### 10. Operational Runbook
 
 **File:** [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
 
@@ -124,11 +147,15 @@ Explains the lightweight load-testing approach used for pilot-stage checks and w
 
 ## Assessor and Evidence-Facing Material
 
-### Assessor Evidence Summary
+Use the top-level README and the pilot-status docs as the current evidence-facing summary. The most useful supporting files are:
 
-**File:** [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
-
-A concise evidence-facing summary for reviewers. It explains what GradeAI is, the problem it addresses, what was built, the technical architecture, product evidence, and personal contribution.
+- [`../README.md`](../README.md)
+- [`PILOT_STATUS.md`](PILOT_STATUS.md)
+- [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
+- [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
+- [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
+- [`screenshots/`](screenshots/)
 
 ## Screenshots
 
@@ -140,21 +167,24 @@ Contains visual evidence of the working product. Screenshots should be used alon
 
 For a technical reviewer, read the documents in this order:
 
-1. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md)
-3. [`TRUST_MODEL.md`](TRUST_MODEL.md)
+1. [`../README.md`](../README.md)
+2. [`PILOT_STATUS.md`](PILOT_STATUS.md)
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 4. [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
 5. [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
-6. [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
-7. [`TESTING.md`](TESTING.md)
-8. [`support/TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
+6. [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
+7. [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
+8. [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
+9. [`TESTING.md`](TESTING.md)
+10. [`support/TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
 
 For a non-technical reviewer or assessor, start with:
 
-1. [`ASSESSOR_EVIDENCE_SUMMARY.md`](ASSESSOR_EVIDENCE_SUMMARY.md)
-2. [`Lecturer-Guide.md`](Lecturer-Guide.md)
-3. [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
-4. [`screenshots/`](screenshots/)
+1. [`../README.md`](../README.md)
+2. [`PILOT_STATUS.md`](PILOT_STATUS.md)
+3. [`Lecturer-Guide.md`](Lecturer-Guide.md)
+4. [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
+5. [`screenshots/`](screenshots/)
 
 ## What This Documentation Is Intended To Show
 
