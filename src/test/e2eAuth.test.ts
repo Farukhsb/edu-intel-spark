@@ -40,7 +40,7 @@ describe("e2eAuth", () => {
   });
 
   it("returns normalized local auth state for a valid stored payload", () => {
-    Object.defineProperty(globalThis, "window", {
+      Object.defineProperty(globalThis, "window", {
       value: createWindowMock(
         JSON.stringify({
           user: { id: "user-1", email: null },
@@ -50,6 +50,7 @@ describe("e2eAuth", () => {
             email: "lecturer@example.test",
             role: "lecturer",
             avatar_url: null,
+            institution_id: "institution-1",
             cohort_id: null,
             department_id: "cs",
           },
@@ -67,13 +68,14 @@ describe("e2eAuth", () => {
         id: "user-1",
         full_name: "Demo Lecturer",
         email: "lecturer@example.test",
-      role: "lecturer",
-      avatar_url: null,
-      cohort_id: null,
-      department_name: "cs",
-      department_id: "cs",
-      must_change_password: false,
-    },
-  });
+        role: "lecturer",
+        avatar_url: null,
+        institution_id: "institution-1",
+        cohort_id: null,
+        department_name: "cs",
+        department_id: "cs",
+        must_change_password: false,
+      },
+    });
   });
 });
