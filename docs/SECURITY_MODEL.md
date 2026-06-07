@@ -15,6 +15,14 @@ GradeAI is still a developing product, so this document should be read as a work
 - exports, audit logging, risk prediction, and AI grading have been hardened to reduce silent failure or hidden data exposure
 - some deployment and governance questions remain pilot-stage checks rather than completed enterprise sign-off
 
+This security posture is deliberately conservative:
+
+- `Demo*` routes are synthetic only
+- live routes are institution-scoped
+- service-role paths are limited to server-side workflows
+- human review remains required for academic decisions
+- the repository contains contract tests and runtime tests, but not a claim of formal institutional certification
+
 ## Security Principles
 
 GradeAI is built around a few simple principles:
@@ -55,6 +63,7 @@ In the current app, admin role changes are intentionally narrow:
 - role changes require explicit confirmation
 - backend role changes write to `admin_audit_log`
 - admin assignment and submission views remain read-only oversight surfaces
+- admin visibility is scoped to the active institution, not all institutions in the database
 
 ## Access Control
 
@@ -69,6 +78,15 @@ Access control in GradeAI is handled through a combination of:
 The important point is that frontend routing is not enough. A hidden button or protected page does not fully secure the system. The database and backend functions must also check who the user is and what they are allowed to access.
 
 The current implementation uses the frontend mainly as a convenience layer. The real security boundary is still the combination of Supabase authentication, row-level security, and Edge Function validation.
+
+Current review status:
+
+| Area | Status | Notes |
+|---|---|---|
+| Live access control | Implemented | Core academic routes are institution-scoped. |
+| Demo access control | Implemented | Demo routes stay synthetic and do not read live academic records. |
+| Pilot runtime proof | Ongoing | Live runtime tests exist, but the platform is still a pilot. |
+| Production certification | Not claimed | No formal certification or institution-wide approval is claimed here. |
 
 ## Row-Level Security
 
@@ -153,6 +171,8 @@ Supabase Edge Functions are used for heavier backend tasks such as grading, inte
 These functions should not simply trust data passed from the browser. They should check the authenticated user, confirm the user's role where needed, and only operate on data the user is allowed to access.
 
 Edge Functions should also avoid logging sensitive content such as full student submissions, private feedback, or personal data.
+
+Server-side service-role access should be treated as a privileged implementation detail, not as a general-purpose client capability.
 
 ## Logging and Monitoring
 

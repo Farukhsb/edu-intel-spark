@@ -11,6 +11,8 @@ GradeAI is best understood as an implemented controlled-pilot system:
 - institution-scoped live data flows are present for the supported dashboards and exports
 - some operational questions still require pilot validation rather than claiming full production readiness
 
+This document is intentionally descriptive rather than promotional. If a workflow is only present in demo mode, only validated in tests, or still waiting on pilot evidence, it should be described that way here.
+
 ## System Overview
 
 GradeAI is a Vite/React single-page application backed by Supabase.
@@ -38,9 +40,18 @@ There is no separate custom API server in this repository. The main backend logi
 - `supabase/functions`
 - `src/lib`
 
+### Live, Demo, and Pilot Status
+
+| Area | Status | Notes |
+|---|---|---|
+| Live academic workflows | Implemented | Assignment, grading, moderation, student support, exports, and audit surfaces are in the codebase. |
+| Demo workflows | Implemented | `Demo*` routes use synthetic data only and do not query live academic records. |
+| Pilot validation | Ongoing | Cross-institution proof, deployment governance, and operational readiness still need institutional validation. |
+| Production readiness | Not claimed | The repository should not be described as a finished institution-wide rollout. |
+
 ## Architectural Direction
 
-The codebase is no longer best described as “large pages with mixed UI and business logic everywhere.”
+The codebase is no longer best described as "large pages with mixed UI and business logic everywhere."
 
 The current direction is:
 

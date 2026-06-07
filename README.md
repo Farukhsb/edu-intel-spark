@@ -35,6 +35,7 @@ GradeAI should be read as an implemented pilot system, not a finished institutio
 - AI grading guardrails and prompt-injection resistance
 - risk model evaluation and false-positive feedback loops
 - runtime access-control proof via contract and live tests
+- reviewer-pack evidence capture and documentation completeness
 
 ### Not yet something to present as fully production-ready
 
@@ -63,7 +64,6 @@ GradeAI includes a synthetic demo mode for reviewer walkthroughs and product eva
 - [Security Model](docs/SECURITY_MODEL.md)
 - [Pilot Status](docs/PILOT_STATUS.md)
 - [Model Evaluation](docs/MODEL_EVALUATION.md)
-- [Human Oversight](docs/HUMAN_OVERSIGHT.md)
 - [Risk Model Transparency](docs/risk-model-transparency.md)
 - [Screenshots](docs/screenshots/README.md)
 
@@ -76,6 +76,28 @@ Selected screenshot evidence:
 - [predictive risk analytics](docs/screenshots/predictive-risk-analytics.jpg)
 - [student improvement plan](docs/screenshots/student-improvement-plan.jpg)
 - [AI grade explanation](docs/screenshots/ai-grade-explanation.jpg)
+
+Video evidence:
+
+- no video artifact is currently committed in this repository
+- if a walkthrough video is produced later, it should be linked from this section and treated as supporting evidence rather than a substitute for code or test proof
+
+## Evidence Pack Summary
+
+For technical reviewers and university IT staff:
+
+- start with [Architecture](docs/ARCHITECTURE.md)
+- then read [Security Model](docs/SECURITY_MODEL.md)
+- then read [Pilot Status](docs/PILOT_STATUS.md)
+- then read [Model Evaluation](docs/MODEL_EVALUATION.md)
+- use [Screenshots](docs/screenshots/README.md) as visual confirmation of implemented workflows
+
+For evidence reviewers:
+
+- this repository shows a working pilot, not a claim of finished institutional rollout
+- live and demo routes are intentionally separated
+- the tests are intended to prove safety boundaries, not just feature presence
+- every claim in this README should be read alongside the linked technical docs and test evidence
 
 ## Key Product Areas
 

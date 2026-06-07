@@ -9,7 +9,6 @@ This page points to the docs that are still current.
 - [`SECURITY_MODEL.md`](SECURITY_MODEL.md): security boundaries
 - [`PILOT_STATUS.md`](PILOT_STATUS.md): what is live, demo-only, pilot-only, and planned
 - [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md): grading and risk model evaluation
-- [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md): lecturer review and release control
 - [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md): workflow-to-table/RLS map
 - [`MIGRATION_RISK_INDEX.md`](MIGRATION_RISK_INDEX.md): migration areas to re-check
 - [`TESTING.md`](TESTING.md): automated test baseline

@@ -26,7 +26,6 @@ There is no single canonical `ASSESSOR_EVIDENCE_SUMMARY.md` file in this branch.
 - [`PILOT_STATUS.md`](PILOT_STATUS.md)
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
-- [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
 - [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
 
 ### 2. Technical Architecture
@@ -59,20 +58,14 @@ Use this to understand what is implemented, what is synthetic/demo-only, what is
 
 Use this to understand how the grading and risk models are evaluated, what metrics are stored, and where the limits are.
 
-### 7. Human Oversight
-
-**File:** [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
-
-Use this to understand the lecturer-review, moderation, release, and audit workflow that keeps AI decision support inside human control.
-
-### 8. Academic Compliance and AI Governance
+### 7. Academic Compliance and AI Governance
 
 **File:** [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
 
 Use this for the project's governance position on student data, lecturer control,
 AI-assisted assessment, and responsible pilot-stage rollout.
 
-### 9. Authorization Reference
+### 8. Authorization Reference
 
 **File:** [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
 
@@ -80,7 +73,7 @@ Use this when you need the fastest route from a critical workflow to the exact t
 
 This is the most audit-friendly map of the current authorization surface.
 
-### 10. Operational Runbook
+### 9. Operational Runbook
 
 **File:** [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
 
@@ -154,7 +147,6 @@ Use the top-level README and the pilot-status docs as the current evidence-facin
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
 - [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
-- [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
 - [`screenshots/`](screenshots/)
 
 ## Screenshots
@@ -173,10 +165,9 @@ For a technical reviewer, read the documents in this order:
 4. [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
 5. [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
 6. [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
-7. [`HUMAN_OVERSIGHT.md`](HUMAN_OVERSIGHT.md)
-8. [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
-9. [`TESTING.md`](TESTING.md)
-10. [`support/TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
+7. [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
+8. [`TESTING.md`](TESTING.md)
+9. [`support/TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
 
 For a non-technical reviewer or assessor, start with:
 
