@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { log } from "@/lib/logger";
 import {
   buildOfsB3EvidencePackMarkdown,
@@ -11,6 +13,7 @@ import {
 } from "@/lib/assignmentWorkflowNavigation";
 import { deriveAccreditationMetrics, type NSSMetric, type QAAMetric, type TEFIndicator } from "@/lib/accreditationMetrics";
 import { fetchAccreditationDataset } from "@/lib/data/academic";
+import { logReportExportEvent } from "@/lib/audit/exportAuditEvents";
 
 const exportQAAReport = (qaaMetrics: QAAMetric[], summary: { overallCompliance: number; metCount: number; atRiskCount: number; belowCount: number }) => {
   const lines = ["QAA Compliance Report - GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
@@ -136,6 +139,7 @@ const buildAccreditationWorkflowTarget = ({
 };
 
 export const useAccreditationDashboardController = () => {
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("qaa");
   const [loading, setLoading] = useState(true);
@@ -150,7 +154,8 @@ export const useAccreditationDashboardController = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const { grades, submissions, assignments, profiles } = await fetchAccreditationDataset();
+        const institutionId = profile?.institution_id ?? null;
+        const { grades, submissions, assignments, profiles } = await fetchAccreditationDataset(institutionId);
 
         const derived = deriveAccreditationMetrics({
           grades,
@@ -183,7 +188,7 @@ export const useAccreditationDashboardController = () => {
     };
 
     void fetchData();
-  }, []);
+  }, [profile?.institution_id]);
 
   const summary = useMemo(() => {
     const overallCompliance =
@@ -233,29 +238,108 @@ export const useAccreditationDashboardController = () => {
     summary,
     statusIcon,
     tefColor,
-    exportQAAReport: () => exportQAAReport(qaaMetrics, summary),
-    exportOfsB3EvidencePack: () =>
-      downloadMarkdown(
-        buildOfsB3EvidencePackMarkdown({
-          qaaMetrics,
-          nssMetrics,
-          tefIndicators,
-          feedbackTurnaround,
-          summary,
-        }),
-        `ofs_b3_evidence_pack_${new Date().toISOString().slice(0, 10)}.md`,
-      ),
-    exportTefNarrativeSubmission: () =>
-      downloadMarkdown(
-        buildTefNarrativeSubmissionMarkdown({
-          qaaMetrics,
-          nssMetrics,
-          tefIndicators,
-          feedbackTurnaround,
-          summary,
-        }),
-        `tef_narrative_submission_${new Date().toISOString().slice(0, 10)}.md`,
-      ),
+    exportQAAReport: () => {
+      try {
+        exportQAAReport(qaaMetrics, summary);
+        void logReportExportEvent({
+          actorId: user?.id,
+          actorRole: profile?.role ?? null,
+          institutionId: profile?.institution_id ?? null,
+          reportName: "qaa_compliance_report",
+          format: "csv",
+          rowCount: qaaMetrics.length,
+          scope: "institution",
+        });
+      } catch (error) {
+        log.error("Failed to export QAA report", error);
+        toast.error("Failed to export the QAA report. Please try again.");
+        void logReportExportEvent({
+          actorId: user?.id,
+          actorRole: profile?.role ?? null,
+          institutionId: profile?.institution_id ?? null,
+          reportName: "qaa_compliance_report",
+          format: "csv",
+          rowCount: qaaMetrics.length,
+          scope: "institution",
+          status: "failure",
+          errorMessage: error instanceof Error ? error.message : "Export failed",
+        });
+      }
+    },
+    exportOfsB3EvidencePack: () => {
+      try {
+        downloadMarkdown(
+          buildOfsB3EvidencePackMarkdown({
+            qaaMetrics,
+            nssMetrics,
+            tefIndicators,
+            feedbackTurnaround,
+            summary,
+          }),
+          `ofs_b3_evidence_pack_${new Date().toISOString().slice(0, 10)}.md`,
+        );
+        void logReportExportEvent({
+          actorId: user?.id,
+          actorRole: profile?.role ?? null,
+          institutionId: profile?.institution_id ?? null,
+          reportName: "ofs_b3_evidence_pack",
+          format: "markdown",
+          rowCount: qaaMetrics.length,
+          scope: "institution",
+        });
+      } catch (error) {
+        log.error("Failed to export OfS B3 evidence pack", error);
+        toast.error("Failed to export the evidence pack. Please try again.");
+        void logReportExportEvent({
+          actorId: user?.id,
+          actorRole: profile?.role ?? null,
+          institutionId: profile?.institution_id ?? null,
+          reportName: "ofs_b3_evidence_pack",
+          format: "markdown",
+          rowCount: qaaMetrics.length,
+          scope: "institution",
+          status: "failure",
+          errorMessage: error instanceof Error ? error.message : "Export failed",
+        });
+      }
+    },
+    exportTefNarrativeSubmission: () => {
+      try {
+        downloadMarkdown(
+          buildTefNarrativeSubmissionMarkdown({
+            qaaMetrics,
+            nssMetrics,
+            tefIndicators,
+            feedbackTurnaround,
+            summary,
+          }),
+          `tef_narrative_submission_${new Date().toISOString().slice(0, 10)}.md`,
+        );
+        void logReportExportEvent({
+          actorId: user?.id,
+          actorRole: profile?.role ?? null,
+          institutionId: profile?.institution_id ?? null,
+          reportName: "tef_narrative_submission",
+          format: "markdown",
+          rowCount: qaaMetrics.length,
+          scope: "institution",
+        });
+      } catch (error) {
+        log.error("Failed to export TEF narrative submission", error);
+        toast.error("Failed to export the TEF narrative. Please try again.");
+        void logReportExportEvent({
+          actorId: user?.id,
+          actorRole: profile?.role ?? null,
+          institutionId: profile?.institution_id ?? null,
+          reportName: "tef_narrative_submission",
+          format: "markdown",
+          rowCount: qaaMetrics.length,
+          scope: "institution",
+          status: "failure",
+          errorMessage: error instanceof Error ? error.message : "Export failed",
+        });
+      }
+    },
     pendingWorkflowTarget,
     openPendingWorkflow: () => navigate(pendingWorkflowTarget?.href ?? "/dashboard/assignments?view=needs-review"),
     openSubmissionOversight: () => navigate("/dashboard?view=submissions"),

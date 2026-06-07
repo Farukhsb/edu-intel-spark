@@ -8,10 +8,14 @@ const mocks = vi.hoisted(() => ({
   authState: {
     isDemo: false,
     user: { id: "lecturer-1" },
+    profile: { id: "lecturer-1", role: "admin", institution_id: "institution-1" },
   },
   toast: {
     error: vi.fn(),
     success: vi.fn(),
+  },
+  logger: {
+    error: vi.fn(),
   },
   supabase: {
     from: vi.fn(),
@@ -19,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 let capturedBlob: Blob | null = null;
+let auditInsertSpy: ReturnType<typeof vi.fn>;
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mocks.authState,
@@ -30,6 +35,10 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("sonner", () => ({
   toast: mocks.toast,
+}));
+
+vi.mock("@/lib/logger", () => ({
+  log: mocks.logger,
 }));
 
 vi.mock("lucide-react", () => {
@@ -100,6 +109,14 @@ const createDeferred = <T,>() => {
   return { promise, resolve, reject } satisfies Deferred<T>;
 };
 
+const readBlobAsText = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read blob"));
+    reader.readAsText(blob);
+  });
+
 const defaultAssignments: AssignmentRow[] = [
   { id: "assignment-1", title: "Policy Case Study", module_code: "POL301" },
 ];
@@ -159,38 +176,44 @@ const setupSupabase = ({
   gradesFallback?: GradeRow[];
 } = {}) => {
   mocks.supabase.from.mockImplementation((table: string) => ({
+    insert: auditInsertSpy,
     select: vi.fn((fields: string) => {
+      const resultForTable = (() => {
       if (table === "assignments") {
         if (assignmentsError) {
-          return Promise.resolve({ data: null, error: assignmentsError });
+          return { data: null, error: assignmentsError };
         }
         if (assignmentsPromise) {
           return assignmentsPromise;
         }
-        return Promise.resolve({ data: assignments, error: null });
+        return { data: assignments, error: null };
       }
       if (table === "submissions") {
         if (submissionsError) {
-          return Promise.resolve({ data: null, error: submissionsError });
+          return { data: null, error: submissionsError };
         }
-        return Promise.resolve({ data: submissions, error: null });
+        return { data: submissions, error: null };
       }
       if (table === "grades") {
         if (gradesError) {
           if (!fields.includes("grade_source") && gradesFallback) {
-            return Promise.resolve({ data: gradesFallback, error: null });
+            return { data: gradesFallback, error: null };
           }
-          return Promise.resolve({ data: null, error: gradesError });
+          return { data: null, error: gradesError };
         }
-        return Promise.resolve({ data: grades, error: null });
+        return { data: grades, error: null };
       }
       if (table === "profiles") {
         if (profilesError) {
-          return Promise.resolve({ data: null, error: profilesError });
+          return { data: null, error: profilesError };
         }
-        return Promise.resolve({ data: profiles, error: null });
+        return { data: profiles, error: null };
       }
-      return Promise.resolve({ data: [], error: null });
+      return { data: [], error: null };
+    })();
+      return {
+        eq: vi.fn(async () => resultForTable),
+      };
     }),
   }));
 };
@@ -205,6 +228,9 @@ describe("ExternalExaminerExport", () => {
   beforeEach(() => {
     mocks.authState.isDemo = false;
     mocks.authState.user = { id: "lecturer-1" };
+    mocks.authState.profile = { id: "lecturer-1", role: "admin", institution_id: "institution-1" };
+    auditInsertSpy = vi.fn(async () => ({ data: null, error: null }));
+    capturedBlob = null;
     anchorClick = vi.fn();
     Object.defineProperty(URL, "createObjectURL", {
       writable: true,
@@ -318,6 +344,60 @@ describe("ExternalExaminerExport", () => {
     });
   });
 
+  it("redacts student identifiers when requested and logs the export", async () => {
+    setupSupabase();
+
+    render(<ExternalExaminerExport />);
+
+    fireEvent.click(await screen.findByLabelText("Redact Student Identity"));
+    fireEvent.click(await screen.findByRole("button", { name: /Export CSV/i }));
+
+    await waitFor(() => {
+      expect(mocks.supabase.from).toHaveBeenCalledWith("admin_audit_log");
+    });
+    await waitFor(() => {
+      expect(auditInsertSpy).toHaveBeenCalled();
+    });
+    expect(auditInsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor_id: "lecturer-1",
+        actor_role: "admin",
+        institution_id: "institution-1",
+        action_type: "report_exported",
+      }),
+    );
+
+    expect(capturedBlob).toBeInstanceOf(Blob);
+    const csv = await readBlobAsText(capturedBlob as Blob);
+    expect(csv).toContain("Student 1");
+    expect(csv).toContain("student-1@redacted.local");
+  });
+
+  it("logs and shows a readable error when the export download fails", async () => {
+    setupSupabase();
+    createObjectURLSpy.mockImplementation(() => {
+      throw new Error("download blocked");
+    });
+
+    render(<ExternalExaminerExport />);
+
+    const exportButton = await screen.findByRole("button", { name: /Export CSV/i });
+    fireEvent.click(exportButton);
+
+    await waitFor(() => {
+      expect(mocks.logger.error).toHaveBeenCalledWith(
+        "Failed to generate external examiner export file",
+        expect.any(Error),
+        expect.objectContaining({
+          format: "csv",
+          rowCount: 1,
+        }),
+      );
+    });
+
+    expect(mocks.toast.error).toHaveBeenCalledWith("Failed to generate export. Please try again.");
+  });
+
   it("includes grade source in the exported CSV headers and rows", () => {
     const csv = buildExternalExaminerCsv(
       [
@@ -346,6 +426,7 @@ describe("ExternalExaminerExport", () => {
         moderation: true,
         aiBreakdown: false,
         studentIdentity: true,
+        redactStudentIdentity: false,
       },
     );
 

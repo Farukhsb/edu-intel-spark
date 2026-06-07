@@ -5,6 +5,7 @@ import type { Json, TablesInsert } from "@/integrations/supabase/types";
 export type AcademicAccessEventType =
   | "submission_viewed"
   | "submission_file_opened"
+  | "student_profile_viewed"
   | "integrity_evidence_viewed"
   | "moderation_evidence_viewed"
   | "grade_details_viewed";
@@ -12,6 +13,7 @@ export type AcademicAccessEventType =
 type AcademicAccessEventInput = {
   actorId?: string | null;
   actorRole?: string | null;
+  institutionId?: string | null;
   eventType: AcademicAccessEventType;
   resourceType: string;
   resourceId?: string | null;
@@ -62,6 +64,7 @@ const sanitizeMetadata = (metadata?: Record<string, unknown>): Json => {
 export const logAcademicAccessEvent = async ({
   actorId,
   actorRole,
+  institutionId,
   eventType,
   resourceType,
   resourceId,
@@ -77,6 +80,7 @@ export const logAcademicAccessEvent = async ({
   const payload: TablesInsert<"academic_access_events"> = {
     actor_id: actorId,
     actor_role: actorRole,
+    institution_id: institutionId ?? null,
     event_type: eventType,
     resource_type: resourceType,
     resource_id: resourceId ?? null,

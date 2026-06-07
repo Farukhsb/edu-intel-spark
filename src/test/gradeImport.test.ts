@@ -159,6 +159,7 @@ describe("hybrid grade import", () => {
       row: preview.rows[0],
       submissionId: "submission-1",
       lecturerId: "lecturer-1",
+      institutionId: "institution-1",
       sourceFileName: "grades.csv",
       sourceFileHash: "abc123",
       importMethod: "csv",
@@ -174,6 +175,7 @@ describe("hybrid grade import", () => {
     });
 
     expect(payload.grade_source).toBe("lecturer_uploaded");
+    expect(payload.institution_id).toBe("institution-1");
     expect(payload.final_score).toBe(90);
     expect(payload.lecturer_score).toBe(90);
     expect(payload.ai_score).toBe(68);

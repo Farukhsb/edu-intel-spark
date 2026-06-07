@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { user, roles } = await requireLecturer(req);
+    const { supabase: userSupabase, user, roles } = await requireLecturer(req);
     const supabaseAdmin = createAdminClient();
     const rateLimit = await applySharedRateLimit(supabaseAdmin, req, {
       scope: IMPORT_RATE_LIMIT_SCOPE,
@@ -42,6 +42,18 @@ Deno.serve(async (req) => {
     }
 
     await purgeExpiredTempImportArtifacts(supabaseAdmin);
+
+    const actorProfileRes = await userSupabase
+      .from("profiles")
+      .select("id, institution_id, institutions:institution_id (slug)")
+      .eq("id", user.id)
+      .maybeSingle<{ id: string; institution_id: string | null }>();
+
+    if (actorProfileRes.error || !actorProfileRes.data?.institution_id) {
+      throw new HttpError(403, "You do not have access to this institution");
+    }
+
+    const institutionId = actorProfileRes.data.institution_id;
 
     const request = await readImportRequest(req);
 
@@ -80,6 +92,7 @@ Deno.serve(async (req) => {
       const { data: loadedAssignment, error: assignmentError } = await loadAssignmentForGrading(
         supabaseAdmin,
         assignmentId,
+        institutionId,
       );
 
       if (assignmentError) {
@@ -99,8 +112,9 @@ Deno.serve(async (req) => {
 
       submissionsRes = await supabaseAdmin
         .from("submissions")
-        .select("id, student_name, student_email, submitted_at, status, file_name, file_url")
-        .eq("assignment_id", assignmentId);
+        .select("id, student_name, student_email, submitted_at, status, file_name, file_url, institution_id")
+        .eq("assignment_id", assignmentId)
+        .eq("institution_id", institutionId);
 
       if (submissionsRes.error) {
         logError("import-grades submissions query failed", submissionsRes.error, {
@@ -180,6 +194,7 @@ Deno.serve(async (req) => {
       createdAssignment = await createImportedAssignment({
         supabaseAdmin,
         userId: user.id,
+        institutionId,
         title: newAssignment.title,
         moduleCode: newAssignment.moduleCode,
         maxScore: newAssignment.maxScore,
@@ -191,6 +206,7 @@ Deno.serve(async (req) => {
     const confirmResponse = await confirmImport({
       supabaseAdmin,
       userId: user.id,
+      institutionId,
       assignmentId: createdAssignment?.id ?? request.assignmentId ?? "",
       assignmentTitle: createdAssignment?.title ?? (assignment?.title ?? ""),
       corsHeaders,

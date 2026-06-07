@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { BookOpen, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { logReportExportEvent } from "@/lib/audit/exportAuditEvents";
 import { DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import { fetchProgrammeReportDataset } from "@/lib/data/academic";
 import { log } from "@/lib/logger";
 import { deriveProgrammeReports, type ProgrammeReport } from "@/lib/accreditationMetrics";
+import { toast } from "sonner";
 
 const exportProgrammeReport = (programmes: ProgrammeReport[]) => {
   const lines = ["Programme-Level Report - GradeAI", `Generated: ${new Date().toISOString().slice(0, 10)}`, ""];
@@ -26,13 +29,15 @@ const exportProgrammeReport = (programmes: ProgrammeReport[]) => {
 };
 
 export const ProgrammeReports = () => {
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [programmes, setProgrammes] = useState<ProgrammeReport[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { assignments, submissions, grades } = await fetchProgrammeReportDataset();
+        const institutionId = profile?.institution_id ?? null;
+        const { assignments, submissions, grades } = await fetchProgrammeReportDataset(institutionId);
 
         setProgrammes(
           deriveProgrammeReports({
@@ -49,7 +54,7 @@ export const ProgrammeReports = () => {
     };
 
     void fetchData();
-  }, []);
+  }, [profile?.institution_id]);
 
   if (loading) return <DashboardLoadingState />;
 
@@ -61,7 +66,38 @@ export const ProgrammeReports = () => {
             <BookOpen className="h-5 w-5 text-primary" />
             <CardTitle className="text-base">Programme-Level Reports</CardTitle>
           </div>
-          <Button variant="outline" size="sm" onClick={() => exportProgrammeReport(programmes)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              try {
+                exportProgrammeReport(programmes);
+                void logReportExportEvent({
+                  actorId: user?.id,
+                  actorRole: profile?.role ?? null,
+                  institutionId: profile?.institution_id ?? null,
+                  reportName: "programme_report",
+                  format: "csv",
+                  rowCount: programmes.length,
+                  scope: "institution",
+                });
+              } catch (error) {
+                log.error("Failed to export programme report", error);
+                toast.error("Failed to export the programme report. Please try again.");
+                void logReportExportEvent({
+                  actorId: user?.id,
+                  actorRole: profile?.role ?? null,
+                  institutionId: profile?.institution_id ?? null,
+                  reportName: "programme_report",
+                  format: "csv",
+                  rowCount: programmes.length,
+                  scope: "institution",
+                  status: "failure",
+                  errorMessage: error instanceof Error ? error.message : "Export failed",
+                });
+              }
+            }}
+          >
             <Download className="mr-2 h-3.5 w-3.5" /> Export
           </Button>
         </div>

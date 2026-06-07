@@ -49,6 +49,11 @@ interface LearningOutcomesSnapshot {
   trajectories: StudentTrajectory[];
 }
 
+interface StudentScoreEntry {
+  score: number;
+  submittedAtTime: number;
+}
+
 const toAssignmentOption = (assignment: AssignmentRow): AssignmentOption => ({
   id: assignment.id,
   title: assignment.title,
@@ -62,6 +67,8 @@ const toNumericScore = (grade: GradeRow) => {
   const score = grade.final_score ?? grade.ai_score;
   return score == null ? null : Number(score);
 };
+
+const toSubmittedAtTime = (submittedAt: string | null) => (submittedAt ? Date.parse(submittedAt) || 0 : 0);
 
 const normalizeCriterionBreakdown = (value: unknown) => {
   if (!Array.isArray(value)) return [];
@@ -96,7 +103,7 @@ export const buildLearningOutcomesSnapshot = ({
 }): LearningOutcomesSnapshot => {
   const submissionsById = new Map(submissions.map((submission) => [submission.id, submission]));
   const criterionScores: Record<string, CriterionAggregate> = {};
-  const studentScores: Record<string, Array<{ score: number; submittedAt: string | null }>> = {};
+  const studentScores: Record<string, StudentScoreEntry[]> = {};
 
   grades.forEach((grade) => {
     const submission = submissionsById.get(grade.submission_id);
@@ -111,7 +118,7 @@ export const buildLearningOutcomesSnapshot = ({
       }
       studentScores[studentKey].push({
         score,
-        submittedAt: submission.submitted_at,
+        submittedAtTime: toSubmittedAtTime(submission.submitted_at),
       });
     }
 
@@ -144,11 +151,7 @@ export const buildLearningOutcomesSnapshot = ({
     .map(([name, entries]) => ({
       name,
       scores: [...entries]
-        .sort((left, right) => {
-          const leftTime = left.submittedAt ? new Date(left.submittedAt).getTime() : 0;
-          const rightTime = right.submittedAt ? new Date(right.submittedAt).getTime() : 0;
-          return leftTime - rightTime;
-        })
+        .sort((left, right) => left.submittedAtTime - right.submittedAtTime)
         .map((entry) => entry.score),
     }))
     .filter((student) => student.scores.length >= 2)

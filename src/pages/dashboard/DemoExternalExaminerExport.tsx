@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Download, FileText, Shield, Users } from "lucide-react";
 import { DashboardDemoBanner } from "@/components/dashboard/PageStates";
 import { buildDetailedExternalExaminerCsv, buildExternalExaminerCsv } from "@/lib/externalExaminerExport";
+import { redactStudentIdentity as buildRedactedStudentIdentity } from "@/lib/exportPrivacy";
 import { toast } from "sonner";
 import {
   DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS,
@@ -38,6 +39,7 @@ const DemoExternalExaminerExport = () => {
     moderation: true,
     aiBreakdown: false,
     studentIdentity: true,
+    redactStudentIdentity: true,
   });
 
   const filteredData = selectedAssignment === "all"
@@ -45,6 +47,14 @@ const DemoExternalExaminerExport = () => {
     : DEMO_EXTERNAL_EXAMINER_EXPORT_DATA.filter((row) =>
         row.assignmentTitle === DEMO_EXTERNAL_EXAMINER_ASSIGNMENTS.find((assignment) => assignment.id === selectedAssignment)?.title,
       );
+  const previewRows = filteredData.map((row, index) =>
+    includeOptions.redactStudentIdentity && includeOptions.studentIdentity
+      ? {
+          ...row,
+          ...buildRedactedStudentIdentity(index),
+        }
+      : row,
+  );
   const exportSummary = getExportSummary(filteredData);
 
   const downloadCSV = (content: string, filename: string) => {
@@ -71,7 +81,7 @@ const DemoExternalExaminerExport = () => {
       }
       toast.success("Export downloaded successfully");
     } catch {
-      toast.error("Failed to generate export");
+      toast.error("Failed to generate export. Please try again.");
     }
     setExporting(false);
   };
@@ -155,6 +165,7 @@ const DemoExternalExaminerExport = () => {
                 { key: "feedback" as const, label: "Feedback & Comments", icon: FileText },
                 { key: "moderation" as const, label: "Moderation Evidence", icon: Shield },
                 { key: "studentIdentity" as const, label: "Student Identity", icon: Users },
+                { key: "redactStudentIdentity" as const, label: "Redact Student Identity", icon: Shield },
               ].map((option) => (
                 <div key={option.key} className="flex items-center gap-2">
                   <Checkbox
@@ -207,7 +218,7 @@ const DemoExternalExaminerExport = () => {
                 <tbody>
                   {filteredData.slice(0, 20).map((row, index) => (
                     <tr key={index} className="border-b last:border-0">
-                      <td className="py-2">{row.studentName}</td>
+                      <td className="py-2">{previewRows[index].studentName}</td>
                       <td className="max-w-[150px] truncate py-2">{row.assignmentTitle}</td>
                       <td className="py-2">{row.moduleCode}</td>
                       <td className="py-2 text-right">{row.aiScore ?? "Not recorded"}</td>

@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
+import { logReportExportEvent } from "@/lib/audit/exportAuditEvents";
 import { buildRiskIntelligenceDemoDataset } from "@/lib/data/admin/riskIntelligenceDemo";
 import { fetchRiskIntelligenceDataset } from "@/lib/data/admin/riskIntelligence";
 import { triggerRiskModelTraining } from "@/lib/data/admin";
@@ -44,7 +45,7 @@ const getInitials = (name: string) =>
     .join("");
 
 const RiskIntelligence = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const isLocalhost =
     typeof window !== "undefined" &&
@@ -59,7 +60,9 @@ const RiskIntelligence = () => {
   const [feedbackCount, setFeedbackCount] = useState(0);
   const [snapshotDate, setSnapshotDate] = useState<string | null>(null);
   const [latestModelVersion, setLatestModelVersion] = useState<string | null>(null);
+  const [latestFeatureVersion, setLatestFeatureVersion] = useState<string | null>(null);
   const [training, setTraining] = useState(false);
+  const [redactStudentIdentity, setRedactStudentIdentity] = useState(true);
 
   const loadDataset = async (dataset: RiskIntelligenceDataset) => {
     const { displayRows, snapshotCount: nextSnapshotCount, feedbackCount: nextFeedbackCount, snapshotDate: nextSnapshotDate, latestModelVersion: nextLatestModelVersion } = buildRiskIntelligenceDisplayRows(dataset);
@@ -68,6 +71,7 @@ const RiskIntelligence = () => {
     setFeedbackCount(nextFeedbackCount);
     setSnapshotDate(nextSnapshotDate);
     setLatestModelVersion(nextLatestModelVersion);
+    setLatestFeatureVersion(displayRows[0]?.featureVersion ?? dataset.snapshots[0]?.feature_version ?? null);
   };
 
   useEffect(() => {
@@ -82,7 +86,7 @@ const RiskIntelligence = () => {
         if (demoMode) {
           loadDataset(buildRiskIntelligenceDemoDataset());
         } else {
-          await loadDataset(await fetchRiskIntelligenceDataset());
+          await loadDataset(await fetchRiskIntelligenceDataset(profile?.institution_id ?? null));
         }
       } catch (error) {
         log.error("Failed to load risk intelligence dataset", error);
@@ -98,7 +102,7 @@ const RiskIntelligence = () => {
     };
 
     void load();
-  }, [demoMode, isLocalhost, reloadKey, user?.id]);
+  }, [demoMode, isLocalhost, profile?.institution_id, reloadKey, user?.id]);
 
   const summary = summarizeRiskPredictions(predictions);
   const componentSummary = predictions.reduce(
@@ -163,9 +167,49 @@ const RiskIntelligence = () => {
             >
               {demoMode ? "Show live data" : "Load demo data"}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => downloadRiskIntelligenceCsv(predictions)} disabled={predictions.length === 0}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                try {
+                  downloadRiskIntelligenceCsv(predictions, { redactStudentIdentity });
+                  void logReportExportEvent({
+                    actorId: user?.id,
+                    actorRole: profile?.role ?? null,
+                    institutionId: profile?.institution_id ?? null,
+                    reportName: "risk_intelligence",
+                    format: "csv",
+                    rowCount: predictions.length,
+                    redactedStudentIdentity: redactStudentIdentity,
+                    scope: "institution",
+                  });
+                } catch (error) {
+                  log.error("Failed to export risk intelligence CSV", error, {
+                    predictionCount: predictions.length,
+                    redactStudentIdentity,
+                  });
+                  toast.error("Failed to export the risk CSV. Please try again.");
+                  void logReportExportEvent({
+                    actorId: user?.id,
+                    actorRole: profile?.role ?? null,
+                    institutionId: profile?.institution_id ?? null,
+                    reportName: "risk_intelligence",
+                    format: "csv",
+                    rowCount: predictions.length,
+                    redactedStudentIdentity: redactStudentIdentity,
+                    scope: "institution",
+                    status: "failure",
+                    errorMessage: error instanceof Error ? error.message : "Export failed",
+                  });
+                }
+              }}
+              disabled={predictions.length === 0}
+            >
               <Download className="mr-2 h-4 w-4" />
               Export CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setRedactStudentIdentity((current) => !current)}>
+              {redactStudentIdentity ? "Show student names" : "Redact student names"}
             </Button>
             {!demoMode ? (
               <Button
@@ -181,6 +225,11 @@ const RiskIntelligence = () => {
                     );
                     setReloadKey((current) => current + 1);
                   } catch (error) {
+                    log.error("Failed to retrain risk model", error, {
+                      demoMode,
+                      currentPredictionCount: predictions.length,
+                      currentSnapshotCount: snapshotCount,
+                    });
                     toast.error(error instanceof Error ? error.message : "Model retraining failed");
                   } finally {
                     setTraining(false);
@@ -380,6 +429,10 @@ const RiskIntelligence = () => {
           <div className="rounded-lg border p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Model version</p>
             <p className="mt-2 text-2xl font-bold font-display">{latestModelVersion || "Pending"}</p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Feature version</p>
+            <p className="mt-2 text-2xl font-bold font-display">{latestFeatureVersion || "Pending"}</p>
           </div>
         </CardContent>
       </Card>

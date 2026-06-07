@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { log } from "@/lib/logger";
 
 type RiskSnapshotRow = Database["public"]["Tables"]["student_risk_snapshots"]["Row"];
 type RiskPredictionRow = Database["public"]["Tables"]["student_risk_predictions"]["Row"];
@@ -11,36 +12,49 @@ type RiskOutcomeInsert = Database["public"]["Tables"]["student_risk_outcomes"]["
 
 const SNAPSHOT_FIELDS = "id, student_id, institution_id, snapshot_date, feature_version, features, created_at";
 const PREDICTION_FIELDS =
-  "id, snapshot_id, student_id, institution_id, prediction_date, model_version, risk_score, risk_band, reason_codes, explanation, details, created_at";
+  "id, snapshot_id, student_id, institution_id, prediction_date, generated_at, feature_version, model_version, risk_score, confidence_score, risk_band, reason_codes, explanation, details, calibration_metrics, created_at";
 const FEEDBACK_FIELDS = "id, prediction_id, reviewer_id, institution_id, feedback_type, notes, created_at";
 const OUTCOME_FIELDS =
   "id, student_id, institution_id, prediction_id, snapshot_id, source_grade_id, source_submission_id, outcome_date, label_window_days, label_value, outcome_status, outcome_source, notes, created_at";
-const PROFILE_FIELDS = "id, full_name, email";
+const PROFILE_FIELDS = "id, full_name, email, institution_id";
 
-export const fetchRiskIntelligenceDataset = async () => {
+const requireInstitutionId = (institutionId?: string | null) => {
+  if (!institutionId) {
+    throw new Error("Institution context is required for risk exports.");
+  }
+
+  return institutionId;
+};
+
+export const fetchRiskIntelligenceDataset = async (institutionId?: string | null) => {
+  const scopedInstitutionId = requireInstitutionId(institutionId);
   const [snapshotsRes, predictionsRes, feedbackRes, outcomesRes, profilesRes] = await Promise.all([
     supabase
       .from("student_risk_snapshots")
       .select(SNAPSHOT_FIELDS)
+      .eq("institution_id", scopedInstitutionId)
       .order("snapshot_date", { ascending: false })
       .limit(200),
     supabase
       .from("student_risk_predictions")
       .select(PREDICTION_FIELDS)
+      .eq("institution_id", scopedInstitutionId)
       .order("prediction_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(200),
     supabase
       .from("risk_feedback")
       .select(FEEDBACK_FIELDS)
+      .eq("institution_id", scopedInstitutionId)
       .order("created_at", { ascending: false })
       .limit(200),
     supabase
       .from("student_risk_outcomes")
       .select(OUTCOME_FIELDS)
+      .eq("institution_id", scopedInstitutionId)
       .order("outcome_date", { ascending: false })
       .limit(200),
-    supabase.from("profiles").select(PROFILE_FIELDS).order("created_at", { ascending: false }).limit(500),
+    supabase.from("profiles").select(PROFILE_FIELDS).eq("institution_id", scopedInstitutionId).order("created_at", { ascending: false }).limit(500),
   ]);
 
   if (snapshotsRes.error || predictionsRes.error || feedbackRes.error || outcomesRes.error || profilesRes.error) {
@@ -78,6 +92,12 @@ export const submitRiskFeedback = async (input: {
     .single();
 
   if (error) {
+    log.error("Failed to submit risk feedback", error, {
+      predictionId: input.predictionId,
+      reviewerId: input.reviewerId,
+      institutionId: input.institutionId,
+      feedbackType: input.feedbackType,
+    });
     throw error;
   }
 
@@ -120,6 +140,14 @@ export const submitRiskOutcome = async (input: {
     .single();
 
   if (error) {
+    log.error("Failed to submit risk outcome", error, {
+      studentId: input.studentId,
+      predictionId: input.predictionId ?? null,
+      snapshotId: input.snapshotId ?? null,
+      institutionId: input.institutionId,
+      outcomeStatus: input.outcomeStatus,
+      outcomeSource: input.outcomeSource,
+    });
     throw error;
   }
 

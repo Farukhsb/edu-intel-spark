@@ -23,6 +23,7 @@ describe("grade-submission timeout telemetry", () => {
       submissionId: "submission-1",
       assignmentId: "assignment-1",
       userId: "user-1",
+      institutionId: "institution-1",
       provider: "openai",
       reason: "OpenAI grading request timed out after 60000ms. Retry the submission or try again later.",
     });
@@ -31,6 +32,7 @@ describe("grade-submission timeout telemetry", () => {
       submission_id: "submission-1",
       assignment_id: "assignment-1",
       user_id: "user-1",
+      institution_id: "institution-1",
       provider: "openai",
       error_code: "openai_timeout",
       error_message: "OpenAI grading request timed out after 60000ms. Retry the submission or try again later.",

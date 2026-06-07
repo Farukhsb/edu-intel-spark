@@ -37,6 +37,7 @@ export interface AtRiskStudent {
   avgGrade: number;
   lastGrade: number;
   trend: "declining" | "stable-low" | "volatile";
+  reasonCodes: string[];
   flags: string[];
   sparkline: number[];
   recommendation: string;
@@ -62,6 +63,12 @@ function linearRegression(values: number[]): { slope: number; intercept: number 
   const slope = denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
   const intercept = (sumY - slope * sumX) / n;
   return { slope, intercept };
+}
+
+function toDateMs(value: string | null | undefined) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
 }
 
 function buildReasonCodes(params: {
@@ -109,9 +116,21 @@ function buildReasonCodes(params: {
   return reasonCodes;
 }
 
-export function evaluateStudentRisk(trajectory: StudentTrajectory): StudentRiskEvaluation | null {
+export function evaluateStudentRisk(
+  trajectory: StudentTrajectory,
+  options?: {
+    referenceDate?: string;
+    staleWindowDays?: number;
+  },
+): StudentRiskEvaluation | null {
   const scores = trajectory.scores.map((entry) => entry.score);
   if (scores.length === 0) return null;
+  const referenceDateMs = toDateMs(options?.referenceDate ?? new Date().toISOString());
+  const staleWindowDays = options?.staleWindowDays ?? 30;
+  const latestSubmissionDateMs = trajectory.scores
+    .map((entry) => toDateMs(entry.date))
+    .filter((value): value is number => value != null)
+    .reduce((latest, value) => Math.max(latest, value), Number.NEGATIVE_INFINITY);
 
   const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
   const last = scores[scores.length - 1];
@@ -175,6 +194,13 @@ export function evaluateStudentRisk(trajectory: StudentTrajectory): StudentRiskE
     standardDeviation,
     scoresLength: scores.length,
   });
+  if (
+    referenceDateMs != null &&
+    Number.isFinite(latestSubmissionDateMs) &&
+    referenceDateMs - latestSubmissionDateMs > staleWindowDays * 24 * 60 * 60 * 1000
+  ) {
+    reasonCodes.push("stale_data");
+  }
 
   const recommendations: string[] = [];
   if (slope < -3) recommendations.push("Urgent: schedule a 1-on-1 meeting to discuss grade trajectory.");
@@ -182,6 +208,9 @@ export function evaluateStudentRisk(trajectory: StudentTrajectory): StudentRiskE
   if (last < average - 15) recommendations.push("Recent performance dipped sharply. Check for academic or personal barriers.");
   if (predictedNext < 40) recommendations.push("The current assessment pattern suggests this student may need support before the next deadline.");
   if (scores.length === 1) recommendations.push("Data is limited. Monitor closely after the next submission.");
+  if (reasonCodes.includes("stale_data")) {
+    recommendations.push("The latest evidence is stale. Review with recent assessment or engagement data before escalating.");
+  }
   if (recommendations.length === 0) {
     recommendations.push("Schedule a check-in to review study strategies and agree short-term goals.");
   }
@@ -214,8 +243,14 @@ export function evaluateStudentRisk(trajectory: StudentTrajectory): StudentRiskE
   };
 }
 
-export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null {
-  const evaluation = evaluateStudentRisk(trajectory);
+export function computeRisk(
+  trajectory: StudentTrajectory,
+  options?: {
+    referenceDate?: string;
+    staleWindowDays?: number;
+  },
+): AtRiskStudent | null {
+  const evaluation = evaluateStudentRisk(trajectory, options);
   if (!evaluation || evaluation.rawRiskScore < 25) return null;
 
   return {
@@ -228,6 +263,7 @@ export function computeRisk(trajectory: StudentTrajectory): AtRiskStudent | null
     avgGrade: evaluation.avgGrade,
     lastGrade: evaluation.lastGrade,
     trend: evaluation.trend,
+    reasonCodes: evaluation.reasonCodes,
     flags: evaluation.flags,
     sparkline: evaluation.sparkline,
     recommendation: evaluation.recommendation,

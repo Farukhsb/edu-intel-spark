@@ -13,31 +13,25 @@ interface TableMockConfig {
 export const createSupabaseMock = (tables: Record<string, TableMockConfig>) => {
   const from = vi.fn((table: string) => {
     const config = tables[table] || {};
+    const result =
+      config.selectEqInResult ??
+      config.selectEqResult ??
+      config.selectInResult ??
+      config.selectResult ??
+      { data: [], error: null };
+
+    const query: any = {
+      eq: vi.fn(() => query),
+      in: vi.fn(() => query),
+      order: vi.fn(() => query),
+      limit: vi.fn(() => Promise.resolve(result)),
+      then: (onFulfilled: (value: QueryResult) => unknown, onRejected?: (reason: unknown) => unknown) =>
+        Promise.resolve(result).then(onFulfilled, onRejected),
+    };
 
     return {
-      select: vi.fn(() => {
-        if (config.selectEqInResult) {
-          return {
-            eq: vi.fn(() => ({
-              in: vi.fn(async () => config.selectEqInResult),
-            })),
-          };
-        }
-
-        if (config.selectEqResult) {
-          return {
-            eq: vi.fn(async () => config.selectEqResult),
-          };
-        }
-
-        if (config.selectInResult) {
-          return {
-            in: vi.fn(async () => config.selectInResult),
-          };
-        }
-
-        return Promise.resolve(config.selectResult ?? { data: [], error: null });
-      }),
+      select: vi.fn(() => query),
+      insert: vi.fn(async () => ({ data: null, error: null })),
       upsert: vi.fn(async () => config.upsertResult ?? { data: null, error: null }),
     };
   });

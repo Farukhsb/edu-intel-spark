@@ -47,6 +47,10 @@ export interface PerformanceReportingReadiness {
   bestNextAction: string;
 }
 
+export type RiskFilterValue = "all" | "high-plus" | AtRiskStudent["riskLevel"];
+export type ScoreBandFilterValue = "all" | "lt40" | "40-49" | "50-59" | "60plus";
+type AtRiskStudentFilterKey = `${RiskFilterValue}|${ScoreBandFilterValue}`;
+
 const GRADE_BANDS: Array<{ band: string; fill: string; matches: (score: number) => boolean }> = [
   { band: "1st (70-100%)", fill: "hsl(152, 56%, 45%)", matches: (score) => score >= 70 },
   { band: "2:1 (60-69%)", fill: "hsl(205, 80%, 55%)", matches: (score) => score >= 60 && score < 70 },
@@ -56,6 +60,76 @@ const GRADE_BANDS: Array<{ band: string; fill: string; matches: (score: number) 
 ];
 
 const toNumericScore = (grade: PerformanceGradeLike) => Number(grade.final_score ?? grade.ai_score);
+const RISK_FILTER_VALUES: RiskFilterValue[] = ["all", "high-plus", "critical", "high", "moderate"];
+const SCORE_BAND_FILTER_VALUES: ScoreBandFilterValue[] = ["all", "lt40", "40-49", "50-59", "60plus"];
+
+const getScoreBandFilterValue = (avgGrade: number): Exclude<ScoreBandFilterValue, "all"> =>
+  avgGrade < 40 ? "lt40" : avgGrade < 50 ? "40-49" : avgGrade < 60 ? "50-59" : "60plus";
+
+const getRiskFilterValues = (riskLevel: AtRiskStudent["riskLevel"]): RiskFilterValue[] =>
+  riskLevel === "critical" || riskLevel === "high" ? ["all", "high-plus", riskLevel] : ["all", riskLevel];
+
+const getCombinedFilterKey = (riskFilter: RiskFilterValue, scoreBandFilter: ScoreBandFilterValue): AtRiskStudentFilterKey =>
+  `${riskFilter}|${scoreBandFilter}`;
+
+export interface AtRiskStudentFilterIndex {
+  riskBuckets: Record<RiskFilterValue, AtRiskStudent[]>;
+  scoreBandBuckets: Record<ScoreBandFilterValue, AtRiskStudent[]>;
+  combinedBuckets: Map<AtRiskStudentFilterKey, AtRiskStudent[]>;
+}
+
+export const buildAtRiskStudentFilterIndex = (students: AtRiskStudent[]): AtRiskStudentFilterIndex => {
+  const riskBuckets = {
+    all: [] as AtRiskStudent[],
+    "high-plus": [] as AtRiskStudent[],
+    critical: [] as AtRiskStudent[],
+    high: [] as AtRiskStudent[],
+    moderate: [] as AtRiskStudent[],
+  };
+
+  const scoreBandBuckets = {
+    all: [] as AtRiskStudent[],
+    lt40: [] as AtRiskStudent[],
+    "40-49": [] as AtRiskStudent[],
+    "50-59": [] as AtRiskStudent[],
+    "60plus": [] as AtRiskStudent[],
+  };
+
+  const combinedBuckets = new Map<AtRiskStudentFilterKey, AtRiskStudent[]>();
+
+  RISK_FILTER_VALUES.forEach((riskFilter) => {
+    SCORE_BAND_FILTER_VALUES.forEach((scoreBandFilter) => {
+      combinedBuckets.set(getCombinedFilterKey(riskFilter, scoreBandFilter), []);
+    });
+  });
+
+  students.forEach((student) => {
+    const scoreBandFilter = getScoreBandFilterValue(student.avgGrade);
+    const riskFilterValues = getRiskFilterValues(student.riskLevel);
+    const scoreFilterValues: ScoreBandFilterValue[] = ["all", scoreBandFilter];
+
+    riskBuckets.all.push(student);
+    riskBuckets[student.riskLevel].push(student);
+    if (student.riskLevel === "critical" || student.riskLevel === "high") {
+      riskBuckets["high-plus"].push(student);
+    }
+
+    scoreBandBuckets.all.push(student);
+    scoreBandBuckets[scoreBandFilter].push(student);
+
+    riskFilterValues.forEach((riskFilter) => {
+      scoreFilterValues.forEach((scoreFilter) => {
+        combinedBuckets.get(getCombinedFilterKey(riskFilter, scoreFilter))!.push(student);
+      });
+    });
+  });
+
+  return {
+    riskBuckets,
+    scoreBandBuckets,
+    combinedBuckets,
+  };
+};
 
 export const EMPTY_GRADE_DIST: GradeDistributionEntry[] = GRADE_BANDS.map((entry) => ({
   band: entry.band,
@@ -105,44 +179,52 @@ export const buildPerformanceProjection = ({
   const filteredGrades = grades.filter((grade) => filteredSubmissionIds.has(grade.submission_id));
 
   const assignmentMap = new Map(filteredAssignments.map((assignment) => [assignment.id, assignment]));
-  const gradeBySubmission = new Map(
-    filteredGrades
-      .map((grade) => [grade.submission_id, toNumericScore(grade)] as const)
-      .filter((entry) => !Number.isNaN(entry[1])),
+  const gradeBySubmission: Record<string, number> = {};
+  for (const grade of filteredGrades) {
+    const score = toNumericScore(grade);
+    if (!Number.isNaN(score)) {
+      gradeBySubmission[grade.submission_id] = score;
+    }
+  }
+
+  const orderedSubmissionRecords: Array<{
+    assignment: PerformanceAssignmentLike;
+    submission: PerformanceSubmissionLike;
+    score: number | undefined;
+  }> = [];
+
+  for (const submission of filteredSubmissions) {
+    const assignment = assignmentMap.get(submission.assignment_id);
+    if (!assignment) continue;
+
+    orderedSubmissionRecords.push({
+      assignment,
+      submission,
+      score: gradeBySubmission[submission.id],
+    });
+  }
+
+  orderedSubmissionRecords.sort(
+    (left, right) =>
+      new Date(left.submission.submitted_at).getTime() - new Date(right.submission.submitted_at).getTime(),
   );
 
   const perAssignment: Record<string, { scores: number[]; totalSubs: number }> = {};
-  filteredSubmissions.forEach((submission) => {
-    const assignment = assignmentMap.get(submission.assignment_id);
-    if (!assignment) return;
+  const trajectories: Record<string, StudentTrajectory> = {};
+  const allScores: number[] = [];
 
+  orderedSubmissionRecords.forEach(({ assignment, submission, score }) => {
     if (!perAssignment[assignment.title]) {
       perAssignment[assignment.title] = { scores: [], totalSubs: 0 };
     }
 
     perAssignment[assignment.title].totalSubs++;
-    const score = gradeBySubmission.get(submission.id);
+
     if (score != null) {
       perAssignment[assignment.title].scores.push(score);
+      allScores.push(score);
     }
-  });
 
-  const assessmentTrends = Object.entries(perAssignment).map(([name, data]) => ({
-    name: name.length > 20 ? `${name.slice(0, 18)}...` : name,
-    avgGrade:
-      data.scores.length > 0
-        ? Math.round(data.scores.reduce((sum, score) => sum + score, 0) / data.scores.length)
-        : 0,
-    participation:
-      filteredSubmissions.length > 0 ? Math.round((data.totalSubs / filteredSubmissions.length) * 100) : 0,
-  }));
-
-  const allScores = filteredGrades
-    .map(toNumericScore)
-    .filter((score) => !Number.isNaN(score));
-
-  const trajectories: Record<string, StudentTrajectory> = {};
-  filteredSubmissions.forEach((submission) => {
     const key = submission.student_id || submission.student_email || submission.student_name || "unknown";
     if (!trajectories[key]) {
       trajectories[key] = {
@@ -153,23 +235,27 @@ export const buildPerformanceProjection = ({
       };
     }
 
-    const score = gradeBySubmission.get(submission.id);
     if (score != null) {
-      const assignment = assignmentMap.get(submission.assignment_id);
       trajectories[key].scores.push({
         score,
         date: submission.submitted_at,
-        assignmentTitle: assignment?.title || "Assignment",
+        assignmentTitle: assignment.title,
       });
     }
   });
 
-  Object.values(trajectories).forEach((trajectory) => {
-    trajectory.scores.sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
-  });
+  const assessmentTrends = Object.entries(perAssignment).map(([name, data]) => ({
+    name,
+    avgGrade:
+      data.scores.length > 0
+        ? Math.round(data.scores.reduce((sum, score) => sum + score, 0) / data.scores.length)
+        : 0,
+    participation:
+      filteredSubmissions.length > 0 ? Math.round((data.totalSubs / filteredSubmissions.length) * 100) : 0,
+  }));
 
   const atRiskStudents = Object.values(trajectories)
-    .map(computeRisk)
+    .map((trajectory) => computeRisk(trajectory))
     .filter((student): student is AtRiskStudent => student !== null)
     .sort((left, right) => right.riskScore - left.riskScore);
 
@@ -185,27 +271,16 @@ export const filterAtRiskStudents = ({
   students,
   riskFilter,
   scoreBandFilter,
+  index,
 }: {
   students: AtRiskStudent[];
-  riskFilter: string;
-  scoreBandFilter: string;
-}) =>
-  students.filter((student) => {
-    const matchesRisk =
-      riskFilter === "all" ||
-      (riskFilter === "high-plus"
-        ? student.riskLevel === "critical" || student.riskLevel === "high"
-        : student.riskLevel === riskFilter);
-
-    const matchesScoreBand =
-      scoreBandFilter === "all" ||
-      (scoreBandFilter === "lt40" && student.avgGrade < 40) ||
-      (scoreBandFilter === "40-49" && student.avgGrade >= 40 && student.avgGrade < 50) ||
-      (scoreBandFilter === "50-59" && student.avgGrade >= 50 && student.avgGrade < 60) ||
-      (scoreBandFilter === "60plus" && student.avgGrade >= 60);
-
-    return matchesRisk && matchesScoreBand;
-  });
+  riskFilter: RiskFilterValue;
+  scoreBandFilter: ScoreBandFilterValue;
+  index?: AtRiskStudentFilterIndex;
+}) => {
+  const filterIndex = index ?? buildAtRiskStudentFilterIndex(students);
+  return filterIndex.combinedBuckets.get(getCombinedFilterKey(riskFilter, scoreBandFilter)) ?? [];
+};
 
 export const getPerformanceReportingReadiness = ({
   assessmentTrends,
@@ -219,7 +294,13 @@ export const getPerformanceReportingReadiness = ({
   const criticalStudents = atRiskStudents.filter((student) => student.riskLevel === "critical");
   const highStudents = atRiskStudents.filter((student) => student.riskLevel === "high");
   const failingBand = gradeDist.find((entry) => entry.band === "Fail (<40%)");
-  const weakestAssessment = [...assessmentTrends].sort((left, right) => left.avgGrade - right.avgGrade)[0];
+  const weakestAssessment = assessmentTrends.reduce<AssessmentTrendEntry | null>(
+    (currentWeakest, currentAssessment) =>
+      currentWeakest === null || currentAssessment.avgGrade < currentWeakest.avgGrade
+        ? currentAssessment
+        : currentWeakest,
+    null,
+  );
 
   return {
     postureLabel:

@@ -9,6 +9,7 @@ import { ButtonLoadingLabel } from "@/components/ui/loading-state";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { log } from "@/lib/logger";
 
 const ForcePasswordChange = () => {
   const navigate = useNavigate();
@@ -53,6 +54,9 @@ const ForcePasswordChange = () => {
       });
       navigate("/dashboard", { replace: true });
     } catch (error) {
+      log.error("Failed to complete enforced password change", error, {
+        stage: "force-password-change-submit",
+      });
       toast({
         title: "Password update failed",
         description: error instanceof Error ? error.message : "Your password could not be updated right now.",

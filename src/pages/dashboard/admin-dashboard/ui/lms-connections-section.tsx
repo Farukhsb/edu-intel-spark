@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
+import { logAdminAuditEvent } from "@/lib/audit/adminAuditEvents";
 import { safeFormatDate } from "@/lib/date";
 import { log } from "@/lib/logger";
 import type { LmsProviderId } from "@/lib/lms";
@@ -39,6 +41,7 @@ export const LmsConnectionsSection = ({
   institution: AdminInstitutionSummary | null;
   onRefreshDashboard: () => Promise<void>;
 }) => {
+  const { user, profile } = useAuth();
   const [connections, setConnections] = useState<AdminLmsConnectionRow[]>([]);
   const [syncRuns, setSyncRuns] = useState<AdminLmsSyncRunRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,6 +136,17 @@ export const LmsConnectionsSection = ({
         accessTokenSecretName: formState.accessTokenSecretName || null,
         metadata,
       });
+      void logAdminAuditEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        institutionId,
+        actionType: "lms_connection_saved",
+        details: {
+          provider: formState.provider,
+          enabled: formState.enabled,
+          base_url: formState.baseUrl,
+        },
+      });
       toast.success(`${providerLabels[formState.provider]} connection saved.`);
       closeDialog();
       await loadConnections();
@@ -151,6 +165,15 @@ export const LmsConnectionsSection = ({
     setDeletingProvider(provider);
     try {
       await deleteAdminLmsConnection(institutionId, provider);
+      void logAdminAuditEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        institutionId,
+        actionType: "lms_connection_deleted",
+        details: {
+          provider,
+        },
+      });
       toast.success(`${providerLabels[provider]} connection deleted.`);
       await loadConnections();
       await onRefreshDashboard();
@@ -173,6 +196,17 @@ export const LmsConnectionsSection = ({
         provider,
         syncMode: "incremental",
       });
+      void logAdminAuditEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        institutionId,
+        actionType: "lms_sync_started",
+        details: {
+          provider,
+          sync_mode: "incremental",
+          result_message: result.message,
+        },
+      });
       toast.success(`${providerLabels[provider]} sync finished: ${result.message}`);
       await loadConnections();
       await onRefreshDashboard();
@@ -190,6 +224,15 @@ export const LmsConnectionsSection = ({
     setSaving(true);
     try {
       await seedCanvasLmsConnection(institutionId);
+      void logAdminAuditEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        institutionId,
+        actionType: "lms_connection_seeded",
+        details: {
+          provider: "canvas",
+        },
+      });
       toast.success("Canvas example connection created.");
       await loadConnections();
       await handleRunSync("canvas");

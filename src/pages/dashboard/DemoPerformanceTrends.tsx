@@ -1,10 +1,12 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { type AtRiskStudent, computeRisk } from "@/lib/studentRisk";
+import { preloadPerformanceTrendsCharts } from "@/lib/routePreloads";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import { DashboardDemoBanner, DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
 import {
+  buildAtRiskStudentFilterIndex,
   buildGradeDistribution,
   filterAtRiskStudents,
   getPerformanceReportingReadiness,
@@ -42,6 +44,10 @@ const DemoPerformanceTrends = () => {
 
   const { riskFilter, scoreBandFilter } = performanceSearchState;
 
+  useEffect(() => {
+    preloadPerformanceTrendsCharts();
+  }, []);
+
   const modules = useMemo(
     () => Array.from(new Set(DEMO_ASSESSMENT_TRENDS.map((entry) => entry.module))),
     [],
@@ -69,18 +75,24 @@ const DemoPerformanceTrends = () => {
 
   const atRiskStudents = useMemo<AtRiskStudent[]>(() => {
     return DEMO_TRAJECTORIES.filter((student) => moduleFilter === "all" || student.module === moduleFilter)
-      .map(computeRisk)
+      .map((student) => computeRisk(student))
       .filter((student): student is AtRiskStudent => student !== null)
       .sort((left, right) => right.riskScore - left.riskScore);
   }, [moduleFilter]);
+
+  const atRiskStudentFilterIndex = useMemo(
+    () => buildAtRiskStudentFilterIndex(atRiskStudents),
+    [atRiskStudents],
+  );
 
   const filteredAtRiskStudents = useMemo(() => {
     return filterAtRiskStudents({
       students: atRiskStudents,
       riskFilter,
       scoreBandFilter,
+      index: atRiskStudentFilterIndex,
     });
-  }, [atRiskStudents, riskFilter, scoreBandFilter]);
+  }, [atRiskStudents, atRiskStudentFilterIndex, riskFilter, scoreBandFilter]);
 
   const reportingReadiness = useMemo(
     () =>

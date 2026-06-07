@@ -19,6 +19,7 @@ const renderAccreditationDashboard = async ({
   vi.doMock("@/contexts/AuthContext", () => ({
     useAuth: () => ({
       isDemo: false,
+      profile: { id: "admin-user", role: "admin", institution_id: "institution-1" },
     }),
   }));
 

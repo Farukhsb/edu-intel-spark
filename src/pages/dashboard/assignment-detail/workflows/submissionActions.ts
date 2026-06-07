@@ -4,48 +4,11 @@ import {
   queueCommunicationMessage,
 } from "@/lib/communications";
 import { log } from "@/lib/logger";
+import {
+  validateSubmissionFile,
+} from "@/lib/submissionValidation";
 
-const ALLOWED_SUBMISSION_TYPES = new Set([
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
-  "text/x-python",
-  "text/x-java-source",
-  "text/javascript",
-  "application/javascript",
-  "application/x-javascript",
-  "text/typescript",
-  "application/typescript",
-  "text/x-c",
-  "text/x-c++src",
-  "text/x-csharp",
-  "text/x-perl",
-  "text/x-pascal",
-  "text/x-haskell",
-  "text/x-verilog",
-  "text/x-vhdl",
-  "application/octet-stream",
-]);
-
-const ALLOWED_SUBMISSION_EXTENSIONS = new Set([
-  ".pdf",
-  ".docx",
-  ".txt",
-  ".py",
-  ".java",
-  ".js",
-  ".ts",
-  ".c",
-  ".cpp",
-  ".cs",
-  ".pl",
-  ".pas",
-  ".hs",
-  ".v",
-  ".vhd",
-]);
-
-export const SUBMISSION_FILE_ACCEPT = Array.from(ALLOWED_SUBMISSION_EXTENSIONS).join(",");
+export { SUBMISSION_FILE_ACCEPT } from "@/lib/submissionValidation";
 
 export interface TargetedStudentProfile {
   id: string;
@@ -66,10 +29,12 @@ export const normalizeStudentKey = (value: string | null | undefined) =>
     .replace(/\s+/g, " ");
 
 export const isAllowedSubmissionUpload = (file: File) => {
-  const normalizedType = file.type.trim().toLowerCase();
-  const normalizedName = file.name.trim().toLowerCase();
-  return ALLOWED_SUBMISSION_TYPES.has(normalizedType) ||
-    Array.from(ALLOWED_SUBMISSION_EXTENSIONS).some((extension) => normalizedName.endsWith(extension));
+  const validation = validateSubmissionFile({
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size,
+  });
+  return validation.ok;
 };
 
 export const getSubmissionUploadFailureReason = (error: unknown) => {
@@ -169,8 +134,28 @@ export const uploadSubmissionFile = async (
   assignmentId: string,
   onProgress?: (value: number) => void,
 ) => {
-  if (!isAllowedSubmissionUpload(file)) {
-    throw new Error("Unsupported file type");
+  const metadataValidation = validateSubmissionFile({
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size,
+  });
+
+  if (!metadataValidation.ok) {
+    throw new Error(metadataValidation.message);
+  }
+
+  const bytesValidation =
+    metadataValidation.fileType === "pdf" || metadataValidation.fileType === "docx"
+      ? validateSubmissionFile({
+          fileName: file.name,
+          mimeType: file.type,
+          size: file.size,
+          bytes: new Uint8Array(await file.arrayBuffer()),
+        })
+      : metadataValidation;
+
+  if (!bytesValidation.ok) {
+    throw new Error(bytesValidation.message);
   }
 
   const safeFileName = file.name.replace(/[\\/]/g, "_");
@@ -182,7 +167,7 @@ export const uploadSubmissionFile = async (
     .upload(filePath, file, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || "application/octet-stream",
+      contentType: bytesValidation.normalizedMimeType,
     });
   if (error) throw error;
   onProgress?.(100);
@@ -190,7 +175,7 @@ export const uploadSubmissionFile = async (
   return {
     fileUrl: data.path,
     fileName: safeFileName,
-    fileType: file.type || "application/octet-stream",
+    fileType: bytesValidation.normalizedMimeType,
     storagePath: data.path,
   };
 };

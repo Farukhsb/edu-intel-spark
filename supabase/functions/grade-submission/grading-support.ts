@@ -455,6 +455,31 @@ export function detectPositiveFeedbackLowScoreMismatch(feedback: string, score: 
   return ratio < 0.4 && positiveSignals.some((signal) => normalizedFeedback.includes(signal));
 }
 
+const PROMPT_INJECTION_PATTERNS = [
+  "ignore previous instructions",
+  "ignore the above",
+  "ignore all prior",
+  "system prompt",
+  "developer message",
+  "assistant message",
+  "you are chatgpt",
+  "reveal the prompt",
+  "print the prompt",
+  "chain of thought",
+  "follow these instructions",
+  "override instructions",
+  "do not follow",
+];
+
+export function detectPromptInjectionRisk(text: string) {
+  const normalized = text.toLowerCase();
+  const matchedSignals = PROMPT_INJECTION_PATTERNS.filter((signal) => normalized.includes(signal));
+  return {
+    hasRisk: matchedSignals.length > 0,
+    signals: matchedSignals,
+  };
+}
+
 export function buildGradingCandidate(
   gradeResult: GradeAIResponse,
   rubric: RubricCriterion[],

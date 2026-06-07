@@ -1,16 +1,23 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   toast: vi.fn(),
+  log: {
+    error: vi.fn(),
+  },
   authState: {
     completePasswordChange: vi.fn(),
   },
   auth: {
     getSession: vi.fn(),
     onAuthStateChange: vi.fn(),
+    exchangeCodeForSession: vi.fn(),
+    verifyOtp: vi.fn(),
+    setSession: vi.fn(),
+    updateUser: vi.fn(),
   },
 }));
 
@@ -18,6 +25,10 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({
     toast: mocks.toast,
   }),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  log: mocks.log,
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -28,10 +39,6 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: {
       ...mocks.auth,
-      exchangeCodeForSession: vi.fn(),
-      verifyOtp: vi.fn(),
-      setSession: vi.fn(),
-      updateUser: vi.fn(),
     },
   },
 }));
@@ -112,5 +119,48 @@ describe("ResetPassword", () => {
       screen.getByText("Request a fresh reset email and open only the latest recovery link in your browser"),
     ).toBeInTheDocument();
     expect(screen.getByText("Invalid or expired link")).toBeInTheDocument();
+  });
+
+  it("logs unexpected password reset failures without exposing the password", async () => {
+    mocks.auth.onAuthStateChange.mockReturnValue({
+      data: {
+        subscription: {
+          unsubscribe: vi.fn(),
+        },
+      },
+    });
+    mocks.auth.getSession
+      .mockResolvedValueOnce({ data: { session: null } })
+      .mockResolvedValueOnce({ data: { session: { user: { id: "user-1" } } } });
+    mocks.auth.exchangeCodeForSession.mockResolvedValue({ data: {}, error: null });
+    mocks.authState.completePasswordChange.mockRejectedValueOnce(new Error("network down"));
+    window.history.replaceState({}, document.title, "/reset-password?type=recovery&code=test-code");
+
+    const { default: ResetPassword } = await import("@/pages/ResetPassword");
+
+    render(
+      <MemoryRouter
+        initialEntries={["/reset-password?type=recovery&code=test-code"]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <ResetPassword />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "Sup3rSecure!" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "Sup3rSecure!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => {
+      expect(mocks.log.error).toHaveBeenCalledWith(
+        "Failed to complete password recovery",
+        expect.any(Error),
+        expect.objectContaining({ stage: "reset-password-submit" }),
+      );
+    });
   });
 });

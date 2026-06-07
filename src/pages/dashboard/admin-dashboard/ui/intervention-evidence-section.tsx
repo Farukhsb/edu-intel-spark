@@ -8,12 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DashboardEmptyState,
   DashboardLiveBanner,
   DashboardLoadingState,
 } from "@/components/dashboard/PageStates";
 import { safeFormatDate } from "@/lib/date";
+import { logAdminAuditEvent } from "@/lib/audit/adminAuditEvents";
 import { log } from "@/lib/logger";
 import {
   buildInterventionEvidenceReport,
@@ -135,6 +137,7 @@ const ReportTable = ({ rows }: { rows: AdminInterventionEvidenceRow[] }) => (
 );
 
 export const InterventionEvidenceSection = () => {
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dataset, setDataset] = useState<AdminInterventionEvidenceDataset | null>(null);
@@ -147,7 +150,7 @@ export const InterventionEvidenceSection = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const nextDataset = await fetchAdminInterventionEvidenceDataset();
+        const nextDataset = await fetchAdminInterventionEvidenceDataset(profile?.institution_id ?? null);
         setDataset(nextDataset);
         setLoadError(null);
       } catch (error) {
@@ -160,7 +163,7 @@ export const InterventionEvidenceSection = () => {
     };
 
     void load();
-  }, []);
+  }, [profile?.institution_id]);
 
   const cohorts = useMemo(() => {
     const values = new Set<string>();
@@ -189,6 +192,18 @@ export const InterventionEvidenceSection = () => {
     setExporting(true);
     try {
       downloadCsv(report.csv, `app_intervention_evidence_${new Date().toISOString().slice(0, 10)}.csv`);
+      void logAdminAuditEvent({
+        actorId: user?.id,
+        actorRole: profile?.role ?? null,
+        institutionId: profile?.institution_id ?? null,
+        actionType: "report_exported",
+        details: {
+          report_name: "intervention_evidence_csv",
+          format: "csv",
+          cohort_id: selectedCohortId,
+          row_count: report.rows.length,
+        },
+      });
       toast.success("APP evidence export downloaded");
     } catch {
       toast.error("Failed to generate APP evidence export");
@@ -207,6 +222,18 @@ export const InterventionEvidenceSection = () => {
     });
 
     downloadText(pack.markdown, pack.filename);
+    void logAdminAuditEvent({
+      actorId: user?.id,
+      actorRole: profile?.role ?? null,
+      institutionId: profile?.institution_id ?? null,
+      actionType: "report_exported",
+      details: {
+        report_name: "intervention_evidence_pack",
+        format: "markdown",
+        cohort_id: selectedCohortId,
+        row_count: pack.rows.length,
+      },
+    });
     toast.success("APP evidence pack downloaded");
   };
 

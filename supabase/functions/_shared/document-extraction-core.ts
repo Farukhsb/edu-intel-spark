@@ -6,9 +6,13 @@ import {
   type PdfTextParser,
   normalizeReadableText,
 } from "./text-analysis.ts";
+import {
+  detectSubmissionFileType,
+  validateSubmissionFile,
+} from "../../../src/lib/submissionValidation.ts";
 
 export const DOCUMENT_EXTRACTION_ERROR_MESSAGE =
-  "We could not extract reliable readable content from this document. The PDF may be scanned, image-only, corrupted, or otherwise unreadable. Please review manually or request a readable re-upload.";
+  "We could not extract reliable readable content from this document. The file may be empty, too large, corrupted, password-protected, scanned, image-only, or otherwise unreadable. Please review manually or request a readable re-upload.";
 export const MIN_EXTRACTED_TEXT_CHARS = 200;
 
 export type SupportedDocumentType = "code" | "docx" | "pdf" | "txt" | "unsupported";
@@ -20,42 +24,18 @@ export type ExtractionMethod =
   | "code_text_decoder"
   | "none";
 export type ExtractionFailureReason =
+  | "corrupted_docx"
+  | "corrupted_pdf"
+  | "empty_file"
+  | "file_too_large"
+  | "mime_type_mismatch"
+  | "password_protected_pdf"
   | "unsupported_submission_file"
   | "extractor_error"
   | "binary_like_content"
   | "extracted_text_too_short"
   | "unreadable_pdf"
   | "extracted_text_unusable";
-
-const CODE_FILE_EXTENSIONS = [
-  ".py",
-  ".js",
-  ".ts",
-  ".tsx",
-  ".jsx",
-  ".java",
-  ".c",
-  ".cpp",
-  ".cc",
-  ".cs",
-  ".go",
-  ".php",
-  ".rb",
-  ".rs",
-  ".swift",
-  ".kt",
-  ".kts",
-  ".scala",
-  ".sql",
-  ".html",
-  ".css",
-  ".json",
-  ".xml",
-  ".yaml",
-  ".yml",
-  ".sh",
-  ".md",
-] as const;
 
 export type DocxExtractor = (bytes: Uint8Array) => Promise<{
   value: string;
@@ -226,37 +206,30 @@ async function tryDoclingPdfFallback(params: {
 }
 
 export function detectDocumentType(fileName: string | null | undefined, mimeType: string | null | undefined): SupportedDocumentType {
+  const fileType = detectSubmissionFileType(fileName);
   const normalizedMime = (mimeType || "").toLowerCase();
-  const normalizedName = (fileName || "").toLowerCase();
 
-  if (
-    normalizedMime.includes("wordprocessingml.document") ||
-    normalizedName.endsWith(".docx")
-  ) {
-    return "docx";
+  switch (fileType) {
+    case "docx":
+      return normalizedMime.includes("wordprocessingml.document") ? "docx" : "unsupported";
+    case "pdf":
+      return normalizedMime.includes("pdf") ? "pdf" : "unsupported";
+    case "txt":
+      return normalizedMime.startsWith("text/plain") ? "txt" : "unsupported";
+    case "code":
+      return (
+        normalizedMime.startsWith("text/") ||
+        normalizedMime.includes("javascript") ||
+        normalizedMime.includes("json") ||
+        normalizedMime.includes("xml") ||
+        normalizedMime.includes("yaml") ||
+        normalizedMime.includes("x-python")
+      )
+        ? "code"
+        : "unsupported";
+    default:
+      return "unsupported";
   }
-
-  if (normalizedMime.includes("pdf") || normalizedName.endsWith(".pdf")) {
-    return "pdf";
-  }
-
-  if (normalizedMime.startsWith("text/plain") || normalizedName.endsWith(".txt")) {
-    return "txt";
-  }
-
-  if (
-    normalizedMime.startsWith("text/") ||
-    normalizedMime.includes("javascript") ||
-    normalizedMime.includes("json") ||
-    normalizedMime.includes("xml") ||
-    normalizedMime.includes("yaml") ||
-    normalizedMime.includes("x-python") ||
-    CODE_FILE_EXTENSIONS.some((extension) => normalizedName.endsWith(extension))
-  ) {
-    return "code";
-  }
-
-  return "unsupported";
 }
 
 export async function extractDocumentText(params: {
@@ -268,7 +241,7 @@ export async function extractDocumentText(params: {
 }): Promise<DocumentExtractionResult> {
   const fileName = params.fileName || "submission";
   const mimeType = params.mimeType || "application/octet-stream";
-  const fileType = detectDocumentType(fileName, mimeType);
+  const fileType = detectSubmissionFileType(fileName);
 
   const fail = (
     message: string,
@@ -293,6 +266,19 @@ export async function extractDocumentText(params: {
     manualReviewRequired: true,
     extractionQuality: options?.extractionQuality ?? null,
   });
+
+  const validation = validateSubmissionFile({
+    fileName,
+    mimeType,
+    size: params.bytes.length,
+    bytes: params.bytes,
+  });
+
+  if (!validation.ok) {
+    return fail(validation.message, validation.message, {
+      extractionFailureReason: validation.failureReason,
+    });
+  }
 
   if (fileType === "unsupported") {
     return fail(DOCUMENT_EXTRACTION_ERROR_MESSAGE, `Unsupported file type: ${mimeType || fileName}`);

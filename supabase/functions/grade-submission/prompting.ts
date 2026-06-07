@@ -214,30 +214,45 @@ export async function requestStructuredGrade({
   isMathMode: boolean;
   responseSchema?: Record<string, unknown>;
 }) {
-  const aiData = await createResponse({
-    model: gradingModel,
-    temperature: 0,
-    top_p: 1,
-    input: [
-      { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
-      { role: "user", content: [{ type: "input_text", text: prompt }] },
-    ],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "submit_grade",
-        schema: responseSchema ?? buildResponseSchema(rubricLength, isMathMode),
-        strict: true,
+  let aiData: Awaited<ReturnType<typeof createResponse>>;
+  try {
+    aiData = await createResponse({
+      model: gradingModel,
+      temperature: 0,
+      top_p: 1,
+      input: [
+        { role: "developer", content: [{ type: "input_text", text: systemPrompt }] },
+        { role: "user", content: [{ type: "input_text", text: prompt }] },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "submit_grade",
+          schema: responseSchema ?? buildResponseSchema(rubricLength, isMathMode),
+          strict: true,
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    if (error instanceof Error && /aborted|timeout/i.test(error.message)) {
+      throw new Error("AI provider request timed out.");
+    }
+
+    throw new Error(`AI provider request failed: ${error instanceof Error ? error.message : "unknown error"}`);
+  }
 
   try {
     const parsed = safeParseGradeAIResponse(parseJsonText(extractOutputText(aiData)));
-    return parsed.success ? parsed.data : null;
+    if (parsed.success) {
+      return parsed.data;
+    }
+    throw new Error("AI provider returned an invalid or incomplete JSON response.");
   } catch {
     const parsed = safeParseGradeAIResponse(aiData?.output?.[0]?.content?.[0]?.json ?? aiData?.output_parsed ?? null);
-    return parsed.success ? parsed.data : null;
+    if (parsed.success) {
+      return parsed.data;
+    }
+    throw new Error("AI provider returned an invalid or incomplete JSON response.");
   }
 }
 

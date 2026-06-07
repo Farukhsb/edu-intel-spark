@@ -59,6 +59,42 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain("revoke all on function public.resolve_signup_institution_id(jsonb) from authenticated");
   });
 
+  it("hardens admin dashboards, student projection RPCs, and submission-file reads to the current institution", () => {
+    const source = readRepoFile("supabase/migrations/20260606120000_harden_multi_tenant_admin_and_student_surfaces.sql");
+
+    expect(source).toContain("create or replace function public.get_admin_dashboard_metrics()");
+    expect(source).toContain("where institution_id = private.current_institution_id()");
+    expect(source).toContain("create or replace function public.get_admin_assignment_oversight()");
+    expect(source).toContain("and a.institution_id = private.current_institution_id()");
+    expect(source).toContain("and s.institution_id = a.institution_id");
+    expect(source).toContain("create or replace function public.get_admin_moderation_overview()");
+    expect(source).toContain("and mc.institution_id = private.current_institution_id()");
+    expect(source).toContain("and a.institution_id = mc.institution_id");
+    expect(source).toContain("create or replace function public.get_student_grade_assignment_metadata()");
+    expect(source).toContain("and s.institution_id = private.current_institution_id()");
+    expect(source).toContain("create or replace function public.get_student_submission_grade_projection()");
+    expect(source).toContain("and g.institution_id = s.institution_id");
+    expect(source).toContain("create or replace function public.send_submission_to_moderation(_submission_id uuid)");
+    expect(source).toContain("where id = _submission_id");
+    expect(source).toContain("and institution_id = private.current_institution_id()");
+    expect(source).toContain("drop policy if exists \"Users can view authorized submission files\" on storage.objects;");
+    expect(source).toContain("and private.same_institution(s.institution_id)");
+  });
+
+  it("seeds a two-institution isolation fixture with mirrored risk data", () => {
+    const source = readRepoFile("supabase/fixtures/multi-tenant-isolation-fixture.sql");
+
+    expect(source).toContain("Isolation Institution A");
+    expect(source).toContain("Isolation Institution B");
+    expect(source).toContain("isolation.student.a@edu-intel.test");
+    expect(source).toContain("isolation.student.b@edu-intel.test");
+    expect(source).toContain("11111111-1111-4111-8111-111111111111");
+    expect(source).toContain("22222222-2222-4222-8222-222222222222");
+    expect(source).toContain("student_risk_snapshots");
+    expect(source).toContain("student_risk_predictions");
+    expect(source).toContain("student_risk_outcomes");
+  });
+
   it("adds institution scoping to core workflow tables with automatic derivation hooks", () => {
     const source = readRepoFile("supabase/migrations/20260525093000_add_workflow_institutions.sql");
 
@@ -123,6 +159,18 @@ describe("multi-tenancy identity contracts", () => {
     expect(policies).toContain("private.same_institution(institution_id)");
   });
 
+  it("hardens risk prediction transparency fields without weakening access control", () => {
+    const source = readRepoFile("supabase/migrations/20260606150000_harden_risk_prediction_transparency.sql");
+
+    expect(source).toContain("add column if not exists generated_at timestamptz not null default now()");
+    expect(source).toContain("add column if not exists feature_version text not null default 'trajectory-v1'");
+    expect(source).toContain("add column if not exists confidence_score numeric(5,4) check (confidence_score >= 0 and confidence_score <= 1)");
+    expect(source).toContain("add column if not exists calibration_metrics jsonb not null default '{}'::jsonb");
+    expect(source).toContain("coalesce(generated_at, created_at, now())");
+    expect(source).toContain("coalesce(feature_version, 'trajectory-v1')");
+    expect(source).toContain("coalesce(calibration_metrics, '{}'::jsonb)");
+  });
+
   it("adds student risk outcomes for supervised model labels with institution-scoped access", () => {
     const source = readRepoFile("supabase/migrations/20260603212000_add_student_risk_outcomes.sql");
     const traceability = readRepoFile("supabase/migrations/20260604103000_add_source_grade_traceability_to_risk_outcomes.sql");
@@ -173,6 +221,29 @@ describe("multi-tenancy identity contracts", () => {
     expect(source).toContain('create policy "Admins can read grading error events"');
     expect(source).toContain("exists (");
     expect(source).toContain("profiles.role = 'admin'");
+  });
+
+  it("adds institution scoping to grading error events", () => {
+    const source = readRepoFile("supabase/migrations/20260606131000_harden_grading_error_events_institution_scope.sql");
+
+    expect(source).toContain("alter table public.grading_error_events");
+    expect(source).toContain("add column if not exists institution_id uuid");
+    expect(source).toContain("grading_error_events_institution_id_fkey");
+    expect(source).toContain("private.submission_institution_id(ge.submission_id)");
+    expect(source).toContain("private.assignment_institution_id(ge.assignment_id)");
+    expect(source).toContain("create trigger sync_grading_error_event_institution_id");
+    expect(source).toContain('create policy "Admins can read grading error events"');
+    expect(source).toContain("private.same_institution(institution_id)");
+  });
+
+  it("adds institution scoping to grade imports", () => {
+    const source = readRepoFile("supabase/migrations/20260606133000_harden_grade_imports_institution_scope.sql");
+
+    expect(source).toContain('create policy "Users can view their own grade imports"');
+    expect(source).toContain('create policy "Users can insert their own grade imports"');
+    expect(source).toContain("private.same_institution(institution_id)");
+    expect(source).toContain("imported_by = auth.uid()");
+    expect(source).toContain("private.is_admin()");
   });
 
   it("adds text overloads for institution helper compatibility on legacy text-key paths", () => {

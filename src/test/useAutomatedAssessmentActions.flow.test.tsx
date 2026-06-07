@@ -264,4 +264,98 @@ describe("useAutomatedAssessmentActions workflow behavior", () => {
       expect(result.current.grading).toBe(false);
     });
   });
+
+  it("logs a failed edge function response and keeps the workflow recoverable", async () => {
+    const reloadSubmissions = vi.fn().mockResolvedValue(undefined);
+    const setPinnedVisibleSubmissionIds = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "grading service unavailable" }),
+    }) as unknown as typeof fetch;
+
+    const { result } = renderHook(() =>
+      useAutomatedAssessmentActions({
+        assignment: buildAssignment(),
+        grades: {},
+        reloadSubmissions,
+        role: "lecturer",
+        selected: new Set(["submission-1"]),
+        setPinnedVisibleSubmissionIds,
+        setPlagiarismFlags: vi.fn(),
+        setPlagiarismSummary: vi.fn(),
+        setSelected: vi.fn(),
+        submissions: [buildSubmission("submission-1")],
+        user: { id: "lecturer-1" },
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleAIGrade();
+    });
+
+    expect(mocks.log.error).toHaveBeenCalledWith(
+      "AI grading workflow failed",
+      expect.any(Error),
+      expect.objectContaining({
+        assignmentId: "assignment-1",
+        selectedCount: 1,
+      }),
+    );
+    expect(mocks.toast.error).toHaveBeenCalledWith("grading service unavailable");
+  });
+
+  it("logs a grading persistence failure without releasing partial results", async () => {
+    const reloadSubmissions = vi.fn().mockResolvedValue(undefined);
+    const setPinnedVisibleSubmissionIds = vi.fn();
+
+    mocks.supabase.from.mockImplementation((table: string) => {
+      if (table === "submissions") {
+        return {
+          update: vi.fn(() => ({
+            eq: vi.fn(() => Promise.resolve({ error: null })),
+          })),
+        };
+      }
+
+      if (table === "grades") {
+        return {
+          upsert: vi.fn(() => Promise.resolve({ error: { message: "grade write failed" } })),
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    const { result } = renderHook(() =>
+      useAutomatedAssessmentActions({
+        assignment: buildAssignment(),
+        grades: {},
+        reloadSubmissions,
+        role: "lecturer",
+        selected: new Set(["submission-1"]),
+        setPinnedVisibleSubmissionIds,
+        setPlagiarismFlags: vi.fn(),
+        setPlagiarismSummary: vi.fn(),
+        setSelected: vi.fn(),
+        submissions: [buildSubmission("submission-1")],
+        user: { id: "lecturer-1" },
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleAIGrade();
+    });
+
+    expect(mocks.log.error).toHaveBeenCalledWith(
+      "Failed to persist graded submission",
+      expect.objectContaining({
+        name: "GradePersistenceError",
+        message: "grade write failed",
+      }),
+      expect.objectContaining({
+        submissionId: "submission-1",
+      }),
+    );
+    expect(mocks.toast.error).toHaveBeenCalledWith("The grading result was returned, but it could not be saved.");
+  });
 });

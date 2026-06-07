@@ -35,6 +35,7 @@ const RequestSchema = z.discriminatedUnion("category", [
 
 type AssignmentRow = {
   id: string;
+  institution_id: string;
   title: string;
   lecturer_id: string;
   due_date: string | null;
@@ -51,6 +52,7 @@ type AssignmentDepartmentRow = {
 
 type ProfileRow = {
   id: string;
+  institution_id?: string | null;
   department_name?: string | null;
   department_id?: string | null;
   full_name: string | null;
@@ -62,6 +64,7 @@ type ProfileRow = {
 type SubmissionRow = {
   id: string;
   assignment_id: string;
+  institution_id?: string;
   student_id: string | null;
   student_name: string | null;
   student_email: string | null;
@@ -71,6 +74,7 @@ type SubmissionRow = {
 type WorkflowNotificationLogInsert = {
   dedupe_key: string;
   notification_type: "assignment-published" | "submission-received" | "grade-released";
+  institution_id: string;
   assignment_id: string | null;
   submission_id: string | null;
   recipient_email: string;
@@ -196,7 +200,7 @@ Deno.serve(async (req) => {
   if (methodError) return methodError;
 
   try {
-    const { user } = await requireUser(req);
+    const { supabase: userSupabase, user } = await requireUser(req);
     const admin = createAdminClient();
     const rateLimit = await applySharedRateLimit(admin, req, {
       scope: "send-workflow-notification-email",
@@ -212,6 +216,21 @@ Deno.serve(async (req) => {
       return createRateLimitResponse(corsHeaders, rateLimit.retryAfterSeconds);
     }
 
+    const actorProfileRes = await userSupabase
+      .from("profiles")
+      .select("id, institution_id, institutions:institution_id (slug)")
+      .eq("id", user.id)
+      .maybeSingle<ProfileRow>();
+
+    if (actorProfileRes.error || !actorProfileRes.data?.institution_id) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const institutionId = actorProfileRes.data.institution_id;
+
     const rawBody = await req.json().catch(() => null);
     const parsed = RequestSchema.safeParse(rawBody);
 
@@ -224,8 +243,9 @@ Deno.serve(async (req) => {
 
     const assignmentRes = await admin
       .from("assignments")
-      .select("id, title, lecturer_id, due_date")
+      .select("id, institution_id, title, lecturer_id, due_date")
       .eq("id", parsed.data.assignmentId)
+      .eq("institution_id", institutionId)
       .maybeSingle<AssignmentRow>();
 
     if (assignmentRes.error || !assignmentRes.data) {
@@ -249,11 +269,13 @@ Deno.serve(async (req) => {
       const assignmentCohortsRes = await admin
         .from("assignment_cohorts")
         .select("cohort_id")
-        .eq("assignment_id", assignment.id);
+        .eq("assignment_id", assignment.id)
+        .eq("institution_id", institutionId);
       const assignmentDepartmentsRes = await admin
         .from("assignment_departments")
         .select("department_name, department_id")
-        .eq("assignment_id", assignment.id);
+        .eq("assignment_id", assignment.id)
+        .eq("institution_id", institutionId);
 
       if (assignmentCohortsRes.error || assignmentDepartmentsRes.error) {
         throw assignmentCohortsRes.error ?? assignmentDepartmentsRes.error;
@@ -283,8 +305,9 @@ Deno.serve(async (req) => {
 
       let studentsQuery = admin
         .from("profiles")
-        .select("id, full_name, email, role, cohort_id, department_name, department_id")
-        .eq("role", "student");
+        .select("id, full_name, email, role, cohort_id, department_name, department_id, institution_id")
+        .eq("role", "student")
+        .eq("institution_id", institutionId);
 
       if (cohortIds.length > 0) {
         studentsQuery = studentsQuery.in("cohort_id", cohortIds);
@@ -320,6 +343,7 @@ Deno.serve(async (req) => {
             recipientEmail,
           }),
           notification_type: "assignment-published",
+          institution_id: institutionId,
           assignment_id: assignment.id,
           submission_id: null,
           recipient_email: recipientEmail,
@@ -336,9 +360,10 @@ Deno.serve(async (req) => {
     if (parsed.data.category === "submission-received") {
       const submissionRes = await admin
         .from("submissions")
-        .select("id, assignment_id, student_id, student_name, student_email, submitted_at")
+        .select("id, assignment_id, institution_id, student_id, student_name, student_email, submitted_at")
         .eq("id", parsed.data.submissionId)
         .eq("assignment_id", assignment.id)
+        .eq("institution_id", institutionId)
         .maybeSingle<SubmissionRow>();
 
       if (submissionRes.error || !submissionRes.data) {
@@ -358,8 +383,9 @@ Deno.serve(async (req) => {
 
       const lecturerRes = await admin
         .from("profiles")
-        .select("id, full_name, email, role")
+        .select("id, full_name, email, role, institution_id")
         .eq("id", assignment.lecturer_id)
+        .eq("institution_id", institutionId)
         .maybeSingle<ProfileRow>();
 
       if (lecturerRes.error || !lecturerRes.data?.email) {
@@ -383,6 +409,7 @@ Deno.serve(async (req) => {
           recipientEmail,
         }),
         notification_type: "submission-received",
+        institution_id: institutionId,
         assignment_id: assignment.id,
         submission_id: submission.id,
         recipient_email: recipientEmail,
@@ -405,9 +432,10 @@ Deno.serve(async (req) => {
 
     const submissionRes = await admin
       .from("submissions")
-      .select("id, assignment_id, student_id, student_name, student_email, submitted_at")
+      .select("id, assignment_id, institution_id, student_id, student_name, student_email, submitted_at")
       .eq("id", parsed.data.submissionId)
       .eq("assignment_id", assignment.id)
+      .eq("institution_id", institutionId)
       .maybeSingle<SubmissionRow>();
 
     if (submissionRes.error || !submissionRes.data) {
@@ -437,6 +465,7 @@ Deno.serve(async (req) => {
         recipientEmail,
       }),
       notification_type: "grade-released",
+      institution_id: institutionId,
       assignment_id: assignment.id,
       submission_id: submission.id,
       recipient_email: recipientEmail,

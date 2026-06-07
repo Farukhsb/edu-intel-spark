@@ -7,6 +7,7 @@ import type { ComponentType } from "react";
 type RouteComponent = ComponentType<any>;
 
 type RouteLoader = () => Promise<{ default: RouteComponent }>;
+type ModuleLoader = () => Promise<unknown>;
 
 const routeDefinitions = {
   auth: {
@@ -177,6 +178,8 @@ const routeDefinitions = {
   },
 } as const satisfies Record<string, { loader: RouteLoader; paths: readonly string[] }>;
 
+const performanceTrendsChartsLoader: ModuleLoader = () => import("@/pages/dashboard/performance-trends/charts");
+
 export const routeLoaders = Object.fromEntries(
   Object.entries(routeDefinitions).map(([key, definition]) => [key, definition.loader]),
 ) as {
@@ -198,6 +201,10 @@ export const preloadRoute = (route: string) => {
   if (!loader) return;
 
   void loader();
+};
+
+export const preloadPerformanceTrendsCharts = () => {
+  void performanceTrendsChartsLoader();
 };
 
 export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {

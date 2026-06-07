@@ -28,8 +28,8 @@ describe("ExternalExaminerExport demo mode", () => {
 
     expect(await screen.findByText("Viewing demo export data")).toBeInTheDocument();
     expect(screen.getByText("Export Preview")).toBeInTheDocument();
-    expect(screen.getByText("Amina Hassan")).toBeInTheDocument();
-    expect(screen.getByText("Daniel Reed")).toBeInTheDocument();
+    expect(screen.getByText("Student 1")).toBeInTheDocument();
+    expect(screen.getByText("Student 2")).toBeInTheDocument();
     expect(screen.getByText("PPL502")).toBeInTheDocument();
     expect(screen.getByText("SOC411")).toBeInTheDocument();
   });

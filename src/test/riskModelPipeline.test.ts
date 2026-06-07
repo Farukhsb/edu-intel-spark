@@ -119,6 +119,48 @@ describe("risk model pipeline", () => {
     expect(examples[0]?.features.average).toBe(84);
   });
 
+  it("falls back to scalar details when a feature vector is missing", () => {
+    const examples = buildRiskModelTrainingExamples({
+      predictions: [
+        {
+          id: "pred-scalar",
+          student_id: "student-scalar",
+          prediction_date: "2026-05-01",
+          model_version: "bootstrap",
+          risk_score: 62,
+          risk_band: "medium",
+          details: {
+            avg_grade: 57,
+            last_grade: 53,
+            score_count: 4,
+            slope: -1.4,
+            predicted_next: 49,
+            std_dev: 5.5,
+            recent_3_avg: 55,
+            early_avg: 59,
+            first_last_delta: -4,
+            recent_delta: -2,
+            below50_ratio: 0.25,
+            below40_ratio: 0,
+          },
+        },
+      ],
+      outcomes: [
+        {
+          prediction_id: "pred-scalar",
+          student_id: "student-scalar",
+          outcome_date: "2026-05-20",
+          label_value: "medium",
+          label_window_days: 30,
+        },
+      ],
+    });
+
+    expect(examples).toHaveLength(1);
+    expect(examples[0]?.features.average).toBe(57);
+    expect(examples[0]?.features.predictedNext).toBe(49);
+  });
+
   it("trains an artifact that ranks a steep decline as high risk", () => {
     const trainingExamples = [
       ...Array.from({ length: 4 }, (_, index) => ({

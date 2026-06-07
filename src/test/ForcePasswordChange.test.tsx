@@ -7,6 +7,9 @@ import ForcePasswordChange from "@/pages/ForcePasswordChange";
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   toast: vi.fn(),
+  log: {
+    error: vi.fn(),
+  },
   authState: {
     mustChangePassword: true,
     completePasswordChange: vi.fn(),
@@ -22,6 +25,10 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({
     toast: mocks.toast,
   }),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  log: mocks.log,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -78,5 +85,27 @@ describe("ForcePasswordChange", () => {
       );
     });
     expect(mocks.authState.completePasswordChange).not.toHaveBeenCalled();
+  });
+
+  it("logs unexpected password update failures without exposing the password", async () => {
+    mocks.authState.completePasswordChange.mockRejectedValueOnce(new Error("network down"));
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ForcePasswordChange />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "Sup3rSecure!" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "Sup3rSecure!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => {
+      expect(mocks.log.error).toHaveBeenCalledWith(
+        "Failed to complete enforced password change",
+        expect.any(Error),
+        expect.objectContaining({ stage: "force-password-change-submit" }),
+      );
+    });
   });
 });

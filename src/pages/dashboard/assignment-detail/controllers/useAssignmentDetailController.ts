@@ -69,6 +69,7 @@ export const useAssignmentDetailController = ({
     assignment,
     currentUserEmail,
     currentUserId,
+    currentUserInstitutionId: profile?.institution_id ?? null,
     grades,
     navigate,
     plagiarismFlags,

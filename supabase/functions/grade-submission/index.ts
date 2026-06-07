@@ -145,6 +145,7 @@ async function recordGradingFailureAudit({
   supabaseAdmin,
   submissionId,
   userId,
+  institutionId,
   actorRole,
   assignmentId,
   reason,
@@ -154,6 +155,7 @@ async function recordGradingFailureAudit({
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   submissionId: string;
   userId: string;
+  institutionId: string;
   actorRole: "admin" | "lecturer";
   assignmentId: string;
   reason: string;
@@ -162,6 +164,7 @@ async function recordGradingFailureAudit({
 }) {
   const { error } = await supabaseAdmin.from("grade_audit_log").insert({
     submission_id: submissionId,
+    institution_id: institutionId,
     changed_by: userId,
     event_type: "grading_failed",
     actor_role: actorRole,
@@ -187,6 +190,7 @@ async function recordGradingErrorEvent({
   submissionId,
   assignmentId,
   userId,
+  institutionId,
   provider,
   reason,
   errorCode,
@@ -197,6 +201,7 @@ async function recordGradingErrorEvent({
   submissionId: string;
   assignmentId: string;
   userId: string;
+  institutionId: string;
   provider: string;
   reason: string;
   errorCode?: string;
@@ -208,6 +213,7 @@ async function recordGradingErrorEvent({
       submissionId,
       assignmentId,
       userId,
+      institutionId,
       provider,
       reason,
       errorCode,
@@ -220,6 +226,53 @@ async function recordGradingErrorEvent({
     logWarn("grade-submission grading error telemetry insert failed", {
       submissionId,
       assignmentId,
+      error,
+    });
+  }
+}
+
+async function recordGradingAuditEvent({
+  supabaseAdmin,
+  submissionId,
+  userId,
+  institutionId,
+  actorRole,
+  gradeId,
+  moderationCaseId,
+  eventType,
+  previousValues,
+  newValues,
+  reason,
+}: {
+  supabaseAdmin: ReturnType<typeof createAdminClient>;
+  submissionId: string;
+  userId: string;
+  institutionId: string;
+  actorRole: "admin" | "lecturer";
+  gradeId?: string | null;
+  moderationCaseId?: string | null;
+  eventType: string;
+  previousValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
+  reason: string;
+}) {
+  const { error } = await supabaseAdmin.from("grade_audit_log").insert({
+    submission_id: submissionId,
+    grade_id: gradeId ?? null,
+    moderation_case_id: moderationCaseId ?? null,
+    institution_id: institutionId,
+    changed_by: userId,
+    event_type: eventType,
+    actor_role: actorRole,
+    previous_values: previousValues ?? {},
+    new_values: newValues ?? {},
+    reason,
+  });
+
+  if (error) {
+    logWarn("grade-submission audit insert failed", {
+      submissionId,
+      eventType,
       error,
     });
   }
@@ -396,10 +449,12 @@ async function fetchSubmissionContent(
 async function persistGradedSubmissionResult({
   supabaseAdmin,
   submissionId,
+  institutionId,
   gradingResult,
 }: {
   supabaseAdmin: ReturnType<typeof createAdminClient>;
   submissionId: string;
+  institutionId: string;
   gradingResult: {
     score?: number | null;
     feedback?: string | null;
@@ -413,6 +468,7 @@ async function persistGradedSubmissionResult({
   const { error: gradeWriteError } = await supabaseAdmin.from("grades").upsert(
     {
       submission_id: submissionId,
+      institution_id: institutionId,
       ai_score: gradingResult.score ?? null,
       ai_feedback: gradingResult.feedback ?? null,
       ai_breakdown: gradingResult.breakdown ?? null,
@@ -431,7 +487,8 @@ async function persistGradedSubmissionResult({
   const { error: submissionWriteError } = await supabaseAdmin
     .from("submissions")
     .update({ status: nextStatus })
-    .eq("id", submissionId);
+    .eq("id", submissionId)
+    .eq("institution_id", institutionId);
 
   if (submissionWriteError) {
     logWarn("grade-submission status update failed after grade save", {
@@ -514,10 +571,27 @@ Deno.serve(async (req) => {
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");
     }
+
+    const { data: actorProfile, error: actorProfileError } = await supabase
+      .from("profiles")
+      .select("id, institution_id, institutions:institution_id (slug)")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (actorProfileError) {
+      throw new HttpError(403, "Admin profile could not be resolved");
+    }
+
+    const institutionId = actorProfile?.institution_id ?? null;
+    if (!institutionId) {
+      throw new HttpError(403, "Admin institution could not be resolved");
+    }
+
     const assignmentClient = actorIsAdmin ? supabaseAdmin : userSupabase;
     const { data: assignment, error: assignmentError } = await loadAssignmentForGrading(
       assignmentClient,
       requestedAssignmentId,
+      institutionId,
     );
 
     if (assignmentError) {
@@ -568,6 +642,7 @@ Deno.serve(async (req) => {
       submissionClient,
       requestedAssignmentId,
       requestedSubmissionIds,
+      institutionId,
     );
 
     if (submissionsError) {
@@ -589,6 +664,7 @@ Deno.serve(async (req) => {
     } = await loadAssignmentSubmissionRows(
       submissionClient,
       requestedAssignmentId,
+      institutionId,
     );
 
     if (assignmentSubmissionIdsError) {
@@ -602,6 +678,7 @@ Deno.serve(async (req) => {
       await loadExistingGradesForGrading(
         gradesClient,
         assignmentSubmissionIds.length > 0 ? assignmentSubmissionIds : requestedSubmissionIds,
+        institutionId,
       );
 
     if (existingGradesError) {
@@ -632,6 +709,7 @@ Deno.serve(async (req) => {
         supabaseAdmin,
         submissionId: sub.id,
         userId: user.id,
+        institutionId,
         actorRole,
         assignmentId: requestedAssignmentId,
         reason,
@@ -643,6 +721,7 @@ Deno.serve(async (req) => {
         submissionId: sub.id,
         assignmentId: requestedAssignmentId,
         userId: user.id,
+        institutionId,
         provider: "openai",
         reason,
       });
@@ -655,6 +734,23 @@ Deno.serve(async (req) => {
 
     for (const sub of submissions.filter((item) => normalizeSubmissionStoragePath(item.file_url))) {
       try {
+        await recordGradingAuditEvent({
+          supabaseAdmin,
+          submissionId: sub.id,
+          userId: user.id,
+          institutionId,
+          actorRole,
+          eventType: "grading_started",
+          previousValues: {
+            status: sub.status,
+          },
+          newValues: {
+            status: "ai_grading",
+            grading_model: gradingModel,
+            grading_passes: gradingPasses,
+          },
+          reason: "AI grading workflow started.",
+        });
         const gradingResult = await gradeSingleSubmission({
           sub,
           assignment,
@@ -674,7 +770,25 @@ Deno.serve(async (req) => {
         await persistGradedSubmissionResult({
           supabaseAdmin,
           submissionId: sub.id,
+          institutionId,
           gradingResult,
+        });
+        await recordGradingAuditEvent({
+          supabaseAdmin,
+          submissionId: sub.id,
+          userId: user.id,
+          institutionId,
+          actorRole,
+          eventType: "grading_completed",
+          previousValues: {
+            status: "ai_grading",
+          },
+          newValues: {
+            status: gradingResult.requiresLecturerReview ? "first_review" : "ai_graded",
+            score: gradingResult.score ?? null,
+            requires_lecturer_review: Boolean(gradingResult.requiresLecturerReview),
+          },
+          reason: "AI grading workflow completed.",
         });
         results.push(gradingResult);
       } catch (gradeErr) {
@@ -691,6 +805,7 @@ Deno.serve(async (req) => {
           supabaseAdmin,
           submissionId: sub.id,
           userId: user.id,
+          institutionId,
           actorRole,
           assignmentId: requestedAssignmentId,
           reason,
@@ -702,6 +817,7 @@ Deno.serve(async (req) => {
           submissionId: sub.id,
           assignmentId: requestedAssignmentId,
           userId: user.id,
+          institutionId,
           provider: isDocumentExtractionError(gradeErr) ? "document_extraction" : "openai",
           reason,
           errorCode: isDocumentExtractionError(gradeErr) ? gradeErr.errorCode : undefined,

@@ -494,6 +494,7 @@ export function buildImportedGradePayload(params: {
   row: GradeImportPreviewRow;
   submissionId: string;
   lecturerId: string;
+  institutionId: string;
   sourceFileName: string | null;
   sourceFileHash: string;
   importMethod: GradeImportMethod;
@@ -533,6 +534,7 @@ export function buildImportedGradePayload(params: {
   };
 
   return {
+    institution_id: params.institutionId,
     submission_id: params.submissionId,
     ai_score: existingGrade?.ai_score ?? null,
     ai_feedback: existingGrade?.ai_feedback ?? null,
