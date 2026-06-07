@@ -1,18 +1,18 @@
 # Model Evaluation
 
-GradeAI uses two broad model surfaces:
+GradeAI uses two model surfaces:
 
 - AI-assisted grading and explanation
 - student risk prediction and intervention support
 
-Both are decision-support tools. Neither should be presented as a replacement for lecturer judgement or institutional process.
+Both are decision-support tools. Neither replaces lecturer judgement or institutional process.
 
 ## Evaluation Principles
 
 - models are evaluated for usefulness, consistency, and failure behaviour
 - outputs are treated as draft support until reviewed by a human
 - failure should be visible and recoverable
-- model quality should be described with honest metrics, not marketing language
+- model quality should be described with plain metrics
 - false positives are worth tracking because silent errors are expensive in academic settings
 
 ## AI-Assisted Grading Evaluation
@@ -93,4 +93,4 @@ It does not prove that any single prediction is correct.
 
 ## Reviewer Note
 
-Model evaluation should be read as evidence of responsible design and testing, not as a claim that the models are formally certified for every institution.
+Model evaluation is evidence of responsible design and testing, not a claim of formal certification.

@@ -1,6 +1,6 @@
 # Pilot Status
 
-GradeAI is currently positioned as a controlled pilot system. The codebase contains real, test-covered workflows, but the documentation should not overstate that this is a finished institution-wide platform.
+GradeAI is a controlled pilot system. The codebase contains real, test-covered workflows, but it is not a finished institution-wide platform.
 
 ## Status Summary
 
@@ -48,15 +48,6 @@ GradeAI is currently positioned as a controlled pilot system. The codebase conta
 - no claim of formal external certification or accreditation approval
 - no claim that the system should replace institutional processes or academic judgement
 
-## Evidence Summary
-
-The current evidence pack is intentionally mixed: code, tests, screenshots, and documentation all matter.
-
-- screenshots live in [`screenshots/`](screenshots/)
-- the top-level [`../README.md`](../README.md) links the review path and evidence files
-- no video artifact is currently committed in this repository
-- if video evidence is added later, it should be treated as supporting material rather than a substitute for test or code evidence
-
 ## Screenshots And Evidence
 
 The repository includes screenshots as evidence of the working product:
@@ -68,8 +59,6 @@ The repository includes screenshots as evidence of the working product:
 - [`docs/screenshots/predictive-risk-analytics.jpg`](screenshots/predictive-risk-analytics.jpg)
 - [`docs/screenshots/student-improvement-plan.jpg`](screenshots/student-improvement-plan.jpg)
 - [`docs/screenshots/ai-grade-explanation.jpg`](screenshots/ai-grade-explanation.jpg)
-
-No video evidence artifact is currently committed in this repository. If a video is produced later, it should be added as a separate evidence asset and linked here.
 
 ## Suggested Review Order
 

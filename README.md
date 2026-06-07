@@ -2,15 +2,15 @@
 
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 
-GradeAI is a controlled-pilot academic workflow platform for assessment, moderation, student support, risk review, and evidence export. It is built to help institutions identify students at risk of disengagement or underperformance early, so tutors and academic leads can intervene sooner.
+GradeAI is a controlled-pilot academic workflow platform for assessment, moderation, student support, risk review, and evidence export. It helps institutions spot students at risk earlier so staff can intervene sooner.
 
-It works alongside existing systems and uses machine learning to monitor grades, submissions, and engagement over time. The aim is to improve retention, support student progress, and provide evidence for effective intervention. GradeAI is not a replacement for the LMS or a black-box decision system. Academic judgement stays with educators.
+It sits alongside existing systems and uses machine learning to track grades, submissions, and engagement over time. GradeAI is not a replacement for the LMS or for academic judgement.
 
 ## Current Status
 
-GradeAI should be read as an implemented pilot system, not a finished institution-wide product.
+GradeAI is implemented, but still a pilot rather than a finished institution-wide product.
 
-### Implemented in the current codebase
+### Implemented
 
 - multi-tenant Supabase data access with RLS-backed institution scoping
 - student, lecturer, moderator, and admin role-aware dashboard flows
@@ -22,7 +22,7 @@ GradeAI should be read as an implemented pilot system, not a finished institutio
 - audit trails for key academic and administrative actions
 - demo-mode routes that use synthetic data only
 
-### Demo-only or synthetic by design
+### Demo-only
 
 - all routes prefixed with `Demo*`
 - reviewer walkthroughs that use fabricated assignments, submissions, grades, and risk records
@@ -37,7 +37,7 @@ GradeAI should be read as an implemented pilot system, not a finished institutio
 - runtime access-control proof via contract and live tests
 - reviewer-pack evidence capture and documentation completeness
 
-### Not yet something to present as fully production-ready
+### Not production-ready yet
 
 - no claim of institution-wide deployment readiness
 - no formal external accreditation approval
@@ -52,11 +52,11 @@ GradeAI should be read as an implemented pilot system, not a finished institutio
 - records interventions and exports evidence for institutional reporting
 - keeps AI-assisted grading available where institutions want it, without making it the product focus
 
-AI output is not treated as the final academic decision. Students only see feedback after educator review and release.
+AI output is draft support. Students only see feedback after educator review and release.
 
 ## Demo Mode
 
-GradeAI includes a synthetic demo mode for reviewer walkthroughs and product evaluation. It uses fabricated assignments, rubrics, submissions, grades, integrity examples, and feedback, and keeps demo paths isolated from real Supabase academic data.
+GradeAI includes a synthetic demo mode for reviewer walkthroughs and product evaluation. It uses fabricated assignments, rubrics, submissions, grades, integrity examples, and feedback, and never reads live academic data.
 
 ## Evidence And Review Material
 
@@ -79,25 +79,19 @@ Selected screenshot evidence:
 
 Video evidence:
 
-- no video artifact is currently committed in this repository
-- if a walkthrough video is produced later, it should be linked from this section and treated as supporting evidence rather than a substitute for code or test proof
+- none committed yet
 
 ## Evidence Pack Summary
 
-For technical reviewers and university IT staff:
+Review path:
 
-- start with [Architecture](docs/ARCHITECTURE.md)
-- then read [Security Model](docs/SECURITY_MODEL.md)
-- then read [Pilot Status](docs/PILOT_STATUS.md)
-- then read [Model Evaluation](docs/MODEL_EVALUATION.md)
-- use [Screenshots](docs/screenshots/README.md) as visual confirmation of implemented workflows
+1. [Architecture](docs/ARCHITECTURE.md)
+2. [Security Model](docs/SECURITY_MODEL.md)
+3. [Pilot Status](docs/PILOT_STATUS.md)
+4. [Model Evaluation](docs/MODEL_EVALUATION.md)
+5. [Screenshots](docs/screenshots/README.md)
 
-For evidence reviewers:
-
-- this repository shows a working pilot, not a claim of finished institutional rollout
-- live and demo routes are intentionally separated
-- the tests are intended to prove safety boundaries, not just feature presence
-- every claim in this README should be read alongside the linked technical docs and test evidence
+This repository shows a working pilot, not a finished institutional rollout. Live and demo routes are separated, and the tests are there to prove safety boundaries as well as features.
 
 ## Key Product Areas
 

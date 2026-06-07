@@ -1,12 +1,12 @@
 # GradeAI Documentation
 
-This folder contains the main documentation for GradeAI, an AI-assisted academic workflow platform for assessment, feedback, integrity review, moderation, analytics, and early student support.
+This folder contains the main docs for GradeAI.
 
-The docs are organised for three kinds of readers:
+Use them for:
 
-- someone reviewing the technical architecture
-- someone checking whether the product has been built with academic risk in mind
-- someone trying to understand how the lecturer workflow works in practice
+- technical review
+- security and governance review
+- workflow and evidence review
 
 ## Start Here
 
@@ -14,13 +14,11 @@ The docs are organised for three kinds of readers:
 
 **File:** [`CURRENT_STATE_INDEX.md`](CURRENT_STATE_INDEX.md)
 
-Use this first if you want the shortest route to the active technical,
-operational, security, and testing documents without sorting through older
-material.
+Start here if you want the active technical, security, and testing docs without sorting through older material.
 
 ### 1. Assessor Evidence Summary
 
-There is no single canonical `ASSESSOR_EVIDENCE_SUMMARY.md` file in this branch. Start with the README and the pilot-status docs instead:
+There is no single canonical `ASSESSOR_EVIDENCE_SUMMARY.md` file in this branch. Start with:
 
 - [`../README.md`](../README.md)
 - [`PILOT_STATUS.md`](PILOT_STATUS.md)
@@ -32,53 +30,49 @@ There is no single canonical `ASSESSOR_EVIDENCE_SUMMARY.md` file in this branch.
 
 **File:** [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
-Use this to understand the frontend, backend, authentication, Supabase integration, database design, Edge Functions, and AI workflow boundaries.
+Use this to understand the app structure, backend boundary, authentication, database design, Edge Functions, and AI workflow boundaries.
 
 ### 3. Trust Model
 
 **File:** [`TRUST_MODEL.md`](TRUST_MODEL.md)
 
-Use this to understand how GradeAI keeps AI output inside a human-reviewed academic workflow rather than treating it as the final decision.
+Use this to understand how AI output stays inside a human-reviewed academic workflow.
 
 ### 4. Security Model
 
 **File:** [`SECURITY_MODEL.md`](SECURITY_MODEL.md)
 
-Use this to understand authentication, role boundaries, data access, row-level security, and protection of sensitive academic information.
+Use this to understand authentication, role boundaries, data access, row-level security, and sensitive-data handling.
 
 ### 5. Pilot Status
 
 **File:** [`PILOT_STATUS.md`](PILOT_STATUS.md)
 
-Use this to understand what is implemented, what is synthetic/demo-only, what is under pilot validation, and what is not production-ready.
+Use this to understand what is implemented, what is demo-only, what is under pilot validation, and what is not production-ready.
 
 ### 6. Model Evaluation
 
 **File:** [`MODEL_EVALUATION.md`](MODEL_EVALUATION.md)
 
-Use this to understand how the grading and risk models are evaluated, what metrics are stored, and where the limits are.
+Use this to understand how the grading and risk models are evaluated and what limits are documented.
 
 ### 7. Academic Compliance and AI Governance
 
 **File:** [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
 
-Use this for the project's governance position on student data, lecturer control,
-AI-assisted assessment, and responsible pilot-stage rollout.
+Use this for the project's governance position on student data, lecturer control, AI-assisted assessment, and pilot-stage rollout.
 
 ### 8. Authorization Reference
 
 **File:** [`AUTHORIZATION_REFERENCE.md`](AUTHORIZATION_REFERENCE.md)
 
-Use this when you need the fastest route from a critical workflow to the exact tables, RPCs, Edge Functions, and current RLS policies it depends on.
-
-This is the most audit-friendly map of the current authorization surface.
+Use this when you need the route from a workflow to the tables, RPCs, Edge Functions, and RLS policies it depends on.
 
 ### 9. Operational Runbook
 
 **File:** [`OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md)
 
-Use this for the practical deployment, migration, release, incident, and
-troubleshooting baseline.
+Use this for deployment, migration, release, incident, and troubleshooting.
 
 ## User and Workflow Documentation
 
@@ -86,15 +80,13 @@ troubleshooting baseline.
 
 **File:** [`USER_GUIDE.md`](USER_GUIDE.md)
 
-Use this for a practical first-time walkthrough of the platform across lecturer, student, moderator, and admin roles.
-
-It includes a worked assignment-creation example with a sample rubric so new users can understand how GradeAI is meant to be used in practice.
+Use this for a first-time walkthrough across lecturer, student, moderator, and admin roles.
 
 ### Lecturer Guide
 
 **File:** [`Lecturer-Guide.md`](Lecturer-Guide.md)
 
-Explains the lecturer-facing workflow, including invite-based access, assignment setup, marking, integrity review, approval, release, analytics, and student support.
+Explains the lecturer-facing workflow: access, assignment setup, marking, integrity review, approval, release, analytics, and student support.
 
 ## Support and QA
 
@@ -102,19 +94,19 @@ Explains the lecturer-facing workflow, including invite-based access, assignment
 
 **File:** [`RELEASE_READINESS_CHECKLIST.md`](support/RELEASE_READINESS_CHECKLIST.md)
 
-Provides a practical pre-release checklist for database state, Edge Functions, role boundaries, testing, deployment readiness, and high-trust academic workflows.
+Provides a pre-release checklist for database state, Edge Functions, role boundaries, testing, deployment readiness, and academic workflows.
 
 ### Testing Checklist
 
 **File:** [`TESTING_CHECKLIST.md`](support/TESTING_CHECKLIST.md)
 
-Manual QA checklist covering important user flows across lecturer, student, and admin roles.
+Manual QA checklist for lecturer, student, and admin flows.
 
 ### Test Coverage Strategy
 
 **File:** [`TEST_COVERAGE_STRATEGY.md`](support/TEST_COVERAGE_STRATEGY.md)
 
-Explains the testing approach and how the project should expand coverage across high-risk workflows.
+Explains the testing approach and how coverage expands across high-risk workflows.
 
 ### Live Role Boundary Smoke Test
 
@@ -122,25 +114,21 @@ Explains the testing approach and how the project should expand coverage across 
 
 Documents role-boundary checks used to confirm that users only see what they are allowed to see.
 
-This is important evidence for security and trust review.
-
 ### Live Regression Checklist
 
 **File:** [`LIVE_REGRESSION_CHECKLIST.md`](support/LIVE_REGRESSION_CHECKLIST.md)
 
 Use this for a short cross-role smoke test after workflow, grading, notification, or architecture changes.
 
-It is intentionally shorter than the full testing checklist and more practical for quick demo or pilot validation.
-
 ### Load Testing
 
 **File:** [`LOAD_TESTING.md`](support/LOAD_TESTING.md)
 
-Explains the lightweight load-testing approach used for pilot-stage checks and where the supporting tooling lives.
+Explains the lightweight load-testing approach used for pilot-stage checks.
 
 ## Assessor and Evidence-Facing Material
 
-Use the top-level README and the pilot-status docs as the current evidence-facing summary. The most useful supporting files are:
+Use the top-level README and the pilot-status docs as the evidence-facing summary. The most useful supporting files are:
 
 - [`../README.md`](../README.md)
 - [`PILOT_STATUS.md`](PILOT_STATUS.md)
@@ -153,11 +141,11 @@ Use the top-level README and the pilot-status docs as the current evidence-facin
 
 **Folder:** [`screenshots/`](screenshots/)
 
-Contains visual evidence of the working product. Screenshots should be used alongside the product and technical documents to show that the system is implemented, not just described.
+Contains visual evidence of the working product. Use screenshots alongside the product and technical docs.
 
 ## Suggested Review Path
 
-For a technical reviewer, read the documents in this order:
+For a technical reviewer, read:
 
 1. [`../README.md`](../README.md)
 2. [`PILOT_STATUS.md`](PILOT_STATUS.md)
@@ -177,17 +165,12 @@ For a non-technical reviewer or assessor, start with:
 4. [`ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md`](ACADEMIC_COMPLIANCE_AND_AI_GOVERNANCE.md)
 5. [`screenshots/`](screenshots/)
 
-## What This Documentation Is Intended To Show
+## What This Documentation Shows
 
-The documentation is intended to demonstrate:
+- a working full-stack academic workflow project
+- role-based access and data governance
+- human-reviewed AI support
+- security and trust boundaries
+- test and release discipline
 
-- full-stack product development ability
-- academic workflow design
-- React, TypeScript, Supabase, Edge Function, and AI integration experience
-- role-based access and data governance thinking
-- human-in-the-loop AI design
-- security and trust-boundary awareness
-- testing and release-readiness discipline
-- responsible product judgement in a sensitive academic context
-
-GradeAI should be understood as a working full-stack academic technology project in a controlled pilot stage, not as a finished institution-wide platform.
+GradeAI is a controlled-pilot project, not a finished institution-wide platform.

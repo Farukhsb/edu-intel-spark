@@ -2,11 +2,9 @@
 
 ## Purpose
 
-GradeAI handles academic assessment data, so security has to be treated as part of the product, not as an afterthought.
+GradeAI handles academic assessment data, so security is part of the product.
 
-This document explains the current security model in plain English. It is written for people who want to understand how the platform protects users, submissions, grades, feedback, and academic decisions without needing to read the whole codebase.
-
-GradeAI is still a developing product, so this document should be read as a working security model rather than a final institutional security certification.
+This document explains how the platform protects users, submissions, grades, feedback, and academic decisions.
 
 ## Current Security Posture
 
@@ -15,13 +13,13 @@ GradeAI is still a developing product, so this document should be read as a work
 - exports, audit logging, risk prediction, and AI grading have been hardened to reduce silent failure or hidden data exposure
 - some deployment and governance questions remain pilot-stage checks rather than completed enterprise sign-off
 
-This security posture is deliberately conservative:
+This posture is conservative:
 
 - `Demo*` routes are synthetic only
 - live routes are institution-scoped
 - service-role paths are limited to server-side workflows
 - human review remains required for academic decisions
-- the repository contains contract tests and runtime tests, but not a claim of formal institutional certification
+- the repository contains contract tests and runtime tests
 
 ## Security Principles
 
@@ -38,7 +36,7 @@ The platform should never rely only on the user interface to protect data. The b
 
 ## Main User Roles
 
-GradeAI currently works around these main roles.
+GradeAI currently works around these roles.
 
 ### Students
 
@@ -77,7 +75,7 @@ Access control in GradeAI is handled through a combination of:
 
 The important point is that frontend routing is not enough. A hidden button or protected page does not fully secure the system. The database and backend functions must also check who the user is and what they are allowed to access.
 
-The current implementation uses the frontend mainly as a convenience layer. The real security boundary is still the combination of Supabase authentication, row-level security, and Edge Function validation.
+The frontend is only a convenience layer. The real security boundary is Supabase authentication, row-level security, and Edge Function validation.
 
 Current review status:
 
@@ -86,7 +84,7 @@ Current review status:
 | Live access control | Implemented | Core academic routes are institution-scoped. |
 | Demo access control | Implemented | Demo routes stay synthetic and do not read live academic records. |
 | Pilot runtime proof | Ongoing | Live runtime tests exist, but the platform is still a pilot. |
-| Production certification | Not claimed | No formal certification or institution-wide approval is claimed here. |
+| Production certification | Not claimed | No formal certification or institution-wide approval is claimed. |
 
 ## Row-Level Security
 
@@ -118,11 +116,11 @@ submitted
   -> student visibility
 ```
 
-This protects students from seeing draft marks or unreviewed feedback. It also protects lecturers from being pressured by AI-generated results that were never meant to be final.
+This keeps draft marks and unreviewed feedback out of student view.
 
 ## AI-Assisted Grading
 
-AI-assisted grading is treated as decision support.
+AI-assisted grading is decision support.
 
 The AI can help prepare draft marks, feedback, and rubric-level comments, but the lecturer must review the output before release. The platform should not present AI grading as a final academic decision.
 
@@ -133,11 +131,11 @@ Security and fairness concerns here include:
 - students should not see draft AI feedback before lecturer approval
 - marks should be traceable through the review and release process
 
-The human review stage is part of the safety model, not just a product feature.
+Human review is part of the safety model.
 
 ## Academic Integrity Review
 
-Academic integrity results are treated as evidence for review, not proof of misconduct.
+Academic integrity results are evidence for review, not proof of misconduct.
 
 The system may highlight similarity, uncited overlap, cited overlap, reference sections, internal peer overlap, external overlap, or AI-writing indicators. These signals should help lecturers decide what to inspect more closely.
 
@@ -149,7 +147,7 @@ The early support feature highlights students whose assessment patterns suggest 
 
 This is not designed to label students. It is designed to help lecturers notice possible issues earlier.
 
-The support signal is based on explainable factors such as grade trends, low averages, sudden drops, inconsistent results, expected next outcome, and limited available data. These signals should be used as prompts for lecturer review, not automatic decisions about a student.
+The support signal is based on explainable factors such as grade trends, low averages, sudden drops, inconsistent results, expected next outcome, and limited available data. These signals are prompts for lecturer review, not automatic decisions.
 
 ## File Storage
 
@@ -176,7 +174,7 @@ Server-side service-role access should be treated as a privileged implementation
 
 ## Logging and Monitoring
 
-As the platform moves closer to wider use, error monitoring should be added carefully.
+Error monitoring should be added carefully.
 
 Tools such as Sentry or Datadog can help detect crashes, failed requests, and production issues, but they must be configured in a privacy-safe way.
 
@@ -192,7 +190,7 @@ Useful monitoring should focus on errors, affected routes, environment, release 
 
 ## Data Minimisation
 
-GradeAI should only collect and store data that is needed for the academic workflow.
+GradeAI should only collect and store data needed for the academic workflow.
 
 That includes information such as users, roles, assignments, submissions, grades, feedback, moderation records, integrity results, and intervention records.
 
@@ -222,7 +220,7 @@ GradeAI should record important actions such as:
 - admin actions
 - intervention logging
 
-The purpose is not to create surveillance. The purpose is to make academic workflows fairer, more transparent, and easier to review.
+The purpose is to make academic workflows easier to review, not to create surveillance.
 
 ## Common Risks and How GradeAI Responds
 
