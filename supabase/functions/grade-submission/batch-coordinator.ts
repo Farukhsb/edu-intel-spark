@@ -10,6 +10,7 @@ import { isSupportedSubmissionFile, normalizeSubmissionStoragePath } from "./gra
 import { buildExistingGradesByFingerprint, loadAssignmentForGrading, loadAssignmentSubmissionRows, loadExistingGradesForGrading, loadRequestedSubmissionsForGrading, normalizeRubricForAssignment } from "./request-stage.ts";
 import { gradeSingleSubmission } from "./submission-stage.ts";
 import { getConfiguredGradingPasses, resolveGradingPasses, getPassSpreadThreshold, isDocumentExtractionError, recordGradingFailureAudit, recordGradingErrorEvent, recordGradingAuditEvent, recordGradingWorkflowRun, getWorkflowRunGradingPassCount, fetchSubmissionContent, persistGradedSubmissionResult } from "./batch-support.ts";
+const CONFIDENCE_THRESHOLD = 0.7;
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (!corsHeaders) return createCorsForbiddenResponse();
@@ -74,7 +75,7 @@ Deno.serve(async (req) => {
     if (forceRegenerate && !actorIsAdmin) {
       throw new HttpError(403, "Only admins can force AI re-grading");
     }
-    const { data: actorProfile, error: actorProfileError } = await supabase
+    const { data: actorProfile, error: actorProfileError } = await userSupabase
       .from("profiles")
       .select("id, institution_id, institutions:institution_id (slug)")
       .eq("id", user.id)
