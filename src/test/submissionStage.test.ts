@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  assessPdfEvidenceAdequacy,
   gradeSingleSubmission,
-  PDF_EVIDENCE_INADEQUATE_MESSAGE,
 } from "../../supabase/functions/grade-submission/submission-stage";
+import {
+  assessPdfEvidenceAdequacy,
+  PDF_EVIDENCE_INADEQUATE_MESSAGE,
+} from "../../supabase/functions/grade-submission/pdf-adequacy";
 import {
   blindSubmissionText,
   buildGradingInputHash,

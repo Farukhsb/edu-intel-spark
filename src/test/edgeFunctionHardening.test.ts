@@ -346,7 +346,8 @@ describe("edge function hardening", () => {
 
   it("centralizes role resolution inside shared edge-function auth", () => {
     const authSource = readRepoFile("supabase/functions/_shared/auth.ts");
-    const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+    const batchCoordinatorSource = readRepoFile("supabase/functions/grade-submission/batch-coordinator.ts");
+    const batchSupportSource = readRepoFile("supabase/functions/grade-submission/batch-support.ts");
     const adminRoleSource = readRepoFile("supabase/functions/admin-set-user-role/index.ts");
     const riskBatchSource = readRepoFile("supabase/functions/compute-risk-batch/index.ts");
     const explainGradeSource = readRepoFile("supabase/functions/explain-grade/index.ts");
@@ -357,16 +358,14 @@ describe("edge function hardening", () => {
     expect(authSource).toContain("export async function resolveUserRoles");
     expect(authSource).toContain("export async function requireAppRoles");
     expect(authSource).toContain("export async function requireAdmin");
-    expect(gradingSource).not.toContain("async function resolveActorRoles");
-    expect(gradingSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
-    expect(gradingSource).toContain('select("id, institution_id, institutions:institution_id (slug)")');
-    expect(gradingSource).toContain("loadAssignmentForGrading(");
-    expect(gradingSource).toContain("loadRequestedSubmissionsForGrading(");
-    expect(gradingSource).toContain("loadAssignmentSubmissionRows(");
-    expect(gradingSource).toContain("loadExistingGradesForGrading(");
-    expect(gradingSource).toContain('institution_id: institutionId');
-    expect(gradingSource).toContain('institution_id: institutionId,');
-    expect(gradingSource).toContain('grading_error_events").insert(');
+    expect(batchCoordinatorSource).not.toContain("async function resolveActorRoles");
+    expect(batchCoordinatorSource).toContain("const { supabase: userSupabase, user, roles: actorRoles } = await requireLecturer(req);");
+    expect(batchCoordinatorSource).toContain('select("id, institution_id, institutions:institution_id (slug)")');
+    expect(batchCoordinatorSource).toContain("loadAssignmentForGrading(");
+    expect(batchCoordinatorSource).toContain("loadRequestedSubmissionsForGrading(");
+    expect(batchCoordinatorSource).toContain("loadAssignmentSubmissionRows(");
+    expect(batchCoordinatorSource).toContain("loadExistingGradesForGrading(");
+    expect(batchSupportSource).toContain('grading_error_events").insert(');
     expect(adminRoleSource).toContain("institution_id: targetProfile.institution_id ?? existingMetadata.institution_id ?? null");
     expect(adminRoleSource).toContain("institution_slug: institutionSlug ?? existingMetadata.institution_slug ?? null");
     expect(adminRoleSource).toContain("const actorInstitutionSlug");
@@ -390,27 +389,30 @@ describe("edge function hardening", () => {
   });
 
   it("persists grading failure audit events for admin operational monitoring", () => {
-    const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+    const batchCoordinatorSource = readRepoFile("supabase/functions/grade-submission/batch-coordinator.ts");
+    const batchSupportSource = readRepoFile("supabase/functions/grade-submission/batch-support.ts");
 
-    expect(gradingSource).toContain('event_type: "grading_failed"');
-    expect(gradingSource).toContain('eventType: "grading_started"');
-    expect(gradingSource).toContain('eventType: "grading_completed"');
-    expect(gradingSource).toContain('await recordGradingFailureAudit({');
-    expect(gradingSource).toContain('await recordGradingAuditEvent({');
-    expect(gradingSource).toContain('logWarn("grade-submission failure audit insert failed"');
-    expect(gradingSource).toContain('logWarn("grade-submission audit insert failed"');
-    expect(gradingSource).toContain('from("workflow_runs")');
-    expect(gradingSource).toContain('workflow_name: "grade-submission"');
-    expect(gradingSource).toContain('status: "running"');
-    expect(gradingSource).toContain('status: "failed"');
-    expect(gradingSource).toContain('workflowRunFailureCount > 0 ? "failed" : "succeeded"');
-    expect(gradingSource).toContain("grading_pass_count:");
-    expect(gradingSource).toContain('providerRetryCount');
+    expect(batchSupportSource).toContain('event_type: "grading_failed"');
+    expect(batchCoordinatorSource).toContain('eventType: "grading_started"');
+    expect(batchCoordinatorSource).toContain('eventType: "grading_completed"');
+    expect(batchCoordinatorSource).toContain('await recordGradingFailureAudit({');
+    expect(batchCoordinatorSource).toContain('await recordGradingAuditEvent({');
+    expect(batchSupportSource).toContain('logWarn("grade-submission failure audit insert failed"');
+    expect(batchSupportSource).toContain('logWarn("grade-submission audit insert failed"');
+    expect(batchSupportSource).toContain('from("workflow_runs")');
+    expect(batchSupportSource).toContain('workflow_name: "grade-submission"');
+    expect(batchCoordinatorSource).toContain('status: "running"');
+    expect(batchCoordinatorSource).toContain('status: "failed"');
+    expect(batchCoordinatorSource).toContain('workflowRunFailureCount > 0 ? "failed" : "succeeded"');
+    expect(batchSupportSource).toContain("grading_pass_count:");
+    expect(batchSupportSource).toContain('providerRetryCount');
   });
 
   it("stores only short safe grading error telemetry messages", () => {
-    const gradingSource = readRepoFile("supabase/functions/grade-submission/index.ts");
+    const batchCoordinatorSource = readRepoFile("supabase/functions/grade-submission/batch-coordinator.ts");
+    const batchSupportSource = readRepoFile("supabase/functions/grade-submission/batch-support.ts");
     const telemetrySource = readRepoFile("supabase/functions/grade-submission/error-telemetry.ts");
+    const pdfAdequacySource = readRepoFile("supabase/functions/grade-submission/pdf-adequacy.ts");
 
     expect(telemetrySource).toContain("function sanitizeSafeMessage");
     expect(telemetrySource).toContain("export function classifyGradingError");
@@ -420,15 +422,15 @@ describe("edge function hardening", () => {
     expect(telemetrySource).toContain("error_message: safeErrorMessage ?? toSafeGradingErrorMessage(reason)");
     expect(telemetrySource).toContain("safe_error_category: classification.safeErrorCategory");
     expect(telemetrySource).not.toContain("metadata");
-    expect(gradingSource).toContain("buildGradingErrorEventPayload");
+    expect(batchSupportSource).toContain("buildGradingErrorEventPayload");
     expect(telemetrySource).toContain("submission_id: submissionId");
     expect(telemetrySource).toContain("assignment_id: assignmentId");
-    expect(gradingSource).toContain("class ExtractionFailureError");
-    expect(gradingSource).toContain("function sanitizeTelemetryString");
-    expect(gradingSource).toContain('logWarn("grade-submission extraction rejected"');
-    expect(gradingSource).toContain("function isDocumentExtractionError(");
-    expect(gradingSource).toContain('provider: isDocumentExtractionError(gradeErr) ? "document_extraction" : "openai"');
-    expect(gradingSource).toContain("extraction_quality_suspicious_pdf_artifact_count");
-    expect(gradingSource).toContain('safeErrorCategory: isDocumentExtractionError(gradeErr) ? gradeErr.safeErrorCategory : undefined');
+    expect(pdfAdequacySource).toContain("class ExtractionFailureError");
+    expect(pdfAdequacySource).toContain("function sanitizeTelemetryString");
+    expect(batchSupportSource).toContain('logWarn("grade-submission extraction rejected"');
+    expect(pdfAdequacySource).toContain("function isDocumentExtractionError(");
+    expect(batchCoordinatorSource).toContain('provider: isDocumentExtractionError(gradeErr) ? "document_extraction" : "openai"');
+    expect(pdfAdequacySource).toContain("extraction_quality_suspicious_pdf_artifact_count");
+    expect(batchCoordinatorSource).toContain('safeErrorCategory: isDocumentExtractionError(gradeErr) ? gradeErr.safeErrorCategory : undefined');
   });
 });

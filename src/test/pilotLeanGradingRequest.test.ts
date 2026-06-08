@@ -44,14 +44,15 @@ describe("pilot lean grading request", () => {
   it("defaults to lean mode unless explicitly disabled", () => {
     expect(isPilotLeanGradingMode()).toBe(true);
 
-    globalThis.Deno = {
-      env: {
-        get: (name: string) => {
-          if (name === "OPENAI_PILOT_LEAN_GRADING_MODE") return "false";
-          return undefined;
+      globalThis.Deno = {
+        env: {
+          get: (name: string) => {
+            if (name === "OPENAI_PILOT_LEAN_GRADING_MODE") return "false";
+            if (name === "OPENAI_PILOT_SINGLE_PASS_MODE") return "false";
+            return undefined;
+          },
         },
-      },
-    } as typeof Deno;
+      } as typeof Deno;
 
     expect(isPilotLeanGradingMode()).toBe(false);
   });
@@ -303,7 +304,7 @@ describe("pilot lean grading request", () => {
     );
   });
 
-  it("keeps non-lean grading behavior unchanged when the model does not request review", async () => {
+  it("keeps non-lean grading behavior and still applies lecturer review heuristics when warranted", async () => {
     globalThis.Deno = {
       env: {
         get: (name: string) => {
@@ -371,7 +372,10 @@ describe("pilot lean grading request", () => {
       file_url: "submissions/systems-report.txt",
     };
     const extractedText =
-      "This systems design report provides analysis of trade-offs and evidence for the recommendations.";
+      "This distributed system design report evaluates the trade-offs in a distributed system design. " +
+      "It compares replication, partitioning, consistency, scalability, and failure trade-offs. " +
+      "The analysis is aligned to the rubric because it analyses the key trade-offs in detail and supports claims with relevant evidence and examples. " +
+      "The report also justifies the recommended architecture with clear evidence from the submission.";
 
     const result = await gradeSingleSubmission({
       sub: submission,
@@ -397,8 +401,8 @@ describe("pilot lean grading request", () => {
     });
 
     expect(requestStructuredGradeSpy).toHaveBeenCalledTimes(1);
-    expect(result.requiresLecturerReview).toBe(false);
-    expect(result.gradingMetadata.lecturer_review_required).toBe(false);
+    expect(result.requiresLecturerReview).toBe(true);
+    expect(result.gradingMetadata.lecturer_review_required).toBe(true);
     expect(result.gradingMetadata.pilot_lean_mode).toBe(false);
   });
 });
