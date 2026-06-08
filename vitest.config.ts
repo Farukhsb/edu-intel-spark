@@ -14,7 +14,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "html", "lcov"],
       reportsDirectory: "./coverage",
-      include: ["src/**/*.{ts,tsx}"],
+      include: ["src/**/*.{ts,tsx}", "supabase/functions/grade-submission/**/*.{ts,tsx}", "supabase/functions/_shared/**/*.{ts,tsx}"],
       exclude: [
         "src/**/*.d.ts",
         "src/**/*.test.{ts,tsx}",
