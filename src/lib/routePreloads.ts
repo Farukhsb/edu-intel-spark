@@ -80,6 +80,10 @@ const routeDefinitions = {
     loader: () => import("@/pages/dashboard/AcademicIntegrity"),
     paths: ["/dashboard/integrity"],
   },
+  cohortSignal: {
+    loader: () => import("@/pages/dashboard/CohortSignal"),
+    paths: ["/dashboard/cohortsignal"],
+  },
   demoAcademicIntegrity: {
     loader: () => import("@/pages/dashboard/DemoAcademicIntegrity"),
     paths: ["/demo/dashboard/integrity"],
@@ -95,6 +99,10 @@ const routeDefinitions = {
   demoExternalExaminerExport: {
     loader: () => import("@/pages/dashboard/DemoExternalExaminerExport"),
     paths: ["/demo/dashboard/external-examiner"],
+  },
+  cohortSignalDemo: {
+    loader: () => import("@/pages/CohortSignalDemo"),
+    paths: ["/cohortsignal-demo", "/demo/dashboard/cohortsignal-demo"],
   },
   demoInstitutionalInsights: {
     loader: () => import("@/pages/dashboard/DemoInstitutionalInsights"),
@@ -212,12 +220,14 @@ export const preloadCommonRoleRoutes = (role: AppRole | null | undefined) => {
     preloadRoute("/dashboard/assignments");
     preloadRoute("/dashboard/moderation");
     preloadRoute("/dashboard/cohort-dashboard");
+    preloadRoute("/dashboard/cohortsignal");
     return;
   }
 
   if (role === "admin") {
     preloadRoute("/dashboard/institutional");
     preloadRoute("/dashboard/risk-intelligence");
+    preloadRoute("/dashboard/cohortsignal");
     preloadRoute("/dashboard/accreditation");
     preloadRoute("/dashboard/external-examiner");
     return;
@@ -233,6 +243,7 @@ export const preloadDemoRoleRoutes = (role: AppRole | null | undefined) => {
     void routeLoaders.demoLecturerOverview();
     void routeLoaders.demoPerformanceTrends();
     void routeLoaders.demoCohortAnalytics();
+    void routeLoaders.cohortSignalDemo();
     void routeLoaders.demoLearningOutcomes();
     void routeLoaders.demoModerationDashboard();
     void routeLoaders.demoAcademicIntegrity();

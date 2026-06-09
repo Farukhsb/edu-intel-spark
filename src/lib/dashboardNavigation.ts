@@ -14,6 +14,7 @@ import {
   Upload,
   Users,
   ClipboardList,
+  ShieldAlert,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -56,6 +57,7 @@ export const lecturerSections = [
     links: [
       { to: "/dashboard/cohort-dashboard", label: "Cohort Dashboard", icon: BarChart3 },
       { to: "/dashboard/performance", label: "Performance Trends", icon: TrendingUp },
+      { to: "/dashboard/cohortsignal", label: "CohortSignal Heatmap", icon: ShieldAlert },
       { to: "/dashboard/learning-outcomes", label: "Criterion Analysis", icon: Target },
     ],
   },
@@ -88,6 +90,7 @@ export const adminSections = [
     links: [
       { to: "/dashboard/institutional", label: "Institutional Insights", icon: University },
       { to: "/dashboard/risk-intelligence", label: "Risk Intelligence", icon: Target },
+      { to: "/dashboard/cohortsignal", label: "CohortSignal Oversight", icon: ShieldAlert },
       { to: "/dashboard/accreditation", label: "Accreditation", icon: Award },
       { to: "/dashboard/external-examiner", label: "External Examiner", icon: FileOutput },
     ],

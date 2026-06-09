@@ -40,6 +40,8 @@ const DemoAcademicIntegrity = lazy(routeLoaders.demoAcademicIntegrity);
 const DemoAccreditationDashboard = lazy(routeLoaders.demoAccreditationDashboard);
 const DemoModerationDashboard = lazy(routeLoaders.demoModerationDashboard);
 const DemoExternalExaminerExport = lazy(routeLoaders.demoExternalExaminerExport);
+const CohortSignalDemo = lazy(routeLoaders.cohortSignalDemo);
+const CohortSignal = lazy(routeLoaders.cohortSignal);
 const ModerationDashboard = lazy(routeLoaders.moderationDashboard);
 const AdminDashboard = lazy(routeLoaders.adminDashboard);
 const InstitutionalInsights = lazy(routeLoaders.institutionalInsights);
@@ -248,6 +250,34 @@ const App = () => (
                   <Suspense fallback={<PageSkeleton />}>
                     <Demo />
                   </Suspense>
+                }
+              />
+              <Route
+                path="/cohortsignal-demo"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <CohortSignalDemo />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/dashboard/cohortsignal"
+                element={
+                  <DashboardRoute>
+                    <CohortSignal />
+                  </DashboardRoute>
+                }
+              />
+              <Route
+                path="/dashboard/cohortsignal-demo"
+                element={<Navigate to="/dashboard/cohortsignal" replace />}
+              />
+              <Route
+                path="/demo/dashboard/cohortsignal-demo"
+                element={
+                  <DemoDashboardRoute allowedRole="lecturer">
+                    <CohortSignalDemo />
+                  </DemoDashboardRoute>
                 }
               />
               <Route

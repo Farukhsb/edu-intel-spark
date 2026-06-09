@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowRight, Brain, GraduationCap, Sparkles, Users, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, Brain, GraduationCap, Sparkles, Users, Zap } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,10 @@ const Demo = () => {
   const openDemo = (role: "lecturer" | "student") => {
     enterDemo(role);
     navigate("/demo/dashboard");
+  };
+
+  const openCohortSignalDemo = () => {
+    navigate("/cohortsignal-demo");
   };
 
   return (
@@ -60,7 +64,7 @@ const Demo = () => {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 pb-20">
-        <div className="mx-auto grid max-w-3xl gap-6 sm:grid-cols-2">
+        <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-3">
           <Card className="group cursor-pointer transition-all hover:border-primary/40 hover:shadow-lg" onClick={() => openDemo("lecturer")}>
             <CardContent className="space-y-4 p-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 transition-colors group-hover:bg-primary/20">
@@ -72,6 +76,23 @@ const Demo = () => {
               </p>
               <Button className="w-full">
                 Open staff demo <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="group cursor-pointer transition-all hover:border-emerald-400/50 hover:shadow-lg" onClick={openCohortSignalDemo}>
+            <CardContent className="space-y-4 p-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 transition-colors group-hover:bg-emerald-500/20">
+                <BarChart3 className="h-7 w-7 text-emerald-700" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="font-display text-lg font-semibold">CohortSignal Heatmap</h2>
+                <p className="text-sm text-muted-foreground">
+                  Lecturer early-warning view for risk bands, filters, and intervention logging.
+                </p>
+              </div>
+              <Button variant="outline" className="w-full">
+                Open heatmap demo <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
           </Card>

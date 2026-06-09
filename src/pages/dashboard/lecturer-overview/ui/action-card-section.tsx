@@ -1,9 +1,10 @@
-import { AlertTriangle, ArrowRight, Clock3 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, ShieldAlert } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
 import type { LecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
 
 import type { LecturerOverviewQueueFocus, LecturerOverviewStats, LecturerOverviewWorkflowTarget } from "../types";
@@ -31,6 +32,7 @@ export const LecturerOverviewActionCardSection = ({
   primaryWorkflowTarget: LecturerOverviewWorkflowTarget | null;
   queueFocus: LecturerOverviewQueueFocus;
 }) => {
+  const { isDemo } = useAuth();
   const navigate = useNavigate();
   const actionHref =
     stats.pendingCount > 0
@@ -41,9 +43,10 @@ export const LecturerOverviewActionCardSection = ({
   const actionLabel =
     stats.pendingCount > 0
       ? (primaryWorkflowTarget?.label ?? "Open review queue")
-      : stats.atRisk > 0
-        ? "Open risk insights"
-        : "Open assignments";
+    : stats.atRisk > 0
+      ? "Open risk insights"
+      : "Open assignments";
+  const heatmapHref = isDemo ? "/demo/dashboard/cohortsignal-demo" : "/dashboard/cohortsignal";
 
   return (
     <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-background shadow-sm">
@@ -77,6 +80,10 @@ export const LecturerOverviewActionCardSection = ({
             <Button size="sm" className="shadow-sm" onClick={() => navigate(actionHref)}>
               {actionLabel}
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+            <Button size="sm" variant="outline" className="shadow-sm" onClick={() => navigate(heatmapHref)}>
+              <ShieldAlert className="mr-1.5 h-3.5 w-3.5" />
+              Open CohortSignal
             </Button>
           </div>
         </div>

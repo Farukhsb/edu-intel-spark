@@ -38,6 +38,7 @@ describe("Demo", () => {
 
     expect(screen.getByText("Choose a demo workspace")).toBeInTheDocument();
     expect(screen.getByText("Staff Demo")).toBeInTheDocument();
+    expect(screen.getByText("CohortSignal Heatmap")).toBeInTheDocument();
     expect(screen.getByText("Synthetic Test View")).toBeInTheDocument();
   });
 

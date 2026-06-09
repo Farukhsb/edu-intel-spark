@@ -69,6 +69,8 @@ describe("DashboardLayout demo mode", () => {
     expect(screen.getByText("Demo child")).toBeInTheDocument();
     expect(screen.getAllByText("Teaching").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Student Support").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Student Support/i }));
+    expect(screen.getByText("CohortSignal Heatmap")).toBeInTheDocument();
     expect(screen.getByText("Overview sits in daily teaching workflow.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Bulk Upload Students" })).not.toBeInTheDocument();
     expect(mocks.communications.loadVisibleCommunicationMessages).not.toHaveBeenCalled();
@@ -242,6 +244,31 @@ describe("DashboardLayout demo mode", () => {
     expect(screen.queryByText("Accreditation")).not.toBeInTheDocument();
     expect(screen.queryByText("External Examiner")).not.toBeInTheDocument();
     expect(screen.queryByText("Institution")).not.toBeInTheDocument();
+  });
+
+  it("shows the CohortSignal heatmap shortcut in demo lecturer mode", async () => {
+    mocks.authState.profile = {
+      id: "demo-lecturer",
+      full_name: "Dr. Demo Lecturer",
+      email: "demo@gradeai.com",
+      role: "lecturer",
+    };
+    mocks.authState.user = {
+      id: "demo-lecturer",
+      email: "demo@gradeai.com",
+    };
+
+    const { default: DemoLecturerOverview } = await import("@/pages/dashboard/DemoLecturerOverview");
+
+    render(
+      <MemoryRouter initialEntries={["/demo/dashboard"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DemoLecturerOverview />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/Welcome back, Dr\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Open CohortSignal/i }));
+    expect(mocks.navigate).toHaveBeenCalledWith("/demo/dashboard/cohortsignal-demo");
   });
 
   it("routes an older support notice into the newer released-result workflow in demo student mode", async () => {

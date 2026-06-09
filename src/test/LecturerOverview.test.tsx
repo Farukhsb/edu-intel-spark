@@ -45,6 +45,7 @@ vi.mock("lucide-react", () => {
     Download: Icon,
     FileSpreadsheet: Icon,
     FileText: Icon,
+    ShieldAlert: Icon,
     Image: Icon,
     Loader2: () => <svg data-testid="loading-spinner" />,
     Sparkles: Icon,
@@ -280,6 +281,7 @@ describe("LecturerOverview", () => {
     expect(screen.getByTestId("pipeline-stage-under-review")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-stage-released")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Open assignments/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Open CohortSignal/i })).toBeInTheDocument();
   });
 
   it("opens a focused assignment workflow from recent submissions and the action card", async () => {
@@ -476,5 +478,31 @@ describe("LecturerOverview", () => {
     expect(mocks.navigate).toHaveBeenCalledWith(
       "/dashboard/assignments/assignment-2?source=notification&focus=submission-review&from=overview",
     );
+  });
+
+  it("opens the CohortSignal heatmap from the lecturer overview", async () => {
+    setupSupabase({
+      assignments: [{ id: "assignment-1", title: "Algorithms", max_score: 100 }],
+      submissions: [
+        {
+          id: "submission-1",
+          assignment_id: "assignment-1",
+          student_id: "student-1",
+          student_name: "Sam Student",
+          student_email: "sam@example.com",
+          file_name: "essay.pdf",
+          status: "released",
+          submitted_at: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+      grades: [{ submission_id: "submission-1", ai_score: 72, final_score: 74 }],
+    });
+
+    renderLecturerOverview();
+
+    const heatmapButton = await screen.findByRole("button", { name: /Open CohortSignal/i });
+    fireEvent.click(heatmapButton);
+
+    expect(mocks.navigate).toHaveBeenCalledWith("/dashboard/cohortsignal");
   });
 });
