@@ -30,11 +30,14 @@ describe("ImprovementPlan demo validation", () => {
       configurable: true,
       value: vi.fn(),
     });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("renders the demo focus cards without a refresh action", () => {

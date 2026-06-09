@@ -725,6 +725,9 @@ describe("check-plagiarism handler", () => {
   beforeEach(() => {
     resetRateLimitStore();
     process.env.INTEGRITY_PROVIDER_MODE = "internal_text_similarity";
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   it("returns internal similarity flags for a requested submission without calling OpenAI", async () => {

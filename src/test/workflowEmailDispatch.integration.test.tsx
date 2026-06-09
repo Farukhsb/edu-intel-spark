@@ -90,6 +90,9 @@ vi.mock("sonner", () => ({
 describe("workflow email dispatch wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
     mocks.authState.isDemo = false;
     mocks.authState.role = "lecturer";
@@ -137,6 +140,7 @@ describe("workflow email dispatch wiring", () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it("keeps assignment publish on in-app bell notifications only", async () => {

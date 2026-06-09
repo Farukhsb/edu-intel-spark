@@ -45,10 +45,16 @@ const renderAccreditationDashboard = async ({
 };
 
 describe("AccreditationDashboard integration", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
   afterEach(() => {
     cleanup();
     vi.resetModules();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     vi.unmock("@/contexts/AuthContext");
     vi.unmock("@/integrations/supabase/client");
     vi.unmock("react-router-dom");

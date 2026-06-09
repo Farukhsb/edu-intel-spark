@@ -24,6 +24,16 @@ import type {
 } from "../../supabase/functions/grade-submission/types";
 
 describe("grade-submission submission stage", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("reuses the saved cached grade when the grading hash matches", async () => {
     const assignment: AssignmentForGrading = {
       id: "assignment-1",

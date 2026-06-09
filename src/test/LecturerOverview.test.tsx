@@ -144,9 +144,15 @@ const renderLecturerOverview = () =>
   );
 
 describe("LecturerOverview", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     mocks.authState.isDemo = false;
     mocks.authState.user = { id: "lecturer-1" };
     mocks.authState.profile = { full_name: "Dr Ada Lovelace" };

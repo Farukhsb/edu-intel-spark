@@ -20,10 +20,16 @@ const mocks = vi.hoisted(() => ({
 }));
 
 describe("demo bootstrap isolation", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
   afterEach(() => {
     cleanup();
     vi.resetModules();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     vi.doUnmock("@/lib/env");
     vi.doUnmock("@/contexts/AuthContext");
   });

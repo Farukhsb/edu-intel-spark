@@ -30,6 +30,7 @@ afterEach(() => {
     process.env[key] = value;
   }
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function toBase64Url(input: string | Uint8Array) {
@@ -78,6 +79,12 @@ async function createSignedLtiToken(payload: Record<string, unknown>) {
 }
 
 describe("LTI 1.3 launch", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
   it("encodes and decodes the app launch state", () => {
     const encoded = encodeLtiLaunchState({
       provider: "canvas",

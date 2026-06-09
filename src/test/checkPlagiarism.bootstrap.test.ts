@@ -24,6 +24,16 @@ vi.mock("../../supabase/functions/_shared/document-extraction", () => ({
 import { registerCheckPlagiarismEntrypoint } from "../../supabase/functions/check-plagiarism/bootstrap";
 
 describe("check-plagiarism bootstrap", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("registers the handler with serve using the shared auth and CORS dependencies", async () => {
     process.env.INTEGRITY_PROVIDER_MODE = "internal_text_similarity";
     const serve = vi.fn((handler: (req: Request) => Promise<Response> | Response) => handler);

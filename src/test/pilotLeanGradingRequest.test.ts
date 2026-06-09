@@ -25,6 +25,9 @@ describe("pilot lean grading request", () => {
   const originalDeno = globalThis.Deno;
 
   beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
     globalThis.Deno = {
       env: {
         get: (name: string) => {

@@ -29,6 +29,9 @@ const originalDeno = globalThis.Deno;
 describe("grade-submission consensus grading", () => {
   beforeEach(() => {
     requestStructuredGradeMock.mockReset();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
     globalThis.Deno = {
       env: {
         get: (name: string) => {
