@@ -113,7 +113,7 @@ const parseStudentCsv = (csv: string, moduleName: string, sourceModuleCode: "mat
 
   return lines.slice(1).map((line) => {
     const values = line.split(";").map(stripQuotes);
-    const row = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])) as Record<string, string>;
+    const row = Object.fromEntries(headers.map((header, index) => [header, values[index]!])) as Record<string, string>;
 
     return {
       school: row.school,
@@ -155,7 +155,7 @@ const standardDeviation = (values: number[], average: number) => {
 const softmax = (values: number[]) => {
   const maxValue = Math.max(...values);
   const exponentials = values.map((value) => Math.exp(value - maxValue));
-  const denominator = exponentials.reduce((sum, value) => sum + value, 0) || 1;
+  const denominator = exponentials.reduce((sum, value) => sum + value, 0);
   return exponentials.map((value) => value / denominator);
 };
 
@@ -168,10 +168,10 @@ const toBand = (grade: number): CohortBand => {
 const extractFeatures = (row: RawStudentRow): number[] => FEATURE_NAMES.map((name) => row[name]);
 
 const standardize = (values: number[], means: number[], stdDevs: number[]) =>
-  values.map((value, index) => (value - (means[index] ?? 0)) / (stdDevs[index] ?? 1));
+  values.map((value, index) => (value - means[index]!) / stdDevs[index]!);
 
 const distanceToCentroid = (features: number[], centroid: number[]) =>
-  features.reduce((sum, value, index) => sum + (value - (centroid[index] ?? 0)) ** 2, 0);
+  features.reduce((sum, value, index) => sum + (value - centroid[index]!) ** 2, 0);
 
 const labelBand = (row: RawStudentRow): CohortBand => toBand(row.G3);
 
@@ -181,7 +181,7 @@ const hashString = (value: string) => {
   let hash = 2166136261;
 
   for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index) ?? 0;
+    hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
 
@@ -266,29 +266,29 @@ const buildStratifiedFolds = <T extends RawStudentRow, L extends string>(
 const trainModel = (rows: RawStudentRow[]): TrainedModel => {
   const classNames: CohortBand[] = ["low", "medium", "high"];
   const featureMatrix = rows.map(extractFeatures);
-  const featureMeans = FEATURE_NAMES.map((_, index) => mean(featureMatrix.map((sample) => sample[index] ?? 0)));
+  const featureMeans = FEATURE_NAMES.map((_, index) => mean(featureMatrix.map((sample) => sample[index]!)));
   const featureStdDevs = FEATURE_NAMES.map((_, index) =>
-    standardDeviation(featureMatrix.map((sample) => sample[index] ?? 0), featureMeans[index] ?? 0),
+    standardDeviation(featureMatrix.map((sample) => sample[index]!), featureMeans[index]!),
   );
   const normalizedRows = rows.map((row) => standardize(extractFeatures(row), featureMeans, featureStdDevs));
   const rowsByBand = new Map<CohortBand, number[][]>(classNames.map((band) => [band, []]));
 
   rows.forEach((row, index) => {
-    rowsByBand.get(toBand(row.G3))?.push(normalizedRows[index] ?? []);
+    rowsByBand.get(toBand(row.G3))!.push(normalizedRows[index]!);
   });
 
   const centroids = classNames.map((band) => {
-    const group = rowsByBand.get(band) ?? [];
+    const group = rowsByBand.get(band)!;
     if (group.length === 0) return FEATURE_NAMES.map(() => 0);
-    return FEATURE_NAMES.map((_, featureIndex) => mean(group.map((sample) => sample[featureIndex] ?? 0)));
+    return FEATURE_NAMES.map((_, featureIndex) => mean(group.map((sample) => sample[featureIndex]!)));
   });
 
   let correct = 0;
   rows.forEach((row, index) => {
-    const normalized = normalizedRows[index] ?? [];
+    const normalized = normalizedRows[index]!;
     const logits = centroids.map((centroid) => -distanceToCentroid(normalized, centroid) / 8);
     const probabilities = softmax(logits);
-    const predictedBand = classNames[probabilities.indexOf(Math.max(...probabilities))] ?? "low";
+    const predictedBand = classNames[probabilities.indexOf(Math.max(...probabilities))]!;
     if (predictedBand === toBand(row.G3)) {
       correct += 1;
     }
@@ -309,18 +309,18 @@ const scoreRow = (row: RawStudentRow, model: TrainedModel) => {
   const logits = model.centroids.map((centroid) => -distanceToCentroid(normalized, centroid) / model.temperature);
   const probabilities = softmax(logits);
   const ranked = model.classNames
-    .map((band, index) => ({ band, probability: probabilities[index] ?? 0 }))
+    .map((band, index) => ({ band, probability: probabilities[index]! }))
     .sort((left, right) => right.probability - left.probability);
-  const predictedBand = ranked[0]?.band ?? "low";
-  const confidence = ranked[0]?.probability ?? 0;
+  const predictedBand = ranked[0]!.band;
+  const confidence = ranked[0]!.probability;
 
   return {
     predictedBand,
     confidence,
     probabilityByBand: {
-      low: probabilities[0] ?? 0,
-      medium: probabilities[1] ?? 0,
-      high: probabilities[2] ?? 0,
+      low: probabilities[0]!,
+      medium: probabilities[1]!,
+      high: probabilities[2]!,
     },
   };
 };
@@ -371,30 +371,30 @@ const deriveSuggestedAction = (band: CohortBand, row: RawStudentRow) => {
 const trainFailureModel = (rows: RawStudentRow[]): FailureModel => {
   const classNames: Array<"pass" | "fail"> = ["pass", "fail"];
   const featureMatrix = rows.map(extractFeatures);
-  const featureMeans = FEATURE_NAMES.map((_, index) => mean(featureMatrix.map((sample) => sample[index] ?? 0)));
+  const featureMeans = FEATURE_NAMES.map((_, index) => mean(featureMatrix.map((sample) => sample[index]!)));
   const featureStdDevs = FEATURE_NAMES.map((_, index) =>
-    standardDeviation(featureMatrix.map((sample) => sample[index] ?? 0), featureMeans[index] ?? 0),
+    standardDeviation(featureMatrix.map((sample) => sample[index]!), featureMeans[index]!),
   );
   const normalizedRows = rows.map((row) => standardize(extractFeatures(row), featureMeans, featureStdDevs));
   const rowsByClass = new Map<"pass" | "fail", number[][]>(classNames.map((band) => [band, []]));
 
   rows.forEach((row, index) => {
     const label: "pass" | "fail" = row.G3 < 10 ? "fail" : "pass";
-    rowsByClass.get(label)?.push(normalizedRows[index] ?? []);
+    rowsByClass.get(label)!.push(normalizedRows[index]!);
   });
 
   const centroids = classNames.map((band) => {
-    const group = rowsByClass.get(band) ?? [];
+    const group = rowsByClass.get(band)!;
     if (group.length === 0) return FEATURE_NAMES.map(() => 0);
-    return FEATURE_NAMES.map((_, featureIndex) => mean(group.map((sample) => sample[featureIndex] ?? 0)));
+    return FEATURE_NAMES.map((_, featureIndex) => mean(group.map((sample) => sample[featureIndex] as number)));
   });
 
   let correct = 0;
   rows.forEach((row, index) => {
-    const normalized = normalizedRows[index] ?? [];
+    const normalized = normalizedRows[index] as number[];
     const logits = centroids.map((centroid) => -distanceToCentroid(normalized, centroid) / 8);
     const probabilities = softmax(logits);
-    const predictedClass = classNames[probabilities.indexOf(Math.max(...probabilities))] ?? "pass";
+    const predictedClass = classNames[probabilities.indexOf(Math.max(...probabilities))] as "pass" | "fail";
     if (predictedClass === (row.G3 < 10 ? "fail" : "pass")) {
       correct += 1;
     }
@@ -414,10 +414,10 @@ const scoreFailure = (row: RawStudentRow, model: FailureModel) => {
   const normalized = standardize(extractFeatures(row), model.featureMeans, model.featureStdDevs);
   const logits = model.centroids.map((centroid) => -distanceToCentroid(normalized, centroid) / model.temperature);
   const probabilities = softmax(logits);
-  const failProbability = probabilities[1] ?? 0;
+  const failProbability = resolveCohortSignalFailureProbability(probabilities);
 
   return {
-    predictedToFail: failProbability >= (probabilities[0] ?? 0),
+    predictedToFail: shouldPredictCohortSignalFailure(probabilities),
     failProbability: Math.round(failProbability * 100),
   };
 };
@@ -427,7 +427,7 @@ const evaluateBandModel = (rows: RawStudentRow[], folds = 5): BandModelReport =>
   const holdoutModel = trainModel(split.train);
   const holdoutScores = split.test.map((row) => scoreRow(row, holdoutModel));
   const holdoutCorrect = split.test.reduce((correct, row, index) => {
-    const predictedBand = holdoutScores[index]?.predictedBand ?? "low";
+    const predictedBand = resolveCohortSignalPredictedBand(holdoutScores[index]?.predictedBand);
     return correct + (predictedBand === labelBand(row) ? 1 : 0);
   }, 0);
 
@@ -474,10 +474,7 @@ const evaluateFailureModel = (rows: RawStudentRow[], folds = 5): FailureModelRep
   const holdoutTotal = split.test.length || 1;
   const holdoutAccuracy =
     (holdoutConfusion.truePositives + holdoutConfusion.trueNegatives) / holdoutTotal;
-  const holdoutPrecision =
-    holdoutConfusion.truePositives + holdoutConfusion.falsePositives > 0
-      ? holdoutConfusion.truePositives / (holdoutConfusion.truePositives + holdoutConfusion.falsePositives)
-      : 0;
+  const holdoutPrecision = getPrecisionFromConfusionMatrix(holdoutConfusion);
   const holdoutRecall =
     holdoutConfusion.truePositives + holdoutConfusion.falseNegatives > 0
       ? holdoutConfusion.truePositives / (holdoutConfusion.truePositives + holdoutConfusion.falseNegatives)
@@ -508,6 +505,44 @@ const evaluateFailureModel = (rows: RawStudentRow[], folds = 5): FailureModelRep
   };
 };
 
+export const getPrecisionFromConfusionMatrix = (matrix: ConfusionMatrix) =>
+  matrix.truePositives + matrix.falsePositives > 0
+    ? matrix.truePositives / (matrix.truePositives + matrix.falsePositives)
+    : 0;
+
+export const resolveCohortSignalFailureProbability = (probabilities: number[]) => probabilities[1] ?? 0;
+
+export const shouldPredictCohortSignalFailure = (probabilities: number[]) =>
+  resolveCohortSignalFailureProbability(probabilities) >= (probabilities[0] ?? 0);
+
+export const resolveCohortSignalPredictedBand = (predictedBand: CohortBand | undefined) => predictedBand ?? "low";
+
+export const __cohortSignalDemoTestHooks = {
+  evaluateFailureModel,
+  evaluateBandModel,
+  getPrecisionFromConfusionMatrix,
+  resolveCohortSignalFailureProbability,
+  shouldPredictCohortSignalFailure,
+  resolveCohortSignalPredictedBand,
+};
+
+export const resolveCohortSignalBandDisplayName = (band: CohortBand, index: number) =>
+  NAMES_BY_BAND[band][index] ?? `Student ${index + 1}`;
+
+export const resolveCohortSignalDemoStudentName = (selectedName: string | undefined, index: number) =>
+  selectedName ?? `Student ${index + 1}`;
+
+export const resolveCohortSignalDemoStudentInitials = (displayName: string) =>
+  displayName
+    .split(" ")
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+export const shouldFlagCohortSignalMissingSubmission = (row: RawStudentRow) =>
+  row.absences >= 12 || row.failures >= 2 || (row.G2 <= 5 && row.G1 <= 8);
+
 const createInterventionTimestamp = (daysAgo = 0) => {
   const timestamp = new Date(REFERENCE_NOW);
   timestamp.setUTCDate(timestamp.getUTCDate() - daysAgo);
@@ -520,7 +555,7 @@ const buildNames = (bands: CohortBand[]) => {
   return bands.map((band) => {
     const index = counters[band];
     counters[band] += 1;
-    return NAMES_BY_BAND[band][index] ?? `Student ${index + 1}`;
+    return resolveCohortSignalBandDisplayName(band, index);
   });
 };
 
@@ -566,13 +601,8 @@ const buildDemoStudents = () => {
 
   const students: CohortSignalStudent[] = selectedRows.map((row, index) => ({
     id: `${row.sourceModuleCode}-${index + 1}-${row.G1}-${row.G2}`,
-    name: selectedNames[index] ?? `Student ${index + 1}`,
-    initials: (selectedNames[index] ?? `Student ${index + 1}`)
-      .split(" ")
-      .map((part) => part[0] ?? "")
-      .join("")
-      .slice(0, 2)
-      .toUpperCase(),
+    name: resolveCohortSignalDemoStudentName(selectedNames[index], index),
+    initials: resolveCohortSignalDemoStudentInitials(resolveCohortSignalDemoStudentName(selectedNames[index], index)),
     module: row.module,
     latestMark: row.G2,
     averageMark: Math.round((row.G1 + row.G2) / 2),
@@ -584,7 +614,7 @@ const buildDemoStudents = () => {
     confidence: row.confidence,
     suggestedAction: row.suggestedAction,
     interventionLoggedAt: index < 4 ? createInterventionTimestamp(index + 1) : null,
-    missingSubmission: row.absences >= 12 || row.failures >= 2 || (row.G2 <= 5 && row.G1 <= 8),
+    missingSubmission: shouldFlagCohortSignalMissingSubmission(row),
   }));
 
   students.push({

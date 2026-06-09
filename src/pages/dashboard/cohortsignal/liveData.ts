@@ -76,8 +76,8 @@ const LIVE_REFERENCE_NOW = new Date().toISOString();
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 const mean = (values: number[]) => {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return total / Math.max(values.length, 1);
 };
 
 const standardDeviation = (values: number[], average: number) => {
@@ -89,7 +89,7 @@ const standardDeviation = (values: number[], average: number) => {
 const softmax = (values: number[]) => {
   const maxValue = Math.max(...values);
   const exponentials = values.map((value) => Math.exp(value - maxValue));
-  const denominator = exponentials.reduce((sum, value) => sum + value, 0) || 1;
+  const denominator = exponentials.reduce((sum, value) => sum + value, 0);
   return exponentials.map((value) => value / denominator);
 };
 
@@ -97,7 +97,7 @@ const hashString = (value: string) => {
   let hash = 2166136261;
 
   for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index) ?? 0;
+    hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
 
@@ -168,19 +168,19 @@ const buildStratifiedFolds = <L extends string>(
 };
 
 const standardizeFeatures = (features: number[], means: number[], stdDevs: number[]) =>
-  features.map((value, index) => (value - (means[index] ?? 0)) / (stdDevs[index] ?? 1));
+  features.map((value, index) => (value - means[index]!) / stdDevs[index]!);
 
 const trainCentroidModel = <L extends string>(
   rows: LabeledObservation<L>[],
   classNames: L[],
 ): CentroidModel<L> => {
   const means = Array.from({ length: FEATURE_COUNT }, (_, featureIndex) =>
-    mean(rows.map((row) => row.features[featureIndex] ?? 0)),
+    mean(rows.map((row) => row.features[featureIndex]!)),
   );
   const stdDevs = Array.from({ length: FEATURE_COUNT }, (_, featureIndex) =>
     standardDeviation(
-      rows.map((row) => row.features[featureIndex] ?? 0),
-      means[featureIndex] ?? 0,
+      rows.map((row) => row.features[featureIndex]!),
+      means[featureIndex]!,
     ),
   );
   const centroids = classNames.map((className) => {
@@ -191,9 +191,7 @@ const trainCentroidModel = <L extends string>(
 
     return Array.from({ length: FEATURE_COUNT }, (_, featureIndex) =>
       mean(
-        classRows.map(
-          (row) => standardizeFeatures(row.features, means, stdDevs)[featureIndex] ?? 0,
-        ),
+        classRows.map((row) => standardizeFeatures(row.features, means, stdDevs)[featureIndex]!),
       ),
     );
   });
@@ -210,7 +208,7 @@ const trainCentroidModel = <L extends string>(
 const predictCentroidModel = <L extends string>(model: CentroidModel<L>, features: number[]) => {
   const standardized = standardizeFeatures(features, model.means, model.stdDevs);
   const scores = model.centroids.map((centroid) =>
-    -standardized.reduce((sum, value, index) => sum + (value - (centroid[index] ?? 0)) ** 2, 0) / model.temperature,
+    -standardized.reduce((sum, value, index) => sum + (value - centroid[index]!) ** 2, 0) / model.temperature,
   );
   const probabilities = softmax(scores);
   let bestIndex = 0;
@@ -221,8 +219,8 @@ const predictCentroidModel = <L extends string>(model: CentroidModel<L>, feature
   });
 
   return {
-    label: model.classNames[bestIndex],
-    probability: probabilities[bestIndex] ?? 0,
+    label: model.classNames[bestIndex]!,
+    probability: probabilities[bestIndex]!,
     probabilities,
   };
 };
@@ -250,13 +248,13 @@ const evaluateModel = <L extends string>(
   }
 
   const { train, test } = stratifiedSplit(rows, 0.2, (row) => row.label);
-  const holdoutModel = trainCentroidModel(train.length > 0 ? train : rows, classNames);
+  const holdoutModel = trainCentroidModel(train, classNames);
   const holdoutPredictions = (test.length > 0 ? test : rows).map((row) => ({
     actual: row.label,
     predicted: predictCentroidModel(holdoutModel, row.features).label,
   }));
   const holdoutCorrect = holdoutPredictions.filter((item) => item.actual === item.predicted).length;
-  const holdoutAccuracy = holdoutPredictions.length > 0 ? holdoutCorrect / holdoutPredictions.length : 0;
+  const holdoutAccuracy = holdoutCorrect / holdoutPredictions.length;
 
   const uniqueLabelCounts = classNames.reduce<Record<string, number>>((accumulator, label) => {
     accumulator[label] = rows.filter((row) => row.label === label).length;
@@ -270,13 +268,13 @@ const evaluateModel = <L extends string>(
     const folds = buildStratifiedFolds(rows, foldCount, (row) => row.label);
     folds.forEach((fold) => {
       const trainingRows = rows.filter((row) => !fold.includes(row));
-      const model = trainCentroidModel(trainingRows.length > 0 ? trainingRows : rows, classNames);
+      const model = trainCentroidModel(trainingRows, classNames);
       const correct = fold.filter((row) => predictCentroidModel(model, row.features).label === row.label).length;
-      foldAccuracies.push(fold.length > 0 ? correct / fold.length : 0);
+      foldAccuracies.push(correct / fold.length);
     });
   }
 
-  const positive = positiveLabel ?? classNames[classNames.length - 1] ?? classNames[0];
+  const positive = positiveLabel ?? classNames[classNames.length - 1]!;
   const confusionMatrix = {
     truePositives: 0,
     falsePositives: 0,
@@ -313,13 +311,17 @@ const evaluateModel = <L extends string>(
   };
 };
 
-const getTrend = (slope: number) => {
+export const __cohortSignalTestHooks = {
+  evaluateModel,
+};
+
+export const getTrend = (slope: number) => {
   if (slope > 1) return "improving";
   if (slope < -1) return "declining";
   return "steady";
 };
 
-const getSlope = (values: number[]) => {
+export const getSlope = (values: number[]) => {
   const n = values.length;
   if (n < 2) return 0;
 
@@ -329,14 +331,15 @@ const getSlope = (values: number[]) => {
   let sumXX = 0;
 
   for (let i = 0; i < n; i += 1) {
+    const value = values[i] as number;
     sumX += i;
-    sumY += values[i] ?? 0;
-    sumXY += i * (values[i] ?? 0);
+    sumY += value;
+    sumXY += i * value;
     sumXX += i * i;
   }
 
   const denominator = n * sumXX - sumX * sumX;
-  return denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
+  return (n * sumXY - sumX * sumY) / denominator;
 };
 
 const riskReasonLabelByCode: Record<string, string> = {
@@ -351,6 +354,62 @@ const riskReasonLabelByCode: Record<string, string> = {
   stale_data: "Latest evidence is stale",
   baseline_monitoring: "Baseline monitoring",
 };
+
+export const getCohortSignalStudentInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase())
+    .join("")
+    .slice(0, 2);
+
+export const getCohortSignalStudentSortPriority = (student: Pick<CohortSignalStudent, "predictedToFail" | "riskBand" | "failProbability">) => {
+  return student.predictedToFail ? 0 : student.riskBand === "high" ? 1 : student.riskBand === "medium" ? 2 : 3;
+};
+
+export const resolveCohortSignalRiskReasonLabel = (reason: string) => riskReasonLabelByCode[reason] ?? reason;
+
+export const resolveCohortSignalLatestMark = (scores: number[], averageMark: number) => scores[scores.length - 1] ?? averageMark;
+
+export const resolveCohortSignalInterventionLoggedAt = (intervention?: { created_at?: string | null; updated_at?: string | null } | null) =>
+  intervention?.created_at ?? intervention?.updated_at ?? null;
+
+export const resolveCohortSignalRiskReasons = (reasonCodes: string[] | undefined) => reasonCodes ?? ["baseline_monitoring"];
+
+export const resolveCohortSignalSuggestedAction = (recommendation: string | undefined, interventionLoggedAt: string | null) =>
+  `${recommendation ?? "Schedule a check-in to review study strategies and agree short-term goals."}${
+    interventionLoggedAt ? " Follow up on the logged intervention and confirm the next step." : ""
+  }`;
+
+export const resolveCohortSignalLatestIntervention = (
+  current: StudentInterventionRow | undefined,
+  next: StudentInterventionRow,
+) => {
+  if (!current) return next;
+
+  const nextTimestamp = new Date(next.created_at ?? next.updated_at ?? "").getTime();
+  const currentTimestamp = new Date(current.created_at ?? current.updated_at ?? "").getTime();
+  return nextTimestamp > currentTimestamp ? next : current;
+};
+
+export const resolveCohortSignalSubmissionKey = (submission: Pick<SubmissionRow, "student_id" | "student_email" | "student_name" | "id">) =>
+  submission.student_id || submission.student_email || submission.student_name || submission.id;
+
+export const resolveCohortSignalStudentName = (submission: Pick<SubmissionRow, "student_name" | "student_email">) =>
+  submission.student_name || submission.student_email || "Student";
+
+export const resolveCohortSignalStudentModule = (assignment?: Pick<AssignmentRow, "module_code" | "title"> | null) =>
+  assignment?.module_code || assignment?.title || "General";
+
+export const resolveCohortSignalAssignmentTitle = (assignment?: Pick<AssignmentRow, "title"> | null) =>
+  assignment?.title || "Assignment";
+
+export const shouldSkipCohortSignalTrajectory = (scores: number[]) => scores.length === 0;
+
+export const resolveCohortSignalPredictedNext = (evaluationPredictedNext: number | undefined, averageMark: number) =>
+  evaluationPredictedNext ?? Math.round(averageMark);
+
+export const resolveCohortSignalFailureProbability = (probabilities: number[]) => Math.round((probabilities[1] ?? 0) * 100);
 
 export const buildLiveCohortSignalDataset = ({
   assignments,
@@ -374,10 +433,7 @@ export const buildLiveCohortSignalDataset = ({
     const key = intervention.student_id;
     if (!key) return;
 
-    const current = interventionByStudent.get(key);
-    if (!current || new Date(intervention.created_at ?? intervention.updated_at ?? "").getTime() > new Date(current.created_at ?? current.updated_at ?? "").getTime()) {
-      interventionByStudent.set(key, intervention);
-    }
+    interventionByStudent.set(key, resolveCohortSignalLatestIntervention(interventionByStudent.get(key), intervention));
   });
 
   const studentTrajectories = new Map<
@@ -395,22 +451,22 @@ export const buildLiveCohortSignalDataset = ({
     const score = gradeBySubmission.get(submission.id);
     if (score == null) return;
 
-    const key = submission.student_id || submission.student_email || submission.student_name || submission.id;
+    const key = resolveCohortSignalSubmissionKey(submission);
     const assignment = assignmentById.get(submission.assignment_id);
     const current =
       studentTrajectories.get(key) ?? {
         studentId: submission.student_id || key,
-        name: submission.student_name || submission.student_email || "Student",
+        name: resolveCohortSignalStudentName(submission),
         email: submission.student_email || null,
-        module: assignment?.module_code || assignment?.title || "General",
+        module: resolveCohortSignalStudentModule(assignment),
         scores: [],
       };
 
-    current.module = assignment?.module_code || assignment?.title || current.module;
+    current.module = resolveCohortSignalStudentModule(assignment);
     current.scores.push({
       score,
       date: submission.submitted_at,
-      assignmentTitle: assignment?.title || "Assignment",
+      assignmentTitle: resolveCohortSignalAssignmentTitle(assignment),
     });
     studentTrajectories.set(key, current);
   });
@@ -439,17 +495,16 @@ export const buildLiveCohortSignalDataset = ({
   studentTrajectories.forEach((trajectoryRecord, studentKey) => {
     const orderedScores = [...trajectoryRecord.scores].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
     const scores = orderedScores.map((entry) => entry.score);
-    if (scores.length === 0) return;
 
     const averageMark = mean(scores);
-    const latestMark = scores[scores.length - 1] ?? averageMark;
+    const latestMark = resolveCohortSignalLatestMark(scores, averageMark);
     const slope = getSlope(scores);
     const trend = getTrend(slope);
     const variance =
       scores.length >= 2 ? mean(scores.map((score) => (score - averageMark) ** 2)) : 0;
     const missingSubmission = totalAssignments > 0 && scores.length < totalAssignments;
     const intervention = interventionByStudent.get(trajectoryRecord.studentId) ?? interventionByStudent.get(studentKey);
-    const interventionLoggedAt = intervention?.created_at ?? intervention?.updated_at ?? null;
+    const interventionLoggedAt = resolveCohortSignalInterventionLoggedAt(intervention);
 
     const trajectory: StudentTrajectory = {
       studentId: trajectoryRecord.studentId,
@@ -463,8 +518,8 @@ export const buildLiveCohortSignalDataset = ({
     };
 
     const evaluation = evaluateStudentRisk(trajectory, { referenceDate: LIVE_REFERENCE_NOW, staleWindowDays: 30 });
-    const reasons = evaluation?.reasonCodes ?? ["baseline_monitoring"];
-    const suggestedAction = `${evaluation?.recommendation ?? "Schedule a check-in to review study strategies and agree short-term goals."}${interventionLoggedAt ? " Follow up on the logged intervention and confirm the next step." : ""}`;
+    const reasons = resolveCohortSignalRiskReasons(evaluation?.reasonCodes);
+    const suggestedAction = resolveCohortSignalSuggestedAction(evaluation?.recommendation, interventionLoggedAt);
 
     const featureVector = [
       averageMark,
@@ -486,9 +541,9 @@ export const buildLiveCohortSignalDataset = ({
       averageMark,
       latestMark,
       trend,
-      riskReasons: reasons.map((reason) => riskReasonLabelByCode[reason] ?? reason),
+      riskReasons: reasons.map((reason) => resolveCohortSignalRiskReasonLabel(reason)),
       suggestedAction,
-      predictedNext: evaluation?.predictedNext ?? Math.round(averageMark),
+      predictedNext: resolveCohortSignalPredictedNext(evaluation?.predictedNext, averageMark),
       failProbability: 0,
     });
   });
@@ -513,7 +568,7 @@ export const buildLiveCohortSignalDataset = ({
     const bandPrediction = predictCentroidModel(bandModel, observation.features);
     const failurePrediction = predictCentroidModel(failureModel, observation.features);
     const bandLabel = (observation.trajectory.scores.length < 2 ? "insufficient" : bandPrediction.label) as CohortSignalRiskBand;
-    const failProbability = Math.round((failurePrediction.probabilities[1] ?? 0) * 100);
+    const failProbability = resolveCohortSignalFailureProbability(failurePrediction.probabilities);
     const confidence = getConfidenceFromProbability(Math.max(bandPrediction.probability, failurePrediction.probability));
 
     const riskReasons = [...observation.riskReasons];
@@ -527,12 +582,7 @@ export const buildLiveCohortSignalDataset = ({
     return {
       id: observation.id,
       name: observation.trajectory.name,
-      initials: observation.trajectory.name
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((part) => part[0]?.toUpperCase() ?? "")
-        .join("")
-        .slice(0, 2),
+      initials: getCohortSignalStudentInitials(observation.trajectory.name),
       module: observation.module,
       latestMark: Math.round(observation.latestMark),
       averageMark: Math.round(observation.averageMark),
@@ -549,8 +599,8 @@ export const buildLiveCohortSignalDataset = ({
   });
 
   students.sort((left, right) => {
-    const leftPriority = left.predictedToFail ? 0 : left.riskBand === "high" ? 1 : left.riskBand === "medium" ? 2 : 3;
-    const rightPriority = right.predictedToFail ? 0 : right.riskBand === "high" ? 1 : right.riskBand === "medium" ? 2 : 3;
+    const leftPriority = getCohortSignalStudentSortPriority(left);
+    const rightPriority = getCohortSignalStudentSortPriority(right);
     return leftPriority - rightPriority || right.failProbability - left.failProbability;
   });
 
