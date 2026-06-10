@@ -1,7 +1,7 @@
 # GradeAI
 
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
-[![CI](https://codecov.io/gh/Farukhsb/edu-intel-spark/branch/main/graph/badge.svg)](https://codecov.io/gh/Farukhsb/edu-intel-spark)
+[![coverage](https://codecov.io/gh/Farukhsb/edu-intel-spark/branch/main/graph/badge.svg)](https://codecov.io/gh/Farukhsb/edu-intel-spark)
 
 GradeAI is a controlled-pilot academic workflow platform for assessment, moderation, student support, risk review, and evidence export. It helps institutions spot students at risk earlier so staff can intervene sooner.
 
