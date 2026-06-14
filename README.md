@@ -3,10 +3,17 @@
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 [![coverage](https://codecov.io/gh/Farukhsb/edu-intel-spark/branch/main/graph/badge.svg)](https://codecov.io/gh/Farukhsb/edu-intel-spark)
 
-GradeAI is an AI-assisted academic workflow platform that helps universities manage assessment, moderation, student support, and risk monitoring while keeping educators in control of final decisions.
+Schools lose students in plain sight. Grades slip, submissions get missed, 
+engagement drops — and by the time someone notices, the window for early support 
+has already closed.
 
-It sits alongside existing systems and uses machine learning to track grades, submissions, and engagement over time. GradeAI is not a replacement for the LMS or for academic judgement.
+GradeAI watches those signals continuously. It surfaces at-risk students to 
+lecturers before the damage compounds, explains *why* each flag was raised, and 
+tracks whether interventions actually worked.
 
+Everything else — AI-assisted grading, moderation workflows, academic integrity 
+review, institutional reporting — exists to feed better signals into that engine 
+and keep educators in control of the decisions that follow.
 ## Live Demo
 
 [Try the GradeAI demo](https://gradeai.pages.dev/)
