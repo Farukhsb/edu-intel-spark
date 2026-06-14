@@ -85,7 +85,7 @@ describe("buildInterventionEvidenceReport", () => {
       uniqueLecturers: 1,
       resolvedCount: 1,
       openCount: 1,
-      overdueCount: 0,
+      overdueCount: 1,
       resolvedRate: 1,
       followUpScheduledCount: 1,
       respondedCount: 0,
