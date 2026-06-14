@@ -50,6 +50,7 @@ const riskBandOptions: Array<{ value: HeatmapFilterState["riskBand"]; label: str
 const weekStart = (referenceNow: string) => {
   const date = new Date(referenceNow);
   date.setUTCDate(date.getUTCDate() - 7);
+  date.setUTCHours(0, 0, 0, 0);
   return date;
 };
 
