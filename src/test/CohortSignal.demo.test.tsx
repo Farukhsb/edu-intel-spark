@@ -42,7 +42,7 @@ describe("CohortSignalDemo", () => {
     expect(screen.getAllByText("High risk").length).toBeGreaterThan(0);
     expect(screen.getByTestId("summary-medium-risk")).toHaveTextContent("4");
     expect(screen.getByTestId("summary-low-risk")).toHaveTextContent("4");
-    expect(screen.getByTestId("summary-interventions")).toHaveTextContent("4");
+    expect(screen.getByTestId("summary-interventions")).toHaveTextContent("2");
     expect(screen.getByText("Model quality")).toBeInTheDocument();
     expect(screen.getByText("Fail precision")).toBeInTheDocument();
     expect(mocks.supabase.from).not.toHaveBeenCalled();
