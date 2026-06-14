@@ -8,15 +8,11 @@ import type {
 } from "../types";
 import { toGovernanceStatus } from "./governance";
 import { humanizeToken } from "../utils";
-
-type IntegrityReviewSourceRow = {
-  id: string;
-  submission_id: string;
-  decision: string;
-  lecturer_note: string | null;
-  created_at: string;
-  updated_at: string;
-};
+import {
+  buildIntegrityOverviewEvent,
+  incrementIntegrityOverviewAssignmentEntry,
+  type IntegrityReviewSourceRow,
+} from "./integrityOverview.helpers";
 
 export const buildIntegrityOverview = ({
   integrityReviews,
@@ -35,21 +31,14 @@ export const buildIntegrityOverview = ({
     const summary = getIntegrityReviewSummary(review);
     const assignmentId = submission?.assignmentId || "unknown-assignment";
     const assignmentTitle = submission?.assignmentTitle || assignmentTitleById.get(assignmentId) || "Unknown assignment";
-    const existing = assignmentSummaryMap.get(assignmentId) ?? {
+
+    incrementIntegrityOverviewAssignmentEntry(
+      assignmentSummaryMap,
       assignmentId,
       assignmentTitle,
-      totalReviews: 0,
-      flaggedReviews: 0,
-      highRiskCases: 0,
-    };
-    existing.totalReviews += 1;
-    if (summary.flagged) {
-      existing.flaggedReviews += 1;
-    }
-    if (summary.riskScore >= 80 || review.decision === "misconduct-concern") {
-      existing.highRiskCases += 1;
-    }
-    assignmentSummaryMap.set(assignmentId, existing);
+      summary.flagged,
+      summary.riskScore >= 80 || review.decision === "misconduct-concern",
+    );
 
     const similarityScore = summary.payload.integritySnapshot?.similarityScore ?? null;
     if (similarityScore != null) {

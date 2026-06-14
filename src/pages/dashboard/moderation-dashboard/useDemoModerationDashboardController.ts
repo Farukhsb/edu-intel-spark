@@ -2,30 +2,34 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { getLatestModeratorReview } from "@/lib/moderation";
-import {
-  canBulkApproveModeration,
-  canBulkAssignModerator,
-  getModerationDisagreementSummary,
-  getModerationOwnerAssignmentSummaries,
-  getModerationQueueStats,
-  matchesModerationQueueFilter,
-  matchesModerationQueueSearch,
-  sortModerationQueueCases,
-  type ModerationCaseView,
-  type ModerationQueueFilter,
-  type ModerationQueueSort,
-} from "@/lib/moderationWorkflow";
+import { type ModerationCaseView, type ModerationQueueFilter, type ModerationQueueSort } from "@/lib/moderationWorkflow";
+import { canBulkApproveModeration, canBulkAssignModerator } from "@/lib/moderationWorkflow";
 import { useModerationDashboardScreenProps } from "./screen-props";
-import { buildDemoModeratorDrafts, createDemoGradeAuditLog, createDemoModerationReview, DEMO_LECTURERS, DEMO_MODERATION_CASES } from "./demoData";
+import { createDemoGradeAuditLog, createDemoModerationReview, DEMO_LECTURERS } from "./demoData";
 import type { ModerationProfile } from "./types";
-
-const buildDemoCases = () => DEMO_MODERATION_CASES.map((item) => ({ ...item }));
+import {
+  buildDemoCases,
+  buildDemoLecturers,
+  buildDemoModeratorDraftMap,
+  getDemoAssignmentFocusTitle,
+  getDemoBulkApprovableFilteredCases,
+  getDemoBulkAssignableFilteredCases,
+  getDemoFilteredCases,
+  getDemoOwnerAssignmentSummaries,
+  getDemoQueueFilterOptions,
+  getDemoQueueStats,
+  getDemoSelectedBulkApprovalCases,
+  getDemoSelectedBulkApprovalSummaries,
+  getDemoSelectedBulkCases,
+  getDemoSelectedCase,
+  pruneDemoSelectedCaseIds,
+} from "./useDemoModerationDashboardController.helpers";
 
 export const useDemoModerationDashboardController = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [cases, setCases] = useState<ModerationCaseView[]>(() => buildDemoCases());
-  const [lecturers, setLecturers] = useState<ModerationProfile[]>(() => DEMO_LECTURERS);
+  const [lecturers, setLecturers] = useState<ModerationProfile[]>(() => buildDemoLecturers());
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [queueFilter, setQueueFilter] = useState<ModerationQueueFilter>("all");
   const [queueSearch, setQueueSearch] = useState("");
@@ -37,20 +41,17 @@ export const useDemoModerationDashboardController = () => {
   const [scoreDraft, setScoreDraft] = useState("");
   const [feedbackDraft, setFeedbackDraft] = useState("");
   const [moderatorDrafts, setModeratorDrafts] = useState<Record<string, string>>(() =>
-    buildDemoModeratorDrafts(DEMO_MODERATION_CASES),
+    buildDemoModeratorDraftMap(),
   );
   const [saving] = useState(false);
 
   const userId = user?.id ?? profile?.id ?? "demo-lecturer";
-  const selectedCase = useMemo(
-    () => cases.find((item) => item.moderationCase.id === selectedCaseId) ?? null,
-    [cases, selectedCaseId],
-  );
+  const selectedCase = useMemo(() => getDemoSelectedCase(cases, selectedCaseId), [cases, selectedCaseId]);
 
   const fetchCases = async () => {
     setLecturers(DEMO_LECTURERS);
     setCases(buildDemoCases());
-    setModeratorDrafts(buildDemoModeratorDrafts(DEMO_MODERATION_CASES));
+    setModeratorDrafts(buildDemoModeratorDraftMap());
     setSelectedCaseId(null);
   };
 
@@ -77,126 +78,61 @@ export const useDemoModerationDashboardController = () => {
   }, [selectedCase]);
 
   useEffect(() => {
-    const knownIds = new Set(cases.map((item) => item.moderationCase.id));
-    setSelectedCaseIds((current) => current.filter((id) => knownIds.has(id)));
+    setSelectedCaseIds((current) => pruneDemoSelectedCaseIds(current, cases));
   }, [cases]);
 
-  const queueStats = useMemo(() => getModerationQueueStats(cases), [cases]);
+  const queueStats = useMemo(() => getDemoQueueStats(cases), [cases]);
 
   const ownerAssignmentSummaries = useMemo(
-    () => getModerationOwnerAssignmentSummaries(cases, userId),
+    () => getDemoOwnerAssignmentSummaries(cases, userId),
     [cases, userId],
   );
 
   const assignmentFocusTitle = useMemo(
-    () =>
-      assignmentFocusId
-        ? ownerAssignmentSummaries.find((summary) => summary.assignmentId === assignmentFocusId)?.assignmentTitle ||
-          cases.find((item) => (item.assignment?.id || item.moderationCase.assignment_id) === assignmentFocusId)
-            ?.assignment?.title ||
-          "Assignment"
-        : null,
+    () => getDemoAssignmentFocusTitle(assignmentFocusId, ownerAssignmentSummaries, cases),
     [assignmentFocusId, cases, ownerAssignmentSummaries],
   );
 
   const queueFilterOptions = useMemo(
-    () =>
-      [
-        { value: "all" as const, label: "All cases" },
-        { value: "assigned_to_me" as const, label: "Assigned to me" },
-        { value: "awaiting_my_approval" as const, label: "Awaiting my approval" },
-        { value: "escalated" as const, label: "Escalated" },
-        { value: "ready_for_release" as const, label: "Ready for release" },
-      ].map((option) => ({
-        ...option,
-        count: cases.filter((item) =>
-          matchesModerationQueueFilter({
-            item,
-            filter: option.value,
-            userId,
-          }),
-        ).length,
-      })),
+    () => getDemoQueueFilterOptions({ cases, userId }),
     [cases, userId],
   );
 
-  const filteredCases = useMemo(() => {
-    const visible = cases.filter(
-      (item) =>
-        (!assignmentFocusId ||
-          (item.assignment?.id || item.moderationCase.assignment_id) === assignmentFocusId) &&
-        matchesModerationQueueFilter({
-          item,
-          filter: queueFilter,
-          userId,
-        }) &&
-        matchesModerationQueueSearch({
-          item,
-          query: queueSearch,
-        }),
-    );
-
-    return sortModerationQueueCases(visible, queueSort);
-  }, [assignmentFocusId, cases, queueFilter, queueSearch, queueSort, userId]);
+  const filteredCases = useMemo(
+    () =>
+      getDemoFilteredCases({
+        cases,
+        assignmentFocusId,
+        queueFilter,
+        queueSearch,
+        queueSort,
+        userId,
+      }),
+    [assignmentFocusId, cases, queueFilter, queueSearch, queueSort, userId],
+  );
 
   const bulkAssignableFilteredCases = useMemo(
-    () =>
-      filteredCases.filter((item) =>
-        canBulkAssignModerator({
-          item,
-          userId,
-        }),
-      ),
+    () => getDemoBulkAssignableFilteredCases(filteredCases, userId),
     [filteredCases, userId],
   );
 
   const bulkApprovableFilteredCases = useMemo(
-    () =>
-      filteredCases.filter((item) =>
-        canBulkApproveModeration({
-          item,
-          userId,
-        }),
-      ),
+    () => getDemoBulkApprovableFilteredCases(filteredCases, userId),
     [filteredCases, userId],
   );
 
   const selectedBulkCases = useMemo(
-    () => cases.filter((item) => selectedCaseIds.includes(item.moderationCase.id)),
+    () => getDemoSelectedBulkCases(cases, selectedCaseIds),
     [cases, selectedCaseIds],
   );
 
   const selectedBulkApprovalCases = useMemo(
-    () =>
-      selectedBulkCases.filter((item) =>
-        canBulkApproveModeration({
-          item,
-          userId,
-        }),
-      ),
+    () => getDemoSelectedBulkApprovalCases(selectedBulkCases, userId),
     [selectedBulkCases, userId],
   );
 
   const selectedBulkApprovalSummaries = useMemo(
-    () =>
-      selectedBulkApprovalCases.map((item) => {
-        const disagreement = getModerationDisagreementSummary({
-          moderationCase: item.moderationCase,
-          grade: item.grade,
-          latestModeratorReview: getLatestModeratorReview(item.reviews),
-        });
-
-        return {
-          caseId: item.moderationCase.id,
-          studentLabel:
-            item.submission?.student_name || item.submission?.student_email || "Student record unavailable",
-          assignmentTitle: item.assignment?.title || "Assignment",
-          disagreementLabel: disagreement.label,
-          baselineScore: disagreement.baselineScore,
-          moderatorScore: disagreement.moderatorScore,
-          feedbackChanged: disagreement.feedbackChanged,
-        };
-      }),
+    () => getDemoSelectedBulkApprovalSummaries(selectedBulkApprovalCases),
     [selectedBulkApprovalCases],
   );
 
