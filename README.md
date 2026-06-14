@@ -4,14 +4,14 @@
 [![coverage](https://codecov.io/gh/Farukhsb/edu-intel-spark/branch/main/graph/badge.svg)](https://codecov.io/gh/Farukhsb/edu-intel-spark)
 
 Schools lose students in plain sight. Grades slip, submissions get missed, 
-engagement drops — and by the time someone notices, the window for early support 
+engagement drops and by the time someone notices, the window for early support 
 has already closed.
 
 GradeAI watches those signals continuously. It surfaces at-risk students to 
 lecturers before the damage compounds, explains *why* each flag was raised, and 
 tracks whether interventions actually worked.
 
-Everything else — AI-assisted grading, moderation workflows, academic integrity 
+Everything else AI-assisted grading, moderation workflows, academic integrity 
 review, institutional reporting — exists to feed better signals into that engine 
 and keep educators in control of the decisions that follow.
 ## Live Demo
