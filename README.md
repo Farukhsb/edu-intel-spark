@@ -3,61 +3,200 @@
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 [![coverage](https://codecov.io/gh/Farukhsb/edu-intel-spark/branch/main/graph/badge.svg)](https://codecov.io/gh/Farukhsb/edu-intel-spark)
 
-GradeAI is a controlled-pilot academic workflow platform for assessment, moderation, student support, risk review, and evidence export. It helps institutions spot students at risk earlier so staff can intervene sooner.
+GradeAI is an AI-assisted academic workflow platform that helps universities manage assessment, moderation, student support, and risk monitoring while keeping educators in control of final decisions.
 
 It sits alongside existing systems and uses machine learning to track grades, submissions, and engagement over time. GradeAI is not a replacement for the LMS or for academic judgement.
 
-## Current Status
+## Live Demo
 
-GradeAI is implemented, but still a pilot rather than a finished institution-wide product.
+[Try the GradeAI demo](https://gradeai.pages.dev/)
 
-### Implemented
+## Table Of Contents
 
-- multi-tenant Supabase data access with RLS-backed institution scoping
-- student, lecturer, moderator, and admin role-aware dashboard flows
-- assignment creation, submission, grading, moderation, and release workflows
-- AI-assisted grading with lecturer review before student release
-- document upload validation and extraction safety checks
-- risk intelligence views with reason codes, model versioning, and evaluation metadata
-- institution-scoped export workflows with audit logging and redaction support
-- audit trails for key academic and administrative actions
-- demo-mode routes that use synthetic data only
+- [Quick Start](#quick-start)
+- [Why GradeAI?](#why-gradeai)
+- [Intended Users](#intended-users)
+- [How To Use GradeAI](#how-to-use-gradeai)
+- [Technical Highlights](#technical-highlights)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Status](#status)
+- [Evidence And Review Material](#evidence-and-review-material)
 
-### Demo-only
+## Quick Start
 
-- all routes prefixed with `Demo*`
-- reviewer walkthroughs that use fabricated assignments, submissions, grades, and risk records
-- demo exports and demo dashboards that do not call live academic data
+### Prerequisites
 
-### Under pilot validation
+- Node.js 20+
+- npm
+- Supabase project and keys
 
-- cross-institution isolation and RLS hardening
-- export safety and redaction behaviour
-- AI grading guardrails and prompt-injection resistance
-- risk model evaluation and false-positive feedback loops
-- runtime access-control proof via contract and live tests
-- reviewer-pack evidence capture and documentation completeness
+### Install
 
-### Not production-ready yet
+```bash
+git clone https://github.com/Farukhsb/edu-intel-spark.git
+cd edu-intel-spark
+npm install
+```
 
-- no claim of institution-wide deployment readiness
-- no formal external accreditation approval
-- no universal data residency sign-off for every possible institution
-- no guaranteed uptime or enterprise support commitment
-- no replacement for institutional policy, moderation, or academic judgement
+### Configure
 
-## At a Glance
+Create a `.env.local` file with your Supabase values:
 
-- monitors grade, submission, and engagement patterns to flag risk early
-- gives tutors, course leaders, and heads of department a cohort view
-- records interventions and exports evidence for institutional reporting
-- keeps AI-assisted grading available where institutions want it, without making it the product focus
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
 
-AI output is draft support. Students only see feedback after educator review and release.
+### Run
 
-## Demo Mode
+```bash
+npm run dev
+```
 
-GradeAI includes a synthetic demo mode for reviewer walkthroughs and product evaluation. It uses fabricated assignments, rubrics, submissions, grades, integrity examples, and feedback, and never reads live academic data.
+Open `http://localhost:5173`.
+
+## Why GradeAI?
+
+Universities have more assessment work, more student support pressure, and less time to do both well.
+
+GradeAI helps teams:
+
+- reduce admin overhead
+- spot at-risk students earlier
+- keep human oversight on AI-assisted grading
+- produce audit-friendly evidence for review and reporting
+
+## Intended Users
+
+- Universities
+- Colleges
+- Training providers
+- Academic departments
+- Course leaders
+- Lecturers
+- Student support teams
+
+## How To Use GradeAI
+
+### Lecturer workflow
+
+1. Create an assignment
+2. Upload a rubric
+3. Open submissions
+4. Review AI-generated grading
+5. Approve feedback
+6. Release grades
+
+### Student workflow
+
+1. Log in
+2. View assignments
+3. Submit work
+4. Receive educator-approved feedback
+5. Track improvement
+
+### Administrator workflow
+
+1. Open the institution dashboard
+2. Monitor risk and moderation activity
+3. Export reports
+4. Review audit logs
+
+## Technical Highlights
+
+- Multi-tenant architecture
+- Row-Level Security isolation
+- AI-assisted assessment workflows
+- Audit trail system
+- Risk prediction engine
+- Evidence export framework
+- End-to-end CI/CD pipeline
+
+## Screenshots
+
+### Platform Overview
+
+| Lecturer Dashboard | Risk Analytics |
+| --- | --- |
+| ![Lecturer Dashboard](docs/screenshots/lecturer-dashboard-overview.jpg) | ![Risk Analytics](docs/screenshots/predictive-risk-analytics.jpg) |
+
+| AI Grading | Student Plan |
+| --- | --- |
+| ![AI Grade Explanation](docs/screenshots/ai-grade-explanation.jpg) | ![Student Improvement Plan](docs/screenshots/student-improvement-plan.jpg) |
+
+## Features
+
+- AI-assisted grading
+- Student risk prediction
+- Moderation workflows
+- Multi-tenant architecture
+- Audit logging
+- Institutional reporting
+- Evidence export
+- Role-based access control
+- Learning analytics dashboards
+
+## Built With
+
+- React
+- TypeScript
+- Supabase
+- PostgreSQL
+- Tailwind CSS
+- Cloudflare Pages
+- GitHub Actions
+
+## Architecture
+
+```mermaid
+flowchart TD
+  Student --> React[React Frontend]
+  Lecturer --> React
+  Admin --> React
+  React --> Supabase[Supabase]
+  Supabase --> Auth[Auth]
+  Supabase --> DB[Database]
+  Supabase --> Storage[Storage]
+  Supabase --> Edge[Edge Functions]
+  Edge --> AI[AI Evaluation Engine]
+```
+
+## Roadmap
+
+### Current
+
+- pilot validation
+- security hardening
+- risk model evaluation
+
+### Planned
+
+- LMS integrations
+- more analytics
+- institutional onboarding
+- model benchmarking
+- explainability improvements
+
+## Contributing
+
+Contributions are welcome.
+
+1. Fork the repository
+2. Create a branch
+3. Make your changes
+4. Open a pull request
+
+## Status
+
+GradeAI is a working pilot, not a finished institutional rollout.
+
+- live and demo routes are separated
+- the tests focus on safety boundaries as well as features
+- demo routes use synthetic data only
 
 ## Evidence And Review Material
 
@@ -68,7 +207,7 @@ GradeAI includes a synthetic demo mode for reviewer walkthroughs and product eva
 - [Risk Model Transparency](docs/risk-model-transparency.md)
 - [Screenshots](docs/screenshots/README.md)
 
-Selected screenshot evidence:
+### Selected screenshot evidence
 
 - [lecturer dashboard overview](docs/screenshots/lecturer-dashboard-overview.jpg)
 - [overview dashboard](docs/screenshots/overview-dashboard.jpg)
@@ -78,50 +217,10 @@ Selected screenshot evidence:
 - [student improvement plan](docs/screenshots/student-improvement-plan.jpg)
 - [AI grade explanation](docs/screenshots/ai-grade-explanation.jpg)
 
-Video evidence:
-
-- none committed yet
-
-## Evidence Pack Summary
-
-Review path:
+### Review path
 
 1. [Architecture](docs/ARCHITECTURE.md)
 2. [Security Model](docs/SECURITY_MODEL.md)
 3. [Pilot Status](docs/PILOT_STATUS.md)
 4. [Model Evaluation](docs/MODEL_EVALUATION.md)
 5. [Screenshots](docs/screenshots/README.md)
-
-This repository shows a working pilot, not a finished institutional rollout. Live and demo routes are separated, and the tests are there to prove safety boundaries as well as features.
-
-## Key Product Areas
-
-### Staff workspace
-
-Tutors and academic leads can identify students who may be struggling, review why they were flagged, manage follow-up actions, and record intervention evidence.
-
-### Synthetic test view
-
-Learners can submit work for open assignments, view released grades, and read educator-approved feedback in the demo and live test surface.
-
-### Institutional workflows
-
-GradeAI also supports admin oversight, accreditation-style reporting, external examiner export workflows, moderation history, audit trails, and cohort-level performance insight.
-
-## Architecture
-
-| Layer | Technology |
-|---|---|
-| Frontend | React 18, TypeScript, Vite |
-| UI | Tailwind CSS, shadcn/ui, Radix UI, lucide-react |
-| Backend | Supabase |
-| Auth | Supabase Auth |
-| Database | Postgres with Row-Level Security |
-| Storage | Supabase Storage |
-| Server logic | Supabase Edge Functions |
-| Charts | Recharts |
-| Product analytics | PostHog |
-| Error monitoring | Sentry |
-| Hosting | Cloudflare Pages |
-| Testing | Vitest, Testing Library, Playwright |
-| CI | GitHub Actions |
