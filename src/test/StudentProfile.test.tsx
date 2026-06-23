@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   supabase: {
     from: vi.fn(),
   },
-  computeRisk: vi.fn(),
+  scoreStudentRisk: vi.fn(),
+  mapRiskModelPredictionToAtRiskStudent: vi.fn(),
   fetchStudentInterventions: vi.fn(),
   fetchStudentInterventionEvents: vi.fn(),
   getInterventionErrorText: vi.fn(),
@@ -49,8 +50,9 @@ vi.mock("sonner", () => ({
   toast: mocks.toast,
 }));
 
-vi.mock("@/lib/studentRisk", () => ({
-  computeRisk: mocks.computeRisk,
+vi.mock("@/lib/riskModel", () => ({
+  scoreStudentRisk: mocks.scoreStudentRisk,
+  mapRiskModelPredictionToAtRiskStudent: mocks.mapRiskModelPredictionToAtRiskStudent,
 }));
 
 vi.mock("@/lib/interventions", async () => {
@@ -321,7 +323,45 @@ describe("StudentProfile", () => {
     mocks.authState.isDemo = false;
     mocks.authState.user = { id: "lecturer-1" };
     mocks.params.studentId = "sam-student";
-    mocks.computeRisk.mockReturnValue(defaultRisk);
+    mocks.scoreStudentRisk.mockReturnValue({
+      modelVersion: "test-model",
+      featureVersion: "trajectory-v1",
+      generatedAt: "2026-05-01T00:00:00.000Z",
+      className: "high",
+      riskBand: "high",
+      riskScore: 76,
+      confidence: 91,
+      confidenceScore: 0.91,
+      needsReview: false,
+      reviewReasons: ["average_below_50", "predicted_next_below_40"],
+      probabilityByBand: { low: 0.08, medium: 0.16, high: 0.76 },
+      featureVector: {
+        scoreCount: 2,
+        average: 42,
+        last: 42,
+        minimum: 42,
+        maximum: 48,
+        slope: -2,
+        predictedNext: 38,
+        stdDev: 3,
+        recent3Avg: 45,
+        earlyAvg: 45,
+        firstLastDelta: -6,
+        recentDelta: -6,
+        below50Ratio: 1,
+        below40Ratio: 0,
+        volatility: 3,
+      },
+      calibrationMetrics: {
+        calibrationTemperature: null,
+        validationNll: null,
+        validationConfidenceEce: null,
+        trainAccuracy: null,
+        testAccuracy: null,
+      },
+      advisoryOnly: true,
+    });
+    mocks.mapRiskModelPredictionToAtRiskStudent.mockReturnValue(defaultRisk);
     mocks.fetchStudentInterventions.mockResolvedValue({ data: [], error: null });
     mocks.fetchStudentInterventionEvents.mockResolvedValue({ data: [], error: null });
     mocks.getInterventionErrorText.mockReturnValue("Could not load intervention history");

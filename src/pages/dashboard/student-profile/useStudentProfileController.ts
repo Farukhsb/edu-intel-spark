@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { logAcademicAccessEvent } from "@/lib/audit/academicAccessEvents";
-import { computeRisk } from "@/lib/studentRisk";
 import { fetchLecturerStudentProfileDataset } from "@/lib/data/student";
 import { safeFormatDate } from "@/lib/date";
 import { dispatchCommunicationMessage } from "@/lib/communications";
@@ -190,7 +189,6 @@ export const useStudentProfileController = () => {
             grades,
             decodedStudentId: resolvedStudentLookupId,
             studentRecordId: linkedStudentRecordId,
-            computeRisk,
           }),
         );
       } catch (error) {

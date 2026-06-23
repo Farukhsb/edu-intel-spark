@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { computeRisk } from "@/lib/studentRisk";
 import { fetchLecturerPerformanceDataset } from "@/lib/data/student";
 import { log } from "@/lib/logger";
 import { preloadPerformanceTrendsCharts } from "@/lib/routePreloads";
@@ -120,7 +119,6 @@ const PerformanceTrends = () => {
       submissions,
       grades,
       moduleFilter,
-      computeRisk,
     });
   }, [assignments, submissions, grades, moduleFilter]);
 

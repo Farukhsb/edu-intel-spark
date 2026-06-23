@@ -116,6 +116,9 @@ function buildReasonCodes(params: {
   return reasonCodes;
 }
 
+/**
+ * @deprecated Use `scoreStudentRisk` from `riskModel.ts` instead.
+ */
 export function evaluateStudentRisk(
   trajectory: StudentTrajectory,
   options?: {
@@ -123,6 +126,12 @@ export function evaluateStudentRisk(
     staleWindowDays?: number;
   },
 ): StudentRiskEvaluation | null {
+  if (process.env.NODE_ENV !== "test") {
+    console.warn(
+      "[studentRisk] This function is deprecated. Use scoreStudentRisk from riskModel.ts instead.",
+    );
+  }
+
   const scores = trajectory.scores.map((entry) => entry.score);
   if (scores.length === 0) return null;
   const referenceDateMs = toDateMs(options?.referenceDate ?? new Date().toISOString());
@@ -243,6 +252,9 @@ export function evaluateStudentRisk(
   };
 }
 
+/**
+ * @deprecated Use `scoreStudentRisk` from `riskModel.ts` instead.
+ */
 export function computeRisk(
   trajectory: StudentTrajectory,
   options?: {
@@ -250,6 +262,12 @@ export function computeRisk(
     staleWindowDays?: number;
   },
 ): AtRiskStudent | null {
+  if (process.env.NODE_ENV !== "test") {
+    console.warn(
+      "[studentRisk] This function is deprecated. Use scoreStudentRisk from riskModel.ts instead.",
+    );
+  }
+
   const evaluation = evaluateStudentRisk(trajectory, options);
   if (!evaluation || evaluation.rawRiskScore < 25) return null;
 

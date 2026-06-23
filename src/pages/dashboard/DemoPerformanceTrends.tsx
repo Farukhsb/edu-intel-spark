@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { type AtRiskStudent, computeRisk } from "@/lib/studentRisk";
+import { type AtRiskStudent } from "@/lib/studentRisk";
+import { mapRiskModelPredictionToAtRiskStudent, scoreStudentRisk } from "@/lib/riskModel";
 import { preloadPerformanceTrendsCharts } from "@/lib/routePreloads";
 import { parsePerformanceTrendsSearchState } from "@/lib/schemas/navigation";
 import { DashboardDemoBanner, DashboardEmptyState, DashboardLoadingState } from "@/components/dashboard/PageStates";
@@ -75,7 +76,7 @@ const DemoPerformanceTrends = () => {
 
   const atRiskStudents = useMemo<AtRiskStudent[]>(() => {
     return DEMO_TRAJECTORIES.filter((student) => moduleFilter === "all" || student.module === moduleFilter)
-      .map((student) => computeRisk(student))
+      .map((student) => mapRiskModelPredictionToAtRiskStudent(student, scoreStudentRisk(student)))
       .filter((student): student is AtRiskStudent => student !== null)
       .sort((left, right) => right.riskScore - left.riskScore);
   }, [moduleFilter]);

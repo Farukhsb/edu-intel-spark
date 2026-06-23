@@ -1,4 +1,5 @@
 import type { StudentTrajectory } from "@/lib/studentRisk";
+import { mapRiskModelPredictionToAtRiskStudent, scoreStudentRisk } from "@/lib/riskModel";
 
 export interface StudentAssignment {
   id: string;
@@ -87,7 +88,7 @@ export const buildStudentInsightData = ({
   grades: StudentGrade[];
   decodedStudentId: string;
   studentRecordId: string | null;
-  computeRisk: (trajectory: StudentTrajectory) => StudentRiskLike | null;
+  computeRisk?: (trajectory: StudentTrajectory) => StudentRiskLike | null;
 }): StudentInsightData | null => {
   const matchingSubmissions = matchStudentSubmissions({
     submissions,
@@ -131,7 +132,10 @@ export const buildStudentInsightData = ({
       .filter((entry): entry is StudentTrajectory["scores"][number] => entry !== null),
   };
 
-  const risk = computeRisk(trajectory);
+  const scoreRisk =
+    computeRisk ?? ((candidate: StudentTrajectory) =>
+      mapRiskModelPredictionToAtRiskStudent(candidate, scoreStudentRisk(candidate)));
+  const risk = scoreRisk(trajectory);
   const scores = trajectory.scores.map((point) => point.score);
   const averageGrade =
     scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;

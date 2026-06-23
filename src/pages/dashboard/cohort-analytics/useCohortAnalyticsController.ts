@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCohortAnalyticsDataset } from "@/lib/data/cohort";
-import { computeRisk, type AtRiskStudent, type StudentTrajectory } from "@/lib/studentRisk";
+import { type AtRiskStudent, type StudentTrajectory } from "@/lib/studentRisk";
+import { mapRiskModelPredictionToAtRiskStudent, scoreStudentRisk } from "@/lib/riskModel";
 import {
   buildCohortRecommendations,
   getCohortReportingReadiness,
@@ -297,7 +298,7 @@ export const useCohortAnalyticsController = () => {
               (left, right) => new Date(left.date).getTime() - new Date(right.date).getTime(),
             ),
           }))
-          .map((trajectory) => computeRisk(trajectory))
+          .map((trajectory) => mapRiskModelPredictionToAtRiskStudent(trajectory, scoreStudentRisk(trajectory)))
           .filter((student): student is AtRiskStudent => student !== null)
           .sort((left, right) => right.riskScore - left.riskScore);
 

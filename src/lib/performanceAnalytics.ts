@@ -1,4 +1,5 @@
 import type { AtRiskStudent, StudentTrajectory } from "@/lib/studentRisk";
+import { mapRiskModelPredictionToAtRiskStudent, scoreStudentRisk } from "@/lib/riskModel";
 
 export interface PerformanceAssignmentLike {
   id: string;
@@ -163,7 +164,7 @@ export const buildPerformanceProjection = ({
   submissions: PerformanceSubmissionLike[];
   grades: PerformanceGradeLike[];
   moduleFilter: string;
-  computeRisk: (trajectory: StudentTrajectory) => AtRiskStudent | null;
+  computeRisk?: (trajectory: StudentTrajectory) => AtRiskStudent | null;
 }): PerformanceProjection => {
   const modules = Array.from(
     new Set(assignments.map((assignment) => assignment.module_code).filter(Boolean) as string[]),
@@ -254,8 +255,12 @@ export const buildPerformanceProjection = ({
       filteredSubmissions.length > 0 ? Math.round((data.totalSubs / filteredSubmissions.length) * 100) : 0,
   }));
 
+  const scoreAtRiskStudent =
+    computeRisk ?? ((trajectory: StudentTrajectory) =>
+      mapRiskModelPredictionToAtRiskStudent(trajectory, scoreStudentRisk(trajectory)));
+
   const atRiskStudents = Object.values(trajectories)
-    .map((trajectory) => computeRisk(trajectory))
+    .map((trajectory) => scoreAtRiskStudent(trajectory))
     .filter((student): student is AtRiskStudent => student !== null)
     .sort((left, right) => right.riskScore - left.riskScore);
 

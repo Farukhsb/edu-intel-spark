@@ -1,11 +1,10 @@
-import { evaluateStudentRisk, type StudentTrajectory } from "@/lib/studentRisk";
+import { type StudentTrajectory } from "@/lib/studentRisk";
+import { mapRiskModelPredictionToAtRiskStudent, scoreStudentRisk } from "@/lib/riskModel";
 import type { CohortSignalRiskBand, CohortSignalStudent } from "@/pages/cohortsignal-demo/demoData";
 
 import { getCohortSignalStudentInitials, getCohortSignalStudentSortPriority, getSlope, getTrend, resolveCohortSignalAssignmentTitle, resolveCohortSignalFailureProbability, resolveCohortSignalInterventionLoggedAt, resolveCohortSignalLatestIntervention, resolveCohortSignalLatestMark, resolveCohortSignalPredictedNext, resolveCohortSignalRiskReasonLabel, resolveCohortSignalRiskReasons, resolveCohortSignalStudentModule, resolveCohortSignalStudentName, resolveCohortSignalSubmissionKey, resolveCohortSignalSuggestedAction } from "./liveDataHelpers";
 import { evaluateModel, getConfidenceFromProbability, predictCentroidModel, trainCentroidModel } from "./liveDataModel";
 import type { LiveCohortSignalDataset, LiveCohortSignalInput, LiveCohortSignalObservation } from "./liveData.types";
-
-const LIVE_REFERENCE_NOW = new Date().toISOString();
 
 export const buildLiveCohortSignalDataset = ({
   assignments,
@@ -92,9 +91,10 @@ export const buildLiveCohortSignalDataset = ({
       })),
     };
 
-    const evaluation = evaluateStudentRisk(trajectory, { referenceDate: LIVE_REFERENCE_NOW, staleWindowDays: 30 });
-    const reasons = resolveCohortSignalRiskReasons(evaluation?.reasonCodes);
-    const suggestedAction = resolveCohortSignalSuggestedAction(evaluation?.recommendation, interventionLoggedAt);
+    const evaluation = scoreStudentRisk(trajectory);
+    const mappedRisk = mapRiskModelPredictionToAtRiskStudent(trajectory, evaluation);
+    const reasons = resolveCohortSignalRiskReasons(mappedRisk?.reasonCodes);
+    const suggestedAction = resolveCohortSignalSuggestedAction(mappedRisk?.recommendation, interventionLoggedAt);
 
     const featureVector = [averageMark, latestMark, slope, variance, scores.length, missingSubmission ? 1 : 0];
 
@@ -111,7 +111,7 @@ export const buildLiveCohortSignalDataset = ({
       trend,
       riskReasons: reasons.map((reason) => resolveCohortSignalRiskReasonLabel(reason)),
       suggestedAction,
-      predictedNext: resolveCohortSignalPredictedNext(evaluation?.predictedNext, averageMark),
+      predictedNext: resolveCohortSignalPredictedNext(mappedRisk?.predictedNext, averageMark),
       failProbability: 0,
     });
   });

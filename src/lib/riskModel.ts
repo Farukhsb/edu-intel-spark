@@ -1,4 +1,4 @@
-import type { StudentTrajectory } from "@/lib/studentRisk";
+import type { AtRiskStudent, StudentTrajectory } from "@/lib/studentRisk";
 
 import type { RiskModelClassName } from "@/lib/riskModelArtifactTypes";
 import { scoreRiskModelArtifact } from "@/lib/riskModelPipeline";
@@ -85,6 +85,79 @@ function standardDeviation(values: number[], average: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function formatReviewReason(reason: string) {
+  switch (reason) {
+    case "low_confidence":
+      return "Model confidence is low";
+    case "small_margin":
+      return "Top risk bands are close together";
+    case "short_history":
+      return "Assessment history is short";
+    case "volatile_pattern":
+      return "Performance pattern is volatile";
+    case "boundary_pattern":
+      return "Trajectory sits near a decision boundary";
+    case "near_threshold":
+      return "Trajectory is near the risk threshold";
+    case "sharp_decline":
+      return "Sharp decline detected";
+    default:
+      return reason.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+}
+
+function buildRiskRecommendation(prediction: RiskModelPrediction): string {
+  const average = prediction.featureVector.average ?? 0;
+  const last = prediction.featureVector.last ?? 0;
+  const slope = prediction.featureVector.slope ?? 0;
+  const predictedNext = prediction.featureVector.predictedNext ?? 0;
+
+  if (prediction.reviewReasons.includes("sharp_decline") || slope < -3) {
+    return "Urgent: schedule a 1-on-1 meeting to discuss grade trajectory.";
+  }
+  if (average < 40) {
+    return "Refer to student support services and consider tutoring.";
+  }
+  if (last < average - 15) {
+    return "Recent performance dipped sharply. Check for academic or personal barriers.";
+  }
+  if (predictedNext < 40) {
+    return "The current assessment pattern suggests this student may need support before the next deadline.";
+  }
+  if (prediction.reviewReasons.includes("short_history") || prediction.reviewReasons.includes("low_confidence")) {
+    return "Data is limited. Monitor closely after the next submission.";
+  }
+
+  return "Schedule a check-in to review study strategies and agree short-term goals.";
+}
+
+export function mapRiskModelPredictionToAtRiskStudent(
+  trajectory: StudentTrajectory,
+  prediction: RiskModelPrediction | null,
+): AtRiskStudent | null {
+  if (!prediction || prediction.riskScore < 25) return null;
+
+  const average = prediction.featureVector.average ?? 0;
+  const last = prediction.featureVector.last ?? 0;
+  const slope = prediction.featureVector.slope ?? 0;
+
+  return {
+    name: trajectory.name,
+    email: trajectory.email,
+    studentId: trajectory.studentId,
+    riskScore: prediction.riskScore,
+    riskLevel: prediction.riskScore >= 70 ? "critical" : prediction.riskScore >= 45 ? "high" : "moderate",
+    avgGrade: Math.round(average),
+    lastGrade: Math.round(last),
+    trend: slope < -1 ? "declining" : average < 50 ? "stable-low" : "volatile",
+    reasonCodes: prediction.reviewReasons,
+    flags: prediction.reviewReasons.map(formatReviewReason),
+    sparkline: trajectory.scores.slice(-6).map((entry) => entry.score),
+    recommendation: buildRiskRecommendation(prediction),
+    predictedNext: Math.round(prediction.featureVector.predictedNext ?? 0),
+  };
 }
 
 export function extractRiskFeatures(trajectory: StudentTrajectory): RiskFeatureVector {

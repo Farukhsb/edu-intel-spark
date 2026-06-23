@@ -5,7 +5,8 @@ import { getAssignmentWorkflowTarget } from "@/lib/assignmentWorkflowNavigation"
 import { isGradedWorkflowStatus, isReviewQueueStatus } from "@/lib/assessmentWorkflow";
 import { safeToLocaleDate } from "@/lib/date";
 import { getLecturerOverviewReadiness } from "@/lib/lecturerOverviewReadiness";
-import { computeRisk, type StudentTrajectory } from "@/lib/studentRisk";
+import { type StudentTrajectory } from "@/lib/studentRisk";
+import { mapRiskModelPredictionToAtRiskStudent, scoreStudentRisk } from "@/lib/riskModel";
 import { supabase } from "@/integrations/supabase/client";
 import { log } from "@/lib/logger";
 
@@ -364,8 +365,8 @@ export const useLecturerOverviewController = () => {
             (left, right) => new Date(left.date).getTime() - new Date(right.date).getTime(),
           ),
         }))
-        .map((trajectory) => computeRisk(trajectory))
-        .filter((risk): risk is NonNullable<ReturnType<typeof computeRisk>> => risk !== null)
+        .map((trajectory) => mapRiskModelPredictionToAtRiskStudent(trajectory, scoreStudentRisk(trajectory)))
+        .filter((risk): risk is NonNullable<ReturnType<typeof mapRiskModelPredictionToAtRiskStudent>> => risk !== null)
         .sort((left, right) => right.riskScore - left.riskScore)
         .slice(0, 3)
         .map((risk) => ({
