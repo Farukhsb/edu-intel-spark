@@ -1,6 +1,11 @@
-import { evaluateStudentRisk, type StudentTrajectory } from "../../../src/lib/studentRisk.ts";
+import { type StudentRiskEvaluation, type StudentTrajectory } from "../../../src/lib/studentRisk.ts";
 import { evaluateCompositeStudentRisk } from "../../../src/lib/studentRiskComposite.ts";
-import { scoreStudentRisk, type RiskModelPrediction } from "../../../src/lib/riskModel.ts";
+import {
+  mapRiskModelPredictionToStudentRiskEvaluation,
+  scoreStudentRisk,
+  type RiskModelPrediction,
+} from "../../../src/lib/riskModel.ts";
+import { evaluateStudentRiskLegacy } from "../../../src/lib/studentRiskLegacy.ts";
 
 import {
   buildFallbackAcademicEvaluation,
@@ -31,7 +36,7 @@ type RiskBatchPreparationContext = {
 };
 
 export type PreparedRiskBatchStudent = {
-  evaluation: NonNullable<ReturnType<typeof evaluateStudentRisk>>;
+  evaluation: StudentRiskEvaluation;
   modelPrediction: RiskModelPrediction | null;
   composite: ReturnType<typeof evaluateCompositeStudentRisk> | null;
   snapshotFeatures: ReturnType<typeof buildRiskDetails>;
@@ -47,13 +52,17 @@ export function prepareRiskBatchStudent(
   trajectory: StudentTrajectory,
   context: RiskBatchPreparationContext,
 ): PreparedRiskBatchStudent | null {
-  const evaluation =
-    trajectory.scores.length > 0
-      ? evaluateStudentRisk(trajectory, { referenceDate: `${context.snapshotDate}T23:59:59.999Z` })
-      : null;
-  const modelPrediction = evaluation
-    ? scoreStudentRisk(trajectory, { featureVersion: context.featureVersion, generatedAt: context.batchGeneratedAt })
+  const modelPrediction = trajectory.scores.length > 0
+    ? scoreStudentRisk(trajectory, {
+      featureVersion: context.featureVersion,
+      generatedAt: context.batchGeneratedAt,
+    })
     : null;
+  const evaluation =
+    mapRiskModelPredictionToStudentRiskEvaluation(trajectory, modelPrediction) ??
+    (trajectory.scores.length > 0
+      ? evaluateStudentRiskLegacy(trajectory, { referenceDate: `${context.snapshotDate}T23:59:59.999Z` })
+      : null);
   const resolvedModelVersion = modelPrediction?.modelVersion ?? `heuristic-risk-${context.featureVersion}`;
   const studentSubmissionRows = context.submissionsByStudentId.get(trajectory.studentId) ?? [];
   const submissionSummary = buildStudentSubmissionSummary(
