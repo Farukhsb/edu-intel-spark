@@ -122,19 +122,22 @@ function safeStringList(value: unknown) {
 }
 
 function getDoclingFallbackConfig() {
-  if (!readBooleanEnv("DOCLING_EXTRACTION_FALLBACK_ENABLED")) {
+  const url = readEnv("DOCLING_EXTRACTION_FALLBACK_URL")?.trim();
+  const secret = readEnv("DOCLING_EXTRACTION_FALLBACK_SECRET")?.trim() || null;
+  const explicitEnabled = readBooleanEnv("DOCLING_EXTRACTION_FALLBACK_ENABLED");
+  const enabled = explicitEnabled || Boolean(url && secret);
+
+  if (!enabled || !url || !secret) {
     return null;
   }
-
-  const url = readEnv("DOCLING_EXTRACTION_FALLBACK_URL")?.trim();
-  if (!url) return null;
 
   const timeoutMs = Number(readEnv("DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS") || 15000);
   const normalizedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.trunc(timeoutMs) : 15000;
 
   return {
+    enabled,
     url,
-    secret: readEnv("DOCLING_EXTRACTION_FALLBACK_SECRET")?.trim() || null,
+    secret,
     timeoutMs: normalizedTimeoutMs,
   };
 }

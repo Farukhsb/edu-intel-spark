@@ -369,7 +369,7 @@ ${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref
     expect(result.extractionQuality?.suspiciousPdfArtifactCount).toBeGreaterThan(0);
   });
 
-  it("does not call Docling fallback unless it is explicitly enabled", async () => {
+  it("does not call Docling fallback when the URL or secret is missing", async () => {
     const originalEnv = {
       enabled: process.env.DOCLING_EXTRACTION_FALLBACK_ENABLED,
       url: process.env.DOCLING_EXTRACTION_FALLBACK_URL,
@@ -407,6 +407,58 @@ ${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref
       expect(result.extractionMethod).toBe("pdf_fallback");
       expect(result.extractionFailureReason).toBe("unreadable_pdf");
       expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      global.fetch = originalFetch;
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_ENABLED", originalEnv.enabled);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_URL", originalEnv.url);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_SECRET", originalEnv.secret);
+      restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS", originalEnv.timeout);
+    }
+  });
+
+  it("uses Docling fallback when the explicit enabled flag is missing but URL and secret are present", async () => {
+    const originalEnv = {
+      enabled: process.env.DOCLING_EXTRACTION_FALLBACK_ENABLED,
+      url: process.env.DOCLING_EXTRACTION_FALLBACK_URL,
+      secret: process.env.DOCLING_EXTRACTION_FALLBACK_SECRET,
+      timeout: process.env.DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS,
+    };
+    const fetchMock = vi.fn(async () =>
+      buildDoclingResponse(
+        "Docling extracted a readable PDF report discussing evidence, analysis, and conclusion in enough detail to grade safely. ".repeat(8),
+      ));
+    const originalFetch = global.fetch;
+    global.fetch = fetchMock as typeof fetch;
+
+    try {
+      delete process.env.DOCLING_EXTRACTION_FALLBACK_ENABLED;
+      process.env.DOCLING_EXTRACTION_FALLBACK_URL = "https://docling.test/extract";
+      process.env.DOCLING_EXTRACTION_FALLBACK_SECRET = "fallback-secret";
+      process.env.DOCLING_EXTRACTION_FALLBACK_TIMEOUT_MS = "5000";
+
+      const pollutedPdf = `%PDF-1.4
+ReportLab Generated PDF document http://www.reportlab.com
+1 0 obj << /Type /Catalog >> endobj
+2 0 obj << /Length 123 >> stream
+xref
+trailer
+startxref
+endstream
+3 0 obj << /Type /Page >> endobj
+${"ReportLab Generated PDF document http://www.reportlab.com 1 0 obj endobj xref trailer startxref stream endstream ".repeat(8)}`;
+
+      const result = await extractDocumentText({
+        fileName: "docling-fallback-missing-flag.pdf",
+        mimeType: "application/pdf",
+        bytes: new TextEncoder().encode(pollutedPdf),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.extractionMethod).toBe("pdf_docling_fallback");
+      expect(result.extractedText).toContain("Docling extracted a readable PDF report");
+      expect(result.extractedTextLength).toBeGreaterThan(MIN_EXTRACTED_TEXT_CHARS);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("https://docling.test/extract");
     } finally {
       global.fetch = originalFetch;
       restoreEnvValue("DOCLING_EXTRACTION_FALLBACK_ENABLED", originalEnv.enabled);
