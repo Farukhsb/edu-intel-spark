@@ -3,8 +3,12 @@
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 [![coverage](https://codecov.io/gh/Farukhsb/edu-intel-spark/branch/main/graph/badge.svg)](https://codecov.io/gh/Farukhsb/edu-intel-spark)
 
-Related project:
+Project map:
+- [GradeAI main platform](https://github.com/Farukhsb/edu-intel-spark)
 - [GradeAI LTI Plugin](https://github.com/Farukhsb/gradeai-lti-plugin)
+
+[![plugin](https://img.shields.io/badge/sibling-GradeAI%20LTI%20Plugin-0ea5e9)](https://github.com/Farukhsb/gradeai-lti-plugin)
+[![platform](https://img.shields.io/badge/sibling-GradeAI%20main%20platform-111827)](https://github.com/Farukhsb/edu-intel-spark)
 
 Sibling projects:
 - GradeAI main platform: the full assessment, moderation, and student-risk system.
