@@ -5,10 +5,19 @@
 
 Project map:
 
-| Repo | Purpose |
-| --- | --- |
-| [GradeAI main platform](https://github.com/Farukhsb/edu-intel-spark) | Full assessment, moderation, and student-risk system |
-| [GradeAI LTI Plugin](https://github.com/Farukhsb/gradeai-lti-plugin) | Lean LMS launch surface for external dashboard embeds |
+```text
+GradeAI main platform
+  -> full assessment, moderation, and student-risk system
+  -> https://github.com/Farukhsb/edu-intel-spark
+
+GradeAI LTI Plugin
+  -> lean LMS launch surface for external dashboard embeds
+  -> https://github.com/Farukhsb/gradeai-lti-plugin
+
+Together:
+  platform <--> plugin
+  shared product family, separate deployment surfaces
+```
 
 [![plugin](https://img.shields.io/badge/sibling-GradeAI%20LTI%20Plugin-0ea5e9)](https://github.com/Farukhsb/gradeai-lti-plugin)
 [![platform](https://img.shields.io/badge/sibling-GradeAI%20main%20platform-111827)](https://github.com/Farukhsb/edu-intel-spark)
