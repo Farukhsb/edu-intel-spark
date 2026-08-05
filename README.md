@@ -6,6 +6,10 @@
 Related project:
 - [GradeAI LTI Plugin](https://github.com/Farukhsb/gradeai-lti-plugin)
 
+Sibling projects:
+- GradeAI main platform: the full assessment, moderation, and student-risk system.
+- GradeAI LTI Plugin: the lean LMS launch surface for external dashboard embeds.
+
 Schools lose students in plain sight. Grades slip, submissions get missed, 
 engagement drops and by the time someone notices, the window for early support 
 has already closed.
