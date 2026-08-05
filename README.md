@@ -3,6 +3,9 @@
 [![CI](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml/badge.svg)](https://github.com/Farukhsb/edu-intel-spark/actions/workflows/ci.yml)
 [![coverage](https://codecov.io/gh/Farukhsb/edu-intel-spark/branch/main/graph/badge.svg)](https://codecov.io/gh/Farukhsb/edu-intel-spark)
 
+Related project:
+- [GradeAI LTI Plugin](https://github.com/Farukhsb/gradeai-lti-plugin)
+
 Schools lose students in plain sight. Grades slip, submissions get missed, 
 engagement drops and by the time someone notices, the window for early support 
 has already closed.
